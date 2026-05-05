@@ -19,7 +19,7 @@ class WishException private constructor(
             link: ProductLink,
         ): WishException = WishException(
             "이미 위시리스트에 등록된 상품입니다. guestId=$guestId link=$link",
-            ErrorCategory.INVALID_INPUT,
+            ErrorCategory.CONFLICT,
             HttpStatus.CONFLICT,
         )
 

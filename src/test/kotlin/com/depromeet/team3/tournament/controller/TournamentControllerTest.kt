@@ -52,7 +52,7 @@ class TournamentControllerTest {
                     """{"name":"테스트 토너먼트","round":8,"wishItemIds":[1,2,3,4,5,6,7,8]}""",
                 ),
         )
-            .andExpect(status().isOk)
+            .andExpect(status().isCreated)
             .andExpect(jsonPath("$.data.tournamentId").value(1))
             .andExpect(jsonPath("$.status").value(201))
     }
