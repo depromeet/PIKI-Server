@@ -2,11 +2,13 @@
 
 ## 원칙
 
+**이슈는 "왜 / 무엇을" 만 받는다.** 우선순위·시작일·마감일 같은 메타 정보는 묻지 않는다. 작업 시작 시점에 적는 메타는 거의 추정치라 데이터 품질이 낮고, 진짜 메타 저장소는 GitHub Project 보드다 — 작업 진행 중 보드에서 채우면 충분하다.
+
 **이슈는 작업의 시작점이라 사용자 입력이 source of truth.** 모델이 추측해 본문을 채우거나 분류를 단정하지 않는다. 자동화하는 부분은 모두 검수 단계에서 사용자 OK 를 받는다.
 
 **Epic 과 일반 이슈는 본질이 다르다.** Epic 은 여러 작업의 묶음으로 자체 코드 작업이 없어 브랜치를 만들지 않는다. 일반 이슈(task/refactor/bug)는 코드 작업의 단위로 부모 Epic 에 묶일 수 있다. 이 구분만 사용자가 명시하고, 그 외 분류·prefix·상위 Epic 추천은 모델이 본문을 보고 자동 결정한 뒤 검수받는다.
 
-**채팅 끊김을 최소화한다.** 자유 텍스트는 한 메시지로 일괄 받고, 옵션형 결정은 `AskUserQuestion` 으로 묶어 받는다. 사용자 인터랙션은 보통 3~4 라운드 안에 끝난다.
+**채팅 끊김을 최소화한다.** 자유 텍스트는 한 메시지로 일괄 받고, 옵션 결정은 `AskUserQuestion` 으로 묶어 받는다. 사용자 인터랙션은 보통 **3 라운드** (Epic 여부 → 자유 입력 → 검수) 안에 끝난다.
 
 ## 절차
 
@@ -35,24 +37,11 @@ Epic 은 브랜치를 만들지 않고 상위 Epic 도 없다.
 
 사용자 입력이 너무 짧아 분해가 어려우면 (예: "이슈 스킬 추가" 한 줄) 1~2 번 follow-up 질문 (예: "왜 필요한지 한 줄만 더 알려주세요"). 더 이상 묻지 않는다.
 
-### A-2. 옵션형 결정 — `AskUserQuestion` 묶음 (3 questions)
-
-```
-Q1: 우선순위
-    - High / Medium / Low (Recommended)
-Q2: 시작일
-    - 오늘 (Recommended) / 1주일 후 / 2주일 후 / 직접 입력
-    + Other 로 MMDD 직접 입력 가능
-Q3: 마감일
-    - 1주일 후 (Recommended) / 2주일 후 / 4주일 후 / 직접 입력
-    + Other 로 MMDD 직접 입력 가능
-```
-
-### A-3. 모델 자동 분해 + 중복 검사
+### A-2. 모델 자동 분해 + 중복 검사
 
 자유 입력을 분석해 다음을 결정:
 
-- **제목** (한 줄, 70자 이내, kebab-case 슬러그용 의미 보존)
+- **제목** (한 줄, 70자 이내, 슬러그 의미 보존)
 - **왜** (배경, 필요성)
 - **무엇을** (목표 상태, 예상 범위)
 
@@ -70,9 +59,9 @@ gh issue list --repo depromeet/18th-team3-server --search "{제목 키워드}" -
 
 결과가 1개 이상이면 검수 단계에서 사용자에게 함께 보여줌.
 
-### A-4. 검수 — `AskUserQuestion`
+### A-3. 검수 — `AskUserQuestion`
 
-분해된 본문 + 일정 + 중복 검사 결과를 한 화면에 보여주고:
+분해된 본문 + 중복 검사 결과를 한 화면에 보여주고:
 
 ```
 [본문 미리보기]
@@ -82,9 +71,6 @@ gh issue list --repo depromeet/18th-team3-server --search "{제목 키워드}" -
 ## 무엇을
 {분해된 내용}
 
-## 우선순위 / 시작일 / 마감일
-...
-
 [중복 검사 결과]
 유사 이슈: #X "..." (있을 때만)
 ```
@@ -93,30 +79,31 @@ gh issue list --repo depromeet/18th-team3-server --search "{제목 키워드}" -
 
 - `OK 진행 (Recommended)`
 - `본문 수정 필요` — Other 로 어떤 부분을 어떻게
-- `일정/우선순위 수정` — Other 로 어떻게
 - `중복 — 새 이슈 만들지 않음` (중복 검사 결과 있을 때만)
 
 수정 요청 들어오면 반영하고 다시 검수. 만족할 때까지 반복.
 
-### A-5. 이슈 생성
+### A-4. 이슈 생성
 
 ```bash
 gh issue create \
+  --repo depromeet/18th-team3-server \
   --title "{제목}" \
   --body "{본문}" \
   --label "epic"
 ```
 
-### A-6. Project 추가
+### A-5. Project 추가
 
 ```bash
 gh project item-add 99 --owner depromeet --url {이슈 URL}
 ```
 
-### A-7. 결과 출력
+### A-6. 결과 출력
 
 - 이슈 URL
 - "Epic 은 브랜치를 만들지 않습니다. 하위 작업은 `/issue` 로 일반 이슈를 만들고 그 단계에서 이 epic 이 자동 추천됩니다."
+- "우선순위 / 일정 등 메타 정보는 GitHub Project 보드에서 직접 채우세요."
 
 ---
 
@@ -126,13 +113,9 @@ gh project item-add 99 --owner depromeet --url {이슈 URL}
 
 A-1 과 동일.
 
-### B-2. 옵션형 결정 — `AskUserQuestion` 묶음 (3 questions)
+### B-2. 모델 자동 분해 + 자동 결정 + 중복 검사
 
-A-2 와 동일. 시작일/마감일은 분류가 아직 결정되지 않았으므로 `직접 입력` Other 에서 빈 칸도 허용 (refactor/bug 면 일정 선택, task 면 검수 단계에서 빠진 경우 안내).
-
-### B-3. 모델 자동 분해 + 자동 결정 + 중복 검사
-
-**자유 입력 분해** — A-3 과 동일 룰.
+**자유 입력 분해** — A-2 와 동일 룰.
 
 **분류 자동 결정** (multi 가능): `task` / `refactor` / `bug`
 - "버그", "안 됨", "오류 수정" 시그널 → bug
@@ -155,20 +138,18 @@ gh issue list --repo depromeet/18th-team3-server --label epic --state open --jso
 ```
 활성 epic 목록과 본문(제목+왜+무엇을)의 의미 비교로 가장 관련 있는 1개 추천. 없으면 추천 안 함.
 
-**task 의 일정 보완**: 자동 분류가 task 면 시작일/마감일이 비어있는지 확인. 비어있으면 검수 단계에서 안내.
+**중복 이슈 사전 검사**: A-2 와 동일하게 분해된 제목으로 검색.
 
-**중복 이슈 사전 검사**: A-3 과 동일하게 분해된 제목으로 검색.
+### B-3. 검수 — `AskUserQuestion`
 
-### B-4. 검수 — `AskUserQuestion`
-
-본문 + 일정 + 자동 결정 + 중복 검사 결과를 한 화면에 보여주고:
+본문 + 자동 결정 + 중복 검사 결과를 한 화면에 보여주고:
 
 ```
 [본문 미리보기]
 ## 상위 Epic
 #{추천 번호}            ← 없으면 통째 생략
 
-## 왜 / 무엇을 / 우선순위 / 시작일 / 마감일
+## 왜 / 무엇을
 ...
 
 [자동 결정]
@@ -185,22 +166,21 @@ gh issue list --repo depromeet/18th-team3-server --label epic --state open --jso
 - `OK 진행 (Recommended)`
 - `본문 수정 필요` — Other 로 어떤 부분을 어떻게
 - `분류/prefix 수정` — Other 로 어떻게
-- `일정/우선순위 수정` — Other 로 어떻게
-
-(중복 검사 결과 있을 때 옵션 1개 추가: `중복 — 새 이슈 만들지 않음`. 옵션 4개 한도라 다른 옵션 1개 묶기.)
+- `중복 — 새 이슈 만들지 않음` (중복 검사 결과 있을 때만, 다른 옵션 1개와 묶어 4개 한도)
 
 수정 반영 후 만족할 때까지 반복.
 
-### B-5. 이슈 생성
+### B-4. 이슈 생성
 
 ```bash
 gh issue create \
+  --repo depromeet/18th-team3-server \
   --title "{제목}" \
   --body "{본문}" \
   --label "{선택된 분류 라벨들 콤마 구분}"
 ```
 
-### B-6. 브랜치 생성 + 매핑
+### B-5. 브랜치 생성 + 매핑
 
 브랜치명 슬러그는 분해된 제목에서 영문 kebab-case 로 생성 (한국어면 의미 보존하며 영문 의역).
 
@@ -214,16 +194,17 @@ gh issue develop {이슈번호} \
 
 생성 후 자동 checkout 이 안 되면 명시적으로 `git checkout {prefix}/{이슈번호}-{slug}` 실행.
 
-### B-7. Project 추가
+### B-6. Project 추가
 
 ```bash
 gh project item-add 99 --owner depromeet --url {이슈 URL}
 ```
 
-### B-8. 결과 출력
+### B-7. 결과 출력
 
 - 이슈 URL
 - 브랜치명 + 현재 체크아웃된 브랜치 확인
+- "우선순위 / 일정은 필요시 GitHub Project 보드에서 채우세요."
 - 다음 단계 안내 (작업 시작 → 커밋 → PR)
 
 ---
@@ -235,8 +216,9 @@ gh project item-add 99 --owner depromeet --url {이슈 URL}
 - 분류 자동 결정은 시그널이 명확할 때만. 모호하면 `task` + `chore` fallback (보수적).
 - 라벨이 레포에 없어 `gh issue create` 가 실패하면 에러 그대로 보고.
 - `gh issue develop` 은 `--name` (브랜치 이름 옵션) + `--checkout` 둘 다 명시 (인터랙티브 회피). `--branch-name` 은 존재하지 않는 옵션이니 주의.
-- `gh project item-add` 권한 부족 시 사용자에게 `gh auth refresh -s project` 안내.
+- `gh project item-add` 권한 부족 시 사용자에게 `gh auth refresh -h github.com -s project` 안내 (인터랙티브 디바이스 인증, 일회성).
 - 본문에 `#{epic 번호}` 가 들어가면 GitHub 가 자동 cross-reference 링크 — 별도 sub-issue API 불필요.
 - 중복 이슈 검사 false positive 가능성 인지. 사용자가 "다른 이슈" 라 답하면 그대로 진행.
+- 이슈 템플릿(`.github/ISSUE_TEMPLATE/`)이 우선순위·일정을 required 로 정의해도 본문 자유 양식이라 강제받지 않는다. 이 스킬은 본질("왜/무엇을")만 받는 정책을 따른다.
 
 $ARGUMENTS
