@@ -90,16 +90,29 @@ gh issue create \
   --repo depromeet/18th-team3-server \
   --title "{제목}" \
   --body "{본문}" \
-  --label "epic"
+  --label "epic" \
+  --assignee @me
 ```
 
-### A-5. Project 추가
+### A-5. Issue Type 부여
+
+`gh issue create` 는 `--type` 을 지원하지 않으므로 GraphQL `updateIssueIssueType` mutation 으로 별도 부여한다. Epic 은 `Feature` type 매핑.
+
+```bash
+ISSUE_ID=$(gh issue view {이슈번호} --repo depromeet/18th-team3-server --json id --jq '.id')
+gh api graphql \
+  -f query='mutation($issueId:ID!,$typeId:ID!){updateIssueIssueType(input:{issueId:$issueId,issueTypeId:$typeId}){issue{id issueType{name}}}}' \
+  -F issueId=$ISSUE_ID \
+  -F typeId=IT_kwDOARZVGM4AJck6
+```
+
+### A-6. Project 추가
 
 ```bash
 gh project item-add 99 --owner depromeet --url {이슈 URL}
 ```
 
-### A-6. 결과 출력
+### A-7. 결과 출력
 
 - 이슈 URL
 - "Epic 은 브랜치를 만들지 않습니다. 하위 작업은 `/issue` 로 일반 이슈를 만들고 그 단계에서 이 epic 이 자동 추천됩니다."
@@ -177,10 +190,35 @@ gh issue create \
   --repo depromeet/18th-team3-server \
   --title "{제목}" \
   --body "{본문}" \
-  --label "{선택된 분류 라벨들 콤마 구분}"
+  --label "{선택된 분류 라벨들 콤마 구분}" \
+  --assignee @me
 ```
 
-### B-5. 브랜치 생성 + 매핑
+### B-5. Issue Type 부여
+
+`gh issue create` 는 `--type` 을 지원하지 않으므로 GraphQL `updateIssueIssueType` mutation 으로 별도 부여한다.
+
+**분류 → org type 매핑** (depromeet 조직 정의 type 3종 — Task / Bug / Feature):
+
+| 우리 분류 | org type | type ID |
+|---|---|---|
+| `bug` | Bug | `IT_kwDOARZVGM4AJck3` |
+| `refactor` | Task | `IT_kwDOARZVGM4AJck0` |
+| `task` + prefix `chore` | Task | `IT_kwDOARZVGM4AJck0` |
+| `task` + prefix `feat` | Feature | `IT_kwDOARZVGM4AJck6` |
+| (Epic 흐름) | Feature | `IT_kwDOARZVGM4AJck6` |
+
+복수 분류일 때는 **주 분류** 기준 매핑 (브랜치 prefix 결정과 동일 기준).
+
+```bash
+ISSUE_ID=$(gh issue view {이슈번호} --repo depromeet/18th-team3-server --json id --jq '.id')
+gh api graphql \
+  -f query='mutation($issueId:ID!,$typeId:ID!){updateIssueIssueType(input:{issueId:$issueId,issueTypeId:$typeId}){issue{id issueType{name}}}}' \
+  -F issueId=$ISSUE_ID \
+  -F typeId={매핑된 type ID}
+```
+
+### B-6. 브랜치 생성 + 매핑
 
 브랜치명 슬러그는 분해된 제목에서 영문 kebab-case 로 생성 (한국어면 의미 보존하며 영문 의역).
 
@@ -194,13 +232,13 @@ gh issue develop {이슈번호} \
 
 생성 후 자동 checkout 이 안 되면 명시적으로 `git checkout {prefix}/{이슈번호}-{slug}` 실행.
 
-### B-6. Project 추가
+### B-7. Project 추가
 
 ```bash
 gh project item-add 99 --owner depromeet --url {이슈 URL}
 ```
 
-### B-7. 결과 출력
+### B-8. 결과 출력
 
 - 이슈 URL
 - 브랜치명 + 현재 체크아웃된 브랜치 확인
@@ -220,5 +258,7 @@ gh project item-add 99 --owner depromeet --url {이슈 URL}
 - 본문에 `#{epic 번호}` 가 들어가면 GitHub 가 자동 cross-reference 링크 — 별도 sub-issue API 불필요.
 - 중복 이슈 검사 false positive 가능성 인지. 사용자가 "다른 이슈" 라 답하면 그대로 진행.
 - 이슈 템플릿(`.github/ISSUE_TEMPLATE/`)이 우선순위·일정을 required 로 정의해도 본문 자유 양식이라 강제받지 않는다. 이 스킬은 본질("왜/무엇을")만 받는 정책을 따른다.
+- **Assignee 는 `@me` 고정**. 이슈 만든 사람이 작업자라는 가정. 다른 사람에게 할당하려면 GitHub UI 에서 변경.
+- **Issue Type 은 GraphQL 별도 호출.** `gh issue create` 가 `--type` 미지원이라 `updateIssueIssueType` mutation 사용. depromeet org 의 type 은 Task / Bug / Feature 3종 — Refactor·Epic 같은 우리 분류와 1:1 매핑이 안 되는 부분은 가장 가까운 type 으로 (refactor → Task, epic → Feature). org 가 type 을 추가/제거하면 본문의 type ID 도 갱신 필요.
 
 $ARGUMENTS
