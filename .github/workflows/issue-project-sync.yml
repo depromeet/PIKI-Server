@@ -7,6 +7,7 @@ on:
 jobs:
   add-to-project-and-sync-dates:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Add to Project & Set Dates
         env:
@@ -91,36 +92,14 @@ jobs:
           update_field "$DUE_FIELD"          "date"                   "$DUE_DATE"            "Date"
           update_field "$PRIORITY_FIELD_ID"  "singleSelectOptionId"   "$PRIORITY_OPTION_ID"  "String"
 
-          # bash -e 환경에서 [[ ]] && echo 패턴은 조건이 false일 때 exit 1을 유발하므로 if/fi 사용
+          # bash -e 환경에서 `[[ ]] && echo` 는 조건이 false 일 때 exit 1 을 유발하므로 if/fi 사용
           if [[ -n "$START_DATE" ]];        then echo "Start date set: $START_DATE"; fi
           if [[ -n "$DUE_DATE" ]];          then echo "Due date set: $DUE_DATE"; fi
           if [[ -n "$PRIORITY_OPTION_ID" ]]; then echo "Priority set: $PRIORITY_LABEL"; fi
 
-  check-parent-epic:
-    runs-on: ubuntu-latest
-    # task 라벨 이슈에만 적용
-    if: contains(toJson(github.event.issue.labels.*.name), 'task')
-    steps:
-      - name: Warn if No Parent Epic
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          PARENT=$(echo "$ISSUE_BODY" | grep -A3 "^### 상위 Epic" | grep -E "^#[0-9]+" | head -1)
-
-          if [[ -z "$PARENT" ]]; then
-            gh issue edit "$ISSUE_NUMBER" \
-              --add-label "needs-parent" \
-              --repo depromeet/18th-team3-server
-
-            gh issue comment "$ISSUE_NUMBER" \
-              --body "⚠️ 상위 Epic이 연결되지 않았습니다. 관련 Epic이 있다면 이슈 본문의 **상위 Epic** 항목에 \`#번호\` 형태로 추가해주세요." \
-              --repo depromeet/18th-team3-server
-          fi
-
   check-assignee:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Auto-assign creator if no assignee
         env:
