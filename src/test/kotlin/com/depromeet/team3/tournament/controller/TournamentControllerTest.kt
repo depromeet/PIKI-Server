@@ -84,6 +84,7 @@ class TournamentControllerTest {
     fun `GET tournaments id 는 토너먼트 정보를 반환한다`() {
         val tournamentInfo = TournamentInfo(
             tournamentId = 1L,
+            round = 4,
             finalWinnerWishItemId = 10L,
             history = listOf(
                 TournamentHistoryInfo(
@@ -102,6 +103,7 @@ class TournamentControllerTest {
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.data.tournamentId").value(1))
+            .andExpect(jsonPath("$.data.round").value(4))
             .andExpect(jsonPath("$.data.finalWinnerWishItemId").value(10))
             .andExpect(jsonPath("$.data.history[0].currentRound").value(2))
             .andExpect(jsonPath("$.data.history[0].winnerWishItemId").value(10))
