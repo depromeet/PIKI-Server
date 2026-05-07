@@ -134,6 +134,64 @@ unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 # 콘솔에서 액세스 키 비활성화 / 삭제
 ```
 
+## 마이그레이션 / 버킷 설정 검증
+
+처음 backend 설정한 직후 또는 신규 합류자가 환경 점검할 때 돌리는 sanity check 모음.
+
+### state 객체가 S3 에 실제로 존재하는지
+
+```bash
+# 객체 단건 확인
+aws s3api head-object \
+  --bucket piki-tfstate-250758375457 \
+  --key terraform.tfstate
+
+# 또는 버킷의 객체 목록
+aws s3 ls s3://piki-tfstate-250758375457/
+```
+
+`head-object` 가 200 응답 + `ContentLength` 가 0 이 아닌 값이면 정상.
+
+### 버킷 versioning 이 켜져 있는지 (반드시 Enabled)
+
+```bash
+aws s3api get-bucket-versioning --bucket piki-tfstate-250758375457
+```
+기대 출력:
+```json
+{ "Status": "Enabled" }
+```
+
+`MFA Delete` 는 우리 환경엔 미사용. `Status` 가 `Enabled` 만 확인되면 충분.
+
+### 객체의 버전 히스토리 확인
+
+```bash
+aws s3api list-object-versions \
+  --bucket piki-tfstate-250758375457 \
+  --prefix terraform.tfstate
+```
+
+apply 횟수만큼 버전이 쌓여야 한다. 신규 부트스트랩 직후엔 1 개.
+
+### 퍼블릭 차단 / 암호화 확인
+
+```bash
+aws s3api get-public-access-block --bucket piki-tfstate-250758375457
+# 4 개 항목 다 true
+aws s3api get-bucket-encryption --bucket piki-tfstate-250758375457
+# AES256 (SSE-S3) 또는 aws:kms
+```
+
+### 기능 검증 — terraform plan 무변경
+
+```bash
+terraform plan
+# Expected: "No changes. Your infrastructure matches the configuration."
+```
+
+`No changes` 가 떠야 state 가 S3 에서 정상 로드되고 AWS 실 리소스와 일치한다는 뜻. 변경이 잡히면 drift — 별도 이슈로 분석.
+
 ## 동시성 / 사고 처리
 
 ### 락 (자동)
