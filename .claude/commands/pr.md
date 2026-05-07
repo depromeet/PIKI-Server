@@ -17,18 +17,22 @@ gh pr view --json url,number,body,baseRefName 2>/dev/null
 - 결과 있음 → **update 모드** (`### 3-B`)
 - 결과 없음 → **create 모드** (`### 3-A`)
 
-**base branch 자동 감지** (create 모드에서만 — update 모드는 기존 PR의 base 유지):
+**`$BASE` 결정**:
 
-```bash
-# 우선순위: origin/dev → 레포 default branch → main
-if git rev-parse --verify origin/dev >/dev/null 2>&1; then
-  BASE=dev
-else
-  BASE=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null || echo main)
-fi
-```
-
-`$ARGUMENTS` 에 사용자가 base 명시한 경우 (`/pr main` 같은) 그 값을 우선.
+- **create 모드** — 우선순위로 자동 감지:
+  ```bash
+  # 우선순위: origin/dev → 레포 default branch → main
+  if git rev-parse --verify origin/dev >/dev/null 2>&1; then
+    BASE=dev
+  else
+    BASE=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null || echo main)
+  fi
+  ```
+- **update 모드** — 기존 PR 의 base 사용:
+  ```bash
+  BASE=$(gh pr view --json baseRefName --jq '.baseRefName')
+  ```
+- `$ARGUMENTS` 에 사용자가 base 명시한 경우 (`/pr main` 같은) 그 값을 우선 (create 모드 한정 — update 모드에서 base 변경하지 않는다).
 
 ### 1단계: 정보 수집
 
@@ -45,9 +49,11 @@ fi
 정규식 `^[a-z]+/(\d+)-` 로 추출 (예: `chore/75-pr-skill-upgrade` → `#75`).
 
 - 매칭 → `## 연관 이슈\n- close #{번호}` 본문에 자동 채움
-- 매칭 안 됨 → 해당 섹션에 `- TODO: 작성자가 직접 보완해주세요`
+- 매칭 안 됨 → 섹션은 유지하되 항목을 빈 줄로 둔다 (`- ` 만). 이슈 미연결 상태가 본문에서 명시적으로 드러나야 작성자가 의도적으로 비웠음을 인지할 수 있다.
 
-### 2단계: STAR 본문 작성
+### 2단계: STAR 본문 작성 — create 모드 한정
+
+(update 모드는 `### 3-B` 의 자체 가이드를 따른다 — 기존 본문은 그대로 두고 Updates 섹션에 짧은 STAR 항목만 추가)
 
 이번 대화에서 나눈 내용을 중심으로, 아래 템플릿을 채운다:
 
@@ -71,7 +77,7 @@ fi
 ---
 ## 연관 이슈
 
-- close #{자동 추출된 번호}     ← 추출 실패 시 TODO
+- close #{자동 추출된 번호}     ← 추출 실패 시 `- ` 빈 항목으로
 ```
 
 **작성 지침:**
@@ -108,14 +114,15 @@ fi
 3. 기존 본문 끝에 `## Updates` 섹션이 없으면 새로 추가, 있으면 그 안에 새 항목 append.
    - 항목은 날짜 또는 추가 변경의 의도를 sub-heading 으로 (`### CodeRabbit 리뷰 대응 (3건)`, `### dev 머지 충돌 해결` 등)
 4. **기존 본문은 절대 덮어쓰지 않는다.** 갱신본 = 기존 본문 + Updates 항목 추가만.
-5. 사용자에게 갱신본 보여주고 확인받는다.
-6. 확인 후 `gh pr edit --body-file /tmp/pr_body.md` 로 갱신.
-7. PR URL 재출력.
+5. **제목 변경 필요 검토**: 추가 변경으로 작업 의도/스코프가 바뀌었거나 기존 제목에 오타·부정확한 표현이 있으면 새 제목 제안. 그 외엔 제목 유지.
+6. 사용자에게 갱신본(필요시 새 제목 포함, 변경 이유 짚어서)을 보여주고 확인받는다.
+7. 확인 후 `gh pr edit --body-file /tmp/pr_body.md` 로 갱신. 제목 변경이 있으면 `--title "새 제목"` 추가.
+8. PR URL 재출력.
 
 ### PR 제목 규칙
 - 70자 이내
 - 타입 prefix를 붙이지 않는다 (커밋과 다름)
 - 예: `예외 처리 시스템 공통화`, `PR 생성 스킬 추가`
-- update 모드에서는 제목을 변경하지 않는다 (의도가 같으면 제목도 같음).
+- update 모드에서는 기본적으로 제목 유지. 작업 의도/스코프 변화나 정정이 필요한 경우만 변경하고, 사용자에게 변경 이유를 짚어 확인받는다.
 
 $ARGUMENTS
