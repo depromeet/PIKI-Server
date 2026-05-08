@@ -36,6 +36,7 @@ class Tournament(
 
     fun complete(winnerWishItemId: Long) {
         check(!isCompleted()) { "이미 완료된 토너먼트입니다." }
+        require(winnerWishItemId in wishItemIds) { "우승자는 토너먼트 참가 아이템 중 하나여야 합니다." }
         this.finalWinnerWishItemId = winnerWishItemId
         this.status = TournamentStatus.COMPLETED
     }
