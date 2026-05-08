@@ -21,9 +21,11 @@ jobs:
           distribution: 'temurin'
 
       - name: Build JAR
+        id: build
         run: ./gradlew bootJar --no-daemon
 
       - name: Login to Docker Hub
+        id: docker_login
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -36,6 +38,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push Docker image
+        id: docker_push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -45,6 +48,7 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/team3-server:latest
 
       - name: Deploy to EC2
+        id: deploy
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -64,3 +68,65 @@ jobs:
               -e DB_USERNAME=${{ secrets.DB_USERNAME }} \
               -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
               ${{ secrets.DOCKERHUB_USERNAME }}/team3-server:latest
+
+      - name: Notify Slack on success
+        if: success()
+        shell: bash
+        run: |
+          SLACK_USER_MAP='{"m-a-king":"U0AKAEF2K9U","1o18z":"U0AKQ6G8BT3","sevineleven":"U0AK6U2J62F"}'
+          ACTOR="${{ github.actor }}"
+          SLACK_ID=$(echo "$SLACK_USER_MAP" | jq -r --arg login "$ACTOR" '.[$login] // empty')
+          ACTOR_MENTION="${SLACK_ID:+<@$SLACK_ID>}"
+          ACTOR_MENTION="${ACTOR_MENTION:-$ACTOR}"
+
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+          COMMIT_MSG=$(jq -r '.head_commit.message // ""' "$GITHUB_EVENT_PATH" | head -n 1)
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          TEXT=$(printf '✅ `${{ github.ref_name }}` 배포 성공!  ✅\n• 배포자: %s\n• 커밋: <%s|%s>  %s\n• <%s|워크플로우 로그>' \
+            "$ACTOR_MENTION" "$COMMIT_URL" "$SHORT_SHA" "$COMMIT_MSG" "$RUN_URL")
+
+          curl -s -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            --data "$(jq -n --arg channel "${{ secrets.SLACK_CHANNEL_ID }}" --arg text "$TEXT" \
+              '{channel:$channel,text:$text,unfurl_links:false,unfurl_media:false}')"
+
+      - name: Notify Slack on failure
+        if: failure()
+        shell: bash
+        run: |
+          SLACK_USER_MAP='{"m-a-king":"U0AKAEF2K9U","1o18z":"U0AKQ6G8BT3","sevineleven":"U0AK6U2J62F"}'
+          ACTOR="${{ github.actor }}"
+          SLACK_ID=$(echo "$SLACK_USER_MAP" | jq -r --arg login "$ACTOR" '.[$login] // empty')
+          ACTOR_MENTION="${SLACK_ID:+<@$SLACK_ID>}"
+          ACTOR_MENTION="${ACTOR_MENTION:-$ACTOR}"
+
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
+          COMMIT_MSG=$(jq -r '.head_commit.message // ""' "$GITHUB_EVENT_PATH" | head -n 1)
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          if [ "${{ steps.build.outcome }}" = "failure" ]; then
+            CAUSE="Gradle 빌드 실패 (Build JAR)"
+          elif [ "${{ steps.docker_login.outcome }}" = "failure" ]; then
+            CAUSE="Docker Hub 로그인 실패"
+          elif [ "${{ steps.docker_push.outcome }}" = "failure" ]; then
+            CAUSE="Docker 이미지 빌드/푸시 실패"
+          elif [ "${{ steps.deploy.outcome }}" = "failure" ]; then
+            CAUSE="EC2 배포 실패 (SSH/Docker)"
+          else
+            CAUSE="알 수 없음 (환경 설정 단계)"
+          fi
+
+          TEXT=$(printf '❌ `${{ github.ref_name }}` 배포 실패!!!! ❌\n• 배포자: %s\n• 커밋: <%s|%s>  %s\n• 원인: %s\n• <%s|워크플로우 로그 확인>' \
+            "$ACTOR_MENTION" "$COMMIT_URL" "$SHORT_SHA" "$COMMIT_MSG" "$CAUSE" "$RUN_URL")
+
+          curl -s -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            --data "$(jq -n --arg channel "${{ secrets.SLACK_CHANNEL_ID }}" --arg text "$TEXT" \
+              '{channel:$channel,text:$text,unfurl_links:false,unfurl_media:false}')"
