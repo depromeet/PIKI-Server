@@ -42,7 +42,7 @@ class GlobalExceptionHandler {
         log.warn("[IllegalArgumentException] {}", e.message)
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
-            .body(ApiResponseBody.fail(ErrorCategory.INVALID_INPUT, HttpStatus.BAD_REQUEST))
+            .body(ApiResponseBody.fail(ErrorCategory.INVALID_INPUT, HttpStatus.BAD_REQUEST, e.message))
     }
 
     @ExceptionHandler(Exception::class)

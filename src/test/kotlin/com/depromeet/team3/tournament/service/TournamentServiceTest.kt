@@ -64,7 +64,7 @@ class TournamentServiceTest {
 
     @Test
     fun `start 는 저장된 토너먼트 ID 를 반환한다`() {
-        val id = service.start(userId, StartTournament("내 토너먼트", round = 8, wishItemIds = (1L..16L).toList()))
+        val id = service.start(userId, StartTournament("내 토너먼트", round = 16, wishItemIds = (1L..16L).toList()))
 
         assertEquals(1L, id)
         assertEquals(1, repository.tournaments.size)
@@ -224,5 +224,21 @@ class TournamentServiceTest {
         assertFailsWith<WishException> {
             serviceWithNoOwnership.start(userId, StartTournament("토너먼트", round = 4, wishItemIds = (1L..4L).toList()))
         }
+    }
+
+    @Test
+    fun `start 에서 round 와 wishItemIds 크기가 다르면 IllegalArgumentException 이 발생한다`() {
+        assertFailsWith<IllegalArgumentException> {
+            service.start(userId, StartTournament("토너먼트", round = 8, wishItemIds = (1L..4L).toList()))
+        }
+    }
+
+    @Test
+    fun `getTournamentById 는 응답에 round 를 포함한다`() {
+        val tournamentId = service.start(userId, StartTournament("조회 토너먼트", round = 4, wishItemIds = (1L..4L).toList()))
+
+        val info = service.getTournamentById(tournamentId, userId)
+
+        assertEquals(4, info.round)
     }
 }

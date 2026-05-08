@@ -41,6 +41,7 @@ class TournamentApiExamples(private val openApiObjectMapper: OpenApiObjectMapper
                     payload = ApiResponseBody.ok(
                         TournamentInfoResponse(
                             tournamentId = 1,
+                            round = 4,
                             finalWinnerWishItemId = 3,
                             history = listOf(
                                 TournamentHistoryInfoResponse(

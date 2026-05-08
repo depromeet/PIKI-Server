@@ -5,12 +5,14 @@ import com.depromeet.team3.tournament.domain.TournamentHistory
 
 data class TournamentInfo(
     val tournamentId: Long,
+    val round: Int,
     val finalWinnerWishItemId: Long?,
     val history: List<TournamentHistoryInfo>,
 ) {
     companion object {
         fun of(tournament: Tournament, histories: List<TournamentHistory>): TournamentInfo = TournamentInfo(
             tournamentId = tournament.getId(),
+            round = tournament.round,
             finalWinnerWishItemId = tournament.finalWinnerWishItemId,
             history = histories.map(TournamentHistoryInfo::from),
         )

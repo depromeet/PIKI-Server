@@ -15,10 +15,10 @@ import java.util.UUID
 @Table(name = "wishes")
 class Wish(
     @Column(name = "guest_id", nullable = false, columnDefinition = "BINARY(16)")
-    var guestId: UUID,
+    val guestId: UUID,
 
     @Embedded
-    var product: Product,
+    val product: Product,
 ) : BaseEntity<Long>() {
 
     @Id

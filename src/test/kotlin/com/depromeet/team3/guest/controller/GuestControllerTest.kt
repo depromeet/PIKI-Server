@@ -27,7 +27,7 @@ class GuestControllerTest : IntegrationTestSupport() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
 
         val response = mockMvc.perform(post("/api/v1/guests"))
-            .andExpect(status().isOk)
+            .andExpect(status().isCreated)
             .andExpect(jsonPath("$.data.guestId").exists())
             .andReturn().response.contentAsString
 
@@ -40,12 +40,12 @@ class GuestControllerTest : IntegrationTestSupport() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
 
         val first = mockMvc.perform(post("/api/v1/guests"))
-            .andExpect(status().isOk)
+            .andExpect(status().isCreated)
             .andReturn().response.contentAsString
             .let { objectMapper.readTree(it).path("data").path("guestId").asString() }
 
         val second = mockMvc.perform(post("/api/v1/guests"))
-            .andExpect(status().isOk)
+            .andExpect(status().isCreated)
             .andReturn().response.contentAsString
             .let { objectMapper.readTree(it).path("data").path("guestId").asString() }
 
