@@ -1,9 +1,10 @@
 package com.depromeet.team3.tournament.controller
 
 import com.depromeet.team3.common.response.ApiResponseBody
+import com.depromeet.team3.tournament.controller.dto.AddTournamentItemsRequest
+import com.depromeet.team3.tournament.controller.dto.CreateTournamentRequest
+import com.depromeet.team3.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.team3.tournament.controller.dto.RecordMatchRequest
-import com.depromeet.team3.tournament.controller.dto.StartTournamentRequest
-import com.depromeet.team3.tournament.controller.dto.StartTournamentResponse
 import com.depromeet.team3.tournament.controller.dto.TournamentInfoResponse
 import com.depromeet.team3.tournament.service.TournamentService
 import jakarta.validation.Valid
@@ -25,12 +26,31 @@ class TournamentController(
 ) : TournamentApi {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    override fun create(
+        @RequestHeader("X-User-Id") userId: UUID,
+        @RequestBody @Valid request: CreateTournamentRequest,
+    ): ApiResponseBody<CreateTournamentResponse> {
+        val tournamentId = tournamentService.create(userId, request.toCreateTournament())
+        return ApiResponseBody.created(CreateTournamentResponse(tournamentId))
+    }
+
+    @PostMapping("/{tournamentId}/items")
+    override fun addItems(
+        @RequestHeader("X-User-Id") userId: UUID,
+        @PathVariable tournamentId: Long,
+        @RequestBody @Valid request: AddTournamentItemsRequest,
+    ): ApiResponseBody<Unit> {
+        tournamentService.addItems(userId, request.toAddTournamentItems(tournamentId))
+        return ApiResponseBody.ok()
+    }
+
+    @PostMapping("/{tournamentId}/start")
     override fun start(
         @RequestHeader("X-User-Id") userId: UUID,
-        @RequestBody @Valid request: StartTournamentRequest,
-    ): ApiResponseBody<StartTournamentResponse> {
-        val tournamentId = tournamentService.start(userId, request.toStartTournament())
-        return ApiResponseBody.created(StartTournamentResponse(tournamentId))
+        @PathVariable tournamentId: Long,
+    ): ApiResponseBody<Unit> {
+        tournamentService.start(userId, tournamentId)
+        return ApiResponseBody.ok()
     }
 
     @PostMapping("/{tournamentId}/matches")

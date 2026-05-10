@@ -1,7 +1,10 @@
 package com.depromeet.team3.tournament.service.dto
 
-data class StartTournament(
+data class CreateTournament(
     val name: String,
-    val round: Int,
-    val wishItemIds: List<Long>,
+)
+
+data class AddTournamentItems(
+    val tournamentId: Long,
+    val itemIds: List<Long>,
 )

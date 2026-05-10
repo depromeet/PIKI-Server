@@ -39,5 +39,26 @@ class TournamentException private constructor(
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
+
+        fun invalidTournamentItem(): TournamentException =
+            TournamentException(
+                "해당 토너먼트에 속하지 않는 아이템입니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
+
+        fun notPendingTournament(): TournamentException =
+            TournamentException(
+                "PENDING 상태인 토너먼트에만 수행할 수 있습니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.CONFLICT,
+            )
+
+        fun notInProgressTournament(): TournamentException =
+            TournamentException(
+                "진행 중인 토너먼트에만 수행할 수 있습니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.CONFLICT,
+            )
     }
 }
