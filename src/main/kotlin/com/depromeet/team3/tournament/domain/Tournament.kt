@@ -18,20 +18,18 @@ class Tournament(
 ) : LongBaseEntity() {
 
     fun start() {
-        check(status == TournamentStatus.PENDING) { "PENDING 상태인 토너먼트만 시작할 수 있습니다." }
         this.status = TournamentStatus.IN_PROGRESS
     }
 
     fun complete() {
-        check(isInProgress()) { "진행 중인 토너먼트만 완료할 수 있습니다." }
         this.status = TournamentStatus.COMPLETED
     }
 
     fun isFinalRound(currentRound: Int): Boolean = currentRound == FINAL_ROUND_SIZE
 
-    fun isInProgress(): Boolean = status == TournamentStatus.IN_PROGRESS
+    fun isPending(): Boolean = status == TournamentStatus.PENDING
 
-    fun isCompleted(): Boolean = status == TournamentStatus.COMPLETED
+    fun isInProgress(): Boolean = status == TournamentStatus.IN_PROGRESS
 
     companion object {
         private const val FINAL_ROUND_SIZE = 2

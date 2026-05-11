@@ -3,7 +3,6 @@ package com.depromeet.team3.tournament.service
 import com.depromeet.team3.tournament.domain.Tournament
 import com.depromeet.team3.tournament.domain.TournamentHistory
 import com.depromeet.team3.tournament.domain.TournamentItem
-import com.depromeet.team3.tournament.domain.TournamentStatus
 import com.depromeet.team3.tournament.repository.TournamentRepository
 import com.depromeet.team3.tournament.service.dto.AddTournamentItems
 import com.depromeet.team3.tournament.service.dto.CreateTournament
@@ -31,9 +30,7 @@ class TournamentService(
         val tournament = tournamentRepository.findTournamentById(command.tournamentId)
             ?: throw TournamentException.notFoundTournament()
         if (tournament.userId != userId) throw TournamentException.forbiddenTournament()
-        if (tournament.status != TournamentStatus.PENDING) {
-            throw TournamentException.notPendingTournament()
-        }
+        if (!tournament.isPending()) throw TournamentException.notPendingTournament()
         val ownedCount = wishRepository.countByIdsAndGuestId(command.itemIds, userId)
         if (ownedCount != command.itemIds.size.toLong()) throw WishException.forbiddenWishItems()
         tournamentRepository.saveTournamentItems(
@@ -41,12 +38,13 @@ class TournamentService(
         )
     }
 
+    // 친구 공유 및 참여 기능 추가 시 소유권 검증 로직 제거 필요
     @Transactional
     fun start(userId: UUID, tournamentId: Long) {
         val tournament = tournamentRepository.findTournamentById(tournamentId)
             ?: throw TournamentException.notFoundTournament()
         if (tournament.userId != userId) throw TournamentException.forbiddenTournament()
-        if (tournament.status != TournamentStatus.PENDING) throw TournamentException.notPendingTournament()
+        if (!tournament.isPending()) throw TournamentException.notPendingTournament()
         tournament.start()
     }
 
