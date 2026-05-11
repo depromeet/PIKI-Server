@@ -26,13 +26,6 @@ class TournamentException private constructor(
                 HttpStatus.FORBIDDEN,
             )
 
-        fun alreadyCompleted(): TournamentException =
-            TournamentException(
-                "이미 완료된 토너먼트입니다.",
-                ErrorCategory.INVALID_INPUT,
-                HttpStatus.CONFLICT,
-            )
-
         fun invalidWinner(): TournamentException =
             TournamentException(
                 "승자는 대결한 두 아이템 중 하나여야 합니다.",
