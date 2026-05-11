@@ -88,16 +88,16 @@ class TournamentControllerTest {
         val expectedRecordMatch = RecordMatch(
             tournamentId = 1L,
             currentRound = 4,
-            firstItemId = 10L,
-            secondItemId = 20L,
-            winnerItemId = 10L,
+            firstItemId = 1L,
+            secondItemId = 2L,
+            winnerItemId = 1L,
         )
 
         mockMvc.perform(
             post("/api/v1/tournaments/1/matches")
                 .header("X-User-Id", userId.toString())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"currentRound":4,"firstItemId":10,"secondItemId":20,"winnerItemId":10}"""),
+                .content("""{"currentRound":4,"firstItemId":1,"secondItemId":2,"winnerItemId":1}"""),
         )
             .andExpect(status().isOk)
 
@@ -115,9 +115,9 @@ class TournamentControllerTest {
             history = listOf(
                 TournamentHistoryInfo(
                     currentRound = 2,
-                    firstItemId = 1L,
-                    secondItemId = 2L,
-                    winnerItemId = 1L,
+                    firstTournamentItemId = 1L,
+                    secondTournamentItemId = 2L,
+                    winnerTournamentItemId = 1L,
                 ),
             ),
         )
@@ -129,8 +129,9 @@ class TournamentControllerTest {
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.data.tournamentId").value(1))
+            .andExpect(jsonPath("$.data.round").value(2))
             .andExpect(jsonPath("$.data.items[0].tournamentItemId").value(1))
             .andExpect(jsonPath("$.data.history[0].currentRound").value(2))
-            .andExpect(jsonPath("$.data.history[0].winnerItemId").value(1))
+            .andExpect(jsonPath("$.data.history[0].winnerTournamentItemId").value(1))
     }
 }

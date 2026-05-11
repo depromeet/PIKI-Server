@@ -157,7 +157,7 @@ class TournamentServiceTest {
         )
 
         assertEquals(1, repository.histories.size)
-        assertEquals(firstItem.getId(), repository.histories[0].winnerItemId)
+        assertEquals(firstItem.getId(), repository.histories[0].winnerTournamentItemId)
     }
 
     @Test
@@ -290,7 +290,7 @@ class TournamentServiceTest {
         assertEquals(tournamentId, info.tournamentId)
         assertEquals(4, info.items.size)
         assertEquals(1, info.history.size)
-        assertEquals(secondItem.getId(), info.history[0].winnerItemId)
+        assertEquals(secondItem.getId(), info.history[0].winnerTournamentItemId)
     }
 
     @Test
