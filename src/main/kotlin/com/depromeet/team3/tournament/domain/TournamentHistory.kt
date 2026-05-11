@@ -9,7 +9,10 @@ class TournamentHistory(
     @Column(name = "tournament_id", nullable = false)
     val tournamentId: Long,
     val currentRound: Int,
-    val firstItemId: Long,
-    val secondItemId: Long,
-    val winnerItemId: Long,
+    @Column(name = "first_tournament_item_id", nullable = false)
+    val firstTournamentItemId: Long,
+    @Column(name = "second_tournament_item_id", nullable = false)
+    val secondTournamentItemId: Long,
+    @Column(name = "winner_tournament_item_id", nullable = false)
+    val winnerTournamentItemId: Long,
 ) : LongBaseEntity()

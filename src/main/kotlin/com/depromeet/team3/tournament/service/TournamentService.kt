@@ -81,9 +81,9 @@ class TournamentService(
             TournamentHistory(
                 tournamentId = command.tournamentId,
                 currentRound = command.currentRound,
-                firstItemId = command.firstItemId,
-                secondItemId = command.secondItemId,
-                winnerItemId = command.winnerItemId,
+                firstTournamentItemId = command.firstItemId,
+                secondTournamentItemId = command.secondItemId,
+                winnerTournamentItemId = command.winnerItemId,
             ),
         )
 

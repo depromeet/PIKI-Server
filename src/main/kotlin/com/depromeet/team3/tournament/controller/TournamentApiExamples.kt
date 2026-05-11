@@ -58,6 +58,7 @@ class TournamentApiExamples(private val openApiObjectMapper: OpenApiObjectMapper
                     payload = ApiResponseBody.ok(
                         TournamentInfoResponse(
                             tournamentId = 1,
+                            round = 2,
                             items = listOf(
                                 TournamentItemInfoResponse(tournamentItemId = 1, itemId = 10),
                                 TournamentItemInfoResponse(tournamentItemId = 2, itemId = 20),
@@ -65,9 +66,9 @@ class TournamentApiExamples(private val openApiObjectMapper: OpenApiObjectMapper
                             history = listOf(
                                 TournamentHistoryInfoResponse(
                                     currentRound = 4,
-                                    firstItemId = 1,
-                                    secondItemId = 2,
-                                    winnerItemId = 1,
+                                    firstTournamentItemId = 1,
+                                    secondTournamentItemId = 2,
+                                    winnerTournamentItemId = 1,
                                 ),
                             ),
                         ),
