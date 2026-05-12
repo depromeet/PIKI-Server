@@ -67,4 +67,10 @@ tasks.withType<Test> {
     useJUnitPlatform()
     // JDK 21+부터 동적 에이전트 로딩이 제한됨. Mockito(ByteBuddy)가 런타임에 에이전트를 붙이므로 명시적 허용 필요.
     jvmArgs("-XX:+EnableDynamicAgentLoading")
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showCauses = true
+        showStackTraces = true
+    }
 }
