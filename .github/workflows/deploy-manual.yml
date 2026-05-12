@@ -1,18 +1,20 @@
-name: Deploy to EC2
+name: Deploy to Staging (Manual)
 
 on:
-  workflow_run:
-    workflows: [CI]
-    branches: [dev]
-    types: [completed]
   workflow_dispatch:
+    inputs:
+      branch:
+        description: '배포할 브랜치'
+        required: true
+        default: 'dev'
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     permissions:
       contents: read
 
@@ -20,7 +22,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event.inputs.branch }}
 
       - name: Set up JDK 25
         uses: actions/setup-java@v4
@@ -54,6 +56,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Sanitize branch name for Docker tag
+        id: tag
+        run: echo "value=staging-$(echo '${{ github.event.inputs.branch }}' | tr '/' '-')" >> $GITHUB_OUTPUT
+
       - name: Build and push Docker image
         id: docker_push
         uses: docker/build-push-action@v6
@@ -62,11 +68,9 @@ jobs:
           file: Dockerfile.ci
           push: true
           platforms: linux/arm64
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/team3-server:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/team3-server:${{ github.event.workflow_run.head_sha || github.sha }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/team3-server:${{ steps.tag.outputs.value }}
 
-      - name: Deploy to EC2
+      - name: Deploy to Staging EC2
         id: deploy
         uses: appleboy/ssh-action@v1
         with:
@@ -74,7 +78,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/team3-server:${{ github.event.workflow_run.head_sha || github.sha }}"
+            IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/team3-server:${{ steps.tag.outputs.value }}"
             docker pull "$IMAGE"
             docker stop team3-server || true
             docker rm team3-server || true
@@ -120,14 +124,10 @@ jobs:
           ACTOR_MENTION="${SLACK_ID:+<@$SLACK_ID>}"
           ACTOR_MENTION="${ACTOR_MENTION:-$ACTOR}"
 
-          SHORT_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
-          SHORT_SHA="${SHORT_SHA:0:7}"
-          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.event.workflow_run.head_sha || github.sha }}"
-          COMMIT_MSG=$(jq -r '(.workflow_run.head_commit.message // .head_commit.message // "")' "$GITHUB_EVENT_PATH" | head -n 1)
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-          TEXT=$(printf '✅ `${{ github.ref_name }}` 배포 성공!  ✅\n• 배포자: %s\n• 커밋: <%s|%s>  %s\n• <%s|워크플로우 로그>' \
-            "$ACTOR_MENTION" "$COMMIT_URL" "$SHORT_SHA" "$COMMIT_MSG" "$RUN_URL")
+          TEXT=$(printf '✅ `${{ github.event.inputs.branch }}` → staging 배포 성공! ✅\n• 배포자: %s\n• <%s|워크플로우 로그>' \
+            "$ACTOR_MENTION" "$RUN_URL")
 
           curl -s -X POST https://slack.com/api/chat.postMessage \
             -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
@@ -146,10 +146,6 @@ jobs:
           ACTOR_MENTION="${SLACK_ID:+<@$SLACK_ID>}"
           ACTOR_MENTION="${ACTOR_MENTION:-$ACTOR}"
 
-          SHORT_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
-          SHORT_SHA="${SHORT_SHA:0:7}"
-          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.event.workflow_run.head_sha || github.sha }}"
-          COMMIT_MSG=$(jq -r '(.workflow_run.head_commit.message // .head_commit.message // "")' "$GITHUB_EVENT_PATH" | head -n 1)
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
           if [ "${{ steps.build.outcome }}" = "failure" ]; then
@@ -166,8 +162,8 @@ jobs:
             CAUSE="알 수 없음 (환경 설정 단계)"
           fi
 
-          TEXT=$(printf '❌ `${{ github.ref_name }}` 배포 실패! ❌\n• 배포자: %s\n• 커밋: <%s|%s>  %s\n• 원인: %s\n• <%s|워크플로우 로그 확인>' \
-            "$ACTOR_MENTION" "$COMMIT_URL" "$SHORT_SHA" "$COMMIT_MSG" "$CAUSE" "$RUN_URL")
+          TEXT=$(printf '❌ `${{ github.event.inputs.branch }}` → staging 배포 실패! ❌\n• 배포자: %s\n• 원인: %s\n• <%s|워크플로우 로그 확인>' \
+            "$ACTOR_MENTION" "$CAUSE" "$RUN_URL")
 
           curl -s -X POST https://slack.com/api/chat.postMessage \
             -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
