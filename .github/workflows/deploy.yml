@@ -77,6 +77,13 @@ jobs:
             IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/team3-server:${{ github.event.workflow_run.head_sha || github.sha }}"
             docker pull "$IMAGE"
 
+            # 구버전 team3-server 컨테이너 마이그레이션 (최초 1회)
+            if docker ps --filter "name=team3-server" --filter "status=running" -q | grep -q .; then
+              echo "  MIGRATE : team3-server → blue-green 슬롯으로 전환"
+              docker stop team3-server || true
+              docker rm team3-server || true
+            fi
+
             # 현재 active 슬롯 감지
             if docker ps --filter "name=team3-blue" --filter "status=running" -q | grep -q .; then
               ACTIVE="blue" ACTIVE_PORT=8080 INACTIVE="green" INACTIVE_PORT=8081
