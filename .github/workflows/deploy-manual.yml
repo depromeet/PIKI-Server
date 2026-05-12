@@ -8,6 +8,10 @@ on:
         required: true
         default: 'dev'
 
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
