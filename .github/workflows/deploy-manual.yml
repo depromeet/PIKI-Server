@@ -111,6 +111,7 @@ jobs:
 
       - name: Notify Slack on success
         if: success()
+        continue-on-error: true
         shell: bash
         run: |
           SLACK_USER_MAP='{"m-a-king":"U0AKAEF2K9U","1o18z":"U0AKQ6G8BT3","sevineleven":"U0AK6U2J62F"}'
@@ -132,6 +133,7 @@ jobs:
 
       - name: Notify Slack on failure
         if: failure()
+        continue-on-error: true
         shell: bash
         run: |
           SLACK_USER_MAP='{"m-a-king":"U0AKAEF2K9U","1o18z":"U0AKQ6G8BT3","sevineleven":"U0AK6U2J62F"}'
