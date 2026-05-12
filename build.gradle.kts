@@ -9,6 +9,9 @@ plugins {
 
 ktlint {
 	version.set("1.4.1")
+	filter {
+		exclude("*.kts")
+	}
 }
 
 group = "com.depromeet"
