@@ -19,7 +19,6 @@ import kotlin.test.assertEquals
 // 일반 통합 테스트와 달리 @Transactional 을 사용하지 않는다 — 별도 트랜잭션 동시 진행이
 // race 시뮬레이션의 본질이다. 데이터 격리는 매 테스트가 새 UUID guestId 를 써서 보장한다.
 class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
-
     @Autowired
     private lateinit var webApplicationContext: WebApplicationContext
 
@@ -43,17 +42,20 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
         val executor = Executors.newFixedThreadPool(2)
         val workersReady = CountDownLatch(2)
         val start = CountDownLatch(1)
-        val futures = (0..1).map {
-            executor.submit<Int> {
-                workersReady.countDown()
-                start.await()
-                mockMvc.perform(
-                    post("/api/v1/wishlists")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body)
-                ).andReturn().response.status
+        val futures =
+            (0..1).map {
+                executor.submit<Int> {
+                    workersReady.countDown()
+                    start.await()
+                    mockMvc
+                        .perform(
+                            post("/api/v1/wishlists")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body),
+                        ).andReturn()
+                        .response.status
+                }
             }
-        }
         workersReady.await()
         start.countDown()
         val statuses = futures.map { it.get(10, TimeUnit.SECONDS) }.toSet()

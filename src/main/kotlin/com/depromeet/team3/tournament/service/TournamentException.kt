@@ -9,8 +9,8 @@ class TournamentException private constructor(
     message: String,
     override val category: ErrorCategory,
     override val httpStatus: HttpStatus,
-) : BaseException(message), HttpMappable {
-
+) : BaseException(message),
+    HttpMappable {
     companion object {
         fun notFoundTournament(): TournamentException =
             TournamentException(
@@ -41,4 +41,3 @@ class TournamentException private constructor(
             )
     }
 }
-

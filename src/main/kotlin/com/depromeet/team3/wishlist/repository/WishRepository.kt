@@ -6,6 +6,14 @@ import java.util.UUID
 
 interface WishRepository {
     fun save(wish: Wish): Wish
-    fun existsByGuestIdAndProductLink(guestId: UUID, link: ProductLink): Boolean
-    fun countByIdsAndGuestId(ids: List<Long>, guestId: UUID): Long
+
+    fun existsByGuestIdAndProductLink(
+        guestId: UUID,
+        link: ProductLink,
+    ): Boolean
+
+    fun countByIdsAndGuestId(
+        ids: List<Long>,
+        guestId: UUID,
+    ): Long
 }

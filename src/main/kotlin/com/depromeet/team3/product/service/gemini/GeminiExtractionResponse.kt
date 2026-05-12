@@ -7,12 +7,16 @@ data class GeminiExtractionResponse(
     val candidates: List<Candidate>,
 ) {
     fun extractText(): String =
-        candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text
+        candidates
+            .firstOrNull()
+            ?.content
+            ?.parts
+            ?.firstOrNull()
+            ?.text
             ?: throw GeminiApiException.noTextPart()
 
     // url_context tool 결과의 fetch 상태를 관측용으로 노출한다. MVP 단계에선 로깅 용도.
-    fun urlContextMetadata(): UrlContextMetadata? =
-        candidates.firstOrNull()?.urlContextMetadata
+    fun urlContextMetadata(): UrlContextMetadata? = candidates.firstOrNull()?.urlContextMetadata
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     data class Candidate(

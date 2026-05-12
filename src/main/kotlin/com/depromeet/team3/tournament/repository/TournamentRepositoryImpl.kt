@@ -10,8 +10,7 @@ class TournamentRepositoryImpl(
     private val tournamentJpaRepository: TournamentJpaRepository,
     private val tournamentHistoryJpaRepository: TournamentHistoryJpaRepository,
 ) : TournamentRepository {
-    override fun saveTournament(tournament: Tournament): Long =
-        tournamentJpaRepository.save(tournament).getId()
+    override fun saveTournament(tournament: Tournament): Long = tournamentJpaRepository.save(tournament).getId()
 
     override fun saveHistory(history: TournamentHistory) {
         tournamentHistoryJpaRepository.save(history)

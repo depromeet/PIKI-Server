@@ -15,9 +15,10 @@ data class StartTournamentRequest(
     @field:Size(min = 2)
     val wishItemIds: List<Long>,
 ) {
-    fun toStartTournament(): StartTournament = StartTournament(
-        name = name,
-        round = round,
-        wishItemIds = wishItemIds,
-    )
+    fun toStartTournament(): StartTournament =
+        StartTournament(
+            name = name,
+            round = round,
+            wishItemIds = wishItemIds,
+        )
 }

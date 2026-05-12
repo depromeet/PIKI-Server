@@ -17,7 +17,6 @@ import java.util.UUID
 
 @Transactional
 class WishlistControllerIntegrationTest : IntegrationTestSupport() {
-
     @Autowired
     private lateinit var webApplicationContext: WebApplicationContext
 
@@ -44,12 +43,12 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         }
         val body = objectMapper.writeValueAsString(mapOf("url" to url, "guestId" to guestId))
 
-        mockMvc.perform(
-            post("/api/v1/wishlists")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)
-        )
-            .andExpect(status().isCreated)
+        mockMvc
+            .perform(
+                post("/api/v1/wishlists")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body),
+            ).andExpect(status().isCreated)
             .andExpect(jsonPath("$.status").value(201))
             .andExpect(jsonPath("$.code").value("CREATED"))
             .andExpect(jsonPath("$.data.wishId").isNumber)
@@ -69,18 +68,19 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         stubExtractor.build = { Product(link = it, name = "기본 상품") }
         val body = objectMapper.writeValueAsString(mapOf("url" to url, "guestId" to guestId))
 
-        mockMvc.perform(
-            post("/api/v1/wishlists")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)
-        ).andExpect(status().isCreated)
+        mockMvc
+            .perform(
+                post("/api/v1/wishlists")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body),
+            ).andExpect(status().isCreated)
 
-        mockMvc.perform(
-            post("/api/v1/wishlists")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)
-        )
-            .andExpect(status().isConflict)
+        mockMvc
+            .perform(
+                post("/api/v1/wishlists")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body),
+            ).andExpect(status().isConflict)
             .andExpect(jsonPath("$.status").value(409))
             .andExpect(jsonPath("$.code").value("CONFLICT"))
             .andExpect(jsonPath("$.data").doesNotExist())
@@ -94,17 +94,19 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val firstBody = objectMapper.writeValueAsString(mapOf("url" to url, "guestId" to UUID.randomUUID()))
         val secondBody = objectMapper.writeValueAsString(mapOf("url" to url, "guestId" to UUID.randomUUID()))
 
-        mockMvc.perform(
-            post("/api/v1/wishlists")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(firstBody)
-        ).andExpect(status().isCreated)
+        mockMvc
+            .perform(
+                post("/api/v1/wishlists")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(firstBody),
+            ).andExpect(status().isCreated)
 
-        mockMvc.perform(
-            post("/api/v1/wishlists")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(secondBody)
-        ).andExpect(status().isCreated)
+        mockMvc
+            .perform(
+                post("/api/v1/wishlists")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(secondBody),
+            ).andExpect(status().isCreated)
     }
 
     @Test
@@ -112,10 +114,11 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         val body = objectMapper.writeValueAsString(mapOf("url" to "", "guestId" to UUID.randomUUID()))
 
-        mockMvc.perform(
-            post("/api/v1/wishlists")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body)
-        ).andExpect(status().isBadRequest)
+        mockMvc
+            .perform(
+                post("/api/v1/wishlists")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body),
+            ).andExpect(status().isBadRequest)
     }
 }

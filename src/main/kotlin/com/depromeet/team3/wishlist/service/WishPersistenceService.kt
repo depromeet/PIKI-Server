@@ -18,7 +18,10 @@ class WishPersistenceService(
     private val wishRepository: WishRepository,
 ) {
     @Transactional
-    fun persist(guestId: UUID, product: Product): WishRegisterResult =
+    fun persist(
+        guestId: UUID,
+        product: Product,
+    ): WishRegisterResult =
         try {
             val wish = wishRepository.save(Wish(guestId = guestId, product = product))
             WishRegisterResult(wish = wish)
@@ -28,10 +31,12 @@ class WishPersistenceService(
             // 진짜 데이터 오류가 "이미 존재함" 으로 사일런트 fail 한다.
             // Hibernate 가 constraintName 을 "wishes.uk_wishes_guest_source" 처럼 테이블 prefix
             // 와 함께 주는 경우가 있어 endsWith 도 함께 본다.
-            val constraint = (e.cause as? ConstraintViolationException)?.constraintName?.lowercase()
-                ?: throw e
-            val matched = constraint == UK_WISHES_GUEST_SOURCE ||
-                constraint.endsWith(".$UK_WISHES_GUEST_SOURCE")
+            val constraint =
+                (e.cause as? ConstraintViolationException)?.constraintName?.lowercase()
+                    ?: throw e
+            val matched =
+                constraint == UK_WISHES_GUEST_SOURCE ||
+                    constraint.endsWith(".$UK_WISHES_GUEST_SOURCE")
             if (!matched) throw e
             throw WishException.alreadyExists(guestId = guestId, link = product.link)
         }

@@ -36,7 +36,8 @@ data class GeminiExtractionRequest(
     companion object {
         // 서버에서 직접 fetch 한 HTML 을 in-context 로 받기 때문에 Gemini 의 url_context tool 을 쓰지 않는다.
         // CSR 페이지의 inline JSON-LD 등 정적 HTML 안의 정보를 LLM 이 직접 보고 추출하도록 유도.
-        private val SYSTEM_PROMPT = """
+        private val SYSTEM_PROMPT =
+            """
             You are a product information extractor. Given the URL and the HTML of a product page,
             extract information for the MAIN product of the page.
 
@@ -72,35 +73,43 @@ data class GeminiExtractionRequest(
             - Do NOT extract discount rate. The server computes it from regularPrice and discountedPrice.
 
             Respond with JSON only, matching the provided schema. Handle any language.
-        """.trimIndent()
+            """.trimIndent()
 
-        private val EXTRACTION_SCHEMA = JsonSchema(
-            type = "object",
-            properties = mapOf(
-                "isProductPage" to JsonSchema(type = "boolean"),
-                "name" to JsonSchema(type = "string", nullable = true),
-                "regularPrice" to JsonSchema(type = "integer", nullable = true),
-                "discountedPrice" to JsonSchema(type = "integer", nullable = true),
-                "currency" to JsonSchema(type = "string", nullable = true),
-                "imageUrl" to JsonSchema(type = "string", nullable = true),
-            ),
-            required = listOf("isProductPage"),
-        )
+        private val EXTRACTION_SCHEMA =
+            JsonSchema(
+                type = "object",
+                properties =
+                    mapOf(
+                        "isProductPage" to JsonSchema(type = "boolean"),
+                        "name" to JsonSchema(type = "string", nullable = true),
+                        "regularPrice" to JsonSchema(type = "integer", nullable = true),
+                        "discountedPrice" to JsonSchema(type = "integer", nullable = true),
+                        "currency" to JsonSchema(type = "string", nullable = true),
+                        "imageUrl" to JsonSchema(type = "string", nullable = true),
+                    ),
+                required = listOf("isProductPage"),
+            )
 
-        fun forHtmlExtraction(url: URI, html: String): GeminiExtractionRequest =
+        fun forHtmlExtraction(
+            url: URI,
+            html: String,
+        ): GeminiExtractionRequest =
             GeminiExtractionRequest(
-                generationConfig = GenerationConfig(
-                    responseMimeType = "application/json",
-                    responseJsonSchema = EXTRACTION_SCHEMA,
-                ),
-                contents = listOf(
-                    Content(
-                        parts = listOf(
-                            Part(text = SYSTEM_PROMPT),
-                            Part(text = "URL: $url\n\nHTML:\n$html"),
+                generationConfig =
+                    GenerationConfig(
+                        responseMimeType = "application/json",
+                        responseJsonSchema = EXTRACTION_SCHEMA,
+                    ),
+                contents =
+                    listOf(
+                        Content(
+                            parts =
+                                listOf(
+                                    Part(text = SYSTEM_PROMPT),
+                                    Part(text = "URL: $url\n\nHTML:\n$html"),
+                                ),
                         ),
                     ),
-                ),
             )
     }
 }

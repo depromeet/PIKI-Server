@@ -8,15 +8,15 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 class GeminiExtractionResultTest {
-
     private val link = ProductLink.parse("https://shop.example.com/products/42")
 
     @Test
     fun `isProductPage 가 false 이면 notProductPage 예외를 던진다`() {
-        val result = GeminiExtractionResult(
-            isProductPage = false,
-            name = null,
-        )
+        val result =
+            GeminiExtractionResult(
+                isProductPage = false,
+                name = null,
+            )
 
         assertFailsWith<ProductExtractionException> {
             result.toProduct(link)
@@ -25,10 +25,11 @@ class GeminiExtractionResultTest {
 
     @Test
     fun `name 이 비어 있어도 Product 로 변환되며 name 은 null 로 정규화된다`() {
-        val result = GeminiExtractionResult(
-            isProductPage = true,
-            name = "   ",
-        )
+        val result =
+            GeminiExtractionResult(
+                isProductPage = true,
+                name = "   ",
+            )
 
         val product = result.toProduct(link)
 
@@ -37,11 +38,12 @@ class GeminiExtractionResultTest {
 
     @Test
     fun `일부 필드만 있어도 Product 로 변환된다`() {
-        val result = GeminiExtractionResult(
-            isProductPage = true,
-            name = "테스트 상품",
-            regularPrice = 10_000,
-        )
+        val result =
+            GeminiExtractionResult(
+                isProductPage = true,
+                name = "테스트 상품",
+                regularPrice = 10_000,
+            )
 
         val product = result.toProduct(link)
 
@@ -53,14 +55,15 @@ class GeminiExtractionResultTest {
 
     @Test
     fun `전 필드가 채워진 경우 그대로 Product 에 매핑되고 discountRate 는 서버에서 계산된다`() {
-        val result = GeminiExtractionResult(
-            isProductPage = true,
-            name = "나이키 에어포스",
-            regularPrice = 139_000,
-            discountedPrice = 99_000,
-            currency = "KRW",
-            imageUrl = "https://cdn.example.com/p/42.jpg",
-        )
+        val result =
+            GeminiExtractionResult(
+                isProductPage = true,
+                name = "나이키 에어포스",
+                regularPrice = 139_000,
+                discountedPrice = 99_000,
+                currency = "KRW",
+                imageUrl = "https://cdn.example.com/p/42.jpg",
+            )
 
         val product = result.toProduct(link)
 
@@ -75,11 +78,12 @@ class GeminiExtractionResultTest {
 
     @Test
     fun `비어 있는 문자열 필드는 null 로 정규화된다`() {
-        val result = GeminiExtractionResult(
-            isProductPage = true,
-            name = "테스트",
-            imageUrl = "",
-        )
+        val result =
+            GeminiExtractionResult(
+                isProductPage = true,
+                name = "테스트",
+                imageUrl = "",
+            )
 
         val product = result.toProduct(link)
 
@@ -88,29 +92,32 @@ class GeminiExtractionResultTest {
 
     @Test
     fun `regularPrice 또는 discountedPrice 가 없으면 discountRate 는 null 이다`() {
-        val onlyRegular = GeminiExtractionResult(
-            isProductPage = true,
-            name = "상품",
-            regularPrice = 10_000,
-        )
+        val onlyRegular =
+            GeminiExtractionResult(
+                isProductPage = true,
+                name = "상품",
+                regularPrice = 10_000,
+            )
         assertNull(onlyRegular.toProduct(link).discountRate)
 
-        val onlyDiscounted = GeminiExtractionResult(
-            isProductPage = true,
-            name = "상품",
-            discountedPrice = 9_000,
-        )
+        val onlyDiscounted =
+            GeminiExtractionResult(
+                isProductPage = true,
+                name = "상품",
+                discountedPrice = 9_000,
+            )
         assertNull(onlyDiscounted.toProduct(link).discountRate)
     }
 
     @Test
     fun `할인가가 원가 이상이면 discountRate 는 null 이다`() {
-        val noDiscount = GeminiExtractionResult(
-            isProductPage = true,
-            name = "상품",
-            regularPrice = 10_000,
-            discountedPrice = 10_000,
-        )
+        val noDiscount =
+            GeminiExtractionResult(
+                isProductPage = true,
+                name = "상품",
+                regularPrice = 10_000,
+                discountedPrice = 10_000,
+            )
 
         assertNull(noDiscount.toProduct(link).discountRate)
     }

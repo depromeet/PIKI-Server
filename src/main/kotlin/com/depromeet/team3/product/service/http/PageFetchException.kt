@@ -3,7 +3,6 @@ package com.depromeet.team3.product.service.http
 import com.depromeet.team3.common.exception.BaseException
 import com.depromeet.team3.common.exception.ErrorCategory
 import com.depromeet.team3.common.exception.HttpMappable
-import com.depromeet.team3.product.domain.ProductLink
 import org.springframework.http.HttpStatus
 
 class PageFetchException private constructor(
@@ -11,8 +10,8 @@ class PageFetchException private constructor(
     override val category: ErrorCategory,
     override val httpStatus: HttpStatus,
     cause: Throwable? = null,
-) : BaseException(message, cause), HttpMappable {
-
+) : BaseException(message, cause),
+    HttpMappable {
     companion object {
         // 사용자 입력 URL 의 query/fragment 에 토큰·세션이 박혀 있을 수 있어 어떤 메시지에도
         // link 자체를 노출하지 않는다. 디버깅용 식별자는 호출 지점에서

@@ -9,8 +9,8 @@ class ProductExtractionException private constructor(
     message: String,
     override val category: ErrorCategory,
     override val httpStatus: HttpStatus,
-) : BaseException(message), HttpMappable {
-
+) : BaseException(message),
+    HttpMappable {
     companion object {
         // LLM 이 "상품 페이지가 아님"으로 판정. 링크 재등록·재시도 모두 무의미.
         fun notProductPage(): ProductExtractionException =

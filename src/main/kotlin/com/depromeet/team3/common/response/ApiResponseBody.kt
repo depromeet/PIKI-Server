@@ -13,32 +13,31 @@ data class ApiResponseBody<T>(
     val pageResponse: PageResponse? = null,
 ) {
     companion object {
+        fun <T> ok(data: T? = null): ApiResponseBody<T> = success(HttpStatus.OK, data)
 
-        fun <T> ok(data: T? = null): ApiResponseBody<T> =
-            success(HttpStatus.OK, data)
-
-        fun <T> created(data: T? = null): ApiResponseBody<T> =
-            success(HttpStatus.CREATED, data)
+        fun <T> created(data: T? = null): ApiResponseBody<T> = success(HttpStatus.CREATED, data)
 
         fun <T> fail(
             category: ErrorCategory,
             status: HttpStatus,
             detail: String? = null,
-        ): ApiResponseBody<T> = ApiResponseBody(
-            status = status.value(),
-            data = null,
-            detail = detail ?: category.description,
-            code = status.name,
-        )
+        ): ApiResponseBody<T> =
+            ApiResponseBody(
+                status = status.value(),
+                data = null,
+                detail = detail ?: category.description,
+                code = status.name,
+            )
 
         private fun <T> success(
             status: HttpStatus,
             data: T?,
-        ): ApiResponseBody<T> = ApiResponseBody(
-            status = status.value(),
-            data = data,
-            detail = "정상적으로 처리되었습니다.",
-            code = status.name,
-        )
+        ): ApiResponseBody<T> =
+            ApiResponseBody(
+                status = status.value(),
+                data = data,
+                detail = "정상적으로 처리되었습니다.",
+                code = status.name,
+            )
     }
 }

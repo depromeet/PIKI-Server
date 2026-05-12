@@ -10,14 +10,13 @@ data class TournamentInfoResponse(
     val history: List<TournamentHistoryInfoResponse>,
 ) {
     companion object {
-        fun from(tournamentInfo: TournamentInfo): TournamentInfoResponse {
-            return TournamentInfoResponse(
+        fun from(tournamentInfo: TournamentInfo): TournamentInfoResponse =
+            TournamentInfoResponse(
                 tournamentId = tournamentInfo.tournamentId,
                 round = tournamentInfo.round,
                 finalWinnerWishItemId = tournamentInfo.finalWinnerWishItemId,
                 history = tournamentInfo.history.map { TournamentHistoryInfoResponse.from(it) },
             )
-        }
     }
 }
 
@@ -28,13 +27,12 @@ data class TournamentHistoryInfoResponse(
     val winnerWishItemId: Long,
 ) {
     companion object {
-        fun from(history: TournamentHistoryInfo): TournamentHistoryInfoResponse {
-            return TournamentHistoryInfoResponse(
+        fun from(history: TournamentHistoryInfo): TournamentHistoryInfoResponse =
+            TournamentHistoryInfoResponse(
                 currentRound = history.currentRound,
                 firstWishItemId = history.firstWishItemId,
                 secondWishItemId = history.secondWishItemId,
                 winnerWishItemId = history.winnerWishItemId,
             )
-        }
     }
 }

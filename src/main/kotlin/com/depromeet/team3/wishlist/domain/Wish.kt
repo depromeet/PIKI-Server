@@ -16,11 +16,9 @@ import java.util.UUID
 class Wish(
     @Column(name = "guest_id", nullable = false, columnDefinition = "BINARY(16)")
     val guestId: UUID,
-
     @Embedded
     val product: Product,
 ) : BaseEntity<Long>() {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")

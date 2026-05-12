@@ -6,30 +6,32 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class ProductLinkTest {
-
     @Test
     fun `빈 문자열 또는 공백만 있으면 거부한다`() {
         listOf("", "   ", "\t\n").forEach { raw ->
-            val ex = assertFailsWith<IllegalArgumentException>("'$raw' 는 거부되어야 함") {
-                ProductLink.parse(raw)
-            }
+            val ex =
+                assertFailsWith<IllegalArgumentException>("'$raw' 는 거부되어야 함") {
+                    ProductLink.parse(raw)
+                }
             assertEquals("URL이 비어 있습니다.", ex.message)
         }
     }
 
     @Test
     fun `https 가 아닌 scheme 은 모두 거부한다`() {
-        val cases = listOf(
-            "http://example.com",
-            "ftp://example.com",
-            "file:///etc/passwd",
-            "javascript:alert(1)",
-            "ws://example.com/socket",
-        )
+        val cases =
+            listOf(
+                "http://example.com",
+                "ftp://example.com",
+                "file:///etc/passwd",
+                "javascript:alert(1)",
+                "ws://example.com/socket",
+            )
         cases.forEach { raw ->
-            val ex = assertFailsWith<IllegalArgumentException>("$raw 는 거부되어야 함") {
-                ProductLink.parse(raw)
-            }
+            val ex =
+                assertFailsWith<IllegalArgumentException>("$raw 는 거부되어야 함") {
+                    ProductLink.parse(raw)
+                }
             assertEquals("https URL만 허용합니다.", ex.message)
         }
     }
@@ -37,17 +39,19 @@ class ProductLinkTest {
     @Test
     fun `URI 파싱 자체가 실패하는 raw 는 형식 오류로 거부한다`() {
         // 예: data: URI 의 본문에 illegal character 가 들어가면 URI_create 단계에서 IllegalArgumentException
-        val ex = assertFailsWith<IllegalArgumentException> {
-            ProductLink.parse("data:text/html,<h1>x</h1>")
-        }
+        val ex =
+            assertFailsWith<IllegalArgumentException> {
+                ProductLink.parse("data:text/html,<h1>x</h1>")
+            }
         assertTrue(ex.message?.startsWith("유효한 URL 형식이 아닙니다") == true)
     }
 
     @Test
     fun `scheme 없이 호스트만 있는 raw 는 거부한다`() {
-        val ex = assertFailsWith<IllegalArgumentException> {
-            ProductLink.parse("example.com/product")
-        }
+        val ex =
+            assertFailsWith<IllegalArgumentException> {
+                ProductLink.parse("example.com/product")
+            }
         assertEquals("https URL만 허용합니다.", ex.message)
     }
 
