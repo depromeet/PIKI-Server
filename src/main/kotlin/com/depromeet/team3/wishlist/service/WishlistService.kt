@@ -1,7 +1,7 @@
 package com.depromeet.team3.wishlist.service
 
-import com.depromeet.team3.product.domain.Product
 import com.depromeet.team3.product.domain.ProductLink
+import com.depromeet.team3.product.domain.ProductSnapshot
 import com.depromeet.team3.product.service.ProductExtractor
 import com.depromeet.team3.wishlist.repository.WishRepository
 import com.depromeet.team3.wishlist.service.dto.WishRegisterResult
@@ -20,7 +20,10 @@ class WishlistService(
     // register 전체를 @Transactional 로 묶으면 외부 fetch + Gemini 호출 (read-timeout 60s)
     // 동안 DB 커넥션이 잡혀 풀 고갈 → 다른 API 까지 latency 폭증으로 번진다.
     // 외부 호출은 트랜잭션 바깥에서 끝내고, 영속화는 별도 빈에 위임해 proxy 를 통해 호출.
-    fun register(rawUrl: String, guestId: UUID): WishRegisterResult {
+    fun register(
+        rawUrl: String,
+        guestId: UUID,
+    ): WishRegisterResult {
         val link = ProductLink.parse(rawUrl)
 
         // dedup 검사를 추출 전에 먼저 — 중복이면 LLM 호출 비용 자체를 회피.
@@ -32,7 +35,7 @@ class WishlistService(
         return wishPersistenceService.persist(guestId, product)
     }
 
-    private fun extractWithLatencyLog(link: ProductLink): Product {
+    private fun extractWithLatencyLog(link: ProductLink): ProductSnapshot {
         val started = System.nanoTime()
         val product = productExtractor.extract(link)
         val elapsedMs = (System.nanoTime() - started) / 1_000_000

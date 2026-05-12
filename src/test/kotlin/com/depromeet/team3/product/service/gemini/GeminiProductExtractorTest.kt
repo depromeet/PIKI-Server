@@ -17,7 +17,6 @@ import kotlin.test.assertNotNull
  */
 @Disabled("실제 Gemini API 호출. 검증 필요 시 수동으로 enable 후 실행.")
 class GeminiProductExtractorTest : IntegrationTestSupport() {
-
     @Autowired
     lateinit var extractor: GeminiProductExtractor
 

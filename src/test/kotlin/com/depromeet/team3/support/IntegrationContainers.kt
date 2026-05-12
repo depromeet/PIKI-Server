@@ -12,13 +12,13 @@ import org.testcontainers.junit.jupiter.Container
 // @ImportTestcontainers 의 reflection scan 이 컨테이너를 발견하지 못한다.
 // Kotlin object 의 @JvmStatic val 은 진짜 static field 로 노출되어 정상 동작한다.
 object IntegrationContainers {
-
     @Container
     @ServiceConnection
     @JvmStatic
-    val MYSQL: MySQLContainer<*> = MySQLContainer("mysql:8.4").apply {
-        withDatabaseName("team3")
-        withUsername("team3")
-        withPassword("team3")
-    }
+    val MYSQL: MySQLContainer<*> =
+        MySQLContainer("mysql:8.4").apply {
+            withDatabaseName("team3")
+            withUsername("team3")
+            withPassword("team3")
+        }
 }

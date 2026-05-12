@@ -36,7 +36,8 @@ data class GeminiExtractionRequest(
     companion object {
         // 서버에서 직접 fetch 한 HTML 을 in-context 로 받기 때문에 Gemini 의 url_context tool 을 쓰지 않는다.
         // CSR 페이지의 inline JSON-LD 등 정적 HTML 안의 정보를 LLM 이 직접 보고 추출하도록 유도.
-        private val SYSTEM_PROMPT = """
+        private val SYSTEM_PROMPT =
+            """
             You are a product information extractor. Given the URL and the HTML of a product page,
             extract information for the MAIN product of the page.
 
@@ -57,50 +58,56 @@ data class GeminiExtractionRequest(
             1. isProductPage (boolean, required): true if the page describes a single identifiable product for sale.
                false if this is a list/search/category page, an article, or non-commerce content.
             2. name (string): The product name exactly as displayed. null if isProductPage is false.
-            3. regularPrice (integer): The original (pre-discount) price. Remove currency symbols, commas, decimals.
-               If only a single price is shown (no discount), put it here.
-            4. discountedPrice (integer): The final discounted price. null if no discount is shown.
-            5. currency (string): ISO 4217 code (KRW, USD, JPY, EUR, etc.). Infer from page language/locale if ambiguous.
-            6. imageUrl (string): ABSOLUTE URL of the primary product image. Prefer og:image meta tag,
+            3. currentPrice (integer): The price a buyer would pay RIGHT NOW. Remove currency symbols, commas, decimals.
+               If a discounted/sale price is shown, this is the discounted price. If only a single price is shown,
+               this is that price. NEVER report the strikethrough/original/pre-discount price here.
+            4. currency (string): ISO 4217 code (KRW, USD, JPY, EUR, etc.). Infer from page language/locale if ambiguous.
+            5. imageUrl (string): ABSOLUTE URL of the primary product image. Prefer og:image meta tag,
                fallback to the main product image. Resolve relative URLs against the page URL.
 
             **Price rules**:
-            - Single price, no discount indicator → regularPrice only, discountedPrice null.
-            - Both original and sale prices visible → regularPrice = original, discountedPrice = sale.
-            - JSON-LD priceSpecification with priceType="StrikethroughPrice" → that price is regularPrice,
-              the outer offers.price is discountedPrice.
-            - Do NOT extract discount rate. The server computes it from regularPrice and discountedPrice.
+            - Single price, no discount indicator → that price is currentPrice.
+            - Both original (strikethrough) and sale prices visible → currentPrice = sale price.
+            - JSON-LD with offers.price → that is currentPrice. Ignore priceSpecification entries marked as
+              StrikethroughPrice / ListPrice / original.
 
             Respond with JSON only, matching the provided schema. Handle any language.
-        """.trimIndent()
+            """.trimIndent()
 
-        private val EXTRACTION_SCHEMA = JsonSchema(
-            type = "object",
-            properties = mapOf(
-                "isProductPage" to JsonSchema(type = "boolean"),
-                "name" to JsonSchema(type = "string", nullable = true),
-                "regularPrice" to JsonSchema(type = "integer", nullable = true),
-                "discountedPrice" to JsonSchema(type = "integer", nullable = true),
-                "currency" to JsonSchema(type = "string", nullable = true),
-                "imageUrl" to JsonSchema(type = "string", nullable = true),
-            ),
-            required = listOf("isProductPage"),
-        )
+        private val EXTRACTION_SCHEMA =
+            JsonSchema(
+                type = "object",
+                properties =
+                    mapOf(
+                        "isProductPage" to JsonSchema(type = "boolean"),
+                        "name" to JsonSchema(type = "string", nullable = true),
+                        "currentPrice" to JsonSchema(type = "integer", nullable = true),
+                        "currency" to JsonSchema(type = "string", nullable = true),
+                        "imageUrl" to JsonSchema(type = "string", nullable = true),
+                    ),
+                required = listOf("isProductPage"),
+            )
 
-        fun forHtmlExtraction(url: URI, html: String): GeminiExtractionRequest =
+        fun forHtmlExtraction(
+            url: URI,
+            html: String,
+        ): GeminiExtractionRequest =
             GeminiExtractionRequest(
-                generationConfig = GenerationConfig(
-                    responseMimeType = "application/json",
-                    responseJsonSchema = EXTRACTION_SCHEMA,
-                ),
-                contents = listOf(
-                    Content(
-                        parts = listOf(
-                            Part(text = SYSTEM_PROMPT),
-                            Part(text = "URL: $url\n\nHTML:\n$html"),
+                generationConfig =
+                    GenerationConfig(
+                        responseMimeType = "application/json",
+                        responseJsonSchema = EXTRACTION_SCHEMA,
+                    ),
+                contents =
+                    listOf(
+                        Content(
+                            parts =
+                                listOf(
+                                    Part(text = SYSTEM_PROMPT),
+                                    Part(text = "URL: $url\n\nHTML:\n$html"),
+                                ),
                         ),
                     ),
-                ),
             )
     }
 }

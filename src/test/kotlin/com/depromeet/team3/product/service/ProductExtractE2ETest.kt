@@ -18,18 +18,19 @@ import java.util.concurrent.TimeUnit
  */
 @Disabled("실제 Gemini API 호출 + 외부 쇼핑몰 fetch. 측정 필요 시 수동으로 enable 후 실행.")
 class ProductExtractE2ETest {
-
     private val pageFetcher = HttpPageFetcher()
     private val objectMapper = jacksonObjectMapper()
-    private val properties = GeminiProperties(
-        apiKey = System.getenv("GEMINI_API_KEY"),
-        model = "gemini-3-flash-preview",
-    )
-    private val extractor = GeminiProductExtractor(
-        objectMapper = objectMapper,
-        geminiProperties = properties,
-        pageFetcher = pageFetcher,
-    )
+    private val properties =
+        GeminiProperties(
+            apiKey = System.getenv("GEMINI_API_KEY"),
+            model = "gemini-3-flash-preview",
+        )
+    private val extractor =
+        GeminiProductExtractor(
+            objectMapper = objectMapper,
+            geminiProperties = properties,
+            pageFetcher = pageFetcher,
+        )
 
     @Test
     @Timeout(value = 30, unit = TimeUnit.MINUTES)
@@ -39,32 +40,31 @@ class ProductExtractE2ETest {
             repeat(ITERATIONS) { i ->
                 val link = ProductLink.parse(rawUrl)
                 val started = System.nanoTime()
-                val outcome = try {
-                    val product = extractor.extract(link)
-                    val ms = (System.nanoTime() - started) / 1_000_000
-                    Outcome(
-                        url = rawUrl,
-                        attempt = i + 1,
-                        status = "OK",
-                        name = product.name,
-                        regularPrice = product.regularPrice,
-                        discountedPrice = product.discountedPrice,
-                        elapsedMs = ms,
-                        error = null,
-                    )
-                } catch (e: Exception) {
-                    val ms = (System.nanoTime() - started) / 1_000_000
-                    Outcome(
-                        url = rawUrl,
-                        attempt = i + 1,
-                        status = "FAIL",
-                        name = null,
-                        regularPrice = null,
-                        discountedPrice = null,
-                        elapsedMs = ms,
-                        error = "${e.javaClass.simpleName}: ${e.message}",
-                    )
-                }
+                val outcome =
+                    try {
+                        val product = extractor.extract(link)
+                        val ms = (System.nanoTime() - started) / 1_000_000
+                        Outcome(
+                            url = rawUrl,
+                            attempt = i + 1,
+                            status = "OK",
+                            name = product.name,
+                            currentPrice = product.currentPrice,
+                            elapsedMs = ms,
+                            error = null,
+                        )
+                    } catch (e: Exception) {
+                        val ms = (System.nanoTime() - started) / 1_000_000
+                        Outcome(
+                            url = rawUrl,
+                            attempt = i + 1,
+                            status = "FAIL",
+                            name = null,
+                            currentPrice = null,
+                            elapsedMs = ms,
+                            error = "${e.javaClass.simpleName}: ${e.message}",
+                        )
+                    }
                 results += outcome
                 println(formatLine(outcome))
             }
@@ -74,9 +74,9 @@ class ProductExtractE2ETest {
 
     private fun formatLine(o: Outcome): String =
         if (o.status == "OK") {
-            "[${o.attempt}/${ITERATIONS}] ${o.elapsedMs}ms  ${o.url}  name=${o.name}  reg=${o.regularPrice}  disc=${o.discountedPrice}"
+            "[${o.attempt}/$ITERATIONS] ${o.elapsedMs}ms  ${o.url}  name=${o.name}  price=${o.currentPrice}"
         } else {
-            "[${o.attempt}/${ITERATIONS}] ${o.elapsedMs}ms  ${o.url}  FAIL  ${o.error}"
+            "[${o.attempt}/$ITERATIONS] ${o.elapsedMs}ms  ${o.url}  FAIL  ${o.error}"
         }
 
     private fun printSummary(results: List<Outcome>) {
@@ -84,9 +84,8 @@ class ProductExtractE2ETest {
         results.groupBy { it.url }.forEach { (url, rs) ->
             val ok = rs.count { it.status == "OK" }
             val avg = rs.map { it.elapsedMs }.average().toInt()
-            val regs = rs.filter { it.status == "OK" }.map { it.regularPrice }.distinct()
-            val discs = rs.filter { it.status == "OK" }.map { it.discountedPrice }.distinct()
-            println("$url: ${ok}/${rs.size} OK  avg=${avg}ms  uniqueReg=$regs  uniqueDisc=$discs")
+            val prices = rs.filter { it.status == "OK" }.map { it.currentPrice }.distinct()
+            println("$url: $ok/${rs.size} OK  avg=${avg}ms  uniquePrice=$prices")
         }
     }
 
@@ -95,8 +94,7 @@ class ProductExtractE2ETest {
         val attempt: Int,
         val status: String,
         val name: String?,
-        val regularPrice: Int?,
-        val discountedPrice: Int?,
+        val currentPrice: Int?,
         val elapsedMs: Long,
         val error: String?,
     )
@@ -105,11 +103,12 @@ class ProductExtractE2ETest {
         private const val ITERATIONS = 3
 
         // SSR / CSR / JSON-LD 보유 / 보유 안 함 등 다양한 패턴으로 섞었음.
-        private val URLS = listOf(
-            "https://www.musinsa.com/products/1551840",
-            "https://www.musinsa.com/products/6029415",
-            "https://www.29cm.co.kr/products/3915051",
-            "https://www.29cm.co.kr/products/1437795",
-        )
+        private val URLS =
+            listOf(
+                "https://www.musinsa.com/products/1551840",
+                "https://www.musinsa.com/products/6029415",
+                "https://www.29cm.co.kr/products/3915051",
+                "https://www.29cm.co.kr/products/1437795",
+            )
     }
 }

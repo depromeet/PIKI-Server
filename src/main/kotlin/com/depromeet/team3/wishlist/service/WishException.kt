@@ -11,22 +11,24 @@ class WishException private constructor(
     message: String,
     override val category: ErrorCategory,
     override val httpStatus: HttpStatus,
-) : BaseException(message), HttpMappable {
-
+) : BaseException(message),
+    HttpMappable {
     companion object {
         fun alreadyExists(
             guestId: UUID,
             link: ProductLink,
-        ): WishException = WishException(
-            "이미 위시리스트에 등록된 상품입니다. guestId=$guestId link=$link",
-            ErrorCategory.CONFLICT,
-            HttpStatus.CONFLICT,
-        )
+        ): WishException =
+            WishException(
+                "이미 위시리스트에 등록된 상품입니다. guestId=$guestId link=$link",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
 
-        fun forbiddenWishItems(): WishException = WishException(
-            "해당 위시 아이템에 접근할 권한이 없습니다.",
-            ErrorCategory.FORBIDDEN,
-            HttpStatus.FORBIDDEN,
-        )
+        fun forbiddenWishItems(): WishException =
+            WishException(
+                "해당 위시 아이템에 접근할 권한이 없습니다.",
+                ErrorCategory.FORBIDDEN,
+                HttpStatus.FORBIDDEN,
+            )
     }
 }

@@ -10,12 +10,16 @@ data class TournamentInfo(
     val history: List<TournamentHistoryInfo>,
 ) {
     companion object {
-        fun of(tournament: Tournament, histories: List<TournamentHistory>): TournamentInfo = TournamentInfo(
-            tournamentId = tournament.getId(),
-            round = tournament.round,
-            finalWinnerWishItemId = tournament.finalWinnerWishItemId,
-            history = histories.map(TournamentHistoryInfo::from),
-        )
+        fun of(
+            tournament: Tournament,
+            histories: List<TournamentHistory>,
+        ): TournamentInfo =
+            TournamentInfo(
+                tournamentId = tournament.getId(),
+                round = tournament.round,
+                finalWinnerWishItemId = tournament.finalWinnerWishItemId,
+                history = histories.map(TournamentHistoryInfo::from),
+            )
     }
 }
 
@@ -26,11 +30,12 @@ data class TournamentHistoryInfo(
     val winnerWishItemId: Long,
 ) {
     companion object {
-        fun from(history: TournamentHistory): TournamentHistoryInfo = TournamentHistoryInfo(
-            currentRound = history.currentRound,
-            firstWishItemId = history.firstWishItemId,
-            secondWishItemId = history.secondWishItemId,
-            winnerWishItemId = history.winnerWishItemId,
-        )
+        fun from(history: TournamentHistory): TournamentHistoryInfo =
+            TournamentHistoryInfo(
+                currentRound = history.currentRound,
+                firstWishItemId = history.firstWishItemId,
+                secondWishItemId = history.secondWishItemId,
+                winnerWishItemId = history.winnerWishItemId,
+            )
     }
 }

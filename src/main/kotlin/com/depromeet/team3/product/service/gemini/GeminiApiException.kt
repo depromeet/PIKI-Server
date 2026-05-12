@@ -9,8 +9,8 @@ class GeminiApiException private constructor(
     message: String,
     override val category: ErrorCategory,
     cause: Throwable? = null,
-) : BaseException(message, cause), HttpMappable {
-
+) : BaseException(message, cause),
+    HttpMappable {
     override val httpStatus: HttpStatus = HttpStatus.BAD_GATEWAY
 
     companion object {
@@ -21,8 +21,7 @@ class GeminiApiException private constructor(
             GeminiApiException("Gemini 요청 오류", ErrorCategory.SERVER_ERROR, cause)
 
         // body 자체가 없음 (역직렬화 이전). transport/인프라 이슈로 일시적일 가능성이 크므로 RETRYABLE.
-        fun emptyResponse(): GeminiApiException =
-            GeminiApiException("Gemini 응답이 비어 있습니다.", ErrorCategory.RETRYABLE)
+        fun emptyResponse(): GeminiApiException = GeminiApiException("Gemini 응답이 비어 있습니다.", ErrorCategory.RETRYABLE)
 
         fun parseError(cause: Throwable): GeminiApiException =
             GeminiApiException("Gemini 응답 처리 실패", ErrorCategory.SERVER_ERROR, cause)

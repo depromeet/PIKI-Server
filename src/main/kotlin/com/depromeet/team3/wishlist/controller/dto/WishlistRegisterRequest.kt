@@ -16,7 +16,6 @@ data class WishlistRegisterRequest(
         requiredMode = Schema.RequiredMode.REQUIRED,
     )
     val url: String,
-
     @field:NotNull
     @field:Schema(
         description = "게스트 식별자 (게스트 발급 API로 받은 UUID)",

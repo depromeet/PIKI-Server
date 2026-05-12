@@ -1,6 +1,6 @@
 package com.depromeet.team3.wishlist.controller
 
-import com.depromeet.team3.product.domain.Product
+import com.depromeet.team3.product.domain.ProductSnapshot
 import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.support.StubProductExtractor
 import org.junit.jupiter.api.Test
@@ -19,7 +19,6 @@ import kotlin.test.assertEquals
 // 일반 통합 테스트와 달리 @Transactional 을 사용하지 않는다 — 별도 트랜잭션 동시 진행이
 // race 시뮬레이션의 본질이다. 데이터 격리는 매 테스트가 새 UUID guestId 를 써서 보장한다.
 class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
-
     @Autowired
     private lateinit var webApplicationContext: WebApplicationContext
 
@@ -35,7 +34,7 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
         val url = "https://shop.example.com/products/race-${UUID.randomUUID()}"
         val guestId = UUID.randomUUID()
         val body = objectMapper.writeValueAsString(mapOf("url" to url, "guestId" to guestId))
-        stubExtractor.build = { link -> Product(link = link, name = "race 상품") }
+        stubExtractor.build = { link -> ProductSnapshot(link = link, name = "race 상품") }
 
         // 2 단계 래치로 동시 출발을 강제한다. 한 단계 래치만 쓰면 worker 가 await 에 도달하기
         // 전에 main 이 countDown 할 수 있어 사실상 순차 실행으로도 (201, 409) 가 통과해 race
@@ -43,17 +42,20 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
         val executor = Executors.newFixedThreadPool(2)
         val workersReady = CountDownLatch(2)
         val start = CountDownLatch(1)
-        val futures = (0..1).map {
-            executor.submit<Int> {
-                workersReady.countDown()
-                start.await()
-                mockMvc.perform(
-                    post("/api/v1/wishlists")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body)
-                ).andReturn().response.status
+        val futures =
+            (0..1).map {
+                executor.submit<Int> {
+                    workersReady.countDown()
+                    start.await()
+                    mockMvc
+                        .perform(
+                            post("/api/v1/wishlists")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body),
+                        ).andReturn()
+                        .response.status
+                }
             }
-        }
         workersReady.await()
         start.countDown()
         val statuses = futures.map { it.get(10, TimeUnit.SECONDS) }.toSet()
