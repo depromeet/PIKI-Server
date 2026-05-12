@@ -27,7 +27,7 @@ repositories {
 // Spring Boot 4.0.5 의 platform 은 testcontainers 코어 2.0.x 만 포함하고
 // junit-jupiter / mysql 모듈은 1.21.x 라인이 최신이라 BOM 불일치가 난다.
 // 모듈이 따라올 때까지 testcontainers BOM 을 1.21.4 로 명시 고정.
-val testcontainersVersion = "1.21.4"
+val testcontainersVersion = "2.0.5"
 
 dependencyManagement {
 	imports {
