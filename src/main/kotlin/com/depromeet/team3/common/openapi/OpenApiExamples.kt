@@ -1,6 +1,6 @@
 package com.depromeet.team3.common.openapi
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.ObjectMapper
 import io.swagger.v3.oas.models.Operation
 import io.swagger.v3.oas.models.examples.Example
 import io.swagger.v3.oas.models.media.Content
