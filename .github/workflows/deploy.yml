@@ -77,6 +77,9 @@ jobs:
             IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/team3-server:${{ github.event.workflow_run.head_sha || github.sha }}"
             docker pull "$IMAGE"
             docker stop team3-server || true
+            mkdir -p /var/log/team3
+            docker logs team3-server > /var/log/team3/team3-$(date +%Y%m%d-%H%M%S).log 2>&1 || true
+            find /var/log/team3 -name "*.log" -mtime +7 -delete || true
             docker rm team3-server || true
             docker run -d \
               --name team3-server \
