@@ -1,8 +1,8 @@
 package com.depromeet.team3.common.openapi
 
-import tools.jackson.databind.ObjectMapper
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import tools.jackson.databind.ObjectMapper
 
 class OpenApiObjectMapper(
     val delegate: ObjectMapper,
