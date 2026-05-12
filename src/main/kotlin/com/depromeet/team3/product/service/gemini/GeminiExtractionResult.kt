@@ -7,8 +7,7 @@ import com.depromeet.team3.product.service.ProductExtractionException
 data class GeminiExtractionResult(
     val isProductPage: Boolean,
     val name: String? = null,
-    val regularPrice: Int? = null,
-    val discountedPrice: Int? = null,
+    val currentPrice: Int? = null,
     val currency: String? = null,
     val imageUrl: String? = null,
 ) {
@@ -20,8 +19,7 @@ data class GeminiExtractionResult(
             // LLM 이 javascript:/data: 같은 스킴을 흘리면 클라이언트가 <img src> 로 쓰는
             // 순간 XSS 사다리가 되므로 https 만 통과시킨다.
             imageUrl = imageUrl?.takeIf { it.isNotBlank() && it.startsWith("https://", ignoreCase = true) },
-            regularPrice = regularPrice,
-            discountedPrice = discountedPrice,
+            currentPrice = currentPrice,
             currency = currency?.takeIf { it.isNotBlank() },
         )
     }
