@@ -2,6 +2,7 @@ package com.depromeet.team3.support
 
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Primary
 
 // 통합 테스트의 외부 호출 stub 빈을 한 곳에 모은다.
 // IntegrationTestSupport 가 import 하므로 모든 통합 테스트가 같은 컨텍스트를 공유한다.
@@ -9,5 +10,6 @@ import org.springframework.context.annotation.Bean
 @TestConfiguration(proxyBeanMethods = false)
 class IntegrationStubs {
     @Bean
+    @Primary
     fun productExtractor(): StubProductExtractor = StubProductExtractor()
 }
