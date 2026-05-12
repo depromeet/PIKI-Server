@@ -12,6 +12,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: read
+    outputs:
+      kotlin: ${{ steps.filter.outputs.kotlin }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            kotlin:
+              - '**/*.kt'
+
   build:
     runs-on: ubuntu-latest
     permissions:
@@ -40,8 +55,9 @@ jobs:
         run: ./gradlew assemble --no-daemon
 
   test:
+    needs: changes
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'feat/')
+    if: github.event_name == 'pull_request' && needs.changes.outputs.kotlin == 'true'
     permissions:
       contents: read
       checks: write
