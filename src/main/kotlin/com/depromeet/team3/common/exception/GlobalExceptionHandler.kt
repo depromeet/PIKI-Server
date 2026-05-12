@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
-
     private val log = LoggerFactory.getLogger(javaClass)
 
     @ExceptionHandler(BaseException::class)
@@ -28,9 +27,10 @@ class GlobalExceptionHandler {
         // 첫 번째 위반 필드만 사용자 메시지로 노출. 나머지는 로그로.
         // 응답 스키마는 다른 4xx 와 동일하게 ApiResponseBody 로 통일한다.
         val first = e.bindingResult.fieldErrors.firstOrNull()
-        val detail = first
-            ?.let { "${it.field}: ${it.defaultMessage ?: "유효하지 않은 값입니다."}" }
-            ?: "요청 본문 검증 실패"
+        val detail =
+            first
+                ?.let { "${it.field}: ${it.defaultMessage ?: "유효하지 않은 값입니다."}" }
+                ?: "요청 본문 검증 실패"
         log.warn("[ValidationException] {}", e.bindingResult.fieldErrors)
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)

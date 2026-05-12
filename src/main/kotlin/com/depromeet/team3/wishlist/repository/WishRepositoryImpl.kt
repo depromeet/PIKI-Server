@@ -11,9 +11,13 @@ class WishRepositoryImpl(
 ) : WishRepository {
     override fun save(wish: Wish): Wish = wishJpaRepository.save(wish)
 
-    override fun existsByGuestIdAndProductLink(guestId: UUID, link: ProductLink): Boolean =
-        wishJpaRepository.existsByGuestIdAndProductLink(guestId, link)
+    override fun existsByGuestIdAndProductLink(
+        guestId: UUID,
+        link: ProductLink,
+    ): Boolean = wishJpaRepository.existsByGuestIdAndProductLink(guestId, link)
 
-    override fun countByIdsAndGuestId(ids: List<Long>, guestId: UUID): Long =
-        wishJpaRepository.countByIdInAndGuestId(ids, guestId)
+    override fun countByIdsAndGuestId(
+        ids: List<Long>,
+        guestId: UUID,
+    ): Long = wishJpaRepository.countByIdInAndGuestId(ids, guestId)
 }

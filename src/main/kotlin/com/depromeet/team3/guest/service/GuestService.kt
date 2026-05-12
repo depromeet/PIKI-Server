@@ -10,7 +10,8 @@ class GuestService(
     private val guestRepository: GuestRepository,
 ) {
     @Transactional
-    fun issueGuestId(): UUID = guestRepository
-        .save(UUID.randomUUID())
-        .getId()
+    fun issueGuestId(): UUID =
+        guestRepository
+            .save(UUID.randomUUID())
+            .getId()
 }

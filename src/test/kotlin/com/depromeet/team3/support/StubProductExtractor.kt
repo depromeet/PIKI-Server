@@ -14,5 +14,6 @@ class StubProductExtractor : ProductExtractor {
     var build: (ProductLink) -> Product = {
         error("stub.build 를 테스트 본문에서 명시 세팅해야 한다. CLAUDE.md '테스트 셋업 원칙' 참고.")
     }
+
     override fun extract(link: ProductLink): Product = build(link)
 }

@@ -11,6 +11,13 @@ interface WishJpaRepository : JpaRepository<Wish, Long> {
     // product 가 @Embedded 라 derivation 파서가 productLink → product.link 로
     // 폴백 resolve 하는 형태로 동작은 하나, 의존하기엔 모호해 JPQL 로 명시한다.
     @Query("select count(w) > 0 from Wish w where w.guestId = :guestId and w.product.link = :link")
-    fun existsByGuestIdAndProductLink(@Param("guestId") guestId: UUID, @Param("link") link: ProductLink): Boolean
-    fun countByIdInAndGuestId(ids: Collection<Long>, guestId: UUID): Long
+    fun existsByGuestIdAndProductLink(
+        @Param("guestId") guestId: UUID,
+        @Param("link") link: ProductLink,
+    ): Boolean
+
+    fun countByIdInAndGuestId(
+        ids: Collection<Long>,
+        guestId: UUID,
+    ): Long
 }

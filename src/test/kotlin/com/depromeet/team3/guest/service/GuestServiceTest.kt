@@ -7,7 +7,6 @@ import java.util.UUID
 import kotlin.test.assertEquals
 
 class GuestServiceTest {
-
     private class StubGuestRepository : GuestRepository {
         val saved = mutableListOf<UUID>()
 

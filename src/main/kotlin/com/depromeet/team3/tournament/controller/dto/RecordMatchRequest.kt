@@ -8,11 +8,12 @@ data class RecordMatchRequest(
     val secondWishItemId: Long,
     val winnerWishItemId: Long,
 ) {
-    fun toRecordMatch(tournamentId: Long): RecordMatch = RecordMatch(
-        tournamentId = tournamentId,
-        currentRound = currentRound,
-        firstWishItemId = firstWishItemId,
-        secondWishItemId = secondWishItemId,
-        winnerWishItemId = winnerWishItemId,
-    )
+    fun toRecordMatch(tournamentId: Long): RecordMatch =
+        RecordMatch(
+            tournamentId = tournamentId,
+            currentRound = currentRound,
+            firstWishItemId = firstWishItemId,
+            secondWishItemId = secondWishItemId,
+            winnerWishItemId = winnerWishItemId,
+        )
 }

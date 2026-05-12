@@ -13,7 +13,6 @@ import java.util.Objects
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener::class)
 abstract class BaseEntity<ID : Any> {
-
     // 영속화 후에만 채워지는 자동 생성 PK 등을 표현하기 위한 nullable getter.
     // 외부에서는 getId() 만 사용한다. 미영속 인스턴스는 엔티티가 아니므로 동등성 검사·해시
     // 시도 자체를 거부해 데이터 정합성이 사일런트로 깨지는 것을 막는다.

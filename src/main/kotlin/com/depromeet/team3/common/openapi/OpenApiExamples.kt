@@ -18,16 +18,27 @@ fun HandlerMethod.binds(ref: KFunction<*>): Boolean {
         method.parameterTypes.contentEquals(target.parameterTypes)
 }
 
-fun Operation.examples(objectMapper: ObjectMapper, block: OperationExamples.() -> Unit) {
+fun Operation.examples(
+    objectMapper: ObjectMapper,
+    block: OperationExamples.() -> Unit,
+) {
     OperationExamples(this, objectMapper).block()
 }
 
-class OperationExamples(private val operation: Operation, private val objectMapper: ObjectMapper) {
-    fun add(status: HttpStatus, name: String, payload: Any) {
+class OperationExamples(
+    private val operation: Operation,
+    private val objectMapper: ObjectMapper,
+) {
+    fun add(
+        status: HttpStatus,
+        name: String,
+        payload: Any,
+    ) {
         val response = operation.responses?.get(status.value().toString()) ?: return
         val content = response.content ?: Content().also { response.content = it }
-        val mediaType = content[SpringMediaType.APPLICATION_JSON_VALUE]
-            ?: MediaType().also { content[SpringMediaType.APPLICATION_JSON_VALUE] = it }
+        val mediaType =
+            content[SpringMediaType.APPLICATION_JSON_VALUE]
+                ?: MediaType().also { content[SpringMediaType.APPLICATION_JSON_VALUE] = it }
         val example = Example().value(objectMapper.convertValue(payload, Any::class.java))
         mediaType.examples = (mediaType.examples ?: linkedMapOf()).apply { put(name, example) }
     }

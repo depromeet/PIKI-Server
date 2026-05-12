@@ -27,7 +27,6 @@ class Tournament(
     @Column(columnDefinition = "varchar(50)")
     var status: TournamentStatus = TournamentStatus.IN_PROGRESS,
 ) : LongBaseEntity() {
-
     init {
         require(wishItemIds.size == round) {
             "토너먼트 참가 아이템 수(${wishItemIds.size})가 라운드 수($round)와 다릅니다."

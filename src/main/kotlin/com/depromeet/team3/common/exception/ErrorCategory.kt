@@ -1,6 +1,8 @@
 package com.depromeet.team3.common.exception
 
-enum class ErrorCategory(val description: String) {
+enum class ErrorCategory(
+    val description: String,
+) {
     INVALID_INPUT("입력 오류 — 요청을 수정하여 재시도"),
     UNAUTHORIZED("인증 필요 — 로그인 후 재시도"),
     FORBIDDEN("권한 없음 — 접근 불가"),
