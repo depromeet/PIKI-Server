@@ -3,6 +3,7 @@ package com.depromeet.team3.product.domain
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ProductLinkTest {
@@ -10,7 +11,7 @@ class ProductLinkTest {
     fun `빈 문자열 또는 공백만 있으면 거부한다`() {
         listOf("", "   ", "\t\n").forEach { raw ->
             val ex =
-                assertFailsWith<IllegalArgumentException>("'$raw' 는 거부되어야 함") {
+                assertFailsWith<ProductLinkException>("'$raw' 는 거부되어야 함") {
                     ProductLink.parse(raw)
                 }
             assertEquals("URL이 비어 있습니다.", ex.message)
@@ -29,7 +30,7 @@ class ProductLinkTest {
             )
         cases.forEach { raw ->
             val ex =
-                assertFailsWith<IllegalArgumentException>("$raw 는 거부되어야 함") {
+                assertFailsWith<ProductLinkException>("$raw 는 거부되어야 함") {
                     ProductLink.parse(raw)
                 }
             assertEquals("https URL만 허용합니다.", ex.message)
@@ -40,16 +41,29 @@ class ProductLinkTest {
     fun `URI 파싱 자체가 실패하는 raw 는 형식 오류로 거부한다`() {
         // 예: data: URI 의 본문에 illegal character 가 들어가면 URI_create 단계에서 IllegalArgumentException
         val ex =
-            assertFailsWith<IllegalArgumentException> {
+            assertFailsWith<ProductLinkException> {
                 ProductLink.parse("data:text/html,<h1>x</h1>")
             }
         assertTrue(ex.message?.startsWith("유효한 URL 형식이 아닙니다") == true)
     }
 
     @Test
+    fun `예외 메시지에 원본 raw 는 포함되지 않는다`() {
+        // GlobalExceptionHandler 가 message 를 응답 detail · 로그에 그대로 박는 구조라
+        // 쿼리스트링에 섞일 수 있는 토큰 · 세션이 새지 않도록 message 단계에서 원본을 제거한다.
+        val rawWithSecret = "data:text/html,<token=SHOULD_NOT_LEAK>"
+        val ex =
+            assertFailsWith<ProductLinkException> {
+                ProductLink.parse(rawWithSecret)
+            }
+        assertEquals("유효한 URL 형식이 아닙니다.", ex.message)
+        assertFalse(ex.message!!.contains("SHOULD_NOT_LEAK"))
+    }
+
+    @Test
     fun `scheme 없이 호스트만 있는 raw 는 거부한다`() {
         val ex =
-            assertFailsWith<IllegalArgumentException> {
+            assertFailsWith<ProductLinkException> {
                 ProductLink.parse("example.com/product")
             }
         assertEquals("https URL만 허용합니다.", ex.message)
