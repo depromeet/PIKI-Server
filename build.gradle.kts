@@ -4,7 +4,7 @@ plugins {
 	kotlin("plugin.jpa") version "2.3.20"
 	id("org.springframework.boot") version "4.0.5"
 	id("io.spring.dependency-management") version "1.1.7"
-	id("org.jlleitschuh.gradle.ktlint") version "12.1.2"
+	id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
 }
 
 ktlint {
