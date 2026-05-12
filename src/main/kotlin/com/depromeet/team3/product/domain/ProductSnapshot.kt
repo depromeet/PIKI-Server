@@ -5,7 +5,7 @@ import jakarta.persistence.Convert
 import jakarta.persistence.Embeddable
 
 @Embeddable
-data class Product(
+data class ProductSnapshot(
     @Convert(converter = ProductLinkConverter::class)
     @Column(name = "source_url", nullable = false, length = 2048)
     var link: ProductLink,

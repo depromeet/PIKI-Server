@@ -1,7 +1,7 @@
 package com.depromeet.team3.product.service.gemini
 
-import com.depromeet.team3.product.domain.Product
 import com.depromeet.team3.product.domain.ProductLink
+import com.depromeet.team3.product.domain.ProductSnapshot
 import com.depromeet.team3.product.service.ProductExtractionException
 
 data class GeminiExtractionResult(
@@ -11,9 +11,9 @@ data class GeminiExtractionResult(
     val currency: String? = null,
     val imageUrl: String? = null,
 ) {
-    fun toProduct(link: ProductLink): Product {
+    fun toProductSnapshot(link: ProductLink): ProductSnapshot {
         if (!isProductPage) throw ProductExtractionException.notProductPage()
-        return Product(
+        return ProductSnapshot(
             link = link,
             name = name?.takeIf { it.isNotBlank() },
             // LLM 이 javascript:/data: 같은 스킴을 흘리면 클라이언트가 <img src> 로 쓰는

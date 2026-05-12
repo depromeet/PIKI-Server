@@ -1,6 +1,6 @@
 package com.depromeet.team3.wishlist.controller
 
-import com.depromeet.team3.product.domain.Product
+import com.depromeet.team3.product.domain.ProductSnapshot
 import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.support.StubProductExtractor
 import org.junit.jupiter.api.Test
@@ -34,7 +34,7 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
         val url = "https://shop.example.com/products/race-${UUID.randomUUID()}"
         val guestId = UUID.randomUUID()
         val body = objectMapper.writeValueAsString(mapOf("url" to url, "guestId" to guestId))
-        stubExtractor.build = { link -> Product(link = link, name = "race 상품") }
+        stubExtractor.build = { link -> ProductSnapshot(link = link, name = "race 상품") }
 
         // 2 단계 래치로 동시 출발을 강제한다. 한 단계 래치만 쓰면 worker 가 await 에 도달하기
         // 전에 main 이 countDown 할 수 있어 사실상 순차 실행으로도 (201, 409) 가 통과해 race

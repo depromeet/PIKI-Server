@@ -1,6 +1,6 @@
 package com.depromeet.team3.wishlist.service
 
-import com.depromeet.team3.product.domain.Product
+import com.depromeet.team3.product.domain.ProductSnapshot
 import com.depromeet.team3.wishlist.domain.Wish
 import com.depromeet.team3.wishlist.repository.WishRepository
 import com.depromeet.team3.wishlist.service.dto.WishRegisterResult
@@ -20,7 +20,7 @@ class WishPersistenceService(
     @Transactional
     fun persist(
         guestId: UUID,
-        product: Product,
+        product: ProductSnapshot,
     ): WishRegisterResult =
         try {
             val wish = wishRepository.save(Wish(guestId = guestId, product = product))

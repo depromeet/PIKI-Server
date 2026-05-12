@@ -1,6 +1,6 @@
 package com.depromeet.team3.wishlist.controller
 
-import com.depromeet.team3.product.domain.Product
+import com.depromeet.team3.product.domain.ProductSnapshot
 import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.support.StubProductExtractor
 import org.junit.jupiter.api.Test
@@ -32,7 +32,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val url = "https://shop.example.com/products/42"
         val guestId = UUID.randomUUID()
         stubExtractor.build = { link ->
-            Product(
+            ProductSnapshot(
                 link = link,
                 name = "나이키 에어포스",
                 currentPrice = 99_000,
@@ -62,7 +62,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         val url = "https://shop.example.com/products/42"
         val guestId = UUID.randomUUID()
-        stubExtractor.build = { Product(link = it, name = "기본 상품") }
+        stubExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
         val body = objectMapper.writeValueAsString(mapOf("url" to url, "guestId" to guestId))
 
         mockMvc
@@ -87,7 +87,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     fun `다른 guest 가 같은 URL 을 등록하면 둘 다 201 로 등록된다`() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         val url = "https://shop.example.com/products/42"
-        stubExtractor.build = { Product(link = it, name = "기본 상품") }
+        stubExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
         val firstBody = objectMapper.writeValueAsString(mapOf("url" to url, "guestId" to UUID.randomUUID()))
         val secondBody = objectMapper.writeValueAsString(mapOf("url" to url, "guestId" to UUID.randomUUID()))
 

@@ -1,7 +1,7 @@
 package com.depromeet.team3.wishlist.service
 
-import com.depromeet.team3.product.domain.Product
 import com.depromeet.team3.product.domain.ProductLink
+import com.depromeet.team3.product.domain.ProductSnapshot
 import com.depromeet.team3.product.service.ProductExtractor
 import com.depromeet.team3.wishlist.repository.WishRepository
 import com.depromeet.team3.wishlist.service.dto.WishRegisterResult
@@ -35,7 +35,7 @@ class WishlistService(
         return wishPersistenceService.persist(guestId, product)
     }
 
-    private fun extractWithLatencyLog(link: ProductLink): Product {
+    private fun extractWithLatencyLog(link: ProductLink): ProductSnapshot {
         val started = System.nanoTime()
         val product = productExtractor.extract(link)
         val elapsedMs = (System.nanoTime() - started) / 1_000_000

@@ -1,7 +1,7 @@
 package com.depromeet.team3.wishlist.domain
 
 import com.depromeet.team3.common.domain.LongBaseEntity
-import com.depromeet.team3.product.domain.Product
+import com.depromeet.team3.product.domain.ProductSnapshot
 import jakarta.persistence.Column
 import jakarta.persistence.Embedded
 import jakarta.persistence.Entity
@@ -14,5 +14,5 @@ class Wish(
     @Column(name = "guest_id", nullable = false, columnDefinition = "BINARY(16)")
     val guestId: UUID,
     @Embedded
-    val product: Product,
+    val product: ProductSnapshot,
 ) : LongBaseEntity()
