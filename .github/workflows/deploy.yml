@@ -77,18 +77,18 @@ jobs:
             IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/team3-server:${{ github.event.workflow_run.head_sha || github.sha }}"
             docker pull "$IMAGE"
 
-            # 구버전 team3-server 컨테이너 마이그레이션 (최초 1회)
-            if docker ps --filter "name=team3-server" --filter "status=running" -q | grep -q .; then
-              echo "  MIGRATE : team3-server → blue-green 슬롯으로 전환"
-              docker stop team3-server || true
-              docker rm team3-server || true
-            fi
-
-            # 현재 active 슬롯 감지
-            if docker ps --filter "name=team3-blue" --filter "status=running" -q | grep -q .; then
-              ACTIVE="blue" ACTIVE_PORT=8080 INACTIVE="green" INACTIVE_PORT=8081
+            # team3-upstream.conf를 source of truth로 현재 서빙 포트 결정
+            # (없으면 8080 기본값 — team3-server가 8080에서 서비스 중인 초기 상태)
+            if [ -f /etc/nginx/team3-upstream.conf ]; then
+              ACTIVE_PORT=$(grep -oP '\d+' /etc/nginx/team3-upstream.conf | head -1)
             else
-              ACTIVE="green" ACTIVE_PORT=8081 INACTIVE="blue" INACTIVE_PORT=8080
+              ACTIVE_PORT=8080
+              echo "server localhost:8080;" | sudo tee /etc/nginx/team3-upstream.conf
+            fi
+            if [ "$ACTIVE_PORT" = "8080" ]; then
+              ACTIVE="blue" INACTIVE="green" INACTIVE_PORT=8081
+            else
+              ACTIVE="green" INACTIVE="blue" INACTIVE_PORT=8080
             fi
             echo "================================================"
             echo "  CURRENT : $ACTIVE (port $ACTIVE_PORT) [serving traffic]"
@@ -122,11 +122,12 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # 비활성 슬롯 감지 (deploy 스텝과 반대)
-            if docker ps --filter "name=team3-blue" --filter "status=running" -q | grep -q .; then
-              ACTIVE="blue" ACTIVE_PORT=8080 INACTIVE="green" INACTIVE_PORT=8081
+            # team3-upstream.conf에서 현재 서빙 포트 읽기 (source of truth)
+            ACTIVE_PORT=$(grep -oP '\d+' /etc/nginx/team3-upstream.conf | head -1)
+            if [ "$ACTIVE_PORT" = "8080" ]; then
+              ACTIVE="blue" INACTIVE="green" INACTIVE_PORT=8081
             else
-              ACTIVE="green" ACTIVE_PORT=8081 INACTIVE="blue" INACTIVE_PORT=8080
+              ACTIVE="green" INACTIVE="blue" INACTIVE_PORT=8080
             fi
 
             # 새로 뜬 컨테이너(INACTIVE) 헬스체크
@@ -140,9 +141,9 @@ jobs:
                 echo "server localhost:$INACTIVE_PORT;" | sudo tee /etc/nginx/team3-upstream.conf
                 sudo nginx -s reload
                 echo "  SWITCHED : Nginx now → $INACTIVE (port $INACTIVE_PORT)"
-                # 구버전 종료
-                docker stop "team3-$ACTIVE" || true
-                docker rm "team3-$ACTIVE" || true
+                # 구버전 종료 (team3-server 마이그레이션 포함)
+                docker stop "team3-$ACTIVE" team3-server 2>/dev/null || true
+                docker rm "team3-$ACTIVE" team3-server 2>/dev/null || true
                 echo "  STOPPED  : $ACTIVE (port $ACTIVE_PORT)"
                 echo "================================================"
                 exit 0
