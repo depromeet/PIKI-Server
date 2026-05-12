@@ -1,12 +1,12 @@
 package com.depromeet.team3.common.openapi
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import io.swagger.v3.oas.models.Operation
 import io.swagger.v3.oas.models.examples.Example
 import io.swagger.v3.oas.models.media.Content
 import io.swagger.v3.oas.models.media.MediaType
 import org.springframework.http.HttpStatus
 import org.springframework.web.method.HandlerMethod
+import tools.jackson.databind.ObjectMapper
 import kotlin.reflect.KFunction
 import kotlin.reflect.jvm.javaMethod
 import org.springframework.http.MediaType as SpringMediaType
