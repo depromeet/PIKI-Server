@@ -49,11 +49,7 @@ reviews:
 
   pre_merge_checks:
     title:
-      mode: warning
-      requirements: |
-        Conventional Commits 형식: <type>(선택 scope): <한 줄 요약>
-        type 예: feat, fix, chore, refactor, docs, test, ci, build 등.
-        콜론 뒤 요약은 명령형·짧게(대략 72자 이내 권장). 예: chore: PR 템플릿 STAR 구조로 변경
+      mode: off
     description:
       mode: warning
     issue_assessment:
