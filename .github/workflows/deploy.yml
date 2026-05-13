@@ -7,6 +7,10 @@ on:
     types: [completed]
   workflow_dispatch:
 
+concurrency:
+  group: deploy-ec2-dev
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -76,14 +80,36 @@ jobs:
           script: |
             IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/team3-server:${{ github.event.workflow_run.head_sha || github.sha }}"
             docker pull "$IMAGE"
-            docker stop team3-server || true
+
+            # team3-upstream.conf를 source of truth로 현재 서빙 포트 결정
+            # (없으면 8080 기본값 — team3-server가 8080에서 서비스 중인 초기 상태)
+            if [ -f /etc/nginx/team3-upstream.conf ]; then
+              ACTIVE_PORT=$(grep -oP '\d+' /etc/nginx/team3-upstream.conf | head -1)
+            else
+              ACTIVE_PORT=8080
+              echo "server localhost:8080;" | sudo tee /etc/nginx/team3-upstream.conf
+            fi
+            if [ "$ACTIVE_PORT" = "8080" ]; then
+              ACTIVE="blue" INACTIVE="green" INACTIVE_PORT=8081
+            else
+              ACTIVE="green" INACTIVE="blue" INACTIVE_PORT=8080
+            fi
+            echo "================================================"
+            echo "  CURRENT : $ACTIVE (port $ACTIVE_PORT) [serving traffic]"
+            echo "  DEPLOY  : $INACTIVE (port $INACTIVE_PORT) [new version]"
+            echo "================================================"
+
+            # 로그 백업 후 비활성 슬롯 정리
             mkdir -p /var/log/team3
-            docker logs team3-server > /var/log/team3/team3-$(date +%Y%m%d-%H%M%S).log 2>&1 || true
-            find /var/log/team3 -name "*.log" -mtime +7 -delete || true
-            docker rm team3-server || true
+            docker logs "team3-$INACTIVE" > /var/log/team3/team3-$INACTIVE-$(date +%Y%m%d-%H%M%S).log 2>&1 || true
+            find /var/log/team3 -name "team3-*.log" -mtime +7 -delete || true
+            docker stop "team3-$INACTIVE" || true
+            docker rm "team3-$INACTIVE" || true
+
+            # 새 버전 비활성 포트에 기동
             docker run -d \
-              --name team3-server \
-              -p 8080:8080 \
+              --name "team3-$INACTIVE" \
+              -p "$INACTIVE_PORT:8080" \
               -e GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
               -e DB_HOST=${{ secrets.DB_HOST }} \
               -e DB_PORT=${{ secrets.DB_PORT }} \
@@ -92,7 +118,7 @@ jobs:
               -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
               "$IMAGE"
 
-      - name: Health check
+      - name: Health check and switch
         id: health
         uses: appleboy/ssh-action@v1
         with:
@@ -100,16 +126,38 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            # team3-upstream.conf에서 현재 서빙 포트 읽기 (source of truth)
+            ACTIVE_PORT=$(grep -oP '\d+' /etc/nginx/team3-upstream.conf | head -1)
+            if [ "$ACTIVE_PORT" = "8080" ]; then
+              ACTIVE="blue" INACTIVE="green" INACTIVE_PORT=8081
+            else
+              ACTIVE="green" INACTIVE="blue" INACTIVE_PORT=8080
+            fi
+
+            # 새로 뜬 컨테이너(INACTIVE) 헬스체크
             for i in $(seq 1 12); do
-              STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health || echo "000")
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$INACTIVE_PORT/health || echo "000")
               if [ "$STATUS" = "200" ]; then
-                echo "Health check passed (attempt $i)"
+                echo "================================================"
+                echo "  HEALTH CHECK PASSED on $INACTIVE (attempt $i)"
+                echo "================================================"
+                # Nginx upstream 전환
+                echo "server localhost:$INACTIVE_PORT;" | sudo tee /etc/nginx/team3-upstream.conf
+                sudo nginx -s reload
+                echo "  SWITCHED : Nginx now → $INACTIVE (port $INACTIVE_PORT)"
+                # 구버전 종료 (team3-server 마이그레이션 포함)
+                docker stop "team3-$ACTIVE" team3-server 2>/dev/null || true
+                docker rm "team3-$ACTIVE" team3-server 2>/dev/null || true
+                echo "  STOPPED  : $ACTIVE (port $ACTIVE_PORT)"
+                echo "================================================"
                 exit 0
               fi
               echo "Attempt $i: status=$STATUS, retrying in 5s..."
               sleep 5
             done
-            echo "Health check failed after 60s"
+            echo "Health check failed — rolling back"
+            docker stop "team3-$INACTIVE" || true
+            docker rm "team3-$INACTIVE" || true
             exit 1
 
       - name: Notify Slack on success
