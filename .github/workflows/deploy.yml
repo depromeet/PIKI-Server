@@ -160,6 +160,56 @@ jobs:
             docker rm "team3-$INACTIVE" || true
             exit 1
 
+      - name: Write deployment summary
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          SHORT_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.event.workflow_run.head_sha || github.sha }}"
+
+          echo "${{ secrets.EC2_SSH_KEY }}" > /tmp/ec2_key && chmod 600 /tmp/ec2_key
+          ACTIVE_PORT=$(ssh -i /tmp/ec2_key -o StrictHostKeyChecking=no \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+            'grep -oP "\\d+" /etc/nginx/team3-upstream.conf 2>/dev/null | head -1' 2>/dev/null || echo "")
+          rm -f /tmp/ec2_key
+
+          if [ "$ACTIVE_PORT" = "8080" ]; then
+            NOW="🔵 blue (8080)"
+          elif [ "$ACTIVE_PORT" = "8081" ]; then
+            NOW="🟢 green (8081)"
+          else
+            NOW="알 수 없음"
+          fi
+
+          if [ "${{ steps.health.outcome }}" = "success" ]; then
+            STATUS="✅ 성공"
+          elif [ "${{ steps.health.outcome }}" = "failure" ]; then
+            STATUS="❌ 실패 (헬스체크)"
+          elif [ "${{ steps.deploy.outcome }}" = "failure" ]; then
+            STATUS="❌ 실패 (EC2 배포)"
+          elif [ "${{ steps.docker_push.outcome }}" = "failure" ]; then
+            STATUS="❌ 실패 (Docker 푸시)"
+          elif [ "${{ steps.build.outcome }}" = "failure" ]; then
+            STATUS="❌ 실패 (Gradle 빌드)"
+          else
+            STATUS="⚠️ 알 수 없음"
+          fi
+
+          {
+            echo "## 배포 결과: $STATUS"
+            echo ""
+            echo "| 항목 | 값 |"
+            echo "|------|-----|"
+            echo "| 커밋 | [\`$SHORT_SHA\`]($COMMIT_URL) |"
+            echo "| 현재 활성 슬롯 | $NOW |"
+            echo "| Gradle 빌드 | ${{ steps.build.outcome }} |"
+            echo "| Docker 푸시 | ${{ steps.docker_push.outcome }} |"
+            echo "| EC2 배포 | ${{ steps.deploy.outcome }} |"
+            echo "| 헬스체크 & 전환 | ${{ steps.health.outcome }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Notify Slack on success
         if: success()
         continue-on-error: true
