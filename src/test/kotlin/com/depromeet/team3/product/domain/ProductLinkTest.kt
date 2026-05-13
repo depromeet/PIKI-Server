@@ -3,7 +3,6 @@ package com.depromeet.team3.product.domain
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ProductLinkTest {
@@ -44,7 +43,7 @@ class ProductLinkTest {
             assertFailsWith<ProductLinkException> {
                 ProductLink.parse("data:text/html,<h1>x</h1>")
             }
-        assertTrue(ex.message?.startsWith("유효한 URL 형식이 아닙니다") == true)
+        assertEquals("유효한 URL 형식이 아닙니다.", ex.message)
     }
 
     @Test
@@ -57,7 +56,6 @@ class ProductLinkTest {
                 ProductLink.parse(rawWithSecret)
             }
         assertEquals("유효한 URL 형식이 아닙니다.", ex.message)
-        assertFalse(ex.message!!.contains("SHOULD_NOT_LEAK"))
     }
 
     @Test
