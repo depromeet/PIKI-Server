@@ -6,6 +6,7 @@ import com.depromeet.team3.support.StubProductExtractor
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.MediaType
+import com.depromeet.team3.support.uuidToBytes
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
@@ -14,7 +15,6 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
-import java.nio.ByteBuffer
 import java.util.UUID
 
 @Transactional
@@ -32,13 +32,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     private lateinit var jdbcTemplate: JdbcTemplate
 
     private fun insertUser(userId: UUID) {
-        val bytes =
-            ByteBuffer
-                .allocate(16)
-                .apply {
-                    putLong(userId.mostSignificantBits)
-                    putLong(userId.leastSignificantBits)
-                }.array()
+        val bytes = uuidToBytes(userId)
         jdbcTemplate.update(
             "INSERT INTO user (id, nickname, identity_type, created_at, updated_at) VALUES (?, ?, ?, NOW(6), NOW(6))",
             bytes,
