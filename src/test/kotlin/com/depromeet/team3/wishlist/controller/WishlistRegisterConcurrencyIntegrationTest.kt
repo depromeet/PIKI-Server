@@ -3,6 +3,7 @@ package com.depromeet.team3.wishlist.controller
 import com.depromeet.team3.product.domain.ProductSnapshot
 import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.support.StubProductExtractor
+import com.depromeet.team3.support.uuidToBytes
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.MediaType
@@ -11,7 +12,6 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
-import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -33,14 +33,6 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
 
-    private fun uuidToBytes(uuid: UUID): ByteArray =
-        ByteBuffer
-            .allocate(16)
-            .apply {
-                putLong(uuid.mostSignificantBits)
-                putLong(uuid.leastSignificantBits)
-            }.array()
-
     @Test
     fun `같은 유저와 URL 로 동시 두 요청이 들어오면 한 쪽은 201, 다른 쪽은 409 로 응답된다`() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
@@ -56,41 +48,42 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
             "GUEST",
         )
 
-        val body = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to userId))
-        stubExtractor.build = { link -> ProductSnapshot(link = link, name = "race 상품") }
+        try {
+            val body = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to userId))
+            stubExtractor.build = { link -> ProductSnapshot(link = link, name = "race 상품") }
 
-        // 2 단계 래치로 동시 출발을 강제한다. 한 단계 래치만 쓰면 worker 가 await 에 도달하기
-        // 전에 main 이 countDown 할 수 있어 사실상 순차 실행으로도 (201, 409) 가 통과해 race
-        // 재현 신뢰도가 떨어진다.
-        val executor = Executors.newFixedThreadPool(2)
-        val workersReady = CountDownLatch(2)
-        val start = CountDownLatch(1)
-        val futures =
-            (0..1).map {
-                executor.submit<Int> {
-                    workersReady.countDown()
-                    start.await()
-                    mockMvc
-                        .perform(
-                            post("/api/v1/wishlists")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(body),
-                        ).andReturn()
-                        .response.status
+            // 2 단계 래치로 동시 출발을 강제한다. 한 단계 래치만 쓰면 worker 가 await 에 도달하기
+            // 전에 main 이 countDown 할 수 있어 사실상 순차 실행으로도 (201, 409) 가 통과해 race
+            // 재현 신뢰도가 떨어진다.
+            val executor = Executors.newFixedThreadPool(2)
+            val workersReady = CountDownLatch(2)
+            val start = CountDownLatch(1)
+            val futures =
+                (0..1).map {
+                    executor.submit<Int> {
+                        workersReady.countDown()
+                        start.await()
+                        mockMvc
+                            .perform(
+                                post("/api/v1/wishlists")
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(body),
+                            ).andReturn()
+                            .response.status
+                    }
                 }
-            }
-        workersReady.await()
-        start.countDown()
-        val statuses = futures.map { it.get(10, TimeUnit.SECONDS) }.toSet()
-        executor.shutdown()
+            workersReady.await()
+            start.countDown()
+            val statuses = futures.map { it.get(10, TimeUnit.SECONDS) }.toSet()
+            executor.shutdown()
 
-        // 두 경로 모두 의도된 응답:
-        // - 한 쪽이 dedup 체크 통과 + persist 성공 → 201
-        // - 다른 쪽은 dedup 또는 unique 제약 위반 catch → 409 (500 으로 새지 않는다)
-        assertEquals(setOf(201, 409), statuses)
-
-        // @Transactional 롤백이 없으므로 명시적으로 정리한다.
-        jdbcTemplate.update("DELETE FROM wishes WHERE user_id = ?", userBytes)
-        jdbcTemplate.update("DELETE FROM user WHERE id = ?", userBytes)
+            // 두 경로 모두 의도된 응답:
+            // - 한 쪽이 dedup 체크 통과 + persist 성공 → 201
+            // - 다른 쪽은 dedup 또는 unique 제약 위반 catch → 409 (500 으로 새지 않는다)
+            assertEquals(setOf(201, 409), statuses)
+        } finally {
+            jdbcTemplate.update("DELETE FROM wishes WHERE user_id = ?", userBytes)
+            jdbcTemplate.update("DELETE FROM user WHERE id = ?", userBytes)
+        }
     }
 }
