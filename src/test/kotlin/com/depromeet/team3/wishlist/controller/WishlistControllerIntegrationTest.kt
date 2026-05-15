@@ -32,13 +32,18 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     private lateinit var jdbcTemplate: JdbcTemplate
 
     private fun insertUser(userId: UUID) {
-        val bytes = ByteBuffer.allocate(16).apply {
-            putLong(userId.mostSignificantBits)
-            putLong(userId.leastSignificantBits)
-        }.array()
+        val bytes =
+            ByteBuffer
+                .allocate(16)
+                .apply {
+                    putLong(userId.mostSignificantBits)
+                    putLong(userId.leastSignificantBits)
+                }.array()
         jdbcTemplate.update(
             "INSERT INTO user (id, nickname, identity_type, created_at, updated_at) VALUES (?, ?, ?, NOW(6), NOW(6))",
-            bytes, "테스트유저", "GUEST",
+            bytes,
+            "테스트유저",
+            "GUEST",
         )
     }
 
