@@ -118,4 +118,24 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .content(body),
             ).andExpect(status().isBadRequest)
     }
+
+    @Test
+    fun `잘못된 형식의 url 은 400 BAD_REQUEST 로 응답되며 detail 에 원본 url 이 새지 않는다`() {
+        // GlobalExceptionHandler 가 IllegalArgumentException_message 를 응답 detail 에 그대로 박는 구조라
+        // ProductLink_parse 가 원본을 메시지에 담으면 쿼리스트링 토큰이 클라이언트 응답으로 새어 나간다.
+        // ProductLink_parse 의 message 정책과 contract 양 끝을 함께 묶어 회귀를 잡는다.
+        val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
+        val rawWithSecret = "data:text/html,<token=SHOULD_NOT_LEAK>"
+        val body = objectMapper.writeValueAsString(mapOf("url" to rawWithSecret, "guestId" to UUID.randomUUID()))
+
+        mockMvc
+            .perform(
+                post("/api/v1/wishlists")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.detail").value("유효한 URL 형식이 아닙니다."))
+    }
 }
