@@ -1,0 +1,16 @@
+package com.depromeet.team3.user.repository
+
+import com.depromeet.team3.user.domain.User
+import org.springframework.stereotype.Repository
+import java.util.UUID
+
+@Repository
+class UserRepositoryImpl(
+    private val userJpaRepository: UserJpaRepository,
+) : UserRepository {
+    override fun save(user: User): User = userJpaRepository.save(user)
+
+    override fun findById(id: UUID): User? = userJpaRepository.findById(id).orElse(null)
+
+    override fun existsByNickname(nickname: String): Boolean = userJpaRepository.existsByNickname(nickname)
+}
