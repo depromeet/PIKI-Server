@@ -6,6 +6,7 @@ import com.depromeet.team3.support.StubProductExtractor
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -13,6 +14,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
+import java.nio.ByteBuffer
 import java.util.UUID
 
 @Transactional
@@ -26,11 +28,26 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     @Autowired
     private lateinit var stubExtractor: StubProductExtractor
 
+    @Autowired
+    private lateinit var jdbcTemplate: JdbcTemplate
+
+    private fun insertUser(userId: UUID) {
+        val bytes = ByteBuffer.allocate(16).apply {
+            putLong(userId.mostSignificantBits)
+            putLong(userId.leastSignificantBits)
+        }.array()
+        jdbcTemplate.update(
+            "INSERT INTO user (id, nickname, identity_type, created_at, updated_at) VALUES (?, ?, ?, NOW(6), NOW(6))",
+            bytes, "테스트유저", "GUEST",
+        )
+    }
+
     @Test
     fun `정상 등록 - 201 과 함께 추출 결과가 응답에 박힌다`() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         val url = "https://shop.example.com/products/42"
         val userId = UUID.randomUUID()
+        insertUser(userId)
         stubExtractor.build = { link ->
             ProductSnapshot(
                 link = link,
@@ -58,10 +75,11 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `같은 guest 가 같은 URL 을 두 번 등록하면 409 CONFLICT 가 반환된다`() {
+    fun `같은 유저가 같은 URL 을 두 번 등록하면 409 CONFLICT 가 반환된다`() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         val url = "https://shop.example.com/products/42"
         val userId = UUID.randomUUID()
+        insertUser(userId)
         stubExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
         val body = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to userId))
 
@@ -84,12 +102,16 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `다른 guest 가 같은 URL 을 등록하면 둘 다 201 로 등록된다`() {
+    fun `다른 유저가 같은 URL 을 등록하면 둘 다 201 로 등록된다`() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         val url = "https://shop.example.com/products/42"
         stubExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
-        val firstBody = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to UUID.randomUUID()))
-        val secondBody = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to UUID.randomUUID()))
+        val firstUserId = UUID.randomUUID()
+        val secondUserId = UUID.randomUUID()
+        insertUser(firstUserId)
+        insertUser(secondUserId)
+        val firstBody = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to firstUserId))
+        val secondBody = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to secondUserId))
 
         mockMvc
             .perform(
