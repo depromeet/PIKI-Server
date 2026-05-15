@@ -22,7 +22,7 @@ class TournamentService(
         userId: UUID,
         command: StartTournament,
     ): Long {
-        val ownedCount = wishRepository.countByIdsAndGuestId(command.wishItemIds, userId)
+        val ownedCount = wishRepository.countByIdsAndUserId(command.wishItemIds, userId)
         if (ownedCount != command.wishItemIds.size.toLong()) throw WishException.forbiddenWishItems()
         return tournamentRepository.saveTournament(
             Tournament(

@@ -19,25 +19,25 @@ class GeminiExtractionResultTest {
             )
 
         assertFailsWith<ProductExtractionException> {
-            result.toProductSnapshot(link)
+            result.toProductDetails(link)
         }
     }
 
     @Test
-    fun `name 이 비어 있어도 ProductSnapshot 으로 변환되며 name 은 null 로 정규화된다`() {
+    fun `name 이 비어 있어도 ProductDetails 으로 변환되며 name 은 null 로 정규화된다`() {
         val result =
             GeminiExtractionResult(
                 isProductPage = true,
                 name = "   ",
             )
 
-        val product = result.toProductSnapshot(link)
+        val product = result.toProductDetails(link)
 
         assertNull(product.name)
     }
 
     @Test
-    fun `일부 필드만 있어도 ProductSnapshot 으로 변환된다`() {
+    fun `일부 필드만 있어도 ProductDetails 으로 변환된다`() {
         val result =
             GeminiExtractionResult(
                 isProductPage = true,
@@ -45,7 +45,7 @@ class GeminiExtractionResultTest {
                 currentPrice = 10_000,
             )
 
-        val product = result.toProductSnapshot(link)
+        val product = result.toProductDetails(link)
 
         assertEquals("테스트 상품", product.name)
         assertEquals(10_000, product.currentPrice)
@@ -53,7 +53,7 @@ class GeminiExtractionResultTest {
     }
 
     @Test
-    fun `전 필드가 채워진 경우 그대로 ProductSnapshot 에 매핑된다`() {
+    fun `전 필드가 채워진 경우 그대로 ProductDetails 에 매핑된다`() {
         val result =
             GeminiExtractionResult(
                 isProductPage = true,
@@ -63,7 +63,7 @@ class GeminiExtractionResultTest {
                 imageUrl = "https://cdn.example.com/p/42.jpg",
             )
 
-        val product = result.toProductSnapshot(link)
+        val product = result.toProductDetails(link)
 
         assertEquals("나이키 에어포스", product.name)
         assertEquals(99_000, product.currentPrice)
@@ -81,7 +81,7 @@ class GeminiExtractionResultTest {
                 imageUrl = "",
             )
 
-        val product = result.toProductSnapshot(link)
+        val product = result.toProductDetails(link)
 
         assertNull(product.imageUrl)
     }

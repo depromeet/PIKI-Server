@@ -1,7 +1,6 @@
 package com.depromeet.team3.tournament.service
 
 import com.depromeet.team3.common.domain.LongBaseEntity
-import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.tournament.domain.Tournament
 import com.depromeet.team3.tournament.domain.TournamentHistory
 import com.depromeet.team3.tournament.domain.TournamentStatus
@@ -23,14 +22,9 @@ class TournamentServiceTest {
     ) : WishRepository {
         override fun save(wish: Wish): Wish = wish
 
-        override fun existsByGuestIdAndProductLink(
-            guestId: UUID,
-            link: ProductLink,
-        ): Boolean = false
-
-        override fun countByIdsAndGuestId(
+        override fun countByIdsAndUserId(
             ids: List<Long>,
-            guestId: UUID,
+            userId: UUID,
         ): Long = if (allOwned) ids.size.toLong() else 0L
     }
 

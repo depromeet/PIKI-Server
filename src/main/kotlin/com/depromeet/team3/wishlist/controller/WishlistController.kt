@@ -22,7 +22,7 @@ class WishlistController(
     override fun register(
         @Valid @RequestBody request: WishlistRegisterRequest,
     ): ApiResponseBody<WishlistRegisterResponse> {
-        val result = wishlistService.register(rawUrl = request.url, guestId = request.guestId)
-        return ApiResponseBody.created(WishlistRegisterResponse.from(result.wish))
+        val result = wishlistService.register(rawUrl = request.url, userId = request.userId)
+        return ApiResponseBody.created(WishlistRegisterResponse.from(result.wish, result.item))
     }
 }

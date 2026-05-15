@@ -18,10 +18,10 @@ data class WishlistRegisterRequest(
     val url: String,
     @field:NotNull
     @field:Schema(
-        description = "게스트 식별자 (게스트 발급 API로 받은 UUID)",
+        description = "유저 식별자 (게스트 발급 API로 받은 UUID)",
         example = "8f1a3c2b-9d44-4e2a-9b12-1a2b3c4d5e6f",
         format = "uuid",
         requiredMode = Schema.RequiredMode.REQUIRED,
     )
-    val guestId: UUID,
+    val userId: UUID,
 )
