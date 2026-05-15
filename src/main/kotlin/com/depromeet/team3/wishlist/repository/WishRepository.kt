@@ -7,13 +7,13 @@ import java.util.UUID
 interface WishRepository {
     fun save(wish: Wish): Wish
 
-    fun existsByGuestIdAndProductLink(
-        guestId: UUID,
+    fun existsByUserIdAndProductLink(
+        userId: UUID,
         link: ProductLink,
     ): Boolean
 
-    fun countByIdsAndGuestId(
+    fun countByIdsAndUserId(
         ids: List<Long>,
-        guestId: UUID,
+        userId: UUID,
     ): Long
 }

@@ -22,17 +22,17 @@ class WishlistService(
     // 외부 호출은 트랜잭션 바깥에서 끝내고, 영속화는 별도 빈에 위임해 proxy 를 통해 호출.
     fun register(
         rawUrl: String,
-        guestId: UUID,
+        userId: UUID,
     ): WishRegisterResult {
         val link = ProductLink.parse(rawUrl)
 
         // dedup 검사를 추출 전에 먼저 — 중복이면 LLM 호출 비용 자체를 회피.
-        if (wishRepository.existsByGuestIdAndProductLink(guestId, link)) {
-            throw WishException.alreadyExists(guestId = guestId, link = link)
+        if (wishRepository.existsByUserIdAndProductLink(userId, link)) {
+            throw WishException.alreadyExists(userId = userId, link = link)
         }
 
         val product = extractWithLatencyLog(link)
-        return wishPersistenceService.persist(guestId, product)
+        return wishPersistenceService.persist(userId, product)
     }
 
     private fun extractWithLatencyLog(link: ProductLink): ProductSnapshot {
