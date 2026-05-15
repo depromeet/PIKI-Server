@@ -6,10 +6,12 @@ import com.depromeet.team3.support.StubProductExtractor
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
+import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -28,11 +30,28 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
     @Autowired
     private lateinit var stubExtractor: StubProductExtractor
 
+    @Autowired
+    private lateinit var jdbcTemplate: JdbcTemplate
+
+    private fun uuidToBytes(uuid: UUID): ByteArray =
+        ByteBuffer.allocate(16).apply {
+            putLong(uuid.mostSignificantBits)
+            putLong(uuid.leastSignificantBits)
+        }.array()
+
     @Test
-    fun `같은 guest 와 URL 로 동시 두 요청이 들어오면 한 쪽은 201, 다른 쪽은 409 로 응답된다`() {
+    fun `같은 유저와 URL 로 동시 두 요청이 들어오면 한 쪽은 201, 다른 쪽은 409 로 응답된다`() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         val url = "https://shop.example.com/products/race-${UUID.randomUUID()}"
         val userId = UUID.randomUUID()
+        val userBytes = uuidToBytes(userId)
+
+        // @Transactional 없는 테스트라 concurrent 요청이 user row 를 볼 수 있도록 먼저 커밋한다.
+        jdbcTemplate.update(
+            "INSERT INTO user (id, nickname, identity_type, created_at, updated_at) VALUES (?, ?, ?, NOW(6), NOW(6))",
+            userBytes, "테스트유저", "GUEST",
+        )
+
         val body = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to userId))
         stubExtractor.build = { link -> ProductSnapshot(link = link, name = "race 상품") }
 
@@ -65,5 +84,9 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
         // - 한 쪽이 dedup 체크 통과 + persist 성공 → 201
         // - 다른 쪽은 dedup 또는 unique 제약 위반 catch → 409 (500 으로 새지 않는다)
         assertEquals(setOf(201, 409), statuses)
+
+        // @Transactional 롤백이 없으므로 명시적으로 정리한다.
+        jdbcTemplate.update("DELETE FROM wishes WHERE user_id = ?", userBytes)
+        jdbcTemplate.update("DELETE FROM user WHERE id = ?", userBytes)
     }
 }
