@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 
 // 일반 통합 테스트와 달리 @Transactional 을 사용하지 않는다 — 별도 트랜잭션 동시 진행이
-// race 시뮬레이션의 본질이다. 데이터 격리는 매 테스트가 새 UUID guestId 를 써서 보장한다.
+// race 시뮬레이션의 본질이다. 데이터 격리는 매 테스트가 새 UUID userId 를 써서 보장한다.
 class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
     @Autowired
     private lateinit var webApplicationContext: WebApplicationContext
@@ -32,8 +32,8 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
     fun `같은 guest 와 URL 로 동시 두 요청이 들어오면 한 쪽은 201, 다른 쪽은 409 로 응답된다`() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         val url = "https://shop.example.com/products/race-${UUID.randomUUID()}"
-        val guestId = UUID.randomUUID()
-        val body = objectMapper.writeValueAsString(mapOf("url" to url, "guestId" to guestId))
+        val userId = UUID.randomUUID()
+        val body = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to userId))
         stubExtractor.build = { link -> ProductSnapshot(link = link, name = "race 상품") }
 
         // 2 단계 래치로 동시 출발을 강제한다. 한 단계 래치만 쓰면 worker 가 await 에 도달하기

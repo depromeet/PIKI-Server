@@ -23,14 +23,14 @@ class TournamentServiceTest {
     ) : WishRepository {
         override fun save(wish: Wish): Wish = wish
 
-        override fun existsByGuestIdAndProductLink(
-            guestId: UUID,
+        override fun existsByUserIdAndProductLink(
+            userId: UUID,
             link: ProductLink,
         ): Boolean = false
 
-        override fun countByIdsAndGuestId(
+        override fun countByIdsAndUserId(
             ids: List<Long>,
-            guestId: UUID,
+            userId: UUID,
         ): Long = if (allOwned) ids.size.toLong() else 0L
     }
 
