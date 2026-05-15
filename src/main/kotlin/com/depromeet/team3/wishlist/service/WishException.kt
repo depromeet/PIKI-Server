@@ -15,11 +15,11 @@ class WishException private constructor(
     HttpMappable {
     companion object {
         fun alreadyExists(
-            guestId: UUID,
+            userId: UUID,
             link: ProductLink,
         ): WishException =
             WishException(
-                "이미 위시리스트에 등록된 상품입니다. guestId=$guestId link=$link",
+                "이미 위시리스트에 등록된 상품입니다. userId=$userId link=$link",
                 ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )
