@@ -24,6 +24,25 @@ spring:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+jwt:
+  secret: ${JWT_SECRET:piki-dev-secret-key-at-least-32-chars!}
+  access-token-expiry-seconds: ${JWT_ACCESS_EXPIRY:3600}
+  refresh-token-expiry-seconds: ${JWT_REFRESH_EXPIRY:1209600}
+
+oauth:
+  kakao:
+    client-id: ${KAKAO_CLIENT_ID:}
+    client-secret: ${KAKAO_CLIENT_SECRET:}
+    redirect-uri: ${KAKAO_REDIRECT_URI:}
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
+    client-secret: ${GOOGLE_CLIENT_SECRET:}
+    redirect-uri: ${GOOGLE_REDIRECT_URI:}
 
 gemini:
   api-key: ${GEMINI_API_KEY:}

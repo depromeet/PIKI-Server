@@ -1,5 +1,6 @@
 package com.depromeet.team3.support
 
+import com.depromeet.team3.auth.infrastructure.oauth.OAuthProvider
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 
@@ -10,4 +11,10 @@ import org.springframework.context.annotation.Bean
 class IntegrationStubs {
     @Bean
     fun productExtractor(): StubProductExtractor = StubProductExtractor()
+
+    @Bean
+    fun kakaoOAuthClient(): StubOAuthClient = StubOAuthClient(OAuthProvider.KAKAO)
+
+    @Bean
+    fun googleOAuthClient(): StubOAuthClient = StubOAuthClient(OAuthProvider.GOOGLE)
 }
