@@ -3,10 +3,10 @@ package com.depromeet.team3.wishlist.controller
 import com.depromeet.team3.product.domain.ProductSnapshot
 import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.support.StubProductExtractor
+import com.depromeet.team3.support.uuidToBytes
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.MediaType
-import com.depromeet.team3.support.uuidToBytes
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
