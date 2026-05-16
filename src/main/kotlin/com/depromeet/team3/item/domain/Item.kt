@@ -3,7 +3,7 @@ package com.depromeet.team3.item.domain
 import com.depromeet.team3.common.domain.LongBaseEntity
 import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.product.domain.ProductLinkConverter
-import com.depromeet.team3.product.service.ProductDetails
+import com.depromeet.team3.product.service.ProductSnapshot
 import jakarta.persistence.Column
 import jakarta.persistence.Convert
 import jakarta.persistence.Entity
@@ -27,13 +27,13 @@ class Item(
     val currency: String? = null,
 ) : LongBaseEntity() {
     companion object {
-        fun from(details: ProductDetails): Item =
+        fun from(snapshot: ProductSnapshot): Item =
             Item(
-                link = details.link,
-                name = details.name,
-                imageUrl = details.imageUrl,
-                currentPrice = details.currentPrice,
-                currency = details.currency,
+                link = snapshot.link,
+                name = snapshot.name,
+                imageUrl = snapshot.imageUrl,
+                currentPrice = snapshot.currentPrice,
+                currency = snapshot.currency,
             )
     }
 }

@@ -1,6 +1,6 @@
 package com.depromeet.team3.wishlist.controller
 
-import com.depromeet.team3.product.service.ProductDetails
+import com.depromeet.team3.product.service.ProductSnapshot
 import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.support.StubProductExtractor
 import org.junit.jupiter.api.Test
@@ -32,7 +32,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val url = "https://shop.example.com/products/42"
         val userId = UUID.randomUUID()
         stubExtractor.build = { link ->
-            ProductDetails(
+            ProductSnapshot(
                 link = link,
                 name = "나이키 에어포스",
                 currentPrice = 99_000,
@@ -63,7 +63,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         val url = "https://shop.example.com/products/42"
         val userId = UUID.randomUUID()
-        stubExtractor.build = { ProductDetails(link = it, name = "기본 상품") }
+        stubExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
         val body = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to userId))
 
         mockMvc

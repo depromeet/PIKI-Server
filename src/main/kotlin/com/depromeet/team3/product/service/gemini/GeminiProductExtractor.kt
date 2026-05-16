@@ -2,8 +2,8 @@ package com.depromeet.team3.product.service.gemini
 
 import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.product.service.PageFetcher
-import com.depromeet.team3.product.service.ProductDetails
 import com.depromeet.team3.product.service.ProductExtractor
+import com.depromeet.team3.product.service.ProductSnapshot
 import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
 import org.springframework.http.client.SimpleClientHttpRequestFactory
@@ -34,7 +34,7 @@ class GeminiProductExtractor(
                 },
             ).build()
 
-    override fun extract(link: ProductLink): ProductDetails {
+    override fun extract(link: ProductLink): ProductSnapshot {
         val fetchStart = System.nanoTime()
         val page = pageFetcher.fetch(link)
         val fetchMs = (System.nanoTime() - fetchStart) / 1_000_000
@@ -82,7 +82,7 @@ class GeminiProductExtractor(
             } catch (e: Exception) {
                 throw GeminiApiException.parseError(e)
             }
-        return result.toProductDetails(link)
+        return result.toProductSnapshot(link)
     }
 
     // LLM 입력에서 <script>/<style>/주석을 제거해 토큰 낭비와 오판(스크립트 안의 가짜 가격 JSON 등)을 줄인다.
