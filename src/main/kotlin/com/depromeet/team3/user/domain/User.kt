@@ -1,6 +1,7 @@
 package com.depromeet.team3.user.domain
 
 import com.depromeet.team3.common.domain.BaseEntity
+import com.depromeet.team3.user.service.UserException
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -17,9 +18,13 @@ class User(
     nickname: String,
     identityType: IdentityType,
 ) : BaseEntity<UUID>() {
+    init {
+        validateNickname(nickname)
+    }
+
     @Id
     @Column(name = "id", columnDefinition = "BINARY(16)")
-    val id: UUID = id
+    private val id: UUID = id
 
     override fun getIdOrNull(): UUID = id
 
@@ -32,17 +37,21 @@ class User(
         protected set
 
     fun promoteToMember() {
-        check(identityType == IdentityType.GUEST) { "이미 MEMBER 입니다." }
+        if (identityType != IdentityType.GUEST) throw UserException.alreadyMember()
         identityType = IdentityType.MEMBER
     }
 
     fun updateNickname(newNickname: String) {
-        require(newNickname.isNotBlank()) { "닉네임은 공백일 수 없습니다." }
-        require(newNickname.length <= 16) { "닉네임은 16자 이하여야 합니다." }
+        validateNickname(newNickname)
         nickname = newNickname
     }
 
     fun softDelete() {
         deletedAt = LocalDateTime.now()
+    }
+
+    private fun validateNickname(value: String) {
+        if (value.isBlank()) throw UserException.nicknameBlank()
+        if (value.length > 16) throw UserException.nicknameTooLong()
     }
 }
