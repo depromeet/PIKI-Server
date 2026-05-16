@@ -15,4 +15,9 @@ class TournamentUser(
     val tournamentId: Long,
     @Column(name = "user_id", nullable = false, columnDefinition = "BINARY(16)")
     val userId: UUID,
-) : LongBaseEntity()
+) : LongBaseEntity() {
+    // 엔티티 불변식 — 0·음수는 존재할 수 없는 참조다. 정상 흐름에선 닿지 않고, 닿으면 코드 버그.
+    init {
+        require(tournamentId > 0) { "tournamentId 는 양수여야 한다: $tournamentId" }
+    }
+}
