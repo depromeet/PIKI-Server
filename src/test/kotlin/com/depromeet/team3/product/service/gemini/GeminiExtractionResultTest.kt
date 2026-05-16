@@ -1,7 +1,7 @@
 package com.depromeet.team3.product.service.gemini
 
 import com.depromeet.team3.product.domain.ProductLink
-import com.depromeet.team3.product.service.ProductExtractionException
+import com.depromeet.team3.product.service.ProductSnapshotException
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -18,7 +18,7 @@ class GeminiExtractionResultTest {
                 name = null,
             )
 
-        assertFailsWith<ProductExtractionException> {
+        assertFailsWith<ProductSnapshotException> {
             result.toProductSnapshot(link)
         }
     }
@@ -84,5 +84,32 @@ class GeminiExtractionResultTest {
         val product = result.toProductSnapshot(link)
 
         assertNull(product.imageUrl)
+    }
+
+    @Test
+    fun `currentPrice 가 음수이면 ProductSnapshotException 을 던진다`() {
+        val result =
+            GeminiExtractionResult(
+                isProductPage = true,
+                name = "테스트 상품",
+                currentPrice = -100,
+            )
+
+        assertFailsWith<ProductSnapshotException> {
+            result.toProductSnapshot(link)
+        }
+    }
+
+    @Test
+    fun `name 이 512자를 초과하면 ProductSnapshotException 을 던진다`() {
+        val result =
+            GeminiExtractionResult(
+                isProductPage = true,
+                name = "가".repeat(513),
+            )
+
+        assertFailsWith<ProductSnapshotException> {
+            result.toProductSnapshot(link)
+        }
     }
 }

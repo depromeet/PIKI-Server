@@ -4,6 +4,7 @@ import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.product.service.ProductSnapshot
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 class ItemTest {
@@ -38,5 +39,19 @@ class ItemTest {
         assertNull(item.imageUrl)
         assertNull(item.currentPrice)
         assertNull(item.currency)
+    }
+
+    @Test
+    fun `currentPrice 가 음수면 Item 생성이 거부된다`() {
+        assertFailsWith<IllegalArgumentException> {
+            Item(link = link, currentPrice = -1)
+        }
+    }
+
+    @Test
+    fun `name 이 512자를 초과하면 Item 생성이 거부된다`() {
+        assertFailsWith<IllegalArgumentException> {
+            Item(link = link, name = "가".repeat(513))
+        }
     }
 }
