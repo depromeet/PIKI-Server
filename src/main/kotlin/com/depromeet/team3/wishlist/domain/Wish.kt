@@ -11,8 +11,8 @@ import java.util.UUID
 @Entity
 @Table(name = "wishes")
 class Wish(
-    @Column(name = "guest_id", nullable = false, columnDefinition = "BINARY(16)")
-    val guestId: UUID,
+    @Column(name = "user_id", nullable = false, columnDefinition = "BINARY(16)")
+    val userId: UUID,
     @Embedded
     val product: ProductSnapshot,
 ) : LongBaseEntity()

@@ -6,6 +6,8 @@ import com.depromeet.team3.support.StubProductExtractor
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.MediaType
+import com.depromeet.team3.support.uuidToBytes
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -26,11 +28,25 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     @Autowired
     private lateinit var stubExtractor: StubProductExtractor
 
+    @Autowired
+    private lateinit var jdbcTemplate: JdbcTemplate
+
+    private fun insertUser(userId: UUID) {
+        val bytes = uuidToBytes(userId)
+        jdbcTemplate.update(
+            "INSERT INTO user (id, nickname, identity_type, created_at, updated_at) VALUES (?, ?, ?, NOW(6), NOW(6))",
+            bytes,
+            "테스트유저",
+            "GUEST",
+        )
+    }
+
     @Test
     fun `정상 등록 - 201 과 함께 추출 결과가 응답에 박힌다`() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         val url = "https://shop.example.com/products/42"
-        val guestId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        insertUser(userId)
         stubExtractor.build = { link ->
             ProductSnapshot(
                 link = link,
@@ -40,7 +56,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 imageUrl = "https://cdn.example.com/p/42.jpg",
             )
         }
-        val body = objectMapper.writeValueAsString(mapOf("url" to url, "guestId" to guestId))
+        val body = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to userId))
 
         mockMvc
             .perform(
@@ -58,12 +74,13 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `같은 guest 가 같은 URL 을 두 번 등록하면 409 CONFLICT 가 반환된다`() {
+    fun `같은 유저가 같은 URL 을 두 번 등록하면 409 CONFLICT 가 반환된다`() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         val url = "https://shop.example.com/products/42"
-        val guestId = UUID.randomUUID()
+        val userId = UUID.randomUUID()
+        insertUser(userId)
         stubExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
-        val body = objectMapper.writeValueAsString(mapOf("url" to url, "guestId" to guestId))
+        val body = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to userId))
 
         mockMvc
             .perform(
@@ -84,12 +101,16 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `다른 guest 가 같은 URL 을 등록하면 둘 다 201 로 등록된다`() {
+    fun `다른 유저가 같은 URL 을 등록하면 둘 다 201 로 등록된다`() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         val url = "https://shop.example.com/products/42"
         stubExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
-        val firstBody = objectMapper.writeValueAsString(mapOf("url" to url, "guestId" to UUID.randomUUID()))
-        val secondBody = objectMapper.writeValueAsString(mapOf("url" to url, "guestId" to UUID.randomUUID()))
+        val firstUserId = UUID.randomUUID()
+        val secondUserId = UUID.randomUUID()
+        insertUser(firstUserId)
+        insertUser(secondUserId)
+        val firstBody = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to firstUserId))
+        val secondBody = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to secondUserId))
 
         mockMvc
             .perform(
@@ -109,7 +130,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     @Test
     fun `url 이 빈 문자열이면 400 BAD_REQUEST 가 반환된다`() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
-        val body = objectMapper.writeValueAsString(mapOf("url" to "", "guestId" to UUID.randomUUID()))
+        val body = objectMapper.writeValueAsString(mapOf("url" to "", "userId" to UUID.randomUUID()))
 
         mockMvc
             .perform(
@@ -126,7 +147,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         // ProductLink_parse 의 message 정책과 contract 양 끝을 함께 묶어 회귀를 잡는다.
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         val rawWithSecret = "data:text/html,<token=SHOULD_NOT_LEAK>"
-        val body = objectMapper.writeValueAsString(mapOf("url" to rawWithSecret, "guestId" to UUID.randomUUID()))
+        val body = objectMapper.writeValueAsString(mapOf("url" to rawWithSecret, "userId" to UUID.randomUUID()))
 
         mockMvc
             .perform(
