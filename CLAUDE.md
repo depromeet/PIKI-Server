@@ -37,6 +37,53 @@
 - 외부 라이브러리 시그니처가 강제하는 경우 (예: `Optional.isPresent()` 같은 Java interop)
 - 이 경우에도 **주석으로 이유를 명시**한다.
 
+## 예외와 검증 계층
+
+검증 실패를 어떤 도구로 표현할지는 **"멀쩡한 클라이언트가 정상 요청으로 이 지점에 닿을 수 있나?"** 로 정한다.
+
+- **닿을 수 있다 → 계약.** 클라이언트가 마주칠 입력 오류·비즈니스 충돌이다. 도메인 커스텀 예외(`HttpMappable` 구현, status·category 를 throw 지점에 명시)로 던진다.
+- **닿을 수 없다 → 불변식.** 정상 흐름에선 도달 불가능한 지점이다. `require` / `check` / `error` 로 던진다. 터지면 곧 코드 버그이므로 `500` + 스택트레이스가 정답이다. 커스텀 예외로 잡아 "처리"하면 버그가 숨는다.
+
+코드 모양(`require` 가 캐치올 핸들러 덕에 우연히 400으로 매핑되는 것 등)이 아니라 이 질문 하나로 판단한다.
+
+### 도메인 예외 이름
+
+도메인 커스텀 예외는 `{도메인 명사}Exception` 으로 짓는다 — `ProductLinkException` · `WishException` · `ProductSnapshotException` · `TournamentException`. 행위명(`...ExtractionException` 등)이 아니라 도메인 용어(명사)를 쓴다.
+
+### 도메인 예외 생성
+
+도메인 예외는 생성자를 `private` 으로 막고, `companion object` 의 **정적 팩토리 메서드**로만 만든다. 각 팩토리는 사유 하나를 나타내며 그 사유에 맞는 message·category·status 를 직접 결정한다.
+
+```kotlin
+class WishException private constructor(
+    message: String,
+    override val category: ErrorCategory,
+    override val httpStatus: HttpStatus,
+) : BaseException(message), HttpMappable {
+    companion object {
+        fun alreadyExists(): WishException =
+            WishException("이미 위시리스트에 등록된 상품입니다.", ErrorCategory.CONFLICT, HttpStatus.CONFLICT)
+    }
+}
+```
+
+호출부는 `throw WishException.alreadyExists()` 처럼 사유 이름만 읽으면 되고, status·메시지는 throw 지점에 흩어지지 않고 예외 클래스 한 곳에 모인다.
+
+### 검증은 입력 경계와 엔티티 양쪽에 둔다
+
+같은 조건을 두 번 검증해도 된다 — 각 층이 다른 질문에 답하면 중복이 아니라 다층 방어다.
+
+- **입력 경계** (컨트롤러 요청 DTO, 외부 추출 파이프라인 등) — *계약* 검증. 각 입력 경로가 자기 경계에서 책임진다. 생성 경로가 새로 늘면 그 경로가 자기 계약 검증을 더한다.
+- **엔티티 생성자** — *불변식* 검증(`require`). 엔티티는 누가 어떤 경로로 만들든 스스로 유효함을 보장하는 최후의 보루다. 정상 흐름에선 경계가 다 걸러 여기 닿지 않는다. 닿았다면 어떤 경계가 검증을 빠뜨린 것이므로 `500`.
+- 엔티티 생성자에 HTTP status 같은 전송 계층 계약을 박지 않는다. status 는 각 입력 경계가 정한다.
+
+## 가까운 미래는 고려한다
+
+YAGNI 는 **가설적·먼 미래**(올지 안 올지 모르는 요구)를 위한 추상화·일반화를 만들지 말라는 것이지, 모든 미래를 무시하라는 게 아니다.
+
+- 이미 예정됐거나 진행 중인 **가까운 미래**(보류 이슈, 합의된 후속 작업 등)는 설계에서 고려한다 — 미리 구현하지는 않더라도, 그 미래가 와도 깨지지 않는 구조로 둔다.
+- 구분: "정말 올지 모르는 것"은 무시, "올 게 거의 확실한 것"은 충돌하지 않게 설계한다.
+
 ## 테이블 간 외래 키
 
 **DB `FOREIGN KEY` 제약을 두지 않는다.** 테이블 간 관계는 논리적으로만 연결한다.
