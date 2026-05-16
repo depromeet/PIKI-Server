@@ -69,6 +69,13 @@ class WishException private constructor(
 
 호출부는 `throw WishException.alreadyExists()` 처럼 사유 이름만 읽으면 되고, status·메시지는 throw 지점에 흩어지지 않고 예외 클래스 한 곳에 모인다.
 
+### 클라이언트 응답에 내부 정보를 노출하지 않는다
+
+도메인 예외의 message 는 `GlobalExceptionHandler` 를 거쳐 응답 `detail` 로 클라이언트에 그대로 나간다. 따라서 예외 message 에 LLM 원문·사용자 입력 원본·내부 식별자·구체적 검증 사유 등 민감하거나 내부적인 정보를 담지 않는다. message 는 고정된 사용자 대면 문구로 두고, 디버깅에 필요한 구체 정보는 로그·cause 체인으로 남긴다.
+
+- 나쁜 예: `untrustworthyValue(reason: String)` — 호출부가 임의 문자열을 message 에 실어 보낼 수 있어, 향후 LLM 원문·입력값이 응답으로 샐 수 있다.
+- 좋은 예: 인자 없는 고정 message 팩토리. 사유 구분이 꼭 필요하면 노출돼도 안전한 enum/code 로 받는다.
+
 ### 검증은 입력 경계와 엔티티 양쪽에 둔다
 
 같은 조건을 두 번 검증해도 된다 — 각 층이 다른 질문에 답하면 중복이 아니라 다층 방어다.
