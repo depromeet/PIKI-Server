@@ -71,8 +71,8 @@ jobs:
                   }
                 }
               }' \
-              -F owner=depromeet -F repo=18th-team3-server -F num="$ISSUE_NUM" \
-              --jq --arg pid "$PROJECT_ID" '.data.repository.issue.projectItems.nodes[] | select(.project.id == $pid) | .id')
+              -F owner=depromeet -F repo=PIKI-Server -F num="$ISSUE_NUM" \
+              --jq ".data.repository.issue.projectItems.nodes[] | select(.project.id == \"$PROJECT_ID\") | .id")
 
             if [[ -n "$ITEM_ID" ]]; then
               gh api graphql \
