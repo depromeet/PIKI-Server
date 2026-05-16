@@ -22,9 +22,10 @@ class ProductSnapshotException private constructor(
 
         // LLM 추출값이 유효 범위(가격 음수, 컬럼 길이 초과 등)를 벗어남. 추출 결과를 신뢰할 수 없다.
         // 정상 URL 이라도 LLM 이 비결정적으로 이상값을 낼 수 있어 클라이언트가 닿는 계약 예외다.
-        fun untrustworthyValue(reason: String): ProductSnapshotException =
+        // message 는 응답 detail 로 노출되므로 구체 사유를 담지 않고 고정 문구로 둔다.
+        fun untrustworthyValue(): ProductSnapshotException =
             ProductSnapshotException(
-                "추출된 상품 정보를 신뢰할 수 없어 등록할 수 없습니다. ($reason)",
+                "추출된 상품 정보를 신뢰할 수 없어 등록할 수 없습니다.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )

@@ -22,16 +22,16 @@ data class GeminiExtractionResult(
 
         // 추출 결과가 DB 컬럼 제약·상식을 벗어나면 추출 실패로 본다 (입력 경계의 계약 검증).
         if ((currentPrice ?: 0) < 0) {
-            throw ProductSnapshotException.untrustworthyValue("가격이 음수입니다")
+            throw ProductSnapshotException.untrustworthyValue()
         }
         if ((normalizedName?.length ?: 0) > NAME_MAX_LENGTH) {
-            throw ProductSnapshotException.untrustworthyValue("상품명이 ${NAME_MAX_LENGTH}자를 초과했습니다")
+            throw ProductSnapshotException.untrustworthyValue()
         }
         if ((normalizedImageUrl?.length ?: 0) > IMAGE_URL_MAX_LENGTH) {
-            throw ProductSnapshotException.untrustworthyValue("이미지 URL 이 ${IMAGE_URL_MAX_LENGTH}자를 초과했습니다")
+            throw ProductSnapshotException.untrustworthyValue()
         }
         if ((normalizedCurrency?.length ?: 0) > CURRENCY_MAX_LENGTH) {
-            throw ProductSnapshotException.untrustworthyValue("통화 코드가 ${CURRENCY_MAX_LENGTH}자를 초과했습니다")
+            throw ProductSnapshotException.untrustworthyValue()
         }
 
         return ProductSnapshot(
