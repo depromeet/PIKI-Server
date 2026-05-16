@@ -46,6 +46,15 @@
 - 조회 성능을 위한 인덱스(`KEY idx_*`)는 FK 와 무관하므로 그대로 둔다.
 - 참조 무결성은 애플리케이션 코드(서비스 계층의 존재 검증 등)가 책임진다.
 
+## 도메인 용어
+
+- **product** — 외부 상품(쇼핑몰 페이지)과 그 추출 파이프라인. `ProductLink`(외부 URL) · `ProductExtractor` · `ProductDetails`(추출 결과 DTO).
+- **item** — 추출 결과를 영속화한 엔티티. 우리 시스템의 상품 단위. wish · tournament 가 참조한다.
+- **wish** — user 가 item 을 위시리스트에 담은 기록 (`user_id` + `item_id`).
+- **tournament** — item 들로 겨루는 토너먼트. `tournament_item`(출전 아이템) · `tournament_user`(참여자).
+
+추출 결과(`ProductDetails`)를 영속화하면 `item` 이 된다. 외부 경계를 가리키는 이름에 `item` 을, 우리 엔티티에 `product` 를 쓰지 않는다.
+
 ## 테스트 분류
 
 테스트는 두 종류만 둔다.
