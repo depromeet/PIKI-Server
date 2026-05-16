@@ -6,6 +6,7 @@ CREATE TABLE user_detail (
     social_id     VARCHAR(255) NOT NULL,
     created_at    DATETIME(6)  NOT NULL,
     updated_at    DATETIME(6)  NOT NULL,
+    deleted_at    DATETIME(6)  NULL,
     PRIMARY KEY (user_id),
     UNIQUE KEY uk_user_detail_provider_social (provider, social_id),
     CONSTRAINT fk_user_detail_user FOREIGN KEY (user_id) REFERENCES user (id) ON DELETE RESTRICT
