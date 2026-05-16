@@ -37,6 +37,35 @@
 - 외부 라이브러리 시그니처가 강제하는 경우 (예: `Optional.isPresent()` 같은 Java interop)
 - 이 경우에도 **주석으로 이유를 명시**한다.
 
+## 도메인 예외 정책 — `require` / `check` / `error` vs 커스텀 예외
+
+**판단 기준 한 줄: "멀쩡한 클라이언트가 정상 요청으로 여기 닿을 수 있나?"**
+
+- 닿는다 → **계약** → 커스텀 예외 (`*Exception.factoryMethod()`, 400 / 409 / 403 등)
+- 못 닿는다 → **불변식** → `require` / `check` / `error` (500, 의도된 코드 버그 신호)
+
+| 상황 | 누가 터뜨리나 | 범주 | 도구 | 결과 |
+|---|---|---|---|---|
+| `error(MISSING_ID)` — 영속화 전 `getId()` | 개발자(버그) | 불변식 | `error` | 500 |
+| 닉네임 17자 | 클라이언트 | 계약 | 커스텀 | 400 |
+| 이미 완료된 토너먼트에 재요청 | 클라이언트 | 계약 | 커스텀 | 409 |
+| `winnerId` 가 참가 목록에 없음 (서비스가 보장한 값) | 개발자(버그) | 불변식 | `require` | 500 |
+
+### 규칙
+- `require` 로 우연히 400 이 나오는 건 캐치올 핸들러 덕분. throw 지점에 "이건 400이다"가 박혀 있지 않다. 커스텀 예외는 `status` · `category` 가 코드에 박힌다.
+- **도메인이 자기방어** 한다. 도메인 메서드가 직접 커스텀 예외를 던지면 호출 위치(서비스 / 다른 도메인 / 테스트)에 무관하게 같은 결과가 나온다. 서비스에서 `check` 와 같은 조건을 사전 `if` 로 막는 패턴은 도메인에 동일 검증을 옮긴 뒤 제거 가능.
+- **한 메서드 안에 `require` 와 커스텀 예외가 공존하는 게 정상.** 각 줄이 다른 질문("누가 터뜨리나")에 답하고 있을 뿐.
+  ```kotlin
+  fun complete(winnerWishItemId: Long) {
+      if (isCompleted()) throw TournamentException.alreadyCompleted()      // 계약: 클라이언트 도달 가능 → 409
+      require(winnerWishItemId in wishItemIds) { "우승자가 참가 목록에 없음" }  // 불변식: 서비스가 보장 → 500
+  }
+  ```
+- 커스텀 예외는 `*Exception : BaseException, HttpMappable` 패턴 (예: `TournamentException`, `UserException`). `private constructor` + `companion object` 의 factory 메서드로 사유별 메시지·`ErrorCategory`·`HttpStatus` 를 한 자리에 박는다.
+
+### 한 줄 외울 것
+코드 모양 보지 말고 **"멀쩡한 클라이언트가 정상 요청으로 여기 닿을 수 있나?"** 만 물을 것. 닿으면 커스텀, 못 닿으면 `require` / `check` / `error`.
+
 ## 테스트 분류
 
 테스트는 두 종류만 둔다.
