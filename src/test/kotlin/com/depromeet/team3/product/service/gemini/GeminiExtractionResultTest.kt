@@ -112,4 +112,32 @@ class GeminiExtractionResultTest {
             result.toProductSnapshot(link)
         }
     }
+
+    @Test
+    fun `imageUrl 이 2048자를 초과하면 ProductSnapshotException 을 던진다`() {
+        val result =
+            GeminiExtractionResult(
+                isProductPage = true,
+                name = "테스트",
+                imageUrl = "https://cdn.example.com/" + "a".repeat(2048),
+            )
+
+        assertFailsWith<ProductSnapshotException> {
+            result.toProductSnapshot(link)
+        }
+    }
+
+    @Test
+    fun `currency 가 8자를 초과하면 ProductSnapshotException 을 던진다`() {
+        val result =
+            GeminiExtractionResult(
+                isProductPage = true,
+                name = "테스트",
+                currency = "ABCDEFGHI",
+            )
+
+        assertFailsWith<ProductSnapshotException> {
+            result.toProductSnapshot(link)
+        }
+    }
 }

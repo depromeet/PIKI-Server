@@ -1,6 +1,8 @@
 package com.depromeet.team3.tournament.domain
 
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -17,17 +19,19 @@ class TournamentItemTest {
         assertEquals(userId, tournamentItem.userId)
     }
 
-    @Test
-    fun `tournamentId 가 0 이하면 생성이 거부된다`() {
+    @ParameterizedTest
+    @ValueSource(longs = [0, -1])
+    fun `tournamentId 가 양수가 아니면 생성이 거부된다`(invalidId: Long) {
         assertFailsWith<IllegalArgumentException> {
-            TournamentItem(tournamentId = 0, itemId = 1, userId = UUID.randomUUID())
+            TournamentItem(tournamentId = invalidId, itemId = 1, userId = UUID.randomUUID())
         }
     }
 
-    @Test
-    fun `itemId 가 0 이하면 생성이 거부된다`() {
+    @ParameterizedTest
+    @ValueSource(longs = [0, -1])
+    fun `itemId 가 양수가 아니면 생성이 거부된다`(invalidId: Long) {
         assertFailsWith<IllegalArgumentException> {
-            TournamentItem(tournamentId = 1, itemId = 0, userId = UUID.randomUUID())
+            TournamentItem(tournamentId = 1, itemId = invalidId, userId = UUID.randomUUID())
         }
     }
 }
