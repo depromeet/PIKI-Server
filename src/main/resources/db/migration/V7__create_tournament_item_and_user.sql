@@ -7,7 +7,8 @@ CREATE TABLE tournament_item (
     updated_at DATETIME(6) NOT NULL,
     deleted_at DATETIME(6) NULL,
     PRIMARY KEY (id),
-    KEY idx_tournament_item_tournament_id (tournament_id)
+    KEY idx_tournament_item_tournament_id (tournament_id),
+    UNIQUE KEY uk_tournament_item (tournament_id, item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE tournament_user (
