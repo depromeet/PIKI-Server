@@ -48,12 +48,12 @@
 
 ## 도메인 용어
 
-- **product** — 외부 상품(쇼핑몰 페이지)과 그 추출 파이프라인. `ProductLink`(외부 URL) · `ProductExtractor` · `ProductDetails`(추출 결과 DTO).
+- **product** — 외부 상품(쇼핑몰 페이지)과 그 추출 파이프라인. `ProductLink`(외부 URL) · `ProductExtractor` · `ProductSnapshot`(추출 시점 결과).
 - **item** — 추출 결과를 영속화한 엔티티. 우리 시스템의 상품 단위. wish · tournament 가 참조한다.
 - **wish** — user 가 item 을 위시리스트에 담은 기록 (`user_id` + `item_id`).
 - **tournament** — item 들로 겨루는 토너먼트. `tournament_item`(출전 아이템) · `tournament_user`(참여자).
 
-추출 결과(`ProductDetails`)를 영속화하면 `item` 이 된다. 외부 경계를 가리키는 이름에 `item` 을, 우리 엔티티에 `product` 를 쓰지 않는다.
+추출 결과(`ProductSnapshot`)를 영속화하면 `item` 이 된다. 외부 경계를 가리키는 이름에 `item` 을, 우리 엔티티에 `product` 를 쓰지 않는다.
 
 ## 테스트 분류
 
