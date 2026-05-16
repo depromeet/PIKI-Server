@@ -1,5 +1,6 @@
--- wish 에 박혀 있던 상품 정보를 items 로 분리한다.
+-- wishes 에 박혀 있던 상품 정보를 items 로 분리한다.
 -- dev 단계라 기존 데이터는 보존하지 않고 테이블을 재생성한다.
+-- DROP TABLE 로 V7 의 fk_wishes_user 외래 키도 함께 사라진다 (FK 미사용 정책).
 DROP TABLE wishes;
 
 CREATE TABLE wishes (

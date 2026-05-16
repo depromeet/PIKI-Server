@@ -37,22 +37,38 @@
 - 외부 라이브러리 시그니처가 강제하는 경우 (예: `Optional.isPresent()` 같은 Java interop)
 - 이 경우에도 **주석으로 이유를 명시**한다.
 
-## 예외와 검증 계층
+## 도메인 예외 정책 — `require` / `check` / `error` vs 커스텀 예외
 
-검증 실패를 어떤 도구로 표현할지는 **"멀쩡한 클라이언트가 정상 요청으로 이 지점에 닿을 수 있나?"** 로 정한다.
+**판단 기준 한 줄: "멀쩡한 클라이언트가 정상 요청으로 여기 닿을 수 있나?"**
 
-- **닿을 수 있다 → 계약.** 클라이언트가 마주칠 입력 오류·비즈니스 충돌이다. 도메인 커스텀 예외(`HttpMappable` 구현, status·category 를 throw 지점에 명시)로 던진다.
-- **닿을 수 없다 → 불변식.** 정상 흐름에선 도달 불가능한 지점이다. `require` / `check` / `error` 로 던진다. 터지면 곧 코드 버그이므로 `500` + 스택트레이스가 정답이다. 커스텀 예외로 잡아 "처리"하면 버그가 숨는다.
+- 닿는다 → **계약** → 커스텀 예외 (`*Exception.factoryMethod()`, 400 / 409 / 403 등)
+- 못 닿는다 → **불변식** → `require` / `check` / `error` (500, 의도된 코드 버그 신호)
 
-코드 모양(`require` 가 캐치올 핸들러 덕에 우연히 400으로 매핑되는 것 등)이 아니라 이 질문 하나로 판단한다.
+| 상황 | 누가 터뜨리나 | 범주 | 도구 | 결과 |
+|---|---|---|---|---|
+| `error(MISSING_ID)` — 영속화 전 `getId()` | 개발자(버그) | 불변식 | `error` | 500 |
+| 닉네임 17자 | 클라이언트 | 계약 | 커스텀 | 400 |
+| 이미 완료된 토너먼트에 재요청 | 클라이언트 | 계약 | 커스텀 | 409 |
+| `winnerId` 가 참가 목록에 없음 (서비스가 보장한 값) | 개발자(버그) | 불변식 | `require` | 500 |
+
+### 규칙
+- `require` 로 우연히 400 이 나오는 건 캐치올 핸들러 덕분. throw 지점에 "이건 400이다"가 박혀 있지 않다. 커스텀 예외는 `status` · `category` 가 코드에 박힌다.
+- **도메인이 자기방어** 한다. 도메인 메서드가 직접 커스텀 예외를 던지면 호출 위치(서비스 / 다른 도메인 / 테스트)에 무관하게 같은 결과가 나온다. 서비스에서 `check` 와 같은 조건을 사전 `if` 로 막는 패턴은 도메인에 동일 검증을 옮긴 뒤 제거 가능.
+- **한 메서드 안에 `require` 와 커스텀 예외가 공존하는 게 정상.** 각 줄이 다른 질문("누가 터뜨리나")에 답하고 있을 뿐.
+  ```kotlin
+  fun complete(winnerWishItemId: Long) {
+      if (isCompleted()) throw TournamentException.alreadyCompleted()      // 계약: 클라이언트 도달 가능 → 409
+      require(winnerWishItemId in wishItemIds) { "우승자가 참가 목록에 없음" }  // 불변식: 서비스가 보장 → 500
+  }
+  ```
 
 ### 도메인 예외 이름
 
-도메인 커스텀 예외는 `{도메인 명사}Exception` 으로 짓는다 — `ProductLinkException` · `WishException` · `ProductSnapshotException` · `TournamentException`. 행위명(`...ExtractionException` 등)이 아니라 도메인 용어(명사)를 쓴다.
+도메인 커스텀 예외는 `{도메인 명사}Exception` 으로 짓는다 — `ProductLinkException` · `WishException` · `ProductSnapshotException` · `TournamentException` · `UserException`. 행위명(`...ExtractionException` 등)이 아니라 도메인 용어(명사)를 쓴다.
 
 ### 도메인 예외 생성
 
-도메인 예외는 생성자를 `private` 으로 막고, `companion object` 의 **정적 팩토리 메서드**로만 만든다. 각 팩토리는 사유 하나를 나타내며 그 사유에 맞는 message·category·status 를 직접 결정한다.
+커스텀 예외는 `*Exception : BaseException, HttpMappable` 패턴이다. 생성자를 `private` 으로 막고 `companion object` 의 **정적 팩토리 메서드**로만 만든다. 각 팩토리는 사유 하나를 나타내며 그 사유에 맞는 message·`ErrorCategory`·`HttpStatus` 를 한 자리에 박는다.
 
 ```kotlin
 class WishException private constructor(
@@ -83,6 +99,9 @@ class WishException private constructor(
 - **입력 경계** (컨트롤러 요청 DTO, 외부 추출 파이프라인 등) — *계약* 검증. 각 입력 경로가 자기 경계에서 책임진다. 생성 경로가 새로 늘면 그 경로가 자기 계약 검증을 더한다.
 - **엔티티 생성자** — *불변식* 검증(`require`). 엔티티는 누가 어떤 경로로 만들든 스스로 유효함을 보장하는 최후의 보루다. 정상 흐름에선 경계가 다 걸러 여기 닿지 않는다. 닿았다면 어떤 경계가 검증을 빠뜨린 것이므로 `500`.
 - 엔티티 생성자에 HTTP status 같은 전송 계층 계약을 박지 않는다. status 는 각 입력 경계가 정한다.
+
+### 한 줄 외울 것
+코드 모양 보지 말고 **"멀쩡한 클라이언트가 정상 요청으로 여기 닿을 수 있나?"** 만 물을 것. 닿으면 커스텀, 못 닿으면 `require` / `check` / `error`.
 
 ## 가까운 미래는 고려한다
 
