@@ -147,7 +147,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         // ProductLink_parse 의 message 정책과 contract 양 끝을 함께 묶어 회귀를 잡는다.
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         val rawWithSecret = "data:text/html,<token=SHOULD_NOT_LEAK>"
-        val body = objectMapper.writeValueAsString(mapOf("url" to rawWithSecret, "guestId" to UUID.randomUUID()))
+        val body = objectMapper.writeValueAsString(mapOf("url" to rawWithSecret, "userId" to UUID.randomUUID()))
 
         mockMvc
             .perform(
