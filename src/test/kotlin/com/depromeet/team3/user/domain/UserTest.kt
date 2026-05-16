@@ -1,5 +1,8 @@
 package com.depromeet.team3.user.domain
 
+import com.depromeet.team3.user.service.UserException
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -9,6 +12,20 @@ import kotlin.test.assertNull
 
 class UserTest {
     private fun guest() = User(id = UUID.randomUUID(), nickname = "테스트유저", identityType = IdentityType.GUEST)
+
+    @ParameterizedTest
+    @ValueSource(strings = ["", "   ", "12345678901234567"])
+    fun `생성자에 유효하지 않은 닉네임이 들어오면 예외가 발생한다`(invalid: String) {
+        assertFailsWith<UserException> {
+            User(id = UUID.randomUUID(), nickname = invalid, identityType = IdentityType.GUEST)
+        }
+    }
+
+    @Test
+    fun `생성자에 16자 닉네임은 허용된다`() {
+        val user = User(id = UUID.randomUUID(), nickname = "1234567890123456", identityType = IdentityType.GUEST)
+        assertEquals("1234567890123456", user.nickname)
+    }
 
     @Test
     fun `GUEST 유저는 MEMBER 로 승격된다`() {
@@ -21,7 +38,7 @@ class UserTest {
     fun `이미 MEMBER 인 유저를 다시 승격하면 예외가 발생한다`() {
         val user = guest()
         user.promoteToMember()
-        assertFailsWith<IllegalStateException> { user.promoteToMember() }
+        assertFailsWith<UserException> { user.promoteToMember() }
     }
 
     @Test
@@ -41,19 +58,19 @@ class UserTest {
     @Test
     fun `닉네임 17자는 예외가 발생한다`() {
         val user = guest()
-        assertFailsWith<IllegalArgumentException> { user.updateNickname("12345678901234567") }
+        assertFailsWith<UserException> { user.updateNickname("12345678901234567") }
     }
 
     @Test
     fun `빈 닉네임은 예외가 발생한다`() {
         val user = guest()
-        assertFailsWith<IllegalArgumentException> { user.updateNickname("") }
+        assertFailsWith<UserException> { user.updateNickname("") }
     }
 
     @Test
     fun `공백만 있는 닉네임은 예외가 발생한다`() {
         val user = guest()
-        assertFailsWith<IllegalArgumentException> { user.updateNickname("   ") }
+        assertFailsWith<UserException> { user.updateNickname("   ") }
     }
 
     @Test
