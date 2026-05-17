@@ -5,18 +5,21 @@ import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
-import java.util.UUID
 
 @Entity
 class Tournament(
-    @Column(name = "owner_tournament_user_id", nullable = false, columnDefinition = "BINARY(16)")
-    val ownerTournamentUserId: UUID,
+    @Column(name = "owner_tournament_user_id", nullable = false)
+    var ownerTournamentUserId: Long,
     @Column(name = "name", nullable = false)
     val name: String,
     @Enumerated(value = EnumType.STRING)
     @Column(columnDefinition = "varchar(50)")
     var status: TournamentStatus = TournamentStatus.PENDING,
 ) : LongBaseEntity() {
+
+    fun assignOwner(tournamentUserId: Long) {
+        ownerTournamentUserId = tournamentUserId
+    }
 
     fun start() {
         this.status = TournamentStatus.IN_PROGRESS
