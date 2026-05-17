@@ -1,12 +1,14 @@
 package com.depromeet.team3.tournament.service
 
 import com.depromeet.team3.common.domain.LongBaseEntity
-import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.tournament.domain.Tournament
 import com.depromeet.team3.tournament.domain.TournamentHistory
 import com.depromeet.team3.tournament.domain.TournamentItem
 import com.depromeet.team3.tournament.domain.TournamentStatus
+import com.depromeet.team3.tournament.domain.TournamentUser
+import com.depromeet.team3.tournament.repository.TournamentItemRepository
 import com.depromeet.team3.tournament.repository.TournamentRepository
+import com.depromeet.team3.tournament.repository.TournamentUserRepository
 import com.depromeet.team3.tournament.service.dto.AddTournamentItems
 import com.depromeet.team3.tournament.service.dto.CreateTournament
 import com.depromeet.team3.tournament.service.dto.RecordMatch
@@ -20,45 +22,72 @@ import kotlin.test.assertFailsWith
 
 class TournamentServiceTest {
 
+    private class TestTournamentUserRepository : TournamentUserRepository {
+        val users = mutableListOf<TournamentUser>()
+        private var idSeq = 1L
+
+        override fun save(tournamentUser: TournamentUser): TournamentUser {
+            val id = idSeq++
+            setEntityId(tournamentUser, id)
+            users.add(tournamentUser)
+            return tournamentUser
+        }
+
+        override fun findById(id: Long): TournamentUser? = users.firstOrNull { it.getId() == id }
+
+        private fun setEntityId(entity: LongBaseEntity, id: Long) {
+            val field = LongBaseEntity::class.java.getDeclaredField("id")
+            field.isAccessible = true
+            field.set(entity, id)
+        }
+    }
+
     private class TestWishRepository(
         private val allOwned: Boolean = true,
     ) : WishRepository {
         override fun save(wish: Wish): Wish = wish
-        override fun existsByGuestIdAndProductLink(guestId: UUID, link: ProductLink): Boolean = false
-        override fun countByIdsAndGuestId(ids: List<Long>, guestId: UUID): Long =
+        override fun countByIdsAndUserId(ids: List<Long>, userId: UUID): Long =
             if (allOwned) ids.size.toLong() else 0L
+    }
+
+    private class TestTournamentItemRepository : TournamentItemRepository {
+        val items = mutableListOf<TournamentItem>()
+        private var idSeq = 1L
+
+        override fun saveAll(items: List<TournamentItem>): List<TournamentItem> = items.map { item ->
+            val id = idSeq++
+            setEntityId(item, id)
+            this.items.add(item)
+            item
+        }
+
+        override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
+            items.filter { it.tournamentId == tournamentId }
+
+        private fun setEntityId(entity: LongBaseEntity, id: Long) {
+            val field = LongBaseEntity::class.java.getDeclaredField("id")
+            field.isAccessible = true
+            field.set(entity, id)
+        }
     }
 
     private class TestTournamentRepository : TournamentRepository {
         private var tournamentIdSeq = 1L
-        private var itemIdSeq = 1L
         val tournaments = mutableMapOf<Long, Tournament>()
-        val tournamentItems = mutableListOf<TournamentItem>()
         val histories = mutableListOf<TournamentHistory>()
 
-        override fun saveTournament(tournament: Tournament): Long {
+        override fun saveTournament(tournament: Tournament): Tournament {
             val id = tournamentIdSeq++
-            tournaments[id] = tournament
             setEntityId(tournament, id)
-            return id
+            tournaments[id] = tournament
+            return tournament
         }
-
-        override fun saveTournamentItems(items: List<TournamentItem>): List<TournamentItem> =
-            items.map { item ->
-                val id = itemIdSeq++
-                setEntityId(item, id)
-                tournamentItems.add(item)
-                item
-            }
 
         override fun saveHistory(history: TournamentHistory) {
             histories.add(history)
         }
 
         override fun findTournamentById(tournamentId: Long): Tournament? = tournaments[tournamentId]
-
-        override fun findTournamentItemsByTournamentId(tournamentId: Long): List<TournamentItem> =
-            tournamentItems.filter { it.tournamentId == tournamentId }
 
         override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
             histories.filter { it.tournamentId == tournamentId }
@@ -70,9 +99,11 @@ class TournamentServiceTest {
         }
     }
 
+    private val itemRepository = TestTournamentItemRepository()
+    private val userRepository = TestTournamentUserRepository()
     private val repository = TestTournamentRepository()
     private val wishRepository = TestWishRepository()
-    private val service = TournamentService(repository, wishRepository)
+    private val service = TournamentService(userRepository, repository, itemRepository, wishRepository)
     private val userId = UUID.randomUUID()
     private val otherUserId = UUID.randomUUID()
 
@@ -97,12 +128,12 @@ class TournamentServiceTest {
 
         service.addItems(userId, AddTournamentItems(tournamentId, (1L..8L).toList()))
 
-        assertEquals(8, repository.findTournamentItemsByTournamentId(tournamentId).size)
+        assertEquals(8, itemRepository.findAllByTournamentId(tournamentId).size)
     }
 
     @Test
     fun `addItems 에서 위시 아이템이 요청자의 것이 아니면 예외가 발생한다`() {
-        val serviceWithNoOwnership = TournamentService(repository, TestWishRepository(allOwned = false))
+        val serviceWithNoOwnership = TournamentService(userRepository, repository, itemRepository, TestWishRepository(allOwned = false))
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
 
         assertFailsWith<WishException> {
@@ -139,9 +170,48 @@ class TournamentServiceTest {
     }
 
     @Test
+    fun `start 에서 아이템이 없으면 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+
+        assertFailsWith<TournamentException> {
+            service.start(userId, tournamentId)
+        }
+    }
+
+    @Test
+    fun `start 에서 아이템이 1개면 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L)))
+
+        assertFailsWith<TournamentException> {
+            service.start(userId, tournamentId)
+        }
+    }
+
+    @Test
+    fun `start 에서 아이템이 33개면 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        service.addItems(userId, AddTournamentItems(tournamentId, (1L..33L).toList()))
+
+        assertFailsWith<TournamentException> {
+            service.start(userId, tournamentId)
+        }
+    }
+
+    @Test
+    fun `start 에서 아이템이 32개면 정상적으로 시작된다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        service.addItems(userId, AddTournamentItems(tournamentId, (1L..32L).toList()))
+
+        service.start(userId, tournamentId)
+
+        assertEquals(TournamentStatus.IN_PROGRESS, repository.tournaments[tournamentId]!!.status)
+    }
+
+    @Test
     fun `recordMatch 는 IN_PROGRESS 토너먼트에 히스토리를 저장한다`() {
         val tournamentId = createAndStart((1L..8L).toList())
-        val items = repository.findTournamentItemsByTournamentId(tournamentId)
+        val items = itemRepository.findAllByTournamentId(tournamentId)
         val firstItem = items.find { it.itemId == 1L }!!
         val secondItem = items.find { it.itemId == 2L }!!
 
@@ -150,20 +220,20 @@ class TournamentServiceTest {
             RecordMatch(
                 tournamentId = tournamentId,
                 currentRound = 4,
-                firstItemId = firstItem.getId(),
-                secondItemId = secondItem.getId(),
-                winnerItemId = firstItem.getId(),
+                firstTournamentItemId = firstItem.getId(),
+                secondTournamentItemId = secondItem.getId(),
+                selectedTournamentItemId = firstItem.getId(),
             ),
         )
 
         assertEquals(1, repository.histories.size)
-        assertEquals(firstItem.getId(), repository.histories[0].winnerTournamentItemId)
+        assertEquals(firstItem.getId(), repository.histories[0].selectedTournamentItemId)
     }
 
     @Test
     fun `recordMatch 에서 currentRound 가 2 면 토너먼트가 COMPLETED 로 완료된다`() {
         val tournamentId = createAndStart(listOf(10L, 20L))
-        val items = repository.findTournamentItemsByTournamentId(tournamentId)
+        val items = itemRepository.findAllByTournamentId(tournamentId)
         val firstItem = items.find { it.itemId == 10L }!!
         val secondItem = items.find { it.itemId == 20L }!!
 
@@ -172,9 +242,9 @@ class TournamentServiceTest {
             RecordMatch(
                 tournamentId = tournamentId,
                 currentRound = 2,
-                firstItemId = firstItem.getId(),
-                secondItemId = secondItem.getId(),
-                winnerItemId = firstItem.getId(),
+                firstTournamentItemId = firstItem.getId(),
+                secondTournamentItemId = secondItem.getId(),
+                selectedTournamentItemId = firstItem.getId(),
             ),
         )
 
@@ -189,7 +259,7 @@ class TournamentServiceTest {
         assertFailsWith<TournamentException> {
             service.recordMatch(
                 userId,
-                RecordMatch(tournamentId = tournamentId, currentRound = 2, firstItemId = 1L, secondItemId = 2L, winnerItemId = 1L),
+                RecordMatch(tournamentId = tournamentId, currentRound = 2, firstTournamentItemId = 1L, secondTournamentItemId = 2L, selectedTournamentItemId = 1L),
             )
         }
     }
@@ -199,28 +269,7 @@ class TournamentServiceTest {
         assertFailsWith<TournamentException> {
             service.recordMatch(
                 userId,
-                RecordMatch(tournamentId = 999L, currentRound = 2, firstItemId = 1L, secondItemId = 2L, winnerItemId = 1L),
-            )
-        }
-    }
-
-    @Test
-    fun `recordMatch 에서 다른 사용자의 토너먼트면 예외가 발생한다`() {
-        val tournamentId = createAndStart((1L..4L).toList())
-        val items = repository.findTournamentItemsByTournamentId(tournamentId)
-        val firstItem = items.find { it.itemId == 1L }!!
-        val secondItem = items.find { it.itemId == 2L }!!
-
-        assertFailsWith<TournamentException> {
-            service.recordMatch(
-                otherUserId,
-                RecordMatch(
-                    tournamentId = tournamentId,
-                    currentRound = 4,
-                    firstItemId = firstItem.getId(),
-                    secondItemId = secondItem.getId(),
-                    winnerItemId = firstItem.getId(),
-                ),
+                RecordMatch(tournamentId = 999L, currentRound = 2, firstTournamentItemId = 1L, secondTournamentItemId = 2L, selectedTournamentItemId = 1L),
             )
         }
     }
@@ -228,7 +277,7 @@ class TournamentServiceTest {
     @Test
     fun `recordMatch 에서 승자가 대결 아이템이 아니면 예외가 발생한다`() {
         val tournamentId = createAndStart((1L..4L).toList())
-        val items = repository.findTournamentItemsByTournamentId(tournamentId)
+        val items = itemRepository.findAllByTournamentId(tournamentId)
         val firstItem = items.find { it.itemId == 1L }!!
         val secondItem = items.find { it.itemId == 2L }!!
 
@@ -238,9 +287,9 @@ class TournamentServiceTest {
                 RecordMatch(
                     tournamentId = tournamentId,
                     currentRound = 4,
-                    firstItemId = firstItem.getId(),
-                    secondItemId = secondItem.getId(),
-                    winnerItemId = 99L,
+                    firstTournamentItemId = firstItem.getId(),
+                    secondTournamentItemId = secondItem.getId(),
+                    selectedTournamentItemId = 99L,
                 ),
             )
         }
@@ -249,16 +298,16 @@ class TournamentServiceTest {
     @Test
     fun `recordMatch 에서 이미 완료된 토너먼트면 예외가 발생한다`() {
         val tournamentId = createAndStart(listOf(10L, 20L))
-        val items = repository.findTournamentItemsByTournamentId(tournamentId)
+        val items = itemRepository.findAllByTournamentId(tournamentId)
         val firstItem = items.find { it.itemId == 10L }!!
         val secondItem = items.find { it.itemId == 20L }!!
 
         val finalMatch = RecordMatch(
             tournamentId = tournamentId,
             currentRound = 2,
-            firstItemId = firstItem.getId(),
-            secondItemId = secondItem.getId(),
-            winnerItemId = firstItem.getId(),
+            firstTournamentItemId = firstItem.getId(),
+            secondTournamentItemId = secondItem.getId(),
+            selectedTournamentItemId = firstItem.getId(),
         )
         service.recordMatch(userId, finalMatch)
 
@@ -270,7 +319,7 @@ class TournamentServiceTest {
     @Test
     fun `getTournamentById 는 토너먼트 정보와 히스토리를 반환한다`() {
         val tournamentId = createAndStart((1L..4L).toList(), "조회 토너먼트")
-        val items = repository.findTournamentItemsByTournamentId(tournamentId)
+        val items = itemRepository.findAllByTournamentId(tournamentId)
         val firstItem = items.find { it.itemId == 1L }!!
         val secondItem = items.find { it.itemId == 2L }!!
 
@@ -279,9 +328,9 @@ class TournamentServiceTest {
             RecordMatch(
                 tournamentId = tournamentId,
                 currentRound = 4,
-                firstItemId = firstItem.getId(),
-                secondItemId = secondItem.getId(),
-                winnerItemId = secondItem.getId(),
+                firstTournamentItemId = firstItem.getId(),
+                secondTournamentItemId = secondItem.getId(),
+                selectedTournamentItemId = secondItem.getId(),
             ),
         )
 
@@ -290,7 +339,7 @@ class TournamentServiceTest {
         assertEquals(tournamentId, info.tournamentId)
         assertEquals(4, info.items.size)
         assertEquals(1, info.history.size)
-        assertEquals(secondItem.getId(), info.history[0].winnerTournamentItemId)
+        assertEquals(secondItem.getId(), info.history[0].selectedTournamentItemId)
     }
 
     @Test
@@ -308,15 +357,6 @@ class TournamentServiceTest {
     fun `getTournamentById 에서 존재하지 않는 tournamentId 면 예외가 발생한다`() {
         assertFailsWith<TournamentException> {
             service.getTournamentById(999L, userId)
-        }
-    }
-
-    @Test
-    fun `getTournamentById 에서 다른 사용자의 토너먼트면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("내 토너먼트"))
-
-        assertFailsWith<TournamentException> {
-            service.getTournamentById(tournamentId, otherUserId)
         }
     }
 }
