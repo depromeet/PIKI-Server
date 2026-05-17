@@ -51,12 +51,13 @@ class JwtProvider(
     ): UUID? =
         runCatching {
             val claims = parseClaims(token)
-            val actualType = TokenType.fromClaim(claims[CLAIM_TYPE] as? String)
+            val rawType = claims[CLAIM_TYPE] as? String
+            val actualType = TokenType.fromClaim(rawType)
             check(actualType == expected) {
-                "JWT type mismatch: expected=${expected.claimValue}, actual=${actualType?.claimValue}"
+                "JWT type mismatch: expected=${expected.claimValue}, actual=${rawType ?: "<missing>"}"
             }
             UUID.fromString(claims.subject)
-        }.onFailure { logger.debug("JWT 파싱 실패 (expected={}): {}", expected, it.message) }
+        }.onFailure { logger.debug("JWT 파싱 실패 (expected={}): {}", expected.claimValue, it.message) }
             .getOrNull()
 
     private fun parseClaims(token: String): Claims =
