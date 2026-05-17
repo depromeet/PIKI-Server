@@ -6,12 +6,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class TournamentTest {
-
     private fun tournament(status: TournamentStatus = TournamentStatus.PENDING) =
         Tournament(ownerTournamentUserId = 0L, name = "테스트").also {
             when (status) {
                 TournamentStatus.IN_PROGRESS -> it.start()
-                TournamentStatus.COMPLETED -> { it.start(); it.complete() }
+                TournamentStatus.COMPLETED -> {
+                    it.start()
+                    it.complete()
+                }
                 else -> Unit
             }
         }

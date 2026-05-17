@@ -235,7 +235,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             post("/api/v1/tournaments/$tournamentId/start")
                 .header("X-User-Id", userId),
         )
-        val items = tournamentItemJpaRepository.findAllByTournamentId(tournamentId)
+        val items = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
         return TournamentStart(
             tournamentId = tournamentId,
             item1Id = items[0].getId(),
