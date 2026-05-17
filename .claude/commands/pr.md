@@ -132,7 +132,7 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
      --field-id PVTSSF_lADOARZVGM4BVVRVzhQxyAA \
      --single-select-option-id df73e18b
    ```
-   - PR 을 올린다는 것은 곧 리뷰 대기 상태이므로 `In review` 가 자연스럽다.
+   - PR 을 올린다는 것은 곧 리뷰 대기 상태이므로 `In review` 가 자연스럽다. create 모드는 방금 만든 PR 이라 Status 가 항상 기본값(`Backlog`)이므로 조건 없이 세팅한다 (update 모드 9단계는 기존 Status 를 확인 후 분기).
    - ID 의미: project=99 노드 ID, field=Status 필드 ID, option=`In review` 옵션 ID. 보드에서 Status 옵션이 바뀌면 이 ID 들도 갱신 필요.
    - 권한 부족 시 사용자에게 `gh auth refresh -h github.com -s project` 안내 (일회성 디바이스 인증).
 5. PR URL 과 부여된 assignee / 라벨 / Project(Status: In review) 결과를 사용자에게 전달
@@ -160,17 +160,29 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
 6. **제목 변경 필요 검토**: 추가 변경으로 작업 의도/스코프가 바뀌었거나 기존 제목에 오타·부정확한 표현이 있으면 새 제목 제안. 그 외엔 제목 유지.
 7. 사용자에게 갱신본(필요시 새 제목 포함, 변경 이유 짚어서)을 보여주고 확인받는다.
 8. 확인 후 `gh pr edit --body-file /tmp/pr_body.md` 로 갱신. 제목 변경이 있으면 `--title "새 제목"` 추가.
-9. **메타데이터 보정** — 이전 버전 스킬로 만든 PR 은 assignee / 라벨 / Project 가 비어 있을 수 있다. update 모드에서도 멱등하게 보정한다 (이미 설정돼 있으면 no-op). `item-add` 는 이미 등록된 PR 이면 기존 item id 를 그대로 반환하므로, 그 id 로 Status 를 `In review` 로 세팅한다:
+9. **메타데이터 보정** — 이전 버전 스킬로 만든 PR 은 assignee / 라벨 / Project 가 비어 있을 수 있다. update 모드에서도 멱등하게 보정한다 (이미 설정돼 있으면 no-op). `item-add` 는 이미 등록된 PR 이면 기존 item id 를 그대로 반환한다.
+   Status 는 **현재 값을 먼저 조회해, 리뷰 이전 단계(`Backlog` / `Ready` / `In progress`)일 때만** `In review` 로 올린다 — 이미 `Done` 등으로 옮긴 PR 을 되돌리지 않기 위함이다. Status 조회는 item 노드를 직접 부르는 GraphQL 이 안정적이다 (`gh project item-list` 는 단일 선택 필드 값을 신뢰성 있게 주지 않는다):
    ```bash
    gh pr edit --add-assignee @me ${ISSUE_LABELS:+--add-label "$ISSUE_LABELS"}
    ITEM_ID=$(gh project item-add 99 --owner depromeet --url {PR URL} --format json --jq '.id')
-   gh project item-edit \
-     --project-id PVT_kwDOARZVGM4BVVRV \
-     --id "$ITEM_ID" \
-     --field-id PVTSSF_lADOARZVGM4BVVRVzhQxyAA \
-     --single-select-option-id df73e18b
+   CURRENT_STATUS=$(gh api graphql -F id="$ITEM_ID" -f query='
+     query($id: ID!) {
+       node(id: $id) {
+         ... on ProjectV2Item {
+           fieldValueByName(name: "Status") {
+             ... on ProjectV2ItemFieldSingleSelectValue { name }
+           }
+         }
+       }
+     }' --jq '.data.node.fieldValueByName.name')
+   if [[ "$CURRENT_STATUS" == "Backlog" || "$CURRENT_STATUS" == "Ready" || "$CURRENT_STATUS" == "In progress" ]]; then
+     gh project item-edit \
+       --project-id PVT_kwDOARZVGM4BVVRV \
+       --id "$ITEM_ID" \
+       --field-id PVTSSF_lADOARZVGM4BVVRVzhQxyAA \
+       --single-select-option-id df73e18b
+   fi
    ```
-   - 단 보드에서 이미 `Done` 등 리뷰 이후 단계로 옮긴 PR 은 `In review` 로 되돌리지 않는다. 현재 Status 를 먼저 확인해 `Backlog` / `Ready` / `In progress` 일 때만 `In review` 로 올린다.
 10. PR URL 재출력.
 
 ### PR 제목 규칙
