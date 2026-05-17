@@ -1,5 +1,6 @@
 package com.depromeet.team3.wishlist.controller.dto
 
+import com.depromeet.team3.item.domain.Item
 import com.depromeet.team3.wishlist.domain.Wish
 import io.swagger.v3.oas.annotations.media.Schema
 
@@ -21,13 +22,16 @@ data class WishlistRegisterResponse(
     val imageUrl: String?,
 ) {
     companion object {
-        fun from(wish: Wish): WishlistRegisterResponse =
+        fun from(
+            wish: Wish,
+            item: Item,
+        ): WishlistRegisterResponse =
             WishlistRegisterResponse(
                 wishId = wish.getId(),
-                name = wish.product.name,
-                currentPrice = wish.product.currentPrice,
-                currency = wish.product.currency,
-                imageUrl = wish.product.imageUrl,
+                name = item.name,
+                currentPrice = item.currentPrice,
+                currency = item.currency,
+                imageUrl = item.imageUrl,
             )
     }
 }
