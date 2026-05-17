@@ -53,5 +53,12 @@ class TournamentException private constructor(
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
+
+        fun duplicateTournamentItem(): TournamentException =
+            TournamentException(
+                "이미 토너먼트에 등록된 아이템입니다.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
     }
 }

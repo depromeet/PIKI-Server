@@ -165,6 +165,25 @@ class TournamentServiceTest {
     }
 
     @Test
+    fun `addItems 에서 요청 내 동일한 itemId 가 중복되면 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+
+        assertFailsWith<TournamentException> {
+            service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L, 1L, 2L)))
+        }
+    }
+
+    @Test
+    fun `addItems 에서 이미 등록된 itemId 를 다시 추가하면 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L, 2L)))
+
+        assertFailsWith<TournamentException> {
+            service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L)))
+        }
+    }
+
+    @Test
     fun `start 는 PENDING 토너먼트를 IN_PROGRESS 로 전환한다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
         service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L, 2L)))

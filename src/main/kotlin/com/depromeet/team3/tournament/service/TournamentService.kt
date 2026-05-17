@@ -50,6 +50,15 @@ class TournamentService(
             tournamentRepository.findTournamentById(command.tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
+        val existingItemIds =
+            tournamentItemRepository
+                .findAllByTournamentId(
+                    command.tournamentId,
+                ).map { it.itemId }
+                .toSet()
+        val hasDuplicate =
+            command.itemIds.toSet().size != command.itemIds.size || command.itemIds.any { it in existingItemIds }
+        if (hasDuplicate) throw TournamentException.duplicateTournamentItem()
         val ownedCount = wishRepository.countByIdsAndUserId(command.itemIds, userId)
         if (ownedCount != command.itemIds.size.toLong()) throw WishException.forbiddenWishItems()
         tournamentItemRepository.saveAll(
