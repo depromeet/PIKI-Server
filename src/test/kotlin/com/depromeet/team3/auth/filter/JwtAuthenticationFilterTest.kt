@@ -92,7 +92,7 @@ class JwtAuthenticationFilterTest {
         val otherProvider =
             JwtProvider(
                 JwtProperties(
-                    secret = "other-secret-key-must-be-at-least-32-chars!",
+                    secret = OTHER_SECRET,
                     accessTokenExpirySeconds = 3600,
                     refreshTokenExpirySeconds = 1_209_600,
                 ),
@@ -110,5 +110,6 @@ class JwtAuthenticationFilterTest {
 
     companion object {
         private const val TEST_SECRET = "test-secret-key-must-be-at-least-32-chars!"
+        private const val OTHER_SECRET = "other-secret-key-must-be-at-least-32-chars!"
     }
 }
