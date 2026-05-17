@@ -36,14 +36,14 @@ data class TournamentHistoryInfoResponse(
     val currentRound: Int,
     val firstTournamentItemId: Long,
     val secondTournamentItemId: Long,
-    val winnerTournamentItemId: Long,
+    val selectedTournamentItemId: Long,
 ) {
     companion object {
         fun from(history: TournamentHistoryInfo): TournamentHistoryInfoResponse = TournamentHistoryInfoResponse(
             currentRound = history.currentRound,
             firstTournamentItemId = history.firstTournamentItemId,
             secondTournamentItemId = history.secondTournamentItemId,
-            winnerTournamentItemId = history.winnerTournamentItemId,
+            selectedTournamentItemId = history.selectedTournamentItemId,
         )
     }
 }

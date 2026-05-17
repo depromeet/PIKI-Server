@@ -68,7 +68,7 @@ class TournamentApiExamples(private val openApiObjectMapper: OpenApiObjectMapper
                                     currentRound = 4,
                                     firstTournamentItemId = 1,
                                     secondTournamentItemId = 2,
-                                    winnerTournamentItemId = 1,
+                                    selectedTournamentItemId = 1,
                                 ),
                             ),
                         ),

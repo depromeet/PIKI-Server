@@ -9,8 +9,9 @@ import java.util.UUID
 
 @Entity
 class Tournament(
-    @Column(name = "user_id", nullable = false, columnDefinition = "BINARY(16)")
-    val userId: UUID,
+    @Column(name = "owner_tournament_user_id", nullable = false, columnDefinition = "BINARY(16)")
+    val ownerTournamentUserId: UUID,
+    @Column(name = "name", nullable = false)
     val name: String,
     @Enumerated(value = EnumType.STRING)
     @Column(columnDefinition = "varchar(50)")

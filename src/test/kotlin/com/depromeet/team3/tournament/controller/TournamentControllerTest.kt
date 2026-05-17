@@ -90,14 +90,14 @@ class TournamentControllerTest {
             currentRound = 4,
             firstItemId = 1L,
             secondItemId = 2L,
-            winnerItemId = 1L,
+            selectedTournamentItemId = 1L,
         )
 
         mockMvc.perform(
             post("/api/v1/tournaments/1/matches")
                 .header("X-User-Id", userId.toString())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"currentRound":4,"firstItemId":1,"secondItemId":2,"winnerItemId":1}"""),
+                .content("""{"currentRound":4,"firstItemId":1,"secondItemId":2,"selectedTournamentItemId":1}"""),
         )
             .andExpect(status().isOk)
 
@@ -117,7 +117,7 @@ class TournamentControllerTest {
                     currentRound = 2,
                     firstTournamentItemId = 1L,
                     secondTournamentItemId = 2L,
-                    winnerTournamentItemId = 1L,
+                    selectedTournamentItemId = 1L,
                 ),
             ),
         )
@@ -132,6 +132,6 @@ class TournamentControllerTest {
             .andExpect(jsonPath("$.data.round").value(2))
             .andExpect(jsonPath("$.data.items[0].tournamentItemId").value(1))
             .andExpect(jsonPath("$.data.history[0].currentRound").value(2))
-            .andExpect(jsonPath("$.data.history[0].winnerTournamentItemId").value(1))
+            .andExpect(jsonPath("$.data.history[0].selectedTournamentItemId").value(1))
     }
 }

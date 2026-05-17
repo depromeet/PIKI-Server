@@ -5,6 +5,6 @@ data class RecordMatch(
     val currentRound: Int,
     val firstItemId: Long,
     val secondItemId: Long,
-    val winnerItemId: Long,
+    val selectedTournamentItemId: Long,
 )
 

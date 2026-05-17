@@ -13,6 +13,6 @@ class TournamentHistory(
     val firstTournamentItemId: Long,
     @Column(name = "second_tournament_item_id", nullable = false)
     val secondTournamentItemId: Long,
-    @Column(name = "winner_tournament_item_id", nullable = false)
-    val winnerTournamentItemId: Long,
+    @Column(name = "selected_tournament_item_id", nullable = false)
+    val selectedTournamentItemId: Long,
 ) : LongBaseEntity()
