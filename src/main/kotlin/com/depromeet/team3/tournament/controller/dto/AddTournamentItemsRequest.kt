@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size
 
 data class AddTournamentItemsRequest(
     @field:NotEmpty
-    @field:Size(min = 2)
+    @field:Size(min = 2, max = 32)
     val itemIds: List<Long>,
 ) {
     fun toAddTournamentItems(tournamentId: Long): AddTournamentItems = AddTournamentItems(

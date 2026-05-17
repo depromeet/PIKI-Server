@@ -6,14 +6,14 @@ import com.depromeet.team3.tournament.service.dto.TournamentItemInfo
 
 data class TournamentInfoResponse(
     val tournamentId: Long,
-    val round: Int,
+    val initialRound: Int,
     val items: List<TournamentItemInfoResponse>,
     val history: List<TournamentHistoryInfoResponse>,
 ) {
     companion object {
         fun from(tournamentInfo: TournamentInfo): TournamentInfoResponse = TournamentInfoResponse(
             tournamentId = tournamentInfo.tournamentId,
-            round = tournamentInfo.items.size,
+            initialRound = tournamentInfo.items.size,
             items = tournamentInfo.items.map { TournamentItemInfoResponse.from(it) },
             history = tournamentInfo.history.map { TournamentHistoryInfoResponse.from(it) },
         )
