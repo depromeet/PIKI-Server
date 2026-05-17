@@ -1,20 +1,11 @@
 package com.depromeet.team3.tournament.controller
 
-import com.depromeet.team3.tournament.service.TournamentService
-import com.depromeet.team3.tournament.service.dto.AddTournamentItems
-import com.depromeet.team3.tournament.service.dto.CreateTournament
-import com.depromeet.team3.tournament.service.dto.RecordMatch
-import com.depromeet.team3.tournament.service.dto.TournamentHistoryInfo
-import com.depromeet.team3.tournament.service.dto.TournamentInfo
-import com.depromeet.team3.tournament.service.dto.TournamentItemInfo
-import org.junit.jupiter.api.BeforeEach
+import com.depromeet.team3.support.IntegrationTestSupport
+import com.depromeet.team3.tournament.repository.TournamentItemJpaRepository
+import com.depromeet.team3.wishlist.domain.Wish
+import com.depromeet.team3.wishlist.repository.WishJpaRepository
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.extension.ExtendWith
-import org.mockito.BDDMockito.given
-import org.mockito.BDDMockito.then
-import org.mockito.InjectMocks
-import org.mockito.Mock
-import org.mockito.junit.jupiter.MockitoExtension
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -22,116 +13,211 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
+import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.context.WebApplicationContext
+import tools.jackson.databind.ObjectMapper
 import java.util.UUID
 
-@ExtendWith(MockitoExtension::class)
-class TournamentControllerTest {
+@Transactional
+class TournamentControllerTest : IntegrationTestSupport() {
 
-    @Mock
-    private lateinit var tournamentService: TournamentService
+    @Autowired private lateinit var webApplicationContext: WebApplicationContext
+    @Autowired private lateinit var objectMapper: ObjectMapper
+    @Autowired private lateinit var wishJpaRepository: WishJpaRepository
+    @Autowired private lateinit var tournamentItemJpaRepository: TournamentItemJpaRepository
 
-    @InjectMocks
-    private lateinit var tournamentController: TournamentController
-
-    private lateinit var mockMvc: MockMvc
-
-    private val userId = UUID.fromString("11111111-2222-3333-4444-555555555555")
-
-    @BeforeEach
-    fun setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(tournamentController).build()
-    }
+    private val userId: UUID = UUID.fromString("11111111-2222-3333-4444-555555555555")
+    private val otherUserId: UUID = UUID.fromString("99999999-8888-7777-6666-555555555555")
 
     @Test
-    fun `POST tournaments 는 생성된 tournamentId 를 반환하고 201 을 응답한다`() {
-        given(tournamentService.create(userId, CreateTournament("테스트 토너먼트"))).willReturn(1L)
+    fun `POST tournaments 는 201 과 함께 tournamentId 를 반환한다`() {
+        val mockMvc = buildMockMvc()
 
         mockMvc.perform(
             post("/api/v1/tournaments")
-                .header("X-User-Id", userId.toString())
+                .header("X-User-Id", userId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"name":"테스트 토너먼트"}"""),
         )
             .andExpect(status().isCreated)
-            .andExpect(jsonPath("$.data.tournamentId").value(1))
             .andExpect(jsonPath("$.status").value(201))
+            .andExpect(jsonPath("$.code").value("CREATED"))
+            .andExpect(jsonPath("$.data.tournamentId").isNumber)
     }
 
     @Test
-    fun `POST tournaments tournamentId items 는 아이템을 추가하고 200 을 응답한다`() {
-        val expectedCommand = AddTournamentItems(tournamentId = 1L, itemIds = listOf(10L, 20L))
+    fun `POST tournaments-id-items 는 소유한 위시를 추가하면 200 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val wishIds = saveWishes(userId, 100L, 200L)
 
         mockMvc.perform(
-            post("/api/v1/tournaments/1/items")
-                .header("X-User-Id", userId.toString())
+            post("/api/v1/tournaments/$tournamentId/items")
+                .header("X-User-Id", userId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"itemIds":[10,20]}"""),
+                .content("""{"itemIds":${wishIds.joinToString(",", "[", "]")}}"""),
         )
             .andExpect(status().isOk)
-
-        then(tournamentService).should().addItems(userId, expectedCommand)
+            .andExpect(jsonPath("$.status").value(200))
     }
 
     @Test
-    fun `POST tournaments tournamentId start 는 토너먼트를 시작하고 200 을 응답한다`() {
-        mockMvc.perform(
-            post("/api/v1/tournaments/1/start")
-                .header("X-User-Id", userId.toString()),
-        )
-            .andExpect(status().isOk)
-
-        then(tournamentService).should().start(userId, 1L)
-    }
-
-    @Test
-    fun `POST tournaments tournamentId matches 는 매치를 기록하고 200 을 응답한다`() {
-        val expectedRecordMatch = RecordMatch(
-            tournamentId = 1L,
-            currentRound = 4,
-            firstTournamentItemId = 1L,
-            secondTournamentItemId = 2L,
-            selectedTournamentItemId = 1L,
-        )
+    fun `POST tournaments-id-items 에서 소유하지 않은 위시이면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val otherWishIds = saveWishes(otherUserId, 100L, 200L)
 
         mockMvc.perform(
-            post("/api/v1/tournaments/1/matches")
-                .header("X-User-Id", userId.toString())
+            post("/api/v1/tournaments/$tournamentId/items")
+                .header("X-User-Id", userId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"currentRound":4,"firstTournamentItemId":1,"secondTournamentItemId":2,"selectedTournamentItemId":1}"""),
+                .content("""{"itemIds":${otherWishIds.joinToString(",", "[", "]")}}"""),
         )
-            .andExpect(status().isOk)
-
-        then(tournamentService).should().recordMatch(userId, expectedRecordMatch)
+            .andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
     }
 
     @Test
-    fun `GET tournaments id 는 토너먼트 정보를 반환한다`() {
-        val tournamentInfo = TournamentInfo(
-            tournamentId = 1L,
-            items = listOf(
-                TournamentItemInfo(tournamentItemId = 1L, itemId = 10L),
-                TournamentItemInfo(tournamentItemId = 2L, itemId = 20L),
-            ),
-            history = listOf(
-                TournamentHistoryInfo(
-                    currentRound = 2,
-                    firstTournamentItemId = 1L,
-                    secondTournamentItemId = 2L,
-                    selectedTournamentItemId = 1L,
-                ),
-            ),
-        )
-        given(tournamentService.getTournamentById(1L, userId)).willReturn(tournamentInfo)
+    fun `POST tournaments-id-start 는 아이템이 있는 PENDING 토너먼트를 시작하고 200 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, 100L, 200L)
 
         mockMvc.perform(
-            get("/api/v1/tournaments/1")
-                .header("X-User-Id", userId.toString()),
+            post("/api/v1/tournaments/$tournamentId/start")
+                .header("X-User-Id", userId),
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.tournamentId").value(1))
+            .andExpect(jsonPath("$.status").value(200))
+    }
+
+    @Test
+    fun `POST tournaments-id-start 에서 아이템이 없으면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/start")
+                .header("X-User-Id", userId),
+        )
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+    }
+
+    @Test
+    fun `POST tournaments-id-matches 는 IN_PROGRESS 토너먼트에 매치를 기록하고 200 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, item1Id, item2Id) = startTournamentWith2Items(mockMvc)
+
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/matches")
+                .header("X-User-Id", userId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"currentRound":2,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}"""),
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+    }
+
+    @Test
+    fun `POST tournaments-id-matches 에서 이미 COMPLETED 인 토너먼트이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, item1Id, item2Id) = startTournamentWith2Items(mockMvc)
+        val matchBody =
+            """{"currentRound":2,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}"""
+
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/matches")
+                .header("X-User-Id", userId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(matchBody),
+        )
+
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/matches")
+                .header("X-User-Id", userId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(matchBody),
+        )
+            .andExpect(status().isConflict)
+            .andExpect(jsonPath("$.status").value(409))
+    }
+
+    @Test
+    fun `GET tournaments-id 는 토너먼트 정보와 히스토리를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, item1Id, item2Id) = startTournamentWith2Items(mockMvc)
+
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/matches")
+                .header("X-User-Id", userId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"currentRound":2,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}"""),
+        )
+
+        mockMvc.perform(
+            get("/api/v1/tournaments/$tournamentId")
+                .header("X-User-Id", userId),
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.tournamentId").value(tournamentId))
             .andExpect(jsonPath("$.data.initialRound").value(2))
-            .andExpect(jsonPath("$.data.items[0].tournamentItemId").value(1))
-            .andExpect(jsonPath("$.data.history[0].currentRound").value(2))
-            .andExpect(jsonPath("$.data.history[0].selectedTournamentItemId").value(1))
+            .andExpect(jsonPath("$.data.items.length()").value(2))
+            .andExpect(jsonPath("$.data.history[0].selectedTournamentItemId").value(item1Id))
+    }
+
+    @Test
+    fun `GET tournaments-id 에서 존재하지 않는 tournamentId 이면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+
+        mockMvc.perform(
+            get("/api/v1/tournaments/999999")
+                .header("X-User-Id", userId),
+        )
+            .andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+    }
+
+    private fun buildMockMvc(): MockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
+
+    private fun createTournament(mockMvc: MockMvc, name: String = "테스트 토너먼트"): Long {
+        val result = mockMvc.perform(
+            post("/api/v1/tournaments")
+                .header("X-User-Id", userId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"name":"$name"}"""),
+        ).andReturn()
+        return objectMapper.readTree(result.response.contentAsString)["data"]["tournamentId"].asLong()
+    }
+
+    private fun saveWishes(owner: UUID, vararg itemIds: Long): List<Long> =
+        itemIds.map { itemId -> wishJpaRepository.save(Wish(userId = owner, itemId = itemId)).getId() }
+
+    private fun addItemsToTournament(mockMvc: MockMvc, tournamentId: Long, owner: UUID, vararg itemIds: Long) {
+        val wishIds = saveWishes(owner, *itemIds)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/items")
+                .header("X-User-Id", owner)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"itemIds":${wishIds.joinToString(",", "[", "]")}}"""),
+        )
+    }
+
+    private data class TournamentStart(val tournamentId: Long, val item1Id: Long, val item2Id: Long)
+
+    private fun startTournamentWith2Items(mockMvc: MockMvc): TournamentStart {
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, 100L, 200L)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/start")
+                .header("X-User-Id", userId),
+        )
+        val items = tournamentItemJpaRepository.findAllByTournamentId(tournamentId)
+        return TournamentStart(
+            tournamentId = tournamentId,
+            item1Id = items[0].getId(),
+            item2Id = items[1].getId(),
+        )
     }
 }
