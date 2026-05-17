@@ -27,10 +27,12 @@ class Tournament(
     }
 
     fun start() {
+        check(isPending()) { "start는 PENDING 상태에서만 호출 가능" }
         this.status = TournamentStatus.IN_PROGRESS
     }
 
     fun complete() {
+        check(isInProgress()) { "complete는 IN_PROGRESS 상태에서만 호출 가능" }
         this.status = TournamentStatus.COMPLETED
     }
 
