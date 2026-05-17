@@ -26,5 +26,12 @@ class RedisRefreshTokenStore(
         redisTemplate.delete(key(userId))
     }
 
-    private fun key(userId: UUID) = "refresh:$userId"
+    // 1 유저당 1 refresh token 만 저장하는 설계. 같은 계정 다중 디바이스 로그인 시
+    // 나중 로그인이 이전 토큰을 덮어쓰므로 이전 디바이스는 다음 refresh 시점에 강제 로그아웃된다.
+    // 다중 디바이스 동시 로그인을 허용하려면 key 에 디바이스 식별자(jti / deviceId)를 추가한다.
+    private fun key(userId: UUID) = "$KEY_PREFIX$userId"
+
+    companion object {
+        private const val KEY_PREFIX = "refresh:"
+    }
 }
