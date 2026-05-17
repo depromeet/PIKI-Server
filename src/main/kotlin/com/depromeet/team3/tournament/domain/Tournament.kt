@@ -8,8 +8,7 @@ import jakarta.persistence.Enumerated
 
 @Entity
 class Tournament(
-    @Column(name = "owner_tournament_user_id", nullable = false)
-    var ownerTournamentUserId: Long,
+    ownerTournamentUserId: Long,
     @Column(name = "name", nullable = false)
     val name: String,
     @Enumerated(value = EnumType.STRING)
@@ -17,8 +16,15 @@ class Tournament(
     var status: TournamentStatus = TournamentStatus.PENDING,
 ) : LongBaseEntity() {
 
+    // open class에서 private set이 금지되므로 backing field로 캡슐화한다.
+    // Hibernate는 field access로 직접 접근하고, 외부에서는 getter만 노출된다.
+    @Column(name = "owner_tournament_user_id", nullable = false)
+    private var _ownerTournamentUserId: Long = ownerTournamentUserId
+
+    val ownerTournamentUserId: Long get() = _ownerTournamentUserId
+
     fun assignOwner(tournamentUserId: Long) {
-        ownerTournamentUserId = tournamentUserId
+        _ownerTournamentUserId = tournamentUserId
     }
 
     fun start() {
