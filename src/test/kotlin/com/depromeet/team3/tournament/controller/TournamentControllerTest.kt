@@ -94,6 +94,20 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `POST tournaments-id-start 에서 소유자가 아니면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, 100L, 200L)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/start")
+                    .header("X-User-Id", otherUserId),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
+    }
+
+    @Test
     fun `POST tournaments-id-start 에서 아이템이 없으면 400 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
@@ -148,6 +162,23 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `POST tournaments-id-matches 에서 참가자가 아니면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, item1Id, item2Id) = startTournamentWith2Items(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/matches")
+                    .header("X-User-Id", otherUserId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"currentRound":2,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}""",
+                    ),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
+    }
+
+    @Test
     fun `GET tournaments-id 는 토너먼트 정보와 히스토리를 반환한다`() {
         val mockMvc = buildMockMvc()
         val (tournamentId, item1Id, item2Id) = startTournamentWith2Items(mockMvc)
@@ -171,6 +202,19 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.initialRound").value(2))
             .andExpect(jsonPath("$.data.items.length()").value(2))
             .andExpect(jsonPath("$.data.history[0].selectedTournamentItemId").value(item1Id))
+    }
+
+    @Test
+    fun `GET tournaments-id 에서 참가자가 아니면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId) = startTournamentWith2Items(mockMvc)
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId")
+                    .header("X-User-Id", otherUserId),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
     }
 
     @Test

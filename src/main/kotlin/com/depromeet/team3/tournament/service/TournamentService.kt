@@ -77,6 +77,10 @@ class TournamentService(
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
+        val owner =
+            tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+                ?: throw TournamentException.forbiddenTournament()
+        if (owner.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
         val itemCount = tournamentItemRepository.findAllByTournamentId(tournamentId).size
         if (itemCount !in MIN_ITEM_COUNT..MAX_ITEM_COUNT) throw TournamentException.invalidItemCount()
         tournament.start()
@@ -90,6 +94,8 @@ class TournamentService(
         val tournament =
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
+        tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+            ?: throw TournamentException.forbiddenTournament()
         val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
         val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
         return TournamentInfo.of(tournament, items, histories)
@@ -104,6 +110,8 @@ class TournamentService(
             tournamentRepository.findTournamentById(command.tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isInProgress()) throw TournamentException.notInProgressTournament()
+        tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)
+            ?: throw TournamentException.forbiddenTournament()
         if (command.selectedTournamentItemId !in setOf(command.firstTournamentItemId, command.secondTournamentItemId)) {
             throw TournamentException.invalidWinner()
         }

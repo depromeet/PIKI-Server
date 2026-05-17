@@ -32,6 +32,11 @@ class TournamentServiceTest {
             return tournamentUser
         }
 
+        override fun findByTournamentIdAndUserId(
+            tournamentId: Long,
+            userId: UUID,
+        ): TournamentUser? = users.find { it.tournamentId == tournamentId && it.userId == userId }
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
@@ -194,6 +199,16 @@ class TournamentServiceTest {
     }
 
     @Test
+    fun `start 에서 소유자가 아니면 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L, 2L)))
+
+        assertFailsWith<TournamentException> {
+            service.start(otherUserId, tournamentId)
+        }
+    }
+
+    @Test
     fun `start 에서 PENDING 이 아닌 토너먼트면 예외가 발생한다`() {
         val tournamentId = createAndStart(listOf(1L, 2L))
 
@@ -304,6 +319,27 @@ class TournamentServiceTest {
     }
 
     @Test
+    fun `recordMatch 에서 참가자가 아니면 예외가 발생한다`() {
+        val tournamentId = createAndStart((1L..4L).toList())
+        val items = itemRepository.findAllByTournamentId(tournamentId)
+        val firstItem = items.find { it.itemId == 1L }!!
+        val secondItem = items.find { it.itemId == 2L }!!
+
+        assertFailsWith<TournamentException> {
+            service.recordMatch(
+                otherUserId,
+                RecordMatch(
+                    tournamentId = tournamentId,
+                    currentRound = 4,
+                    firstTournamentItemId = firstItem.getId(),
+                    secondTournamentItemId = secondItem.getId(),
+                    selectedTournamentItemId = firstItem.getId(),
+                ),
+            )
+        }
+    }
+
+    @Test
     fun `recordMatch 에서 존재하지 않는 tournamentId 면 예외가 발생한다`() {
         assertFailsWith<TournamentException> {
             service.recordMatch(
@@ -397,6 +433,15 @@ class TournamentServiceTest {
         assertEquals(tournamentId, info.tournamentId)
         assertEquals(0, info.items.size)
         assertEquals(0, info.history.size)
+    }
+
+    @Test
+    fun `getTournamentById 에서 참가자가 아니면 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+
+        assertFailsWith<TournamentException> {
+            service.getTournamentById(tournamentId, otherUserId)
+        }
     }
 
     @Test

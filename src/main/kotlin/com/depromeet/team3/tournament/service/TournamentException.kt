@@ -12,6 +12,13 @@ class TournamentException private constructor(
 ) : BaseException(message),
     HttpMappable {
     companion object {
+        fun forbiddenTournament(): TournamentException =
+            TournamentException(
+                "해당 토너먼트에 대한 권한이 없습니다.",
+                ErrorCategory.FORBIDDEN,
+                HttpStatus.FORBIDDEN,
+            )
+
         fun notFoundTournament(): TournamentException =
             TournamentException(
                 "토너먼트를 찾을 수 없습니다.",
