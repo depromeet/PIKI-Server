@@ -4,6 +4,7 @@ import com.depromeet.team3.tournament.domain.Tournament
 import com.depromeet.team3.tournament.domain.TournamentHistory
 import com.depromeet.team3.tournament.domain.TournamentItem
 import com.depromeet.team3.tournament.domain.TournamentUser
+import com.depromeet.team3.tournament.repository.TournamentItemRepository
 import com.depromeet.team3.tournament.repository.TournamentRepository
 import com.depromeet.team3.tournament.repository.TournamentUserRepository
 import com.depromeet.team3.tournament.service.dto.AddTournamentItems
@@ -18,25 +19,34 @@ import java.util.UUID
 
 @Service
 class TournamentService(
+    private val tournamentUserRepository: TournamentUserRepository,
     private val tournamentRepository: TournamentRepository,
+    private val tournamentItemRepository: TournamentItemRepository,
     private val wishRepository: WishRepository,
 ) {
     @Transactional
     fun create(userId: UUID, command: CreateTournament): Long {
-        val tournamentId = tournamentRepository.saveTournament(
-            Tournament(ownerTournamentUserId = userId, name = command.name),
+        val tournament = tournamentRepository.saveTournament(
+            Tournament(ownerTournamentUserId = 0L, name = command.name),
         )
+        val tournamentUser = tournamentUserRepository.save(
+            TournamentUser(tournamentId = tournament.getId(), userId = userId),
+        )
+        tournament.assignOwner(tournamentUser.getId())
+        return tournament.getId()
+    }
 
     @Transactional
     fun addItems(userId: UUID, command: AddTournamentItems) {
         val tournament = tournamentRepository.findTournamentById(command.tournamentId)
             ?: throw TournamentException.notFoundTournament()
-        if (tournament.ownerTournamentUserId != userId) throw TournamentException.forbiddenTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
-        val ownedCount = wishRepository.countByIdsAndGuestId(command.itemIds, userId)
+        val ownedCount = wishRepository.countByIdsAndUserId(command.itemIds, userId)
         if (ownedCount != command.itemIds.size.toLong()) throw WishException.forbiddenWishItems()
-        tournamentRepository.saveTournamentItems(
-            command.itemIds.map { itemId -> TournamentItem(tournamentId = command.tournamentId, itemId = itemId, userId = userId) },
+        tournamentItemRepository.saveAll(
+            command.itemIds.map { itemId ->
+                TournamentItem(tournamentId = command.tournamentId, itemId = itemId, userId = userId)
+            },
         )
     }
 
@@ -44,8 +54,9 @@ class TournamentService(
     fun start(userId: UUID, tournamentId: Long) {
         val tournament = tournamentRepository.findTournamentById(tournamentId)
             ?: throw TournamentException.notFoundTournament()
-        if (tournament.ownerTournamentUserId != userId) throw TournamentException.forbiddenTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
+        val itemCount = tournamentItemRepository.findAllByTournamentId(tournamentId).size
+        if (itemCount !in MIN_ITEM_COUNT..MAX_ITEM_COUNT) throw TournamentException.invalidItemCount()
         tournament.start()
     }
 
@@ -53,8 +64,7 @@ class TournamentService(
     fun getTournamentById(tournamentId: Long, userId: UUID): TournamentInfo {
         val tournament = tournamentRepository.findTournamentById(tournamentId)
             ?: throw TournamentException.notFoundTournament()
-        if (tournament.ownerTournamentUserId != userId) throw TournamentException.forbiddenTournament()
-        val items = tournamentRepository.findTournamentItemsByTournamentId(tournamentId)
+        val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
         val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
         return TournamentInfo.of(tournament, items, histories)
     }
@@ -63,17 +73,15 @@ class TournamentService(
     fun recordMatch(userId: UUID, command: RecordMatch) {
         val tournament = tournamentRepository.findTournamentById(command.tournamentId)
             ?: throw TournamentException.notFoundTournament()
-
-        if (tournament.ownerTournamentUserId != userId) throw TournamentException.forbiddenTournament()
         if (!tournament.isInProgress()) throw TournamentException.notInProgressTournament()
-        if (command.selectedTournamentItemId !in setOf(command.firstItemId, command.secondItemId)) {
+        if (command.selectedTournamentItemId !in setOf(command.firstTournamentItemId, command.secondTournamentItemId)) {
             throw TournamentException.invalidWinner()
         }
 
-        val tournamentItemIds = tournamentRepository
-            .findTournamentItemsByTournamentId(command.tournamentId)
+        val tournamentItemIds = tournamentItemRepository
+            .findAllByTournamentId(command.tournamentId)
             .mapTo(mutableSetOf()) { it.getId() }
-        if (command.firstItemId !in tournamentItemIds || command.secondItemId !in tournamentItemIds) {
+        if (command.firstTournamentItemId !in tournamentItemIds || command.secondTournamentItemId !in tournamentItemIds) {
             throw TournamentException.invalidTournamentItem()
         }
 
@@ -81,8 +89,8 @@ class TournamentService(
             TournamentHistory(
                 tournamentId = command.tournamentId,
                 currentRound = command.currentRound,
-                firstTournamentItemId = command.firstItemId,
-                secondTournamentItemId = command.secondItemId,
+                firstTournamentItemId = command.firstTournamentItemId,
+                secondTournamentItemId = command.secondTournamentItemId,
                 selectedTournamentItemId = command.selectedTournamentItemId,
             ),
         )
@@ -90,5 +98,10 @@ class TournamentService(
         if (tournament.isFinalRound(command.currentRound)) {
             tournament.complete()
         }
+    }
+
+    companion object {
+        private const val MIN_ITEM_COUNT = 2
+        private const val MAX_ITEM_COUNT = 32
     }
 }

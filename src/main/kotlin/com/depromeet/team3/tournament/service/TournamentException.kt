@@ -53,5 +53,12 @@ class TournamentException private constructor(
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.CONFLICT,
             )
+
+        fun invalidItemCount(): TournamentException =
+            TournamentException(
+                "토너먼트 아이템은 최소 2개, 최대 32개여야 합니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
     }
 }
