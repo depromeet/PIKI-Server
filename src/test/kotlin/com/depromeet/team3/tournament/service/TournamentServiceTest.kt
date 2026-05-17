@@ -33,8 +33,6 @@ class TournamentServiceTest {
             return tournamentUser
         }
 
-        override fun findById(id: Long): TournamentUser? = users.firstOrNull { it.getId() == id }
-
         private fun setEntityId(entity: LongBaseEntity, id: Long) {
             val field = LongBaseEntity::class.java.getDeclaredField("id")
             field.isAccessible = true

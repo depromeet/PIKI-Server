@@ -19,13 +19,6 @@ class TournamentException private constructor(
                 HttpStatus.NOT_FOUND,
             )
 
-        fun forbiddenTournament(): TournamentException =
-            TournamentException(
-                "해당 토너먼트에 접근할 권한이 없습니다.",
-                ErrorCategory.FORBIDDEN,
-                HttpStatus.FORBIDDEN,
-            )
-
         fun invalidWinner(): TournamentException =
             TournamentException(
                 "승자는 대결한 두 아이템 중 하나여야 합니다.",
