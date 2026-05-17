@@ -1,4 +1,4 @@
-브랜치에서 작업한 내용을 STAR 구조 PR로 정리하여 GitHub에 올립니다. 이미 PR이 있으면 본문을 덮어쓰지 않고 `## Updates` 섹션에 추가 변경 내역을 append 합니다.
+브랜치에서 작업한 내용을 STAR 구조 PR로 정리하여 GitHub에 올립니다. 이미 PR이 있으면 본문을 덮어쓰지 않고 `## Updates` 섹션에 추가 변경 내역을 append 합니다. assignee(`@me`) · 라벨(연관 이슈에서 복사) · Project(99) 도 자동 설정합니다.
 
 ## PR 본문 작성 원칙
 
@@ -51,6 +51,16 @@ gh pr view --json url,number,body,baseRefName 2>/dev/null
 - 매칭 → `## 연관 이슈\n- close #{번호}` 본문에 자동 채움
 - 매칭 안 됨 → 섹션은 유지하되 항목을 빈 줄로 둔다 (`- ` 만). 이슈 미연결 상태가 본문에서 명시적으로 드러나야 작성자가 의도적으로 비웠음을 인지할 수 있다.
 
+**연관 이슈에서 PR 라벨 자동 수집** (이슈 번호 매칭 시):
+PR 은 연관 이슈와 같은 분류를 갖는 것이 자연스러우므로, 이슈의 라벨을 그대로 PR 라벨로 쓴다.
+
+```bash
+ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | join(",")' 2>/dev/null)
+```
+
+- 라벨이 있으면 `### 3-A` / `### 3-B` 에서 `--label "$ISSUE_LABELS"` 로 PR 에 부여.
+- 이슈 번호 매칭이 안 됐거나 이슈에 라벨이 없으면 라벨 없이 진행.
+
 ### 2단계: STAR 본문 작성 — create 모드 한정
 
 (update 모드는 `### 3-B` 의 자체 가이드를 따른다 — 기존 본문은 그대로 두고 Updates 섹션에 짧은 STAR 항목만 추가)
@@ -101,8 +111,30 @@ gh pr view --json url,number,body,baseRefName 2>/dev/null
 
 1. 원격에 푸시되지 않았으면 `git push -u origin {브랜치명}`
 2. 사용자에게 PR 제목과 본문 초안을 보여주고 확인받는다
-3. 확인 후 `gh pr create --base $BASE` 로 PR 생성
-4. PR URL을 사용자에게 전달
+3. 확인 후 PR 생성 — assignee / 라벨을 함께 부여한다:
+   ```bash
+   gh pr create --base $BASE \
+     --title "{제목}" \
+     --body-file /tmp/pr_body.md \
+     --assignee @me \
+     ${ISSUE_LABELS:+--label "$ISSUE_LABELS"}
+   ```
+   - `--assignee @me` — PR 작성자가 작업자라는 가정 (`issue` 스킬과 동일).
+   - `--label` — 1단계에서 수집한 `$ISSUE_LABELS` 가 있을 때만 붙인다.
+   - 라벨이 레포에 없어 실패하면 라벨 없이 재시도하고 사용자에게 보고한다.
+4. **Project 추가 + Status In review** — 생성된 PR 을 Project 99 에 등록하고 Status 를 `In review` 로 세팅한다. `item-add` 만 하면 기본값 `Backlog` 이 되므로, 반환된 item id 로 `item-edit` 를 이어서 호출한다:
+   ```bash
+   ITEM_ID=$(gh project item-add 99 --owner depromeet --url {PR URL} --format json --jq '.id')
+   gh project item-edit \
+     --project-id PVT_kwDOARZVGM4BVVRV \
+     --id "$ITEM_ID" \
+     --field-id PVTSSF_lADOARZVGM4BVVRVzhQxyAA \
+     --single-select-option-id df73e18b
+   ```
+   - PR 을 올린다는 것은 곧 리뷰 대기 상태이므로 `In review` 가 자연스럽다.
+   - ID 의미: project=99 노드 ID, field=Status 필드 ID, option=`In review` 옵션 ID. 보드에서 Status 옵션이 바뀌면 이 ID 들도 갱신 필요.
+   - 권한 부족 시 사용자에게 `gh auth refresh -h github.com -s project` 안내 (일회성 디바이스 인증).
+5. PR URL 과 부여된 assignee / 라벨 / Project(Status: In review) 결과를 사용자에게 전달
 
 ### 3-B. Update 모드 — 기존 PR 본문 갱신
 
@@ -110,14 +142,35 @@ gh pr view --json url,number,body,baseRefName 2>/dev/null
    ```bash
    gh pr view --json body --jq '.body' > /tmp/pr_body.md
    ```
-2. **이번 추가 변경 내역**에 대해 짧은 STAR 형식 항목 작성 (이번 세션에서 새로 한 일 위주).
-3. 기존 본문 끝에 `## Updates` 섹션이 없으면 새로 추가, 있으면 그 안에 새 항목 append.
-   - 항목은 날짜 또는 추가 변경의 의도를 sub-heading 으로 (`### CodeRabbit 리뷰 대응 (3건)`, `### dev 머지 충돌 해결` 등)
-4. **기존 본문은 절대 덮어쓰지 않는다.** 갱신본 = 기존 본문 + Updates 항목 추가만.
-5. **제목 변경 필요 검토**: 추가 변경으로 작업 의도/스코프가 바뀌었거나 기존 제목에 오타·부정확한 표현이 있으면 새 제목 제안. 그 외엔 제목 유지.
-6. 사용자에게 갱신본(필요시 새 제목 포함, 변경 이유 짚어서)을 보여주고 확인받는다.
-7. 확인 후 `gh pr edit --body-file /tmp/pr_body.md` 로 갱신. 제목 변경이 있으면 `--title "새 제목"` 추가.
-8. PR URL 재출력.
+2. **이번 추가 변경 내역을 `git log` 로 정확히 식별한다 — 기억·추측에 의존하지 않는다.**
+   ```bash
+   git log $BASE..HEAD --oneline   # PR 의 전체 커밋
+   ```
+   - PR 전체 커밋 중 기존 본문·`## Updates` 에 **이미 반영된 커밋(해시로 대조)** 을 제외해, 이번에 새로 추가된 커밋만 가려낸다.
+   - merge 커밋이 있으면 `--no-merges` 로 우리 커밋만, merge 사실 자체는 별도 항목으로 다룬다.
+   - 가려낸 커밋 목록과 실제 변경(`git diff`)을 대조해 누락이 없는지 확인한다.
+3. 가려낸 새 커밋들에 대해 짧은 STAR 형식 항목을 작성한다.
+   - **각 항목 끝에 해당 커밋의 short hash(7자리)를 `` (`a1b2c3d`) `` 형태로 명기**한다. 어떤 변경이 어떤 커밋인지 리뷰어가 추적할 수 있고, 다음 갱신 때 "무엇이 이미 반영됐는지" 대조 기준이 된다.
+   - 한 항목이 여러 커밋을 묶으면 해시를 모두 적는다 (예: `` (`d3e53ab`, `cbef613`) ``).
+   - 모든 새 커밋이 어느 항목엔가 반영됐는지 최종 점검한다 — 빠진 커밋이 없어야 한다.
+4. 기존 본문 끝에 `## Updates` 섹션이 없으면 새로 추가, 있으면 그 안에 새 항목 append.
+   - 항목은 날짜 또는 추가 변경의 의도를 sub-heading 으로 (`### CodeRabbit 리뷰 대응`, `### dev 머지 충돌 해결` 등)
+5. **기존 본문은 절대 덮어쓰지 않는다.** 갱신본 = 기존 본문 + Updates 항목 추가만.
+6. **제목 변경 필요 검토**: 추가 변경으로 작업 의도/스코프가 바뀌었거나 기존 제목에 오타·부정확한 표현이 있으면 새 제목 제안. 그 외엔 제목 유지.
+7. 사용자에게 갱신본(필요시 새 제목 포함, 변경 이유 짚어서)을 보여주고 확인받는다.
+8. 확인 후 `gh pr edit --body-file /tmp/pr_body.md` 로 갱신. 제목 변경이 있으면 `--title "새 제목"` 추가.
+9. **메타데이터 보정** — 이전 버전 스킬로 만든 PR 은 assignee / 라벨 / Project 가 비어 있을 수 있다. update 모드에서도 멱등하게 보정한다 (이미 설정돼 있으면 no-op). `item-add` 는 이미 등록된 PR 이면 기존 item id 를 그대로 반환하므로, 그 id 로 Status 를 `In review` 로 세팅한다:
+   ```bash
+   gh pr edit --add-assignee @me ${ISSUE_LABELS:+--add-label "$ISSUE_LABELS"}
+   ITEM_ID=$(gh project item-add 99 --owner depromeet --url {PR URL} --format json --jq '.id')
+   gh project item-edit \
+     --project-id PVT_kwDOARZVGM4BVVRV \
+     --id "$ITEM_ID" \
+     --field-id PVTSSF_lADOARZVGM4BVVRVzhQxyAA \
+     --single-select-option-id df73e18b
+   ```
+   - 단 보드에서 이미 `Done` 등 리뷰 이후 단계로 옮긴 PR 은 `In review` 로 되돌리지 않는다. 현재 Status 를 먼저 확인해 `Backlog` / `Ready` / `In progress` 일 때만 `In review` 로 올린다.
+10. PR URL 재출력.
 
 ### PR 제목 규칙
 - 70자 이내
