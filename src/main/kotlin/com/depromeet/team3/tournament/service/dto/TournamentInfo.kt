@@ -14,11 +14,12 @@ data class TournamentInfo(
             tournament: Tournament,
             items: List<TournamentItem>,
             histories: List<TournamentHistory>,
-        ): TournamentInfo = TournamentInfo(
-            tournamentId = tournament.getId(),
-            items = items.map { TournamentItemInfo(tournamentItemId = it.getId(), itemId = it.itemId) },
-            history = histories.map(TournamentHistoryInfo::from),
-        )
+        ): TournamentInfo =
+            TournamentInfo(
+                tournamentId = tournament.getId(),
+                items = items.map { TournamentItemInfo(tournamentItemId = it.getId(), itemId = it.itemId) },
+                history = histories.map(TournamentHistoryInfo::from),
+            )
     }
 }
 
@@ -34,11 +35,12 @@ data class TournamentHistoryInfo(
     val selectedTournamentItemId: Long,
 ) {
     companion object {
-        fun from(history: TournamentHistory): TournamentHistoryInfo = TournamentHistoryInfo(
-            currentRound = history.currentRound,
-            firstTournamentItemId = history.firstTournamentItemId,
-            secondTournamentItemId = history.secondTournamentItemId,
-            selectedTournamentItemId = history.selectedTournamentItemId,
-        )
+        fun from(history: TournamentHistory): TournamentHistoryInfo =
+            TournamentHistoryInfo(
+                currentRound = history.currentRound,
+                firstTournamentItemId = history.firstTournamentItemId,
+                secondTournamentItemId = history.secondTournamentItemId,
+                selectedTournamentItemId = history.selectedTournamentItemId,
+            )
     }
 }

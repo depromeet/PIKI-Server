@@ -25,21 +25,30 @@ class TournamentService(
     private val wishRepository: WishRepository,
 ) {
     @Transactional
-    fun create(userId: UUID, command: CreateTournament): Long {
-        val tournament = tournamentRepository.saveTournament(
-            Tournament(ownerTournamentUserId = 0L, name = command.name),
-        )
-        val tournamentUser = tournamentUserRepository.save(
-            TournamentUser(tournamentId = tournament.getId(), userId = userId),
-        )
+    fun create(
+        userId: UUID,
+        command: CreateTournament,
+    ): Long {
+        val tournament =
+            tournamentRepository.saveTournament(
+                Tournament(ownerTournamentUserId = 0L, name = command.name),
+            )
+        val tournamentUser =
+            tournamentUserRepository.save(
+                TournamentUser(tournamentId = tournament.getId(), userId = userId),
+            )
         tournament.assignOwner(tournamentUser.getId())
         return tournament.getId()
     }
 
     @Transactional
-    fun addItems(userId: UUID, command: AddTournamentItems) {
-        val tournament = tournamentRepository.findTournamentById(command.tournamentId)
-            ?: throw TournamentException.notFoundTournament()
+    fun addItems(
+        userId: UUID,
+        command: AddTournamentItems,
+    ) {
+        val tournament =
+            tournamentRepository.findTournamentById(command.tournamentId)
+                ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
         val ownedCount = wishRepository.countByIdsAndUserId(command.itemIds, userId)
         if (ownedCount != command.itemIds.size.toLong()) throw WishException.forbiddenWishItems()
@@ -51,9 +60,13 @@ class TournamentService(
     }
 
     @Transactional
-    fun start(userId: UUID, tournamentId: Long) {
-        val tournament = tournamentRepository.findTournamentById(tournamentId)
-            ?: throw TournamentException.notFoundTournament()
+    fun start(
+        userId: UUID,
+        tournamentId: Long,
+    ) {
+        val tournament =
+            tournamentRepository.findTournamentById(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
         val itemCount = tournamentItemRepository.findAllByTournamentId(tournamentId).size
         if (itemCount !in MIN_ITEM_COUNT..MAX_ITEM_COUNT) throw TournamentException.invalidItemCount()
@@ -61,27 +74,38 @@ class TournamentService(
     }
 
     @Transactional(readOnly = true)
-    fun getTournamentById(tournamentId: Long, userId: UUID): TournamentInfo {
-        val tournament = tournamentRepository.findTournamentById(tournamentId)
-            ?: throw TournamentException.notFoundTournament()
+    fun getTournamentById(
+        tournamentId: Long,
+        userId: UUID,
+    ): TournamentInfo {
+        val tournament =
+            tournamentRepository.findTournamentById(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
         val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
         val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
         return TournamentInfo.of(tournament, items, histories)
     }
 
     @Transactional
-    fun recordMatch(userId: UUID, command: RecordMatch) {
-        val tournament = tournamentRepository.findTournamentById(command.tournamentId)
-            ?: throw TournamentException.notFoundTournament()
+    fun recordMatch(
+        userId: UUID,
+        command: RecordMatch,
+    ) {
+        val tournament =
+            tournamentRepository.findTournamentById(command.tournamentId)
+                ?: throw TournamentException.notFoundTournament()
         if (!tournament.isInProgress()) throw TournamentException.notInProgressTournament()
         if (command.selectedTournamentItemId !in setOf(command.firstTournamentItemId, command.secondTournamentItemId)) {
             throw TournamentException.invalidWinner()
         }
 
-        val tournamentItemIds = tournamentItemRepository
-            .findAllByTournamentId(command.tournamentId)
-            .mapTo(mutableSetOf()) { it.getId() }
-        if (command.firstTournamentItemId !in tournamentItemIds || command.secondTournamentItemId !in tournamentItemIds) {
+        val tournamentItemIds =
+            tournamentItemRepository
+                .findAllByTournamentId(command.tournamentId)
+                .mapTo(mutableSetOf()) { it.getId() }
+        if (command.firstTournamentItemId !in tournamentItemIds ||
+            command.secondTournamentItemId !in tournamentItemIds
+        ) {
             throw TournamentException.invalidTournamentItem()
         }
 

@@ -11,12 +11,13 @@ data class TournamentInfoResponse(
     val history: List<TournamentHistoryInfoResponse>,
 ) {
     companion object {
-        fun from(tournamentInfo: TournamentInfo): TournamentInfoResponse = TournamentInfoResponse(
-            tournamentId = tournamentInfo.tournamentId,
-            initialRound = tournamentInfo.items.size,
-            items = tournamentInfo.items.map { TournamentItemInfoResponse.from(it) },
-            history = tournamentInfo.history.map { TournamentHistoryInfoResponse.from(it) },
-        )
+        fun from(tournamentInfo: TournamentInfo): TournamentInfoResponse =
+            TournamentInfoResponse(
+                tournamentId = tournamentInfo.tournamentId,
+                initialRound = tournamentInfo.items.size,
+                items = tournamentInfo.items.map { TournamentItemInfoResponse.from(it) },
+                history = tournamentInfo.history.map { TournamentHistoryInfoResponse.from(it) },
+            )
     }
 }
 
@@ -25,10 +26,11 @@ data class TournamentItemInfoResponse(
     val itemId: Long,
 ) {
     companion object {
-        fun from(item: TournamentItemInfo): TournamentItemInfoResponse = TournamentItemInfoResponse(
-            tournamentItemId = item.tournamentItemId,
-            itemId = item.itemId,
-        )
+        fun from(item: TournamentItemInfo): TournamentItemInfoResponse =
+            TournamentItemInfoResponse(
+                tournamentItemId = item.tournamentItemId,
+                itemId = item.itemId,
+            )
     }
 }
 
@@ -39,11 +41,12 @@ data class TournamentHistoryInfoResponse(
     val selectedTournamentItemId: Long,
 ) {
     companion object {
-        fun from(history: TournamentHistoryInfo): TournamentHistoryInfoResponse = TournamentHistoryInfoResponse(
-            currentRound = history.currentRound,
-            firstTournamentItemId = history.firstTournamentItemId,
-            secondTournamentItemId = history.secondTournamentItemId,
-            selectedTournamentItemId = history.selectedTournamentItemId,
-        )
+        fun from(history: TournamentHistoryInfo): TournamentHistoryInfoResponse =
+            TournamentHistoryInfoResponse(
+                currentRound = history.currentRound,
+                firstTournamentItemId = history.firstTournamentItemId,
+                secondTournamentItemId = history.secondTournamentItemId,
+                selectedTournamentItemId = history.selectedTournamentItemId,
+            )
     }
 }

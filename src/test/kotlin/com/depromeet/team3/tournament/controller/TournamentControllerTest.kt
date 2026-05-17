@@ -20,10 +20,12 @@ import java.util.UUID
 
 @Transactional
 class TournamentControllerTest : IntegrationTestSupport() {
-
     @Autowired private lateinit var webApplicationContext: WebApplicationContext
+
     @Autowired private lateinit var objectMapper: ObjectMapper
+
     @Autowired private lateinit var wishJpaRepository: WishJpaRepository
+
     @Autowired private lateinit var tournamentItemJpaRepository: TournamentItemJpaRepository
 
     private val userId: UUID = UUID.fromString("11111111-2222-3333-4444-555555555555")
@@ -33,13 +35,13 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `POST tournaments 는 201 과 함께 tournamentId 를 반환한다`() {
         val mockMvc = buildMockMvc()
 
-        mockMvc.perform(
-            post("/api/v1/tournaments")
-                .header("X-User-Id", userId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"name":"테스트 토너먼트"}"""),
-        )
-            .andExpect(status().isCreated)
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments")
+                    .header("X-User-Id", userId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"name":"테스트 토너먼트"}"""),
+            ).andExpect(status().isCreated)
             .andExpect(jsonPath("$.status").value(201))
             .andExpect(jsonPath("$.code").value("CREATED"))
             .andExpect(jsonPath("$.data.tournamentId").isNumber)
@@ -51,13 +53,13 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val tournamentId = createTournament(mockMvc)
         val wishIds = saveWishes(userId, 100L, 200L)
 
-        mockMvc.perform(
-            post("/api/v1/tournaments/$tournamentId/items")
-                .header("X-User-Id", userId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"itemIds":${wishIds.joinToString(",", "[", "]")}}"""),
-        )
-            .andExpect(status().isOk)
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/items")
+                    .header("X-User-Id", userId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"itemIds":${wishIds.joinToString(",", "[", "]")}}"""),
+            ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
     }
 
@@ -67,13 +69,13 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val tournamentId = createTournament(mockMvc)
         val otherWishIds = saveWishes(otherUserId, 100L, 200L)
 
-        mockMvc.perform(
-            post("/api/v1/tournaments/$tournamentId/items")
-                .header("X-User-Id", userId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"itemIds":${otherWishIds.joinToString(",", "[", "]")}}"""),
-        )
-            .andExpect(status().isForbidden)
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/items")
+                    .header("X-User-Id", userId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"itemIds":${otherWishIds.joinToString(",", "[", "]")}}"""),
+            ).andExpect(status().isForbidden)
             .andExpect(jsonPath("$.status").value(403))
     }
 
@@ -83,11 +85,11 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val tournamentId = createTournament(mockMvc)
         addItemsToTournament(mockMvc, tournamentId, userId, 100L, 200L)
 
-        mockMvc.perform(
-            post("/api/v1/tournaments/$tournamentId/start")
-                .header("X-User-Id", userId),
-        )
-            .andExpect(status().isOk)
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/start")
+                    .header("X-User-Id", userId),
+            ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
     }
 
@@ -96,11 +98,11 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
 
-        mockMvc.perform(
-            post("/api/v1/tournaments/$tournamentId/start")
-                .header("X-User-Id", userId),
-        )
-            .andExpect(status().isBadRequest)
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/start")
+                    .header("X-User-Id", userId),
+            ).andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.status").value(400))
     }
 
@@ -109,13 +111,15 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val (tournamentId, item1Id, item2Id) = startTournamentWith2Items(mockMvc)
 
-        mockMvc.perform(
-            post("/api/v1/tournaments/$tournamentId/matches")
-                .header("X-User-Id", userId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"currentRound":2,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}"""),
-        )
-            .andExpect(status().isOk)
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/matches")
+                    .header("X-User-Id", userId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"currentRound":2,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}""",
+                    ),
+            ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
     }
 
@@ -133,13 +137,13 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 .content(matchBody),
         )
 
-        mockMvc.perform(
-            post("/api/v1/tournaments/$tournamentId/matches")
-                .header("X-User-Id", userId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(matchBody),
-        )
-            .andExpect(status().isConflict)
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/matches")
+                    .header("X-User-Id", userId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(matchBody),
+            ).andExpect(status().isConflict)
             .andExpect(jsonPath("$.status").value(409))
     }
 
@@ -152,14 +156,16 @@ class TournamentControllerTest : IntegrationTestSupport() {
             post("/api/v1/tournaments/$tournamentId/matches")
                 .header("X-User-Id", userId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"currentRound":2,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}"""),
+                .content(
+                    """{"currentRound":2,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}""",
+                ),
         )
 
-        mockMvc.perform(
-            get("/api/v1/tournaments/$tournamentId")
-                .header("X-User-Id", userId),
-        )
-            .andExpect(status().isOk)
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId")
+                    .header("X-User-Id", userId),
+            ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.tournamentId").value(tournamentId))
             .andExpect(jsonPath("$.data.initialRound").value(2))
@@ -171,30 +177,42 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `GET tournaments-id 에서 존재하지 않는 tournamentId 이면 404 를 반환한다`() {
         val mockMvc = buildMockMvc()
 
-        mockMvc.perform(
-            get("/api/v1/tournaments/999999")
-                .header("X-User-Id", userId),
-        )
-            .andExpect(status().isNotFound)
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/999999")
+                    .header("X-User-Id", userId),
+            ).andExpect(status().isNotFound)
             .andExpect(jsonPath("$.status").value(404))
     }
 
     private fun buildMockMvc(): MockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
 
-    private fun createTournament(mockMvc: MockMvc, name: String = "테스트 토너먼트"): Long {
-        val result = mockMvc.perform(
-            post("/api/v1/tournaments")
-                .header("X-User-Id", userId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"name":"$name"}"""),
-        ).andReturn()
+    private fun createTournament(
+        mockMvc: MockMvc,
+        name: String = "테스트 토너먼트",
+    ): Long {
+        val result =
+            mockMvc
+                .perform(
+                    post("/api/v1/tournaments")
+                        .header("X-User-Id", userId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"name":"$name"}"""),
+                ).andReturn()
         return objectMapper.readTree(result.response.contentAsString)["data"]["tournamentId"].asLong()
     }
 
-    private fun saveWishes(owner: UUID, vararg itemIds: Long): List<Long> =
-        itemIds.map { itemId -> wishJpaRepository.save(Wish(userId = owner, itemId = itemId)).getId() }
+    private fun saveWishes(
+        owner: UUID,
+        vararg itemIds: Long,
+    ): List<Long> = itemIds.map { itemId -> wishJpaRepository.save(Wish(userId = owner, itemId = itemId)).getId() }
 
-    private fun addItemsToTournament(mockMvc: MockMvc, tournamentId: Long, owner: UUID, vararg itemIds: Long) {
+    private fun addItemsToTournament(
+        mockMvc: MockMvc,
+        tournamentId: Long,
+        owner: UUID,
+        vararg itemIds: Long,
+    ) {
         val wishIds = saveWishes(owner, *itemIds)
         mockMvc.perform(
             post("/api/v1/tournaments/$tournamentId/items")
@@ -204,7 +222,11 @@ class TournamentControllerTest : IntegrationTestSupport() {
         )
     }
 
-    private data class TournamentStart(val tournamentId: Long, val item1Id: Long, val item2Id: Long)
+    private data class TournamentStart(
+        val tournamentId: Long,
+        val item1Id: Long,
+        val item2Id: Long,
+    )
 
     private fun startTournamentWith2Items(mockMvc: MockMvc): TournamentStart {
         val tournamentId = createTournament(mockMvc)

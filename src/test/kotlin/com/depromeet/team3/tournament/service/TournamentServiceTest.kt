@@ -21,7 +21,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class TournamentServiceTest {
-
     private class TestTournamentUserRepository : TournamentUserRepository {
         val users = mutableListOf<TournamentUser>()
         private var idSeq = 1L
@@ -33,7 +32,10 @@ class TournamentServiceTest {
             return tournamentUser
         }
 
-        private fun setEntityId(entity: LongBaseEntity, id: Long) {
+        private fun setEntityId(
+            entity: LongBaseEntity,
+            id: Long,
+        ) {
             val field = LongBaseEntity::class.java.getDeclaredField("id")
             field.isAccessible = true
             field.set(entity, id)
@@ -44,25 +46,32 @@ class TournamentServiceTest {
         private val allOwned: Boolean = true,
     ) : WishRepository {
         override fun save(wish: Wish): Wish = wish
-        override fun countByIdsAndUserId(ids: List<Long>, userId: UUID): Long =
-            if (allOwned) ids.size.toLong() else 0L
+
+        override fun countByIdsAndUserId(
+            ids: List<Long>,
+            userId: UUID,
+        ): Long = if (allOwned) ids.size.toLong() else 0L
     }
 
     private class TestTournamentItemRepository : TournamentItemRepository {
         val items = mutableListOf<TournamentItem>()
         private var idSeq = 1L
 
-        override fun saveAll(items: List<TournamentItem>): List<TournamentItem> = items.map { item ->
-            val id = idSeq++
-            setEntityId(item, id)
-            this.items.add(item)
-            item
-        }
+        override fun saveAll(items: List<TournamentItem>): List<TournamentItem> =
+            items.map { item ->
+                val id = idSeq++
+                setEntityId(item, id)
+                this.items.add(item)
+                item
+            }
 
         override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
             items.filter { it.tournamentId == tournamentId }
 
-        private fun setEntityId(entity: LongBaseEntity, id: Long) {
+        private fun setEntityId(
+            entity: LongBaseEntity,
+            id: Long,
+        ) {
             val field = LongBaseEntity::class.java.getDeclaredField("id")
             field.isAccessible = true
             field.set(entity, id)
@@ -90,7 +99,10 @@ class TournamentServiceTest {
         override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
             histories.filter { it.tournamentId == tournamentId }
 
-        private fun setEntityId(entity: LongBaseEntity, id: Long) {
+        private fun setEntityId(
+            entity: LongBaseEntity,
+            id: Long,
+        ) {
             val field = LongBaseEntity::class.java.getDeclaredField("id")
             field.isAccessible = true
             field.set(entity, id)
@@ -105,7 +117,10 @@ class TournamentServiceTest {
     private val userId = UUID.randomUUID()
     private val otherUserId = UUID.randomUUID()
 
-    private fun createAndStart(itemIds: List<Long>, name: String = "토너먼트"): Long {
+    private fun createAndStart(
+        itemIds: List<Long>,
+        name: String = "토너먼트",
+    ): Long {
         val tournamentId = service.create(userId, CreateTournament(name))
         service.addItems(userId, AddTournamentItems(tournamentId, itemIds))
         service.start(userId, tournamentId)
@@ -131,7 +146,8 @@ class TournamentServiceTest {
 
     @Test
     fun `addItems 에서 위시 아이템이 요청자의 것이 아니면 예외가 발생한다`() {
-        val serviceWithNoOwnership = TournamentService(userRepository, repository, itemRepository, TestWishRepository(allOwned = false))
+        val serviceWithNoOwnership =
+            TournamentService(userRepository, repository, itemRepository, TestWishRepository(allOwned = false))
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
 
         assertFailsWith<WishException> {
@@ -257,7 +273,13 @@ class TournamentServiceTest {
         assertFailsWith<TournamentException> {
             service.recordMatch(
                 userId,
-                RecordMatch(tournamentId = tournamentId, currentRound = 2, firstTournamentItemId = 1L, secondTournamentItemId = 2L, selectedTournamentItemId = 1L),
+                RecordMatch(
+                    tournamentId = tournamentId,
+                    currentRound = 2,
+                    firstTournamentItemId = 1L,
+                    secondTournamentItemId = 2L,
+                    selectedTournamentItemId = 1L,
+                ),
             )
         }
     }
@@ -267,7 +289,13 @@ class TournamentServiceTest {
         assertFailsWith<TournamentException> {
             service.recordMatch(
                 userId,
-                RecordMatch(tournamentId = 999L, currentRound = 2, firstTournamentItemId = 1L, secondTournamentItemId = 2L, selectedTournamentItemId = 1L),
+                RecordMatch(
+                    tournamentId = 999L,
+                    currentRound = 2,
+                    firstTournamentItemId = 1L,
+                    secondTournamentItemId = 2L,
+                    selectedTournamentItemId = 1L,
+                ),
             )
         }
     }
@@ -300,13 +328,14 @@ class TournamentServiceTest {
         val firstItem = items.find { it.itemId == 10L }!!
         val secondItem = items.find { it.itemId == 20L }!!
 
-        val finalMatch = RecordMatch(
-            tournamentId = tournamentId,
-            currentRound = 2,
-            firstTournamentItemId = firstItem.getId(),
-            secondTournamentItemId = secondItem.getId(),
-            selectedTournamentItemId = firstItem.getId(),
-        )
+        val finalMatch =
+            RecordMatch(
+                tournamentId = tournamentId,
+                currentRound = 2,
+                firstTournamentItemId = firstItem.getId(),
+                secondTournamentItemId = secondItem.getId(),
+                selectedTournamentItemId = firstItem.getId(),
+            )
         service.recordMatch(userId, finalMatch)
 
         assertFailsWith<TournamentException> {

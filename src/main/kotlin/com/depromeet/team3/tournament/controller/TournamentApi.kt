@@ -23,7 +23,12 @@ interface TournamentApi {
     @ApiResponse(
         responseCode = "201",
         description = "토너먼트 생성 성공",
-        content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = Schema(implementation = ApiResponseBody::class),
+            ),
+        ],
     )
     fun create(
         userId: UUID,
@@ -37,7 +42,12 @@ interface TournamentApi {
     @ApiResponse(
         responseCode = "200",
         description = "아이템 추가 성공",
-        content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = Schema(implementation = ApiResponseBody::class),
+            ),
+        ],
     )
     fun addItems(
         userId: UUID,
@@ -52,7 +62,12 @@ interface TournamentApi {
     @ApiResponse(
         responseCode = "200",
         description = "토너먼트 시작 성공",
-        content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = Schema(implementation = ApiResponseBody::class),
+            ),
+        ],
     )
     fun start(
         userId: UUID,
@@ -66,7 +81,12 @@ interface TournamentApi {
     @ApiResponse(
         responseCode = "200",
         description = "매치 결과 기록 성공",
-        content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = Schema(implementation = ApiResponseBody::class),
+            ),
+        ],
     )
     fun recordMatch(
         userId: UUID,
@@ -81,7 +101,12 @@ interface TournamentApi {
     @ApiResponse(
         responseCode = "200",
         description = "토너먼트 조회 성공",
-        content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = Schema(implementation = ApiResponseBody::class),
+            ),
+        ],
     )
     fun getTournamentById(
         userId: UUID,

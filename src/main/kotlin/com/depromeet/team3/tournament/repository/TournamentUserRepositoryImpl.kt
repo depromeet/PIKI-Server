@@ -7,6 +7,5 @@ import org.springframework.stereotype.Repository
 class TournamentUserRepositoryImpl(
     private val tournamentUserJpaRepository: TournamentUserJpaRepository,
 ) : TournamentUserRepository {
-    override fun save(tournamentUser: TournamentUser): TournamentUser =
-        tournamentUserJpaRepository.save(tournamentUser)
+    override fun save(tournamentUser: TournamentUser): TournamentUser = tournamentUserJpaRepository.save(tournamentUser)
 }

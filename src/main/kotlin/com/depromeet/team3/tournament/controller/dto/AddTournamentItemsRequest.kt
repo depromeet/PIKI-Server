@@ -7,8 +7,9 @@ data class AddTournamentItemsRequest(
     @field:Size(min = 2, max = 32)
     val itemIds: List<Long>,
 ) {
-    fun toAddTournamentItems(tournamentId: Long): AddTournamentItems = AddTournamentItems(
-        tournamentId = tournamentId,
-        itemIds = itemIds,
-    )
+    fun toAddTournamentItems(tournamentId: Long): AddTournamentItems =
+        AddTournamentItems(
+            tournamentId = tournamentId,
+            itemIds = itemIds,
+        )
 }
