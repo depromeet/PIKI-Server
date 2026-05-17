@@ -13,9 +13,11 @@ import javax.crypto.SecretKey
 class JwtProvider(
     private val jwtProperties: JwtProperties,
 ) {
-    private val secretKey: SecretKey by lazy {
+    // 부팅 시점에 즉시 생성한다. lazy 로 두면 첫 토큰 발급/검증 트래픽까지 키 유효성 문제가
+    // 가려져 운영 사고의 표면이 트래픽 시점으로 미뤄진다. JwtProperties 의 @Size(min=32) 와
+    // 합쳐 부팅 시점 fail-fast 보장.
+    private val secretKey: SecretKey =
         Keys.hmacShaKeyFor(jwtProperties.secret.toByteArray(Charsets.UTF_8))
-    }
 
     fun generateAccessToken(userId: UUID): String =
         buildToken(userId, TokenType.ACCESS, jwtProperties.accessTokenExpirySeconds)
