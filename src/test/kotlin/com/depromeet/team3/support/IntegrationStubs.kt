@@ -10,4 +10,10 @@ import org.springframework.context.annotation.Bean
 class IntegrationStubs {
     @Bean
     fun productExtractor(): StubProductExtractor = StubProductExtractor()
+
+    // 빈 이름을 OcrService 의 생성자 파라미터명(ocrClient)과 맞춘다.
+    // GeminiOcrClient(@Component, 빈 이름 geminiOcrClient) 와 타입이 같아 후보가 2개가 되는데,
+    // Spring 은 이때 주입 지점 파라미터명과 일치하는 빈을 선택하므로 stub 이 우선 적용된다.
+    @Bean
+    fun ocrClient(): StubOcrClient = StubOcrClient()
 }
