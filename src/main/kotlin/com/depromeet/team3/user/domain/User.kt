@@ -1,7 +1,6 @@
 package com.depromeet.team3.user.domain
 
 import com.depromeet.team3.common.domain.BaseEntity
-import com.depromeet.team3.user.exception.UserException
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -33,15 +32,13 @@ class User(
         protected set
 
     fun promoteToMember() {
-        deletedAt?.let { throw UserException.deletedUser(id) }
-        if (identityType != IdentityType.GUEST) throw UserException.alreadyMember(id)
+        check(identityType == IdentityType.GUEST) { "이미 MEMBER 입니다." }
         identityType = IdentityType.MEMBER
     }
 
     fun updateNickname(newNickname: String) {
-        deletedAt?.let { throw UserException.deletedUser(id) }
-        if (newNickname.isBlank()) throw UserException.invalidNickname("닉네임은 공백일 수 없습니다.")
-        if (newNickname.length > 16) throw UserException.invalidNickname("닉네임은 16자 이하여야 합니다.")
+        require(newNickname.isNotBlank()) { "닉네임은 공백일 수 없습니다." }
+        require(newNickname.length <= 16) { "닉네임은 16자 이하여야 합니다." }
         nickname = newNickname
     }
 
