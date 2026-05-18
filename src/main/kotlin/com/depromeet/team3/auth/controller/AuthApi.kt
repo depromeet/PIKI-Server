@@ -5,6 +5,7 @@ import com.depromeet.team3.auth.controller.dto.TokenRefreshRequest
 import com.depromeet.team3.auth.controller.dto.TokenRefreshResponse
 import com.depromeet.team3.common.response.ApiResponseBody
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
@@ -93,5 +94,7 @@ interface AuthApi {
             ),
         ],
     )
-    fun logout(userId: UUID): ApiResponseBody<Nothing>
+    fun logout(
+        @Parameter(hidden = true) userId: UUID,
+    ): ApiResponseBody<Nothing>
 }
