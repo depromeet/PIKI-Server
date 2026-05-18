@@ -27,24 +27,9 @@ class OcrApiExamples(
                         payload =
                             ApiResponseBody.ok(
                                 OcrResponse(
-                                    name =
-                                        OcrResponse.ExtractedFieldResponse(
-                                            value = "에어 조던 1 미드",
-                                            boundingBox = OcrResponse.BoundingBoxResponse(yMin = 120, xMin = 80, yMax = 180, xMax = 640),
-                                            isInferred = false,
-                                        ),
-                                    price =
-                                        OcrResponse.ExtractedFieldResponse(
-                                            value = 119_000,
-                                            boundingBox = OcrResponse.BoundingBoxResponse(yMin = 220, xMin = 80, yMax = 260, xMax = 300),
-                                            isInferred = false,
-                                        ),
-                                    category =
-                                        OcrResponse.ExtractedFieldResponse(
-                                            value = "신발",
-                                            boundingBox = null,
-                                            isInferred = true,
-                                        ),
+                                    name = "에어 조던 1 미드",
+                                    price = 119_000,
+                                    category = "신발",
                                 ),
                             ),
                     )

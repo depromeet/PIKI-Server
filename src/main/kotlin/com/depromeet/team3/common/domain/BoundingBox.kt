@@ -1,6 +1,9 @@
 package com.depromeet.team3.common.domain
 
 /**
+ * 0~1000 으로 정규화된 직사각형 좌표 값 객체.
+ * OCR 결과의 상품 이미지 영역 크롭(#144)에서 사용한다.
+ *
  * 원본 이미지의 실제 픽셀로 변환하려면:
  *   pixelX = xMin / 1000.0 * imageWidth
  *   pixelY = yMin / 1000.0 * imageHeight
