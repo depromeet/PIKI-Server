@@ -1,14 +1,19 @@
 package com.depromeet.team3.wishlist.controller
 
+import com.depromeet.team3.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.team3.product.domain.ProductSnapshot
 import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.support.StubProductExtractor
 import com.depromeet.team3.support.uuidToBytes
+import com.depromeet.team3.user.domain.IdentityType
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
@@ -33,12 +38,21 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
 
+    @Autowired
+    private lateinit var jwtProvider: JwtProvider
+
     @Test
     fun `같은 유저와 URL 로 동시 두 요청이 들어오면 한 쪽은 201, 다른 쪽은 409 로 응답된다`() {
-        val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(
+                    webApplicationContext,
+                ).apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
         val url = "https://shop.example.com/products/race-${UUID.randomUUID()}"
         val userId = UUID.randomUUID()
         val userBytes = uuidToBytes(userId)
+        val token = "Bearer ${jwtProvider.generateAccessToken(userId, IdentityType.GUEST)}"
 
         // @Transactional 없는 테스트라 concurrent 요청이 user row 를 볼 수 있도록 먼저 커밋한다.
         jdbcTemplate.update(
@@ -66,6 +80,7 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
                         mockMvc
                             .perform(
                                 post("/api/v1/wishlists")
+                                    .header(HttpHeaders.AUTHORIZATION, token)
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(body),
                             ).andReturn()

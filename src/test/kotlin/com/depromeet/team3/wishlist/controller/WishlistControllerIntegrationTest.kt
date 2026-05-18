@@ -1,16 +1,21 @@
 package com.depromeet.team3.wishlist.controller
 
+import com.depromeet.team3.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.team3.product.domain.ProductSnapshot
 import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.support.StubProductExtractor
 import com.depromeet.team3.support.uuidToBytes
+import com.depromeet.team3.user.domain.IdentityType
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
@@ -31,6 +36,9 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
 
+    @Autowired
+    private lateinit var jwtProvider: JwtProvider
+
     private fun insertUser(userId: UUID) {
         val bytes = uuidToBytes(userId)
         jdbcTemplate.update(
@@ -41,9 +49,17 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         )
     }
 
+    private fun bearerToken(userId: UUID): String =
+        "Bearer ${jwtProvider.generateAccessToken(userId, IdentityType.GUEST)}"
+
     @Test
     fun `정상 등록 - 201 과 함께 추출 결과가 응답에 박힌다`() {
-        val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(
+                    webApplicationContext,
+                ).apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
         val url = "https://shop.example.com/products/42"
         val userId = UUID.randomUUID()
         insertUser(userId)
@@ -61,6 +77,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 post("/api/v1/wishlists")
+                    .header(HttpHeaders.AUTHORIZATION, bearerToken(userId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body),
             ).andExpect(status().isCreated)
@@ -75,7 +92,12 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
     @Test
     fun `같은 유저가 같은 URL 을 두 번 등록하면 409 CONFLICT 가 반환된다`() {
-        val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(
+                    webApplicationContext,
+                ).apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
         val url = "https://shop.example.com/products/42"
         val userId = UUID.randomUUID()
         insertUser(userId)
@@ -85,6 +107,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 post("/api/v1/wishlists")
+                    .header(HttpHeaders.AUTHORIZATION, bearerToken(userId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body),
             ).andExpect(status().isCreated)
@@ -92,6 +115,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 post("/api/v1/wishlists")
+                    .header(HttpHeaders.AUTHORIZATION, bearerToken(userId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body),
             ).andExpect(status().isConflict)
@@ -102,7 +126,12 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
     @Test
     fun `다른 유저가 같은 URL 을 등록하면 둘 다 201 로 등록된다`() {
-        val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(
+                    webApplicationContext,
+                ).apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
         val url = "https://shop.example.com/products/42"
         stubExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
         val firstUserId = UUID.randomUUID()
@@ -115,6 +144,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 post("/api/v1/wishlists")
+                    .header(HttpHeaders.AUTHORIZATION, bearerToken(firstUserId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(firstBody),
             ).andExpect(status().isCreated)
@@ -122,6 +152,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 post("/api/v1/wishlists")
+                    .header(HttpHeaders.AUTHORIZATION, bearerToken(secondUserId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(secondBody),
             ).andExpect(status().isCreated)
@@ -129,14 +160,47 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
     @Test
     fun `url 이 빈 문자열이면 400 BAD_REQUEST 가 반환된다`() {
-        val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
-        val body = objectMapper.writeValueAsString(mapOf("url" to "", "userId" to UUID.randomUUID()))
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(
+                    webApplicationContext,
+                ).apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId)
+        val body = objectMapper.writeValueAsString(mapOf("url" to "", "userId" to userId))
+
+        mockMvc
+            .perform(
+                post("/api/v1/wishlists")
+                    .header(HttpHeaders.AUTHORIZATION, bearerToken(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `인증 토큰 없이 요청하면 401 이 반환된다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(
+                    webApplicationContext,
+                ).apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val body =
+            objectMapper.writeValueAsString(
+                mapOf(
+                    "url" to "https://shop.example.com/products/42",
+                    "userId" to UUID.randomUUID(),
+                ),
+            )
 
         mockMvc
             .perform(
                 post("/api/v1/wishlists")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body),
-            ).andExpect(status().isBadRequest)
+            ).andExpect(status().isUnauthorized)
+            .andExpect(jsonPath("$.status").value(401))
     }
 }
