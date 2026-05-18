@@ -11,4 +11,9 @@ interface RefreshTokenStore {
     fun get(userId: UUID): String?
 
     fun delete(userId: UUID)
+
+    fun consumeIfMatches(
+        userId: UUID,
+        token: String,
+    ): Boolean
 }

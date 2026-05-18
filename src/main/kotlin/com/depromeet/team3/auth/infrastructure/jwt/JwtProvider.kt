@@ -37,6 +37,16 @@ class JwtProvider(
 
     fun validateToken(token: String): Boolean = runCatching { parseClaims(token) }.isSuccess
 
+    fun parseAccessToken(token: String): AccessTokenPayload? =
+        runCatching {
+            val claims = parseClaims(token)
+            if (claims[CLAIM_TYPE] != TOKEN_TYPE_ACCESS) return null
+            AccessTokenPayload(
+                userId = UUID.fromString(claims.subject),
+                identityType = IdentityType.valueOf(claims[CLAIM_ROLE] as String),
+            )
+        }.getOrNull()
+
     private fun buildToken(
         userId: UUID,
         expirySeconds: Long,
@@ -69,4 +79,9 @@ class JwtProvider(
         const val TOKEN_TYPE_ACCESS = "ACCESS"
         const val TOKEN_TYPE_REFRESH = "REFRESH"
     }
+
+    data class AccessTokenPayload(
+        val userId: UUID,
+        val identityType: IdentityType,
+    )
 }

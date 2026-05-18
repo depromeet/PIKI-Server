@@ -10,3 +10,6 @@ spring:
 gemini:
   api-key: ${GEMINI_API_KEY:test-dummy-key}
   model: ${GEMINI_MODEL:gemini-2.5-flash}
+
+jwt:
+  secret: test-jwt-secret-key-at-least-32-chars-ok

@@ -12,17 +12,30 @@ import java.util.UUID
 class UserService(
     private val userRepository: UserRepository,
 ) {
+    companion object {
+        private const val MAX_NICKNAME_ATTEMPTS = 5
+    }
+
     @Transactional
     fun createGuest(): User {
         val id = UUID.randomUUID()
-        val nickname = "게스트_${id.toString().replace("-", "").take(8)}"
+        val nickname = generateUniqueGuestNickname()
         return userRepository.save(User(id = id, nickname = nickname, identityType = IdentityType.GUEST))
     }
 
     @Transactional
     fun createMember(nickname: String): User {
+        if (userRepository.existsByNickname(nickname)) throw UserException.duplicateNickname(nickname)
         val id = UUID.randomUUID()
         return userRepository.save(User(id = id, nickname = nickname, identityType = IdentityType.MEMBER))
+    }
+
+    private fun generateUniqueGuestNickname(): String {
+        repeat(MAX_NICKNAME_ATTEMPTS) {
+            val candidate = "게스트_${UUID.randomUUID().toString().replace("-", "").take(8)}"
+            if (!userRepository.existsByNickname(candidate)) return candidate
+        }
+        throw UserException.nicknameGenerationFailed()
     }
 
     @Transactional(readOnly = true)

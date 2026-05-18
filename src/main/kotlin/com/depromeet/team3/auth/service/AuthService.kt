@@ -28,8 +28,7 @@ class AuthService(
     fun refresh(refreshToken: String): TokenPair {
         if (!jwtProvider.validateToken(refreshToken)) throw AuthException.invalidToken()
         val userId = jwtProvider.getUserIdFromToken(refreshToken)
-        val stored = refreshTokenStore.get(userId) ?: throw AuthException.tokenNotFound()
-        if (stored != refreshToken) throw AuthException.invalidToken()
+        if (!refreshTokenStore.consumeIfMatches(userId, refreshToken)) throw AuthException.invalidToken()
         val user = userService.findById(userId)
         return issueTokenPair(user)
     }

@@ -3,6 +3,7 @@ package com.depromeet.team3.auth.config
 import com.depromeet.team3.auth.filter.JwtAuthenticationFilter
 import com.depromeet.team3.common.exception.ErrorCategory
 import com.depromeet.team3.common.response.ApiResponseBody
+import jakarta.servlet.DispatcherType
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -33,6 +34,8 @@ class SecurityConfig(
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
                 auth
+                    .dispatcherTypeMatchers(DispatcherType.ERROR)
+                    .permitAll()
                     .requestMatchers(HttpMethod.GET, "/health", "/v3/api-docs/**")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/auth/guest", "/auth/token/refresh")

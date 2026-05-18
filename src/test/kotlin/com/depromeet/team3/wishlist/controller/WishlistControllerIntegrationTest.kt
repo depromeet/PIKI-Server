@@ -72,7 +72,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 imageUrl = "https://cdn.example.com/p/42.jpg",
             )
         }
-        val body = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to userId))
+        val body = objectMapper.writeValueAsString(mapOf("url" to url))
 
         mockMvc
             .perform(
@@ -102,7 +102,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val userId = UUID.randomUUID()
         insertUser(userId)
         stubExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
-        val body = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to userId))
+        val body = objectMapper.writeValueAsString(mapOf("url" to url))
 
         mockMvc
             .perform(
@@ -138,8 +138,8 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val secondUserId = UUID.randomUUID()
         insertUser(firstUserId)
         insertUser(secondUserId)
-        val firstBody = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to firstUserId))
-        val secondBody = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to secondUserId))
+        val firstBody = objectMapper.writeValueAsString(mapOf("url" to url))
+        val secondBody = objectMapper.writeValueAsString(mapOf("url" to url))
 
         mockMvc
             .perform(
@@ -168,7 +168,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 .build()
         val userId = UUID.randomUUID()
         insertUser(userId)
-        val body = objectMapper.writeValueAsString(mapOf("url" to "", "userId" to userId))
+        val body = objectMapper.writeValueAsString(mapOf("url" to ""))
 
         mockMvc
             .perform(
@@ -189,10 +189,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 .build()
         val body =
             objectMapper.writeValueAsString(
-                mapOf(
-                    "url" to "https://shop.example.com/products/42",
-                    "userId" to UUID.randomUUID(),
-                ),
+                mapOf("url" to "https://shop.example.com/products/42"),
             )
 
         mockMvc

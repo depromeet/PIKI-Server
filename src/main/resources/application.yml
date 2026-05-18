@@ -30,7 +30,7 @@ spring:
       port: ${REDIS_PORT:6379}
 
 jwt:
-  secret: ${JWT_SECRET:piki-dev-secret-key-at-least-32-chars!}
+  secret: ${JWT_SECRET}
   access-token-expiry-seconds: ${JWT_ACCESS_EXPIRY:3600}
   refresh-token-expiry-seconds: ${JWT_REFRESH_EXPIRY:1209600}
 

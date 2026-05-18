@@ -63,7 +63,7 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
         )
 
         try {
-            val body = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to userId))
+            val body = objectMapper.writeValueAsString(mapOf("url" to url))
             stubExtractor.build = { link -> ProductSnapshot(link = link, name = "race 상품") }
 
             // 2 단계 래치로 동시 출발을 강제한다. 한 단계 래치만 쓰면 worker 가 await 에 도달하기
@@ -96,6 +96,13 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
             // - 한 쪽이 dedup 체크 통과 + persist 성공 → 201
             // - 다른 쪽은 dedup 또는 unique 제약 위반 catch → 409 (500 으로 새지 않는다)
             assertEquals(setOf(201, 409), statuses)
+            val wishCount =
+                jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM wishes WHERE user_id = ?",
+                    Long::class.java,
+                    userBytes,
+                )
+            assertEquals(1L, wishCount)
         } finally {
             jdbcTemplate.update("DELETE FROM wishes WHERE user_id = ?", userBytes)
             jdbcTemplate.update("DELETE FROM user WHERE id = ?", userBytes)

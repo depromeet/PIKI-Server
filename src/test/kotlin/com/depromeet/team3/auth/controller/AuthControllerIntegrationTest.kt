@@ -156,4 +156,36 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(status().isUnauthorized)
             .andExpect(jsonPath("$.status").value(401))
     }
+
+    @Test
+    fun `POST auth-token-refresh - 리프레시 토큰을 한 번 사용하면 재사용이 불가하다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(
+                    webApplicationContext,
+                ).apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+
+        val guestResponse =
+            mockMvc
+                .perform(post("/auth/guest"))
+                .andReturn()
+                .response.contentAsString
+        val refreshToken = JsonPath.read<String>(guestResponse, "$.data.refreshToken")
+
+        mockMvc
+            .perform(
+                post("/auth/token/refresh")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(mapOf("refreshToken" to refreshToken))),
+            ).andExpect(status().isOk)
+
+        mockMvc
+            .perform(
+                post("/auth/token/refresh")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(mapOf("refreshToken" to refreshToken))),
+            ).andExpect(status().isUnauthorized)
+            .andExpect(jsonPath("$.status").value(401))
+    }
 }
