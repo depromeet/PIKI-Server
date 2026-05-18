@@ -1,8 +1,6 @@
 package com.depromeet.team3.ocr.controller
 
-import com.depromeet.team3.common.domain.BoundingBox
 import com.depromeet.team3.common.domain.Product
-import com.depromeet.team3.common.domain.Product.Field
 import com.depromeet.team3.product.service.gemini.GeminiApiException
 import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.support.StubOcrClient
@@ -27,11 +25,7 @@ class OcrControllerIntegrationTest : IntegrationTestSupport() {
     fun `이미지를 올리면 200 과 함께 추출 결과가 contract 모양으로 응답된다`() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
         stubOcrClient.analyze = {
-            Product(
-                name = Field.Extracted("나이키 에어포스", BoundingBox(yMin = 10, xMin = 20, yMax = 30, xMax = 40)),
-                price = Field.Inferred(99_000),
-                category = Field.NotFound,
-            )
+            Product(name = "나이키 에어포스", price = 99_000, category = null)
         }
         val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
 
@@ -40,13 +34,8 @@ class OcrControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.code").value("OK"))
-            .andExpect(jsonPath("$.data.name.value").value("나이키 에어포스"))
-            .andExpect(jsonPath("$.data.name.isInferred").value(false))
-            .andExpect(jsonPath("$.data.name.boundingBox.yMin").value(10))
-            .andExpect(jsonPath("$.data.name.boundingBox.xMax").value(40))
-            .andExpect(jsonPath("$.data.price.value").value(99_000))
-            .andExpect(jsonPath("$.data.price.isInferred").value(true))
-            .andExpect(jsonPath("$.data.price.boundingBox").isEmpty)
+            .andExpect(jsonPath("$.data.name").value("나이키 에어포스"))
+            .andExpect(jsonPath("$.data.price").value(99_000))
             .andExpect(jsonPath("$.data.category").isEmpty)
     }
 
