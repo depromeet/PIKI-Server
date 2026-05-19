@@ -37,7 +37,7 @@ class User(
         protected set
 
     fun promoteToMember() {
-        check(identityType == IdentityType.GUEST) { "이미 MEMBER 입니다." }
+        if (identityType != IdentityType.GUEST) throw UserException.alreadyMember(id)
         identityType = IdentityType.MEMBER
     }
 
@@ -46,8 +46,8 @@ class User(
     }
 
     fun updateNickname(newNickname: String) {
-        require(newNickname.isNotBlank()) { "닉네임은 공백일 수 없습니다." }
-        require(newNickname.length <= 16) { "닉네임은 16자 이하여야 합니다." }
+        if (newNickname.isBlank()) throw UserException.invalidNickname("닉네임은 공백일 수 없습니다.")
+        if (newNickname.length > 16) throw UserException.invalidNickname("닉네임은 16자 이하여야 합니다.")
         nickname = newNickname
     }
 

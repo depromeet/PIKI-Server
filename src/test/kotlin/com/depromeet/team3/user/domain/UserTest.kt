@@ -27,7 +27,7 @@ class UserTest {
     fun `이미 MEMBER 인 유저를 다시 승격하면 예외가 발생한다`() {
         val user = guest()
         user.promoteToMember()
-        assertFailsWith<IllegalStateException> { user.promoteToMember() }
+        assertFailsWith<UserException> { user.promoteToMember() }
     }
 
     @Test
@@ -47,19 +47,19 @@ class UserTest {
     @Test
     fun `닉네임 17자는 예외가 발생한다`() {
         val user = guest()
-        assertFailsWith<IllegalArgumentException> { user.updateNickname("12345678901234567") }
+        assertFailsWith<UserException> { user.updateNickname("12345678901234567") }
     }
 
     @Test
     fun `빈 닉네임은 예외가 발생한다`() {
         val user = guest()
-        assertFailsWith<IllegalArgumentException> { user.updateNickname("") }
+        assertFailsWith<UserException> { user.updateNickname("") }
     }
 
     @Test
     fun `공백만 있는 닉네임은 예외가 발생한다`() {
         val user = guest()
-        assertFailsWith<IllegalArgumentException> { user.updateNickname("   ") }
+        assertFailsWith<UserException> { user.updateNickname("   ") }
     }
 
     @Test

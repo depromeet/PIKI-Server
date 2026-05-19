@@ -1,4 +1,4 @@
-package com.depromeet.team3.user.service
+package com.depromeet.team3.user.domain
 
 import com.depromeet.team3.common.exception.BaseException
 import com.depromeet.team3.common.exception.ErrorCategory
@@ -46,6 +46,13 @@ class UserException private constructor(
                 "닉네임 생성에 실패했습니다. 다시 시도해주세요.",
                 ErrorCategory.SERVER_ERROR,
                 HttpStatus.INTERNAL_SERVER_ERROR,
+            )
+
+        fun invalidNickname(reason: String): UserException =
+            UserException(
+                reason,
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
             )
     }
 }

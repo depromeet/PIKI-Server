@@ -2,6 +2,7 @@ package com.depromeet.team3.user.service
 
 import com.depromeet.team3.user.domain.IdentityType
 import com.depromeet.team3.user.domain.User
+import com.depromeet.team3.user.domain.UserException
 import com.depromeet.team3.user.repository.UserRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -93,7 +94,6 @@ class UserService(
     fun promoteToMember(userId: UUID): User {
         val user = findById(userId)
         user.deletedAt?.let { throw UserException.deletedUser(userId) }
-        if (user.identityType != IdentityType.GUEST) throw UserException.alreadyMember(userId)
         user.promoteToMember()
         return userRepository.save(user)
     }
