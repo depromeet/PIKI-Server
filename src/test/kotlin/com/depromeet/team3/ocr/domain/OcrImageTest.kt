@@ -20,6 +20,33 @@ class OcrImageTest {
         assertContentEquals(bytes, image.bytes)
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = ["IMAGE/JPEG", "Image/Png", "image/jpeg; charset=utf-8", "  image/webp  "])
+    fun `대소문자·파라미터가 섞인 MIME 타입도 정규화되어 생성된다`(mimeType: String) {
+        val image = OcrImage.of(byteArrayOf(1, 2, 3), mimeType)
+
+        assertEquals(mimeType.substringBefore(';').trim().lowercase(), image.mimeType)
+    }
+
+    @Test
+    fun `생성에 쓰인 원본 배열을 변경해도 OcrImage 내부는 영향받지 않는다`() {
+        val original = byteArrayOf(1, 2, 3)
+        val image = OcrImage.of(original, "image/png")
+
+        original[0] = 99
+
+        assertContentEquals(byteArrayOf(1, 2, 3), image.bytes)
+    }
+
+    @Test
+    fun `bytes 로 반환된 배열을 변경해도 OcrImage 내부는 영향받지 않는다`() {
+        val image = OcrImage.of(byteArrayOf(1, 2, 3), "image/png")
+
+        image.bytes[0] = 99
+
+        assertContentEquals(byteArrayOf(1, 2, 3), image.bytes)
+    }
+
     @Test
     fun `빈 바이트 배열이면 예외가 발생한다`() {
         assertFailsWith<IllegalArgumentException> {
