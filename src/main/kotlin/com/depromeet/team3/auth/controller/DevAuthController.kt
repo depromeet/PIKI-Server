@@ -2,6 +2,7 @@ package com.depromeet.team3.auth.controller
 
 import com.depromeet.team3.auth.controller.dto.DevUserCreateRequest
 import com.depromeet.team3.auth.controller.dto.GuestCreateResponse
+import com.depromeet.team3.auth.exception.AuthException
 import com.depromeet.team3.auth.service.AuthService
 import com.depromeet.team3.common.response.ApiResponseBody
 import com.depromeet.team3.user.domain.IdentityType
@@ -29,8 +30,7 @@ class DevAuthController(
             when (request.identityType) {
                 IdentityType.GUEST -> authService.createGuest()
                 IdentityType.MEMBER -> {
-                    val nickname =
-                        requireNotNull(request.nickname) { "MEMBER 생성 시 nickname 은 필수입니다." }
+                    val nickname = request.nickname ?: throw AuthException.missingNickname()
                     authService.createMember(nickname)
                 }
             }

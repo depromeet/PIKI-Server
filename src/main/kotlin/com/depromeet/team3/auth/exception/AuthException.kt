@@ -18,5 +18,12 @@ class AuthException private constructor(
                 ErrorCategory.UNAUTHORIZED,
                 HttpStatus.UNAUTHORIZED,
             )
+
+        fun missingNickname(): AuthException =
+            AuthException(
+                "MEMBER 생성 시 nickname 은 필수입니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
     }
 }

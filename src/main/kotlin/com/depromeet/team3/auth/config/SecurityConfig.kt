@@ -44,7 +44,7 @@ class SecurityConfig {
                     .requestMatchers("/api/v1/tournaments/**")
                     .authenticated()
                     .anyRequest()
-                    .permitAll()
+                    .authenticated()
             }.exceptionHandling {
                 // 미인증 요청은 401, 인증됐지만 권한 없으면 403
                 it.authenticationEntryPoint { _, response, _ ->
