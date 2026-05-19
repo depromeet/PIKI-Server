@@ -1,7 +1,6 @@
 package com.depromeet.team3.user.domain
 
 import com.depromeet.team3.common.domain.BaseEntity
-import com.depromeet.team3.user.service.UserException
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -16,19 +15,20 @@ import java.util.UUID
 class User(
     id: UUID,
     nickname: String,
+    profileImage: String,
     identityType: IdentityType,
 ) : BaseEntity<UUID>() {
-    init {
-        validateNickname(nickname)
-    }
-
     @Id
     @Column(name = "id", columnDefinition = "BINARY(16)")
-    private val id: UUID = id
+    val id: UUID = id
 
     override fun getIdOrNull(): UUID = id
 
     var nickname: String = nickname
+        protected set
+
+    @Column(name = "profile_image", nullable = false, length = 2048)
+    var profileImage: String = profileImage
         protected set
 
     @Enumerated(EnumType.STRING)
@@ -37,21 +37,21 @@ class User(
         protected set
 
     fun promoteToMember() {
-        if (identityType != IdentityType.GUEST) throw UserException.alreadyMember()
+        check(identityType == IdentityType.GUEST) { "이미 MEMBER 입니다." }
         identityType = IdentityType.MEMBER
     }
 
+    fun updateProfileImage(newProfileImage: String) {
+        profileImage = newProfileImage
+    }
+
     fun updateNickname(newNickname: String) {
-        validateNickname(newNickname)
+        require(newNickname.isNotBlank()) { "닉네임은 공백일 수 없습니다." }
+        require(newNickname.length <= 16) { "닉네임은 16자 이하여야 합니다." }
         nickname = newNickname
     }
 
     fun softDelete() {
-        deletedAt = LocalDateTime.now()
-    }
-
-    private fun validateNickname(value: String) {
-        if (value.isBlank()) throw UserException.nicknameBlank()
-        if (value.length > 16) throw UserException.nicknameTooLong()
+        deletedAt = deletedAt ?: LocalDateTime.now()
     }
 }

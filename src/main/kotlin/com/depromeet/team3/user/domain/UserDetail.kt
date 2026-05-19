@@ -11,7 +11,6 @@ import java.util.UUID
 @Table(name = "user_detail")
 class UserDetail(
     userId: UUID,
-    profileImage: String = "default",
     email: String,
     provider: String,
     socialId: String,
@@ -21,10 +20,6 @@ class UserDetail(
     private val userId: UUID = userId
 
     override fun getIdOrNull(): UUID = userId
-
-    @Column(name = "profile_image", nullable = false)
-    var profileImage: String = profileImage
-        protected set
 
     @Column(nullable = false)
     var email: String = email
@@ -37,10 +32,6 @@ class UserDetail(
     @Column(name = "social_id", nullable = false)
     var socialId: String = socialId
         protected set
-
-    fun updateProfileImage(newProfileImage: String) {
-        profileImage = newProfileImage
-    }
 
     fun updateEmail(newEmail: String) {
         email = newEmail
