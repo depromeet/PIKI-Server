@@ -83,7 +83,7 @@ class HttpPageFetcher : PageFetcher {
             try {
                 InetAddress.getAllByName(host)
             } catch (e: java.net.UnknownHostException) {
-                log.warn("link fetch unknown host url={}", link.safeLogString())
+                log.info("link fetch unknown host url={}", link.safeLogString())
                 throw PageFetchException.upstreamError(e)
             }
         val anyInternal =
@@ -97,7 +97,7 @@ class HttpPageFetcher : PageFetcher {
                     addr.hostAddress == "169.254.169.254"
             }
         if (anyInternal) {
-            log.warn("[SSRF] blocked: internal address resolved url={}", link.safeLogString())
+            log.error("[SSRF] blocked: internal address resolved url={}", link.safeLogString())
             throw PageFetchException.blockedHost()
         }
     }

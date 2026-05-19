@@ -52,7 +52,7 @@ class JwtProvider(
                 userId = UUID.fromString(claims.subject),
                 identityType = IdentityType.valueOf(rawRole),
             )
-        }.onFailure { logger.debug("ACCESS JWT 파싱 실패: {}", it.message) }
+        }.onFailure { logger.info("ACCESS JWT 파싱 실패: {}", it.message) }
             .getOrNull()
 
     fun parseRefreshToken(token: String): UUID? =
@@ -64,7 +64,7 @@ class JwtProvider(
                 "JWT type mismatch: expected=refresh, actual=${rawType ?: "<missing>"}"
             }
             UUID.fromString(claims.subject)
-        }.onFailure { logger.debug("REFRESH JWT 파싱 실패: {}", it.message) }
+        }.onFailure { logger.info("REFRESH JWT 파싱 실패: {}", it.message) }
             .getOrNull()
 
     fun validateToken(token: String): Boolean = runCatching { parseClaims(token) }.isSuccess

@@ -14,7 +14,7 @@ class GlobalExceptionHandler {
 
     @ExceptionHandler(BaseException::class)
     fun handleBaseException(e: BaseException): ResponseEntity<ApiResponseBody<Nothing>> {
-        log.warn("[{}] {}", e.javaClass.simpleName, e.message, e)
+        log.info("[{}] {}", e.javaClass.simpleName, e.message)
         val status = if (e is HttpMappable) e.httpStatus else HttpStatus.INTERNAL_SERVER_ERROR
         val category = if (e is HttpMappable) e.category else ErrorCategory.SERVER_ERROR
         return ResponseEntity
@@ -31,7 +31,7 @@ class GlobalExceptionHandler {
             first
                 ?.let { "${it.field}: ${it.defaultMessage ?: "유효하지 않은 값입니다."}" }
                 ?: "요청 본문 검증 실패"
-        log.warn("[ValidationException] {}", e.bindingResult.fieldErrors)
+        log.info("[ValidationException] {}", e.bindingResult.fieldErrors)
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
             .body(ApiResponseBody.fail(ErrorCategory.INVALID_INPUT, HttpStatus.BAD_REQUEST, detail))
@@ -39,7 +39,7 @@ class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException::class)
     fun handleIllegalArgument(e: IllegalArgumentException): ResponseEntity<ApiResponseBody<Nothing>> {
-        log.warn("[IllegalArgumentException] {}", e.message)
+        log.info("[IllegalArgumentException] {}", e.message)
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
             .body(ApiResponseBody.fail(ErrorCategory.INVALID_INPUT, HttpStatus.BAD_REQUEST, e.message))
