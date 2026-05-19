@@ -78,6 +78,7 @@ class JwtProvider(
         val now = Date()
         return Jwts
             .builder()
+            .id(UUID.randomUUID().toString())
             .subject(userId.toString())
             .claim(CLAIM_TYPE, type.claimValue)
             .issuedAt(now)
