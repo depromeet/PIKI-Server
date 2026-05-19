@@ -44,7 +44,7 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
     private fun createGuest(): Pair<String, String> {
         val result =
             mockMvc()
-                .perform(post("/auth/guest").contentType(MediaType.APPLICATION_JSON))
+                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
                 .andReturn()
         val json = objectMapper.readTree(result.response.contentAsString)
         return json.at("/data/accessToken").asText() to json.at("/data/refreshToken").asText()
@@ -68,7 +68,7 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
                     .readTree(
                         mockMvc
                             .perform(
-                                post("/auth/token/refresh")
+                                post("/api/v1/auth/token/refresh")
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(oldBody),
                             ).andExpect(status().isOk)
@@ -80,7 +80,7 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
 
             mockMvc
                 .perform(
-                    post("/auth/token/refresh")
+                    post("/api/v1/auth/token/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(oldBody),
                 ).andExpect(status().isUnauthorized)
@@ -88,7 +88,7 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
 
             mockMvc
                 .perform(
-                    post("/auth/token/refresh")
+                    post("/api/v1/auth/token/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(mapOf("refreshToken" to newRefreshToken))),
                 ).andExpect(status().isOk)
@@ -107,14 +107,14 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
         try {
             mockMvc
                 .perform(
-                    post("/auth/logout")
+                    post("/api/v1/auth/logout")
                         .contentType(MediaType.APPLICATION_JSON)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer $accessToken"),
                 ).andExpect(status().isOk)
 
             mockMvc
                 .perform(
-                    post("/auth/token/refresh")
+                    post("/api/v1/auth/token/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(mapOf("refreshToken" to refreshToken))),
                 ).andExpect(status().isUnauthorized)

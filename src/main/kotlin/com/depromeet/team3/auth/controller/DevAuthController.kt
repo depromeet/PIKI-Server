@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController
 
 @Profile("dev", "local")
 @RestController
-@RequestMapping("/dev")
+@RequestMapping("/api/v1/dev")
 class DevAuthController(
     private val authService: AuthService,
 ) : DevAuthApi {

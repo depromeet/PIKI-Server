@@ -27,12 +27,14 @@ class SecurityConfig {
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
                 auth
-                    .requestMatchers(HttpMethod.POST, "/auth/guest")
+                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/guest")
                     .permitAll()
-                    .requestMatchers(HttpMethod.POST, "/auth/token/refresh")
+                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/token/refresh")
                     .permitAll()
-                    .requestMatchers(HttpMethod.POST, "/auth/logout")
+                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout")
                     .authenticated()
+                    .requestMatchers("/api/v1/dev/**")
+                    .hasAuthority(IdentityType.GUEST.name)
                     .requestMatchers("/swagger-ui/**", "/v3/api-docs/**")
                     .permitAll()
                     .requestMatchers("/api/v1/wishlists/**")

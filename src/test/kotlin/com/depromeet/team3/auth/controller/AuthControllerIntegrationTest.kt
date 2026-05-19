@@ -32,7 +32,7 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
     @Test
     fun `POST auth guest - 201 과 accessToken, refreshToken 이 응답에 포함된다`() {
         mockMvc()
-            .perform(post("/auth/guest").contentType(MediaType.APPLICATION_JSON))
+            .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.status").value(201))
             .andExpect(jsonPath("$.code").value("CREATED"))
@@ -44,7 +44,7 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
     fun `POST auth token refresh - 유효한 refreshToken 으로 새 토큰 쌍이 발급된다`() {
         val guestResult =
             mockMvc()
-                .perform(post("/auth/guest").contentType(MediaType.APPLICATION_JSON))
+                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
                 .andReturn()
         val refreshToken =
             objectMapper
@@ -55,7 +55,7 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
         val body = objectMapper.writeValueAsString(mapOf("refreshToken" to refreshToken))
         mockMvc()
             .perform(
-                post("/auth/token/refresh")
+                post("/api/v1/auth/token/refresh")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body),
             ).andExpect(status().isOk)
@@ -69,7 +69,7 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
         val body = objectMapper.writeValueAsString(mapOf("refreshToken" to "invalid.token.value"))
         mockMvc()
             .perform(
-                post("/auth/token/refresh")
+                post("/api/v1/auth/token/refresh")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body),
             ).andExpect(status().isUnauthorized)
@@ -82,7 +82,7 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
         val body = objectMapper.writeValueAsString(mapOf("refreshToken" to ""))
         mockMvc()
             .perform(
-                post("/auth/token/refresh")
+                post("/api/v1/auth/token/refresh")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body),
             ).andExpect(status().isBadRequest)
@@ -93,7 +93,7 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
     fun `POST auth logout - 인증된 사용자가 로그아웃하면 200 이 반환된다`() {
         val guestResult =
             mockMvc()
-                .perform(post("/auth/guest").contentType(MediaType.APPLICATION_JSON))
+                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
                 .andReturn()
         val accessToken =
             objectMapper
@@ -103,7 +103,7 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
 
         mockMvc()
             .perform(
-                post("/auth/logout")
+                post("/api/v1/auth/logout")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer $accessToken"),
             ).andExpect(status().isOk)
@@ -113,7 +113,7 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
     @Test
     fun `POST auth logout - Authorization 헤더 없으면 401 이 반환된다`() {
         mockMvc()
-            .perform(post("/auth/logout").contentType(MediaType.APPLICATION_JSON))
+            .perform(post("/api/v1/auth/logout").contentType(MediaType.APPLICATION_JSON))
             .andExpect(status().isUnauthorized)
     }
 }
