@@ -12,10 +12,11 @@ import kotlin.random.Random
  * 재시도 여부 판단을 예외 타입이 아니라 [GeminiApiException.category] 에 위임하므로
  * spring-retry 의 타입 기반 `@Retryable` 보다 분류 한 곳(GeminiApiException)에 모인다.
  *
- * [sleep] 을 주입 가능하게 둬, 재시도 횟수·분류 로직을 실제 대기 없이 단위 테스트할 수 있다.
+ * 재시도 횟수·백오프는 [GeminiProperties.Retry] 로 외부 주입한다 — maxAttempts 가 곧
+ * billed API 호출 상한이라 운영에서 비용·quota 에 맞춰 조정할 수 있어야 하기 때문이다.
  */
 class GeminiRetry(
-    private val sleep: (Long) -> Unit = { Thread.sleep(it) },
+    private val config: GeminiProperties.Retry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -25,16 +26,16 @@ class GeminiRetry(
             try {
                 return block()
             } catch (e: GeminiApiException) {
-                if (e.category != ErrorCategory.RETRYABLE || attempt >= MAX_ATTEMPTS) throw e
+                if (e.category != ErrorCategory.RETRYABLE || attempt >= config.maxAttempts) throw e
                 val delayMs = backoffMillis(attempt)
                 log.warn(
                     "Gemini 호출 재시도 {}/{} — {}ms 후 ({})",
                     attempt,
-                    MAX_ATTEMPTS - 1,
+                    config.maxAttempts - 1,
                     delayMs,
                     e.message,
                 )
-                sleep(delayMs)
+                Thread.sleep(delayMs)
                 attempt++
             }
         }
@@ -43,15 +44,8 @@ class GeminiRetry(
     // 지수 백오프 + full jitter: [0, min(initial * 2^(attempt-1), max)] 범위의 난수.
     // jitter 는 동시에 실패한 다수 요청이 같은 시점에 재시도하며 몰리는 thundering herd 를 막는다.
     private fun backoffMillis(attempt: Int): Long {
-        val exponential = INITIAL_DELAY_MS shl (attempt - 1)
-        val capped = minOf(exponential, MAX_DELAY_MS)
+        val exponential = config.initialDelayMs shl (attempt - 1)
+        val capped = minOf(exponential, config.maxDelayMs)
         return Random.nextLong(capped + 1)
-    }
-
-    companion object {
-        // 첫 호출 + 재시도 2회 = 최대 3회 시도.
-        private const val MAX_ATTEMPTS = 3
-        private const val INITIAL_DELAY_MS = 1_000L
-        private const val MAX_DELAY_MS = 8_000L
     }
 }

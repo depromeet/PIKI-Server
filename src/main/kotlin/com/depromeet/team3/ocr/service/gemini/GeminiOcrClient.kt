@@ -22,7 +22,7 @@ class GeminiOcrClient(
     private val objectMapper: ObjectMapper,
     private val geminiProperties: GeminiProperties,
 ) : OcrClient {
-    private val geminiRetry = GeminiRetry()
+    private val geminiRetry = GeminiRetry(geminiProperties.retry)
 
     private val restClient = RestClient
         .builder()

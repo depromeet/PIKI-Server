@@ -23,7 +23,7 @@ class GeminiProductExtractor(
 ) : ProductExtractor {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    private val geminiRetry = GeminiRetry()
+    private val geminiRetry = GeminiRetry(geminiProperties.retry)
 
     private val restClient =
         RestClient

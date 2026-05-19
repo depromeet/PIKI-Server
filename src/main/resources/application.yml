@@ -29,6 +29,11 @@ gemini:
   api-key: ${GEMINI_API_KEY:}
   # preview 모델은 2 주 사전공지 후 deprecate 정책이라 운영 안정성을 위해 GA 모델 사용.
   model: ${GEMINI_MODEL:gemini-2.5-flash}
+  retry:
+    # max-attempts 는 한 요청이 유발할 수 있는 billed API 호출 횟수 상한. 비용·quota 보고 조정.
+    max-attempts: ${GEMINI_RETRY_MAX_ATTEMPTS:3}
+    initial-delay-ms: ${GEMINI_RETRY_INITIAL_DELAY_MS:1000}
+    max-delay-ms: ${GEMINI_RETRY_MAX_DELAY_MS:8000}
 
 springdoc:
   api-docs:
