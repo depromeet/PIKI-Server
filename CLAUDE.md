@@ -196,6 +196,7 @@ until docker info > /dev/null 2>&1; do sleep 2; done
 
 ### 규칙
 - 외부 호출 경계는 **프로그래머블 stub**(`@TestConfiguration` + 빈 교체) 으로 격리한다. 인터페이스(`ProductExtractor`)에 stub 구현(`StubProductExtractor`)을 만들어 빈으로 등록하고, stub 의 응답을 람다로 받아 매 테스트가 시나리오별로 교체한다.
+- **stub 빈에는 `@Primary` 를 붙인다.** 운영 `@Component` 빈과 타입이 같아 주입 후보가 2개가 되는데, `@Primary` 로 stub 우선을 명시한다. 빈 이름과 주입 지점 파라미터명이 우연히 일치하는 데 기대면 파라미터명 리팩터링 시 격리가 조용히 깨진다 — `@Primary` 는 그 의존을 끊는다.
 - **stub 의 default 람다는 throw 로 둔다.** 명시 세팅을 빠뜨리면 호출 시점에 즉시 `IllegalStateException` 으로 깨져 "이전 테스트의 build 가 살아남는" 함정을 차단한다. stub 을 호출하지 않는 테스트는 영향 없다.
   ```kotlin
   class StubProductExtractor : ProductExtractor {
