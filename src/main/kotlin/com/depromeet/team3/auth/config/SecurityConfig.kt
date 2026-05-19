@@ -33,9 +33,6 @@ class SecurityConfig {
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/auth/logout")
                     .authenticated()
-                    // dev/local 프로파일에서만 빈이 등록되므로 prod 에서는 404 로 막힌다
-                    .requestMatchers("/dev/**")
-                    .permitAll()
                     .requestMatchers("/swagger-ui/**", "/v3/api-docs/**")
                     .permitAll()
                     .requestMatchers("/api/v1/wishlists/**")

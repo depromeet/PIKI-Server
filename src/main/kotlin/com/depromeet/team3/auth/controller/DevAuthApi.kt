@@ -14,14 +14,14 @@ import org.springframework.http.MediaType
 @Tag(name = "Dev", description = "개발·테스트 전용 API (운영 환경 비활성화)")
 interface DevAuthApi {
     @Operation(
-        summary = "개발용 유저 생성",
-        description = "OAuth 없이 GUEST 또는 MEMBER User 를 생성하고 JWT 토큰 쌍을 발급한다. dev 프로파일에서만 활성화된다.",
+        summary = "개발용 MEMBER 생성",
+        description = "OAuth 없이 MEMBER User 를 생성하고 JWT 토큰 쌍을 발급한다. GUEST 토큰으로 호출해야 한다. dev/local 프로파일에서만 활성화된다.",
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "201",
-                description = "유저 생성 성공",
+                description = "MEMBER 생성 성공",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -31,7 +31,7 @@ interface DevAuthApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "MEMBER 인데 nickname 미입력 또는 닉네임 형식 오류",
+                description = "닉네임 미입력 또는 형식 오류",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
