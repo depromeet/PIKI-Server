@@ -75,7 +75,7 @@ class TournamentApiExamples(
                                         history =
                                             listOf(
                                                 TournamentHistoryInfoResponse(
-                                                    currentRound = 4,
+                                                    currentRound = 2,
                                                     firstTournamentItemId = 1,
                                                     secondTournamentItemId = 2,
                                                     selectedTournamentItemId = 1,
