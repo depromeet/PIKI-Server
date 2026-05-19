@@ -4,12 +4,14 @@ import com.depromeet.team3.common.response.ApiResponseBody
 import com.depromeet.team3.wishlist.controller.dto.WishlistRegisterRequest
 import com.depromeet.team3.wishlist.controller.dto.WishlistRegisterResponse
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.http.MediaType
+import java.util.UUID
 
 @Tag(name = "Wishlist", description = "위시리스트 등록/조회 API")
 interface WishlistApi {
@@ -54,5 +56,8 @@ interface WishlistApi {
             ),
         ],
     )
-    fun register(request: WishlistRegisterRequest): ApiResponseBody<WishlistRegisterResponse>
+    fun register(
+        @Parameter(hidden = true) userId: UUID,
+        request: WishlistRegisterRequest,
+    ): ApiResponseBody<WishlistRegisterResponse>
 }
