@@ -2,6 +2,7 @@ package com.depromeet.team3.auth.filter
 
 import com.depromeet.team3.auth.infrastructure.jwt.JwtProperties
 import com.depromeet.team3.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.team3.user.domain.IdentityType
 import org.springframework.http.HttpHeaders
 import org.springframework.mock.web.MockFilterChain
 import org.springframework.mock.web.MockHttpServletRequest
@@ -32,7 +33,7 @@ class JwtAuthenticationFilterTest {
     @Test
     fun `유효한 access token 으로 호출하면 SecurityContext 에 userId 가 principal 로 박힌다`() {
         val userId = UUID.randomUUID()
-        val token = jwtProvider.generateAccessToken(userId)
+        val token = jwtProvider.generateAccessToken(userId, IdentityType.GUEST)
         val request =
             MockHttpServletRequest().apply {
                 addHeader(HttpHeaders.AUTHORIZATION, "Bearer $token")
@@ -97,7 +98,7 @@ class JwtAuthenticationFilterTest {
                     refreshTokenExpirySeconds = 1_209_600,
                 ),
             )
-        val token = otherProvider.generateAccessToken(UUID.randomUUID())
+        val token = otherProvider.generateAccessToken(UUID.randomUUID(), IdentityType.GUEST)
         val request =
             MockHttpServletRequest().apply {
                 addHeader(HttpHeaders.AUTHORIZATION, "Bearer $token")

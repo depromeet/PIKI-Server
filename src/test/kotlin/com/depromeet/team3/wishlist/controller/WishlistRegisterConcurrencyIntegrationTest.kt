@@ -1,14 +1,19 @@
 package com.depromeet.team3.wishlist.controller
 
+import com.depromeet.team3.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.team3.product.domain.ProductSnapshot
 import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.support.StubProductExtractor
 import com.depromeet.team3.support.uuidToBytes
+import com.depromeet.team3.user.domain.IdentityType
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
@@ -33,9 +38,17 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
 
+    @Autowired
+    private lateinit var jwtProvider: JwtProvider
+
     @Test
     fun `같은 유저와 URL 로 동시 두 요청이 들어오면 한 쪽은 201, 다른 쪽은 409 로 응답된다`() {
-        val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(
+                    webApplicationContext,
+                ).apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
         val url = "https://shop.example.com/products/race-${UUID.randomUUID()}"
         val userId = UUID.randomUUID()
         val userBytes = uuidToBytes(userId)
@@ -45,11 +58,12 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
             "INSERT INTO user (id, nickname, identity_type, created_at, updated_at) VALUES (?, ?, ?, NOW(6), NOW(6))",
             userBytes,
             "테스트유저",
-            "GUEST",
+            "MEMBER",
         )
 
         try {
-            val body = objectMapper.writeValueAsString(mapOf("url" to url, "userId" to userId))
+            val body = objectMapper.writeValueAsString(mapOf("url" to url))
+            val authHeader = "Bearer ${jwtProvider.generateAccessToken(userId, IdentityType.MEMBER)}"
             stubExtractor.build = { link -> ProductSnapshot(link = link, name = "race 상품") }
 
             // 2 단계 래치로 동시 출발을 강제한다. 한 단계 래치만 쓰면 worker 가 await 에 도달하기
@@ -67,6 +81,7 @@ class WishlistRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
                             .perform(
                                 post("/api/v1/wishlists")
                                     .contentType(MediaType.APPLICATION_JSON)
+                                    .header(HttpHeaders.AUTHORIZATION, authHeader)
                                     .content(body),
                             ).andReturn()
                             .response.status
