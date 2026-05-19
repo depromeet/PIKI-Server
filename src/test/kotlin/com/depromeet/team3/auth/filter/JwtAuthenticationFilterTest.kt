@@ -13,6 +13,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class JwtAuthenticationFilterTest {
     private val jwtProvider =
@@ -41,7 +42,10 @@ class JwtAuthenticationFilterTest {
 
         filter.doFilter(request, MockHttpServletResponse(), MockFilterChain())
 
-        assertEquals(userId, SecurityContextHolder.getContext().authentication?.principal)
+        val authentication = SecurityContextHolder.getContext().authentication
+        assertEquals(userId, authentication?.principal)
+        val authorities = authentication?.authorities?.map { it.authority }.orEmpty()
+        assertTrue(IdentityType.GUEST.name in authorities)
     }
 
     @Test

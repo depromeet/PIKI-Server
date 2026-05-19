@@ -4,6 +4,7 @@ import com.depromeet.team3.user.domain.IdentityType
 import com.depromeet.team3.user.domain.User
 import com.depromeet.team3.user.domain.UserException
 import com.depromeet.team3.user.repository.UserRepository
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -71,9 +72,13 @@ class UserService(
         if (userRepository.existsByNickname(nickname)) throw UserException.duplicateNickname(nickname)
         val id = UUID.randomUUID()
         val profileImage = dicebearUrl(id)
-        return userRepository.save(
-            User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.MEMBER),
-        )
+        return try {
+            userRepository.save(
+                User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.MEMBER),
+            )
+        } catch (e: DataIntegrityViolationException) {
+            throw UserException.duplicateNickname(nickname)
+        }
     }
 
     @Transactional(readOnly = true)
@@ -86,6 +91,9 @@ class UserService(
     ): User {
         val user = findById(userId)
         user.deletedAt?.let { throw UserException.deletedUser(userId) }
+        if (user.nickname != newNickname && userRepository.existsByNickname(newNickname)) {
+            throw UserException.duplicateNickname(newNickname)
+        }
         user.updateNickname(newNickname)
         return userRepository.save(user)
     }

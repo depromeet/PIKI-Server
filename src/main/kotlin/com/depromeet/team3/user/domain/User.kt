@@ -18,6 +18,11 @@ class User(
     profileImage: String,
     identityType: IdentityType,
 ) : BaseEntity<UUID>() {
+    init {
+        if (nickname.isBlank()) throw UserException.invalidNickname("닉네임은 공백일 수 없습니다.")
+        if (nickname.length > 16) throw UserException.invalidNickname("닉네임은 16자 이하여야 합니다.")
+    }
+
     @Id
     @Column(name = "id", columnDefinition = "BINARY(16)")
     val id: UUID = id
