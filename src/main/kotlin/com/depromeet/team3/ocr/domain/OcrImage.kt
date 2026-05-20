@@ -4,7 +4,7 @@ package com.depromeet.team3.ocr.domain
  * OCR 분석 대상 이미지를 표현하는 값 객체.
  *
  * 빈 바이트 · 미지정 / 미지원 MIME 타입을 [of] 팩토리에서 차단한다.
- * 입력 형식 검증을 도메인 경계에 모아, GeminiOcrExtractor 같은 외부 어댑터는
+ * 입력 형식 검증을 도메인 경계에 모아, GeminiProductImageExtractor 같은 외부 어댑터는
  * 항상 유효한 이미지만 받는다는 것을 시그니처 수준에서 보장한다.
  *
  * 현재는 업로드된 이미지 바이트를 메모리에 그대로 보관한다.

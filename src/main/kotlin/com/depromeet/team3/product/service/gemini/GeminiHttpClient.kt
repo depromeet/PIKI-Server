@@ -15,7 +15,7 @@ import tools.jackson.databind.ObjectMapper
  * + 에러 분류([GeminiApiException.fromResponseError]) + [GeminiGenerateContentResponse.extractText]
  * + result 파싱까지 한 곳에서 처리한다.
  *
- * 두 추출기(`GeminiProductExtractor`, `GeminiOcrExtractor`) 가 자기 Request/Result 타입만
+ * 두 추출기(`GeminiProductLinkExtractor`, `GeminiProductImageExtractor`) 가 자기 Request/Result 타입만
  * 알면 되도록 일반 호출 템플릿을 흡수.
  */
 @Component

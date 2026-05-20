@@ -2,16 +2,16 @@ package com.depromeet.team3.product.service.gemini
 
 import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.product.service.PageFetcher
-import com.depromeet.team3.product.service.ProductExtractor
+import com.depromeet.team3.product.service.ProductLinkExtractor
 import com.depromeet.team3.product.service.ProductSnapshot
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 @Component
-class GeminiProductExtractor(
+class GeminiProductLinkExtractor(
     private val geminiHttpClient: GeminiHttpClient,
     private val pageFetcher: PageFetcher,
-) : ProductExtractor {
+) : ProductLinkExtractor {
     private val log = LoggerFactory.getLogger(javaClass)
 
     override fun extract(link: ProductLink): ProductSnapshot {

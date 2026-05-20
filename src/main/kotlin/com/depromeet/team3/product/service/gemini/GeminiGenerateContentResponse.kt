@@ -8,7 +8,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
  * Gemini API 는 범용적으로 설계되어 응답이 항상 중첩 리스트 구조로 옴 — `candidates → content → parts`.
  * 이 프로젝트에서는 후보 1개·텍스트 파트 1개만 사용하므로 [extractText] 가 `firstOrNull` 로 바로 꺼낸다.
  *
- * 두 추출기(`GeminiProductExtractor`, `GeminiOcrExtractor`) 가 같은 wire 모델을 공유한다.
+ * 두 추출기(`GeminiProductLinkExtractor`, `GeminiProductImageExtractor`) 가 같은 wire 모델을 공유한다.
  * `urlContextMetadata` 는 url_context 도구를 쓰는 HTML 추출 흐름에서만 채워지고 OCR 흐름에선 null.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)

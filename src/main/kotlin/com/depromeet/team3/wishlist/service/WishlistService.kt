@@ -1,7 +1,7 @@
 package com.depromeet.team3.wishlist.service
 
 import com.depromeet.team3.product.domain.ProductLink
-import com.depromeet.team3.product.service.ProductExtractor
+import com.depromeet.team3.product.service.ProductLinkExtractor
 import com.depromeet.team3.product.service.ProductSnapshot
 import com.depromeet.team3.wishlist.service.dto.WishRegisterResult
 import org.slf4j.LoggerFactory
@@ -10,7 +10,7 @@ import java.util.UUID
 
 @Service
 class WishlistService(
-    private val productExtractor: ProductExtractor,
+    private val productLinkExtractor: ProductLinkExtractor,
     private val wishPersistenceService: WishPersistenceService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -29,7 +29,7 @@ class WishlistService(
 
     private fun extractWithLatencyLog(link: ProductLink): ProductSnapshot {
         val started = System.nanoTime()
-        val snapshot = productExtractor.extract(link)
+        val snapshot = productLinkExtractor.extract(link)
         val elapsedMs = (System.nanoTime() - started) / 1_000_000
         log.info("extract latency: total={}ms url={}", elapsedMs, link.safeLogString())
         return snapshot
