@@ -9,6 +9,10 @@ import java.util.Date
 import java.util.UUID
 import javax.crypto.SecretKey
 
+private const val CLAIM_TYPE = "type"
+private const val MILLIS_PER_SECOND = 1_000L
+private val logger = LoggerFactory.getLogger(JwtProvider::class.java)
+
 @Component
 class JwtProvider(
     private val jwtProperties: JwtProperties,
@@ -70,9 +74,4 @@ class JwtProvider(
             .parseSignedClaims(token)
             .payload
 
-    companion object {
-        private const val CLAIM_TYPE = "type"
-        private const val MILLIS_PER_SECOND = 1_000L
-        private val logger = LoggerFactory.getLogger(JwtProvider::class.java)
-    }
 }
