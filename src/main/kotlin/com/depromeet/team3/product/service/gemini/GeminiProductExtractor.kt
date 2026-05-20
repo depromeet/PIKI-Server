@@ -98,8 +98,9 @@ class GeminiProductExtractor(
     companion object {
         private const val CONNECT_TIMEOUT_MS = 5_000
 
-        // LLM 응답은 수십 초까지 갈 수 있어 넉넉하게 설정.
-        private const val READ_TIMEOUT_MS = 60_000
+        // LLM 응답이 길어질 수 있어 넉넉히 두되, 1 분 안에 재시도까지 끝낼 수 있도록 30 초로 제한.
+        // GeminiOcrClient 도 같은 30 초.
+        private const val READ_TIMEOUT_MS = 30_000
 
         // API 키는 access log 에 남지 않도록 쿼리 대신 헤더로 전달.
         // https://ai.google.dev/gemini-api/docs/api-key#provide-api-key-explicitly
