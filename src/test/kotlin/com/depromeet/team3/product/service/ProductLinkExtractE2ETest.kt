@@ -2,7 +2,7 @@ package com.depromeet.team3.product.service
 
 import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.product.service.gemini.GeminiHttpClient
-import com.depromeet.team3.product.service.gemini.GeminiProductExtractor
+import com.depromeet.team3.product.service.gemini.GeminiProductLinkExtractor
 import com.depromeet.team3.product.service.gemini.GeminiProperties
 import com.depromeet.team3.product.service.http.HttpPageFetcher
 import org.junit.jupiter.api.Disabled
@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
  * GEMINI_API_KEY 가 OS env 또는 .env 에 있다고 가정한다.
  */
 @Disabled("실제 Gemini API 호출 + 외부 쇼핑몰 fetch. 측정 필요 시 수동으로 enable 후 실행.")
-class ProductExtractE2ETest {
+class ProductLinkExtractE2ETest {
     private val pageFetcher = HttpPageFetcher()
     private val objectMapper = jacksonObjectMapper()
     private val properties =
@@ -28,7 +28,7 @@ class ProductExtractE2ETest {
         )
     private val httpClient = GeminiHttpClient(properties, objectMapper)
     private val extractor =
-        GeminiProductExtractor(
+        GeminiProductLinkExtractor(
             geminiHttpClient = httpClient,
             pageFetcher = pageFetcher,
         )

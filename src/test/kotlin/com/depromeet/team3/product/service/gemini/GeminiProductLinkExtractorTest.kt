@@ -16,9 +16,9 @@ import kotlin.test.assertNotNull
  * GEMINI_API_KEY 가 환경에 있다고 가정한다.
  */
 @Disabled("실제 Gemini API 호출. 검증 필요 시 수동으로 enable 후 실행.")
-class GeminiProductExtractorTest : IntegrationTestSupport() {
+class GeminiProductLinkExtractorTest : IntegrationTestSupport() {
     @Autowired
-    lateinit var extractor: GeminiProductExtractor
+    lateinit var extractor: GeminiProductLinkExtractor
 
     @Test
     @Timeout(value = 90, unit = TimeUnit.SECONDS)

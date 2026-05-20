@@ -3,7 +3,7 @@ package com.depromeet.team3.ocr.controller
 import com.depromeet.team3.common.domain.Product
 import com.depromeet.team3.product.service.gemini.GeminiApiException
 import com.depromeet.team3.support.IntegrationTestSupport
-import com.depromeet.team3.support.StubOcrExtractor
+import com.depromeet.team3.support.StubProductImageExtractor
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.mock.web.MockMultipartFile
@@ -19,12 +19,12 @@ class OcrControllerIntegrationTest : IntegrationTestSupport() {
     private lateinit var webApplicationContext: WebApplicationContext
 
     @Autowired
-    private lateinit var stubOcrExtractor: StubOcrExtractor
+    private lateinit var stubProductImageExtractor: StubProductImageExtractor
 
     @Test
     fun `이미지를 올리면 200 과 함께 추출 결과가 contract 모양으로 응답된다`() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
-        stubOcrExtractor.build = {
+        stubProductImageExtractor.build = {
             Product(name = "나이키 에어포스", price = 99_000, category = null)
         }
         val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
@@ -68,7 +68,7 @@ class OcrControllerIntegrationTest : IntegrationTestSupport() {
     @Test
     fun `Gemini 호출이 실패하면 502 BAD_GATEWAY 가 반환된다`() {
         val mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
-        stubOcrExtractor.build = {
+        stubProductImageExtractor.build = {
             throw GeminiApiException.upstreamError(RuntimeException("connection timeout"))
         }
         val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
