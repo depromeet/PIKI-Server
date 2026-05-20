@@ -1,6 +1,7 @@
 package com.depromeet.team3.auth.infrastructure.oauth.google
 
 import com.depromeet.team3.auth.infrastructure.oauth.OAuthClient
+import com.depromeet.team3.auth.infrastructure.oauth.OAuthParams
 import com.depromeet.team3.auth.infrastructure.oauth.OAuthProvider
 import com.depromeet.team3.auth.infrastructure.oauth.OAuthUserInfo
 import com.depromeet.team3.auth.infrastructure.oauth.google.dto.GoogleTokenResponse
@@ -48,11 +49,11 @@ class GoogleOAuthClient(
     ): String {
         val params =
             LinkedMultiValueMap<String, String>().apply {
-                add(PARAM_GRANT_TYPE, GRANT_TYPE_AUTHORIZATION_CODE)
-                add(PARAM_CLIENT_ID, googleProperties.clientId)
-                add(PARAM_CLIENT_SECRET, googleProperties.clientSecret)
-                add(PARAM_REDIRECT_URI, redirectUri)
-                add(PARAM_CODE, code)
+                add(OAuthParams.GRANT_TYPE, OAuthParams.GRANT_TYPE_AUTHORIZATION_CODE)
+                add(OAuthParams.CLIENT_ID, googleProperties.clientId)
+                add(OAuthParams.CLIENT_SECRET, googleProperties.clientSecret)
+                add(OAuthParams.REDIRECT_URI, redirectUri)
+                add(OAuthParams.CODE, code)
             }
         val response =
             tokenClient
@@ -81,14 +82,5 @@ class GoogleOAuthClient(
         private const val TOKEN_PATH = "/token"
         private const val USER_INFO_PATH = "/oauth2/v2/userinfo"
         private const val BEARER_PREFIX = "Bearer "
-
-        // OAuth 2.0 (RFC 6749) 표준 form 파라미터. Spring Security 의 OAuth2ParameterNames 와 같은 값이지만
-        // spring-security-oauth2-core 의존성 도입을 피하기 위해 자체 상수로 보관한다.
-        private const val PARAM_GRANT_TYPE = "grant_type"
-        private const val PARAM_CLIENT_ID = "client_id"
-        private const val PARAM_CLIENT_SECRET = "client_secret"
-        private const val PARAM_REDIRECT_URI = "redirect_uri"
-        private const val PARAM_CODE = "code"
-        private const val GRANT_TYPE_AUTHORIZATION_CODE = "authorization_code"
     }
 }
