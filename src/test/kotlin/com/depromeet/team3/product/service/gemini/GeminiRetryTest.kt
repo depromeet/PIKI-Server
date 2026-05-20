@@ -9,7 +9,7 @@ class GeminiRetryTest {
     // initial/max delay 를 0 으로 둬 Thread.sleep(0) 로 실제 대기 없이 재시도 횟수·분류만 검증한다.
     private fun retryWith(maxAttempts: Int) =
         GeminiRetry(
-            GeminiProperties.Retry(maxAttempts = maxAttempts, initialDelayMs = 0, maxDelayMs = 0),
+            GeminiProperties.Retry(maxAttempts = maxAttempts, initialDelayMs = 0),
         )
 
     private val retry = retryWith(maxAttempts = 3)
