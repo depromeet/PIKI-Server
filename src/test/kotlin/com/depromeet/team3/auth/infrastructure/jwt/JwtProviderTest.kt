@@ -1,5 +1,6 @@
 package com.depromeet.team3.auth.infrastructure.jwt
 
+import java.time.Duration
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,8 +11,8 @@ class JwtProviderTest {
     private val properties =
         JwtProperties(
             secret = TEST_SECRET,
-            accessTokenExpirySeconds = 3600,
-            refreshTokenExpirySeconds = 1_209_600,
+            accessTokenExpiry = Duration.ofHours(1),
+            refreshTokenExpiry = Duration.ofDays(14),
         )
     private val jwtProvider = JwtProvider(properties)
 
@@ -52,8 +53,8 @@ class JwtProviderTest {
             JwtProvider(
                 JwtProperties(
                     secret = TEST_SECRET,
-                    accessTokenExpirySeconds = -1,
-                    refreshTokenExpirySeconds = -1,
+                    accessTokenExpiry = Duration.ofSeconds(-1),
+                    refreshTokenExpiry = Duration.ofSeconds(-1),
                 ),
             )
         val token = expiredProvider.generateAccessToken(UUID.randomUUID())
@@ -76,8 +77,8 @@ class JwtProviderTest {
             JwtProvider(
                 JwtProperties(
                     secret = "other-secret-key-must-be-at-least-32-chars!",
-                    accessTokenExpirySeconds = 3600,
-                    refreshTokenExpirySeconds = 1_209_600,
+                    accessTokenExpiry = Duration.ofHours(1),
+                    refreshTokenExpiry = Duration.ofDays(14),
                 ),
             )
         val token = otherProvider.generateAccessToken(UUID.randomUUID())

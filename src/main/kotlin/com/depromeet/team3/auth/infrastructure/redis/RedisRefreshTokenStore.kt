@@ -17,7 +17,7 @@ class RedisRefreshTokenStore(
     ) {
         redisTemplate
             .opsForValue()
-            .set(key(userId), refreshToken, jwtProperties.refreshTokenExpirySeconds, TimeUnit.SECONDS)
+            .set(key(userId), refreshToken, jwtProperties.refreshTokenExpiry.toMillis(), TimeUnit.MILLISECONDS)
     }
 
     override fun get(userId: UUID): String? = redisTemplate.opsForValue().get(key(userId))

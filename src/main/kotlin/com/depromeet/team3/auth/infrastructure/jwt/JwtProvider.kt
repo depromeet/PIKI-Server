@@ -5,12 +5,12 @@ import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import java.time.Duration
 import java.util.Date
 import java.util.UUID
 import javax.crypto.SecretKey
 
 private const val CLAIM_TYPE = "type"
-private const val MILLIS_PER_SECOND = 1_000L
 private val logger = LoggerFactory.getLogger(JwtProvider::class.java)
 
 @Component
@@ -24,10 +24,10 @@ class JwtProvider(
         Keys.hmacShaKeyFor(jwtProperties.secret.toByteArray(Charsets.UTF_8))
 
     fun generateAccessToken(userId: UUID): String =
-        buildToken(userId, TokenType.ACCESS, jwtProperties.accessTokenExpirySeconds)
+        buildToken(userId, TokenType.ACCESS, jwtProperties.accessTokenExpiry)
 
     fun generateRefreshToken(userId: UUID): String =
-        buildToken(userId, TokenType.REFRESH, jwtProperties.refreshTokenExpirySeconds)
+        buildToken(userId, TokenType.REFRESH, jwtProperties.refreshTokenExpiry)
 
     fun parseAccessToken(token: String): UUID? = parseToken(token, TokenType.ACCESS)
 
@@ -36,7 +36,7 @@ class JwtProvider(
     private fun buildToken(
         userId: UUID,
         type: TokenType,
-        expirySeconds: Long,
+        expiry: Duration,
     ): String {
         val now = Date()
         return Jwts
@@ -44,7 +44,7 @@ class JwtProvider(
             .subject(userId.toString())
             .claim(CLAIM_TYPE, type.claimValue)
             .issuedAt(now)
-            .expiration(Date(now.time + expirySeconds * MILLIS_PER_SECOND))
+            .expiration(Date(now.time + expiry.toMillis()))
             .signWith(secretKey)
             .compact()
     }
