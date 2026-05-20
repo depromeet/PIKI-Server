@@ -1,6 +1,7 @@
 package com.depromeet.team3.product.service
 
 import com.depromeet.team3.product.domain.ProductLink
+import com.depromeet.team3.product.service.gemini.GeminiHttpClient
 import com.depromeet.team3.product.service.gemini.GeminiProductExtractor
 import com.depromeet.team3.product.service.gemini.GeminiProperties
 import com.depromeet.team3.product.service.http.HttpPageFetcher
@@ -25,10 +26,10 @@ class ProductExtractE2ETest {
             apiKey = System.getenv("GEMINI_API_KEY"),
             model = "gemini-3-flash-preview",
         )
+    private val httpClient = GeminiHttpClient(properties, objectMapper)
     private val extractor =
         GeminiProductExtractor(
-            objectMapper = objectMapper,
-            geminiProperties = properties,
+            geminiHttpClient = httpClient,
             pageFetcher = pageFetcher,
         )
 

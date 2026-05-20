@@ -4,10 +4,10 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-class GeminiExtractionResponseTest {
+class GeminiGenerateContentResponseTest {
     @Test
     fun `candidates 가 비어 있으면 noTextPart 예외를 던진다`() {
-        val response = GeminiExtractionResponse(candidates = emptyList())
+        val response = GeminiGenerateContentResponse(candidates = emptyList())
 
         assertFailsWith<GeminiApiException> {
             response.extractText()
@@ -17,11 +17,11 @@ class GeminiExtractionResponseTest {
     @Test
     fun `parts 가 비어 있으면 noTextPart 예외를 던진다`() {
         val response =
-            GeminiExtractionResponse(
+            GeminiGenerateContentResponse(
                 candidates =
                     listOf(
-                        GeminiExtractionResponse.Candidate(
-                            content = GeminiExtractionResponse.Content(parts = emptyList()),
+                        GeminiGenerateContentResponse.Candidate(
+                            content = GeminiGenerateContentResponse.Content(parts = emptyList()),
                         ),
                     ),
             )
@@ -34,15 +34,15 @@ class GeminiExtractionResponseTest {
     @Test
     fun `정상 응답은 첫번째 candidate 의 첫번째 part text 를 반환한다`() {
         val response =
-            GeminiExtractionResponse(
+            GeminiGenerateContentResponse(
                 candidates =
                     listOf(
-                        GeminiExtractionResponse.Candidate(
+                        GeminiGenerateContentResponse.Candidate(
                             content =
-                                GeminiExtractionResponse.Content(
+                                GeminiGenerateContentResponse.Content(
                                     parts =
                                         listOf(
-                                            GeminiExtractionResponse.Part(text = """{"isProductPage":true}"""),
+                                            GeminiGenerateContentResponse.Part(text = """{"isProductPage":true}"""),
                                         ),
                                 ),
                         ),
