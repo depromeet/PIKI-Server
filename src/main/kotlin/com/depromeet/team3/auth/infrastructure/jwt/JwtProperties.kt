@@ -1,9 +1,10 @@
 package com.depromeet.team3.auth.infrastructure.jwt
 
-import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Size
+import org.hibernate.validator.constraints.time.DurationMin
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.validation.annotation.Validated
+import java.time.Duration
 
 // secret 은 환경변수에서만 주입한다. default 값을 두면 운영에서 env 가 누락됐을 때
 // 공개된 키로 토큰을 서명하게 되어 위조 가능성이 생긴다.
@@ -16,10 +17,10 @@ import org.springframework.validation.annotation.Validated
 data class JwtProperties(
     @field:Size(min = MIN_SECRET_BYTES, message = "JWT secret 은 $MIN_SECRET_BYTES bytes 이상이어야 한다 (HS256 최소).")
     val secret: String,
-    @field:Min(value = 1, message = "accessTokenExpirySeconds 는 1 이상이어야 한다.")
-    val accessTokenExpirySeconds: Long,
-    @field:Min(value = 1, message = "refreshTokenExpirySeconds 는 1 이상이어야 한다.")
-    val refreshTokenExpirySeconds: Long,
+    @field:DurationMin(seconds = 1, message = "accessTokenExpiry 는 1초 이상이어야 한다.")
+    val accessTokenExpiry: Duration,
+    @field:DurationMin(seconds = 1, message = "refreshTokenExpiry 는 1초 이상이어야 한다.")
+    val refreshTokenExpiry: Duration,
 ) {
     companion object {
         // HS256 의 키 최소 길이 (RFC 7518 §3.2: key MUST be at least 256 bits = 32 bytes).

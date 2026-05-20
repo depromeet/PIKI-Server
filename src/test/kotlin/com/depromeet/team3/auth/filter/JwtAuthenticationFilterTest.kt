@@ -8,6 +8,7 @@ import org.springframework.mock.web.MockFilterChain
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.security.core.context.SecurityContextHolder
+import java.time.Duration
 import java.util.UUID
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -20,8 +21,8 @@ class JwtAuthenticationFilterTest {
         JwtProvider(
             JwtProperties(
                 secret = TEST_SECRET,
-                accessTokenExpirySeconds = 3600,
-                refreshTokenExpirySeconds = 1_209_600,
+                accessTokenExpiry = Duration.ofHours(1),
+                refreshTokenExpiry = Duration.ofDays(14),
             ),
         )
     private val filter = JwtAuthenticationFilter(jwtProvider)
@@ -98,8 +99,8 @@ class JwtAuthenticationFilterTest {
             JwtProvider(
                 JwtProperties(
                     secret = OTHER_SECRET,
-                    accessTokenExpirySeconds = 3600,
-                    refreshTokenExpirySeconds = 1_209_600,
+                    accessTokenExpiry = Duration.ofHours(1),
+                    refreshTokenExpiry = Duration.ofDays(14),
                 ),
             )
         val token = otherProvider.generateAccessToken(UUID.randomUUID(), IdentityType.GUEST)

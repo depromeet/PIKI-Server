@@ -17,5 +17,5 @@ gemini:
 # main classpath 의 application.yml 을 대체하므로 jwt 섹션은 필요한 모든 필드를 박는다.
 jwt:
   secret: ${JWT_SECRET:test-jwt-secret-key-must-be-at-least-32-chars!}
-  access-token-expiry-seconds: 3600
-  refresh-token-expiry-seconds: 1209600
+  access-token-expiry: 1h
+  refresh-token-expiry: 14d
