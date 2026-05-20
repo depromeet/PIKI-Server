@@ -21,8 +21,9 @@ data class GeminiProperties(
      * billed API 호출 횟수 상한이므로, API 비용·quota 를 고려해 운영에서 직접 조정한다.
      */
     data class Retry(
-        // 기본값 1 = 재시도 없음 (호출 1회). 재시도가 필요하면 운영에서 명시적으로 2 이상으로 올린다.
-        val maxAttempts: Int = 1,
+        // max-attempts 는 총 시도 횟수(초기 호출 + 재시도). 기본 2 = 초기 호출 1회 + 재시도 1회.
+        // 한 요청이 유발하는 billed API 호출 횟수 상한이므로 비용·quota 에 맞춰 운영에서 조정한다.
+        val maxAttempts: Int = 2,
         val initialDelayMs: Long = 1_000,
     ) {
         init {

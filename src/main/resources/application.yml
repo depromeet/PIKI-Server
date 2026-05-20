@@ -30,9 +30,9 @@ gemini:
   # preview 모델은 2 주 사전공지 후 deprecate 정책이라 운영 안정성을 위해 GA 모델 사용.
   model: ${GEMINI_MODEL:gemini-2.5-flash}
   retry:
-    # max-attempts 는 한 요청이 유발할 수 있는 billed API 호출 횟수 상한. 기본 1 = 재시도 없음.
-    # 재시도가 필요하면 비용·quota 보고 환경변수로 2 이상으로 올린다.
-    max-attempts: ${GEMINI_RETRY_MAX_ATTEMPTS:1}
+    # max-attempts 는 총 시도 횟수(초기 호출 + 재시도). 기본 2 = 초기 호출 1회 + 재시도 1회.
+    # 한 요청이 유발하는 billed API 호출 횟수 상한이므로 비용·quota 에 맞춰 환경변수로 조정.
+    max-attempts: ${GEMINI_RETRY_MAX_ATTEMPTS:2}
     initial-delay-ms: ${GEMINI_RETRY_INITIAL_DELAY_MS:1000}
 
 springdoc:
