@@ -41,11 +41,11 @@ class GeminiRetry(
         }
     }
 
-    // 지수 백오프 + full jitter: [0, min(initial * 2^(attempt-1), max)] 범위의 난수.
+    // 지수 백오프 + full jitter: [0, initial * 2^(attempt-1)] 범위의 난수.
     // jitter 는 동시에 실패한 다수 요청이 같은 시점에 재시도하며 몰리는 thundering herd 를 막는다.
+    // 상한 cap 은 두지 않는다 — max-attempts 가 깊어져(5+) 지수 증가가 부담될 시점에 cap 도 함께 도입한다.
     private fun backoffMillis(attempt: Int): Long {
         val exponential = config.initialDelayMs shl (attempt - 1)
-        val capped = minOf(exponential, config.maxDelayMs)
-        return Random.nextLong(capped + 1)
+        return Random.nextLong(exponential + 1)
     }
 }

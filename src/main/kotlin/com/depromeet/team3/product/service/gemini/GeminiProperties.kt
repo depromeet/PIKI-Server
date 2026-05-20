@@ -21,16 +21,13 @@ data class GeminiProperties(
      * billed API 호출 횟수 상한이므로, API 비용·quota 를 고려해 운영에서 직접 조정한다.
      */
     data class Retry(
-        val maxAttempts: Int = 3,
+        // 기본값 1 = 재시도 없음 (호출 1회). 재시도가 필요하면 운영에서 명시적으로 2 이상으로 올린다.
+        val maxAttempts: Int = 1,
         val initialDelayMs: Long = 1_000,
-        val maxDelayMs: Long = 8_000,
     ) {
         init {
             require(maxAttempts >= 1) { "gemini.retry.max-attempts 는 1 이상이어야 합니다: $maxAttempts" }
             require(initialDelayMs >= 0) { "gemini.retry.initial-delay-ms 는 0 이상이어야 합니다: $initialDelayMs" }
-            require(maxDelayMs >= initialDelayMs) {
-                "gemini.retry.max-delay-ms($maxDelayMs) 는 initial-delay-ms($initialDelayMs) 이상이어야 합니다."
-            }
         }
     }
 }
