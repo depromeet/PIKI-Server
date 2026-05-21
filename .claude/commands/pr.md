@@ -132,7 +132,7 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
      --field-id PVTSSF_lADOARZVGM4BVVRVzhQxyAA \
      --single-select-option-id df73e18b
    ```
-   - PR 을 올린다는 것은 곧 리뷰 대기 상태이므로 `In review` 가 자연스럽다. create 모드는 방금 만든 PR 이라 Status 가 항상 기본값(`Backlog`)이므로 조건 없이 세팅한다 (update 모드 9단계는 기존 Status 를 확인 후 분기).
+   - PR 을 올린다는 것은 곧 리뷰 대기 상태이므로 `In review` 가 자연스럽다. create 모드는 방금 만든 PR 이라 Status 가 항상 기본값(`Backlog`)이므로 조건 없이 세팅한다 (update 모드 10단계는 기존 Status 를 확인 후 분기).
    - ID 의미: project=99 노드 ID, field=Status 필드 ID, option=`In review` 옵션 ID. 보드에서 Status 옵션이 바뀌면 이 ID 들도 갱신 필요.
    - 권한 부족 시 사용자에게 `gh auth refresh -h github.com -s project` 안내 (일회성 디바이스 인증).
 5. PR URL 과 부여된 assignee / 라벨 / Project(Status: In review) 결과를 사용자에게 전달
@@ -162,9 +162,22 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
 8. 확인 후 `gh pr edit --body-file /tmp/pr_body.md` 로 갱신. 제목 변경이 있으면 `--title "새 제목"` 추가.
 9. **CodeRabbit 인라인 리뷰 코멘트 처리** — 이번 변경이 CodeRabbit 리뷰 대응이라면 commit + push 로 끝내지 않는다. 각 review thread 에 reply 를 남겨 **어떤 commit 으로 반영했는지 / reject 한 이유가 무엇인지**가 conversation 에 박혀야 다른 리뷰어가 처리 여부를 헷갈리지 않는다.
 
-   **사람 리뷰어 thread 는 자동 reply 하지 않는다.** author 가 `coderabbitai` 가 아니면 (즉 사람 리뷰면) reply / resolve 둘 다 모델이 건드리지 않는다 — 작성자(`@me`)가 직접 의도·뉘앙스를 담아 답한다. 처리해야 할 thread 가 사람이면 사용자에게 "사람 리뷰 N건 있습니다" 만 알리고 멈춘다.
+   **사람 리뷰어 thread 는 자동 reply 하지 않는다.** author 가 `coderabbitai` 가 아니면 (즉 사람 리뷰면) reply / resolve 둘 다 모델이 건드리지 않는다 — 작성자(`@me`)가 직접 의도·뉘앙스를 담아 답한다. 0번 단계 카운트에서 1건 이상이면 아래 1~3 단계는 모두 건너뛰고 사용자에게 "사람 리뷰 N건 있습니다" 만 알린 뒤 10단계로 넘어간다.
 
    ```bash
+   # 0. 사람 리뷰 thread 카운트 — 1 이상이면 아래 1~3 단계 건너뛴다
+   HUMAN_THREADS=$(gh api graphql -f query='
+     query { repository(owner: "depromeet", name: "PIKI-Server") {
+       pullRequest(number: {N}) {
+         reviewThreads(first: 50) { nodes {
+           comments(first: 1) { nodes { author { login } } }
+         } }
+       }
+     }}' --jq '[.data.repository.pullRequest.reviewThreads.nodes[]
+                | select(.comments.nodes[0].author.login != "coderabbitai")] | length')
+   echo "사람 리뷰 thread: ${HUMAN_THREADS}건"
+   # HUMAN_THREADS > 0 → 아래 1~3 단계 건너뛰고 10단계로
+
    # 1. CodeRabbit thread 조회 — author "coderabbitai" 고정 필터
    gh api graphql -f query='
      query { repository(owner: "depromeet", name: "PIKI-Server") {
@@ -174,9 +187,9 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
            comments(first: 1) { nodes { author { login } body } }
          } }
        }
-     }' --jq '.data.repository.pullRequest.reviewThreads.nodes[]
-              | select(.comments.nodes[0].author.login == "coderabbitai")
-              | {id, isResolved, path, line}'
+     }}' --jq '.data.repository.pullRequest.reviewThreads.nodes[]
+               | select(.comments.nodes[0].author.login == "coderabbitai")
+               | {id, isResolved, path, line}'
 
    # 2. 각 CodeRabbit thread 에 reply
    gh api graphql -f query='
