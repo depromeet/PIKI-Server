@@ -34,9 +34,9 @@ class UserException private constructor(
                 HttpStatus.CONFLICT,
             )
 
-        fun duplicateNickname(nickname: String): UserException =
+        fun duplicateNickname(): UserException =
             UserException(
-                "이미 사용 중인 닉네임입니다. nickname=$nickname",
+                "이미 사용 중인 닉네임입니다.",
                 ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )

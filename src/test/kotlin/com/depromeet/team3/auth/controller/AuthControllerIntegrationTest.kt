@@ -30,7 +30,8 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
             .build()
 
     @Test
-    fun `POST auth guest - 201 과 accessToken, refreshToken 이 응답에 포함된다`() {
+    fun `POST auth guest - 201 과 accessToken, refreshToken, user 가 응답에 포함된다`() {
+        // FE 의 진입 fill 흐름을 위해 user 정보가 응답에 같이 와야 한다. 회귀 가드.
         mockMvc()
             .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
             .andExpect(status().isCreated)
@@ -38,6 +39,10 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.code").value("CREATED"))
             .andExpect(jsonPath("$.data.accessToken").isString)
             .andExpect(jsonPath("$.data.refreshToken").isString)
+            .andExpect(jsonPath("$.data.user.id").isString)
+            .andExpect(jsonPath("$.data.user.nickname").isString)
+            .andExpect(jsonPath("$.data.user.profileImage").isString)
+            .andExpect(jsonPath("$.data.user.identityType").value("GUEST"))
     }
 
     @Test

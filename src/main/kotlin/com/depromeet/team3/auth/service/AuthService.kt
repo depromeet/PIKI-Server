@@ -3,6 +3,7 @@ package com.depromeet.team3.auth.service
 import com.depromeet.team3.auth.exception.AuthException
 import com.depromeet.team3.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.team3.auth.infrastructure.redis.RefreshTokenStore
+import com.depromeet.team3.auth.service.dto.SignupResult
 import com.depromeet.team3.auth.service.dto.TokenPair
 import com.depromeet.team3.user.domain.User
 import com.depromeet.team3.user.service.UserService
@@ -15,14 +16,16 @@ class AuthService(
     private val jwtProvider: JwtProvider,
     private val refreshTokenStore: RefreshTokenStore,
 ) {
-    fun createGuest(): TokenPair {
+    fun createGuest(): SignupResult {
         val user = userService.createGuest()
-        return issueTokenPair(user)
+        val tokenPair = issueTokenPair(user)
+        return SignupResult(tokenPair = tokenPair, user = user)
     }
 
-    fun createMember(nickname: String): TokenPair {
+    fun createMember(nickname: String): SignupResult {
         val user = userService.createMember(nickname)
-        return issueTokenPair(user)
+        val tokenPair = issueTokenPair(user)
+        return SignupResult(tokenPair = tokenPair, user = user)
     }
 
     fun refresh(refreshToken: String): TokenPair {

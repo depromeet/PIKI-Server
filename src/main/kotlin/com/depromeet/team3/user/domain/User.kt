@@ -19,8 +19,7 @@ class User(
     identityType: IdentityType,
 ) : BaseEntity<UUID>() {
     init {
-        if (nickname.isBlank()) throw UserException.invalidNickname("닉네임은 공백일 수 없습니다.")
-        if (nickname.length > 16) throw UserException.invalidNickname("닉네임은 16자 이하여야 합니다.")
+        validateNickname(nickname)
     }
 
     @Id
@@ -51,12 +50,22 @@ class User(
     }
 
     fun updateNickname(newNickname: String) {
-        if (newNickname.isBlank()) throw UserException.invalidNickname("닉네임은 공백일 수 없습니다.")
-        if (newNickname.length > 16) throw UserException.invalidNickname("닉네임은 16자 이하여야 합니다.")
+        validateNickname(newNickname)
         nickname = newNickname
     }
 
     fun softDelete() {
         deletedAt = deletedAt ?: LocalDateTime.now()
+    }
+
+    companion object {
+        const val NICKNAME_MAX_LENGTH = 10
+
+        private fun validateNickname(nickname: String) {
+            if (nickname.isBlank()) throw UserException.invalidNickname("닉네임은 공백일 수 없습니다.")
+            if (nickname.length > NICKNAME_MAX_LENGTH) {
+                throw UserException.invalidNickname("닉네임은 $NICKNAME_MAX_LENGTH 자 이하여야 합니다.")
+            }
+        }
     }
 }

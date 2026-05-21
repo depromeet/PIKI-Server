@@ -24,7 +24,7 @@ class DevAuthController(
     override fun createDevUser(
         @Valid @RequestBody request: DevUserCreateRequest,
     ): ApiResponseBody<GuestCreateResponse> {
-        val tokenPair = authService.createMember(request.nickname)
-        return ApiResponseBody.created(GuestCreateResponse.from(tokenPair))
+        val result = authService.createMember(request.nickname)
+        return ApiResponseBody.created(GuestCreateResponse.from(result.tokenPair, result.user))
     }
 }
