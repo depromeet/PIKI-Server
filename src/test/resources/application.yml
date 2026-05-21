@@ -10,3 +10,12 @@ spring:
 gemini:
   api-key: ${GEMINI_API_KEY:test-dummy-key}
   model: ${GEMINI_MODEL:gemini-2.5-flash}
+
+# 운영 application.yml 은 JWT_SECRET env 를 강제하지만 테스트는 dummy secret 으로
+# 컨텍스트 로딩만 통과시킨다 (HS256 최소 키 길이 32 bytes 충족).
+# 만료 시간은 운영과 동일한 default 값을 명시한다 — test classpath 의 application.yml 이
+# main classpath 의 application.yml 을 대체하므로 jwt 섹션은 필요한 모든 필드를 박는다.
+jwt:
+  secret: ${JWT_SECRET:test-jwt-secret-key-must-be-at-least-32-chars!}
+  access-token-expiry: 1h
+  refresh-token-expiry: 14d

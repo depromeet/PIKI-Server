@@ -1,6 +1,7 @@
 package com.depromeet.team3.support
 
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection
+import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.MySQLContainer
 import org.testcontainers.junit.jupiter.Container
 
@@ -21,4 +22,9 @@ object IntegrationContainers {
             withUsername("team3")
             withPassword("team3")
         }
+
+    @Container
+    @ServiceConnection
+    @JvmStatic
+    val REDIS: GenericContainer<*> = GenericContainer("redis:7.4-alpine").withExposedPorts(6379)
 }

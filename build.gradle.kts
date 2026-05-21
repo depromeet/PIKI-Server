@@ -49,6 +49,15 @@ dependencies {
     // Spring Boot 4.0.5 / Jackson 3 호환 라인. Swagger UI 없이 /v3/api-docs 만 제공 (UI는 Stoplight Elements 사용)
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-api:3.0.3")
 
+    implementation("org.springframework.boot:spring-boot-starter-security")
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
+
+    // JJWT - Jackson 2.x 와 3.x 는 그룹 ID 가 달라 공존 가능 (com.fasterxml vs tools.jackson)
+    val jjwtVersion = "0.13.0"
+    implementation("io.jsonwebtoken:jjwt-api:$jjwtVersion")
+    runtimeOnly("io.jsonwebtoken:jjwt-impl:$jjwtVersion")
+    runtimeOnly("io.jsonwebtoken:jjwt-jackson:$jjwtVersion")
+
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:junit-jupiter")
