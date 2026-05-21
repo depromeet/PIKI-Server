@@ -2,8 +2,6 @@ package com.depromeet.team3.tournament.controller
 
 import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.tournament.repository.TournamentItemJpaRepository
-import com.depromeet.team3.wishlist.domain.Wish
-import com.depromeet.team3.wishlist.repository.WishJpaRepository
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.MediaType
@@ -23,8 +21,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
     @Autowired private lateinit var webApplicationContext: WebApplicationContext
 
     @Autowired private lateinit var objectMapper: ObjectMapper
-
-    @Autowired private lateinit var wishJpaRepository: WishJpaRepository
 
     @Autowired private lateinit var tournamentItemJpaRepository: TournamentItemJpaRepository
 
@@ -48,35 +44,18 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `POST tournaments-id-items 는 소유한 위시를 추가하면 200 을 반환한다`() {
+    fun `POST tournaments-id-items 는 아이템을 추가하면 200 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        val wishIds = saveWishes(userId, 100L, 200L)
 
         mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/items")
                     .header("X-User-Id", userId)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"itemIds":${wishIds.joinToString(",", "[", "]")}}"""),
+                    .content("""{"itemId":100}"""),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
-    }
-
-    @Test
-    fun `POST tournaments-id-items 에서 소유하지 않은 위시이면 403 을 반환한다`() {
-        val mockMvc = buildMockMvc()
-        val tournamentId = createTournament(mockMvc)
-        val otherWishIds = saveWishes(otherUserId, 100L, 200L)
-
-        mockMvc
-            .perform(
-                post("/api/v1/tournaments/$tournamentId/items")
-                    .header("X-User-Id", userId)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"itemIds":${otherWishIds.joinToString(",", "[", "]")}}"""),
-            ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.status").value(403))
     }
 
     @Test
@@ -246,24 +225,20 @@ class TournamentControllerTest : IntegrationTestSupport() {
         return objectMapper.readTree(result.response.contentAsString)["data"]["tournamentId"].asLong()
     }
 
-    private fun saveWishes(
-        owner: UUID,
-        vararg itemIds: Long,
-    ): List<Long> = itemIds.map { itemId -> wishJpaRepository.save(Wish(userId = owner, itemId = itemId)).getId() }
-
     private fun addItemsToTournament(
         mockMvc: MockMvc,
         tournamentId: Long,
         owner: UUID,
         vararg itemIds: Long,
     ) {
-        val wishIds = saveWishes(owner, *itemIds)
-        mockMvc.perform(
-            post("/api/v1/tournaments/$tournamentId/items")
-                .header("X-User-Id", owner)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"itemIds":${wishIds.joinToString(",", "[", "]")}}"""),
-        )
+        itemIds.forEach { itemId ->
+            mockMvc.perform(
+                post("/api/v1/tournaments/$tournamentId/items")
+                    .header("X-User-Id", owner)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"itemId":$itemId}"""),
+            )
+        }
     }
 
     private data class TournamentStart(

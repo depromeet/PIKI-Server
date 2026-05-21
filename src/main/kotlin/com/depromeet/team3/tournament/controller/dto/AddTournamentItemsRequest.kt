@@ -1,15 +1,13 @@
 package com.depromeet.team3.tournament.controller.dto
 
-import com.depromeet.team3.tournament.service.dto.AddTournamentItems
-import jakarta.validation.constraints.Size
+import com.depromeet.team3.tournament.service.dto.AddTournamentItem
 
-data class AddTournamentItemsRequest(
-    @field:Size(min = 2, max = 32)
-    val itemIds: List<Long>,
+data class AddTournamentItemRequest(
+    val itemId: Long,
 ) {
-    fun toAddTournamentItems(tournamentId: Long): AddTournamentItems =
-        AddTournamentItems(
+    fun toAddTournamentItem(tournamentId: Long): AddTournamentItem =
+        AddTournamentItem(
             tournamentId = tournamentId,
-            itemIds = itemIds,
+            itemId = itemId,
         )
 }

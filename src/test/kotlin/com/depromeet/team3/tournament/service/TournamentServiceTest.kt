@@ -9,12 +9,9 @@ import com.depromeet.team3.tournament.domain.TournamentUser
 import com.depromeet.team3.tournament.repository.TournamentItemRepository
 import com.depromeet.team3.tournament.repository.TournamentRepository
 import com.depromeet.team3.tournament.repository.TournamentUserRepository
-import com.depromeet.team3.tournament.service.dto.AddTournamentItems
+import com.depromeet.team3.tournament.service.dto.AddTournamentItem
 import com.depromeet.team3.tournament.service.dto.CreateTournament
 import com.depromeet.team3.tournament.service.dto.RecordMatch
-import com.depromeet.team3.wishlist.domain.Wish
-import com.depromeet.team3.wishlist.repository.WishRepository
-import com.depromeet.team3.wishlist.service.WishException
 import org.junit.jupiter.api.Test
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -47,28 +44,16 @@ class TournamentServiceTest {
         }
     }
 
-    private class TestWishRepository(
-        private val allOwned: Boolean = true,
-    ) : WishRepository {
-        override fun save(wish: Wish): Wish = wish
-
-        override fun countByIdsAndUserId(
-            ids: List<Long>,
-            userId: UUID,
-        ): Long = if (allOwned) ids.size.toLong() else 0L
-    }
-
     private class TestTournamentItemRepository : TournamentItemRepository {
         val items = mutableListOf<TournamentItem>()
         private var idSeq = 1L
 
-        override fun saveAll(items: List<TournamentItem>): List<TournamentItem> =
-            items.map { item ->
-                val id = idSeq++
-                setEntityId(item, id)
-                this.items.add(item)
-                item
-            }
+        override fun save(tournamentItem: TournamentItem): TournamentItem {
+            val id = idSeq++
+            setEntityId(tournamentItem, id)
+            this.items.add(tournamentItem)
+            return tournamentItem
+        }
 
         override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
             items.filter { it.tournamentId == tournamentId }
@@ -117,8 +102,7 @@ class TournamentServiceTest {
     private val itemRepository = TestTournamentItemRepository()
     private val userRepository = TestTournamentUserRepository()
     private val repository = TestTournamentRepository()
-    private val wishRepository = TestWishRepository()
-    private val service = TournamentService(userRepository, repository, itemRepository, wishRepository)
+    private val service = TournamentService(userRepository, repository, itemRepository)
     private val userId = UUID.randomUUID()
     private val otherUserId = UUID.randomUUID()
 
@@ -127,7 +111,7 @@ class TournamentServiceTest {
         name: String = "토너먼트",
     ): Long {
         val tournamentId = service.create(userId, CreateTournament(name))
-        service.addItems(userId, AddTournamentItems(tournamentId, itemIds))
+        itemIds.forEach { service.addItem(userId, AddTournamentItem(tournamentId, it)) }
         service.start(userId, tournamentId)
         return tournamentId
     }
@@ -141,57 +125,38 @@ class TournamentServiceTest {
     }
 
     @Test
-    fun `addItems 는 PENDING 토너먼트에 아이템을 추가한다`() {
+    fun `addItem 은 PENDING 토너먼트에 아이템을 추가한다`() {
         val tournamentId = service.create(userId, CreateTournament("내 토너먼트"))
 
-        service.addItems(userId, AddTournamentItems(tournamentId, (1L..8L).toList()))
+        (1L..8L).forEach { service.addItem(userId, AddTournamentItem(tournamentId, it)) }
 
         assertEquals(8, itemRepository.findAllByTournamentId(tournamentId).size)
     }
 
     @Test
-    fun `addItems 에서 위시 아이템이 요청자의 것이 아니면 예외가 발생한다`() {
-        val serviceWithNoOwnership =
-            TournamentService(userRepository, repository, itemRepository, TestWishRepository(allOwned = false))
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
-
-        assertFailsWith<WishException> {
-            serviceWithNoOwnership.addItems(userId, AddTournamentItems(tournamentId, (1L..4L).toList()))
-        }
-    }
-
-    @Test
-    fun `addItems 에서 PENDING 이 아닌 토너먼트에 추가하면 예외가 발생한다`() {
+    fun `addItem 에서 PENDING 이 아닌 토너먼트에 추가하면 예외가 발생한다`() {
         val tournamentId = createAndStart(listOf(1L, 2L))
 
         assertFailsWith<TournamentException> {
-            service.addItems(userId, AddTournamentItems(tournamentId, listOf(3L, 4L)))
+            service.addItem(userId, AddTournamentItem(tournamentId, 3L))
         }
     }
 
     @Test
-    fun `addItems 에서 요청 내 동일한 itemId 가 중복되면 예외가 발생한다`() {
+    fun `addItem 에서 이미 등록된 itemId 를 다시 추가하면 예외가 발생한다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        service.addItem(userId, AddTournamentItem(tournamentId, 1L))
 
         assertFailsWith<TournamentException> {
-            service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L, 1L, 2L)))
-        }
-    }
-
-    @Test
-    fun `addItems 에서 이미 등록된 itemId 를 다시 추가하면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
-        service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L, 2L)))
-
-        assertFailsWith<TournamentException> {
-            service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L)))
+            service.addItem(userId, AddTournamentItem(tournamentId, 1L))
         }
     }
 
     @Test
     fun `start 는 PENDING 토너먼트를 IN_PROGRESS 로 전환한다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
-        service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L, 2L)))
+        service.addItem(userId, AddTournamentItem(tournamentId, 1L))
+        service.addItem(userId, AddTournamentItem(tournamentId, 2L))
 
         service.start(userId, tournamentId)
 
@@ -201,7 +166,8 @@ class TournamentServiceTest {
     @Test
     fun `start 에서 소유자가 아니면 예외가 발생한다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
-        service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L, 2L)))
+        service.addItem(userId, AddTournamentItem(tournamentId, 1L))
+        service.addItem(userId, AddTournamentItem(tournamentId, 2L))
 
         assertFailsWith<TournamentException> {
             service.start(otherUserId, tournamentId)
@@ -229,7 +195,7 @@ class TournamentServiceTest {
     @Test
     fun `start 에서 아이템이 1개면 예외가 발생한다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
-        service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L)))
+        service.addItem(userId, AddTournamentItem(tournamentId, 1L))
 
         assertFailsWith<TournamentException> {
             service.start(userId, tournamentId)
@@ -239,7 +205,7 @@ class TournamentServiceTest {
     @Test
     fun `start 에서 아이템이 33개면 예외가 발생한다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
-        service.addItems(userId, AddTournamentItems(tournamentId, (1L..33L).toList()))
+        (1L..33L).forEach { service.addItem(userId, AddTournamentItem(tournamentId, it)) }
 
         assertFailsWith<TournamentException> {
             service.start(userId, tournamentId)
@@ -249,7 +215,7 @@ class TournamentServiceTest {
     @Test
     fun `start 에서 아이템이 32개면 정상적으로 시작된다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
-        service.addItems(userId, AddTournamentItems(tournamentId, (1L..32L).toList()))
+        (1L..32L).forEach { service.addItem(userId, AddTournamentItem(tournamentId, it)) }
 
         service.start(userId, tournamentId)
 
@@ -302,7 +268,8 @@ class TournamentServiceTest {
     @Test
     fun `recordMatch 에서 PENDING 토너먼트면 예외가 발생한다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
-        service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L, 2L)))
+        service.addItem(userId, AddTournamentItem(tournamentId, 1L))
+        service.addItem(userId, AddTournamentItem(tournamentId, 2L))
 
         assertFailsWith<TournamentException> {
             service.recordMatch(

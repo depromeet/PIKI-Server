@@ -30,7 +30,7 @@ class TournamentApiExamples(
                         )
                     }
 
-                handlerMethod.binds(TournamentController::addItems) ->
+                handlerMethod.binds(TournamentController::addItem) ->
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.OK,

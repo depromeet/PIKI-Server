@@ -7,12 +7,10 @@ import com.depromeet.team3.tournament.domain.TournamentUser
 import com.depromeet.team3.tournament.repository.TournamentItemRepository
 import com.depromeet.team3.tournament.repository.TournamentRepository
 import com.depromeet.team3.tournament.repository.TournamentUserRepository
-import com.depromeet.team3.tournament.service.dto.AddTournamentItems
+import com.depromeet.team3.tournament.service.dto.AddTournamentItem
 import com.depromeet.team3.tournament.service.dto.CreateTournament
 import com.depromeet.team3.tournament.service.dto.RecordMatch
 import com.depromeet.team3.tournament.service.dto.TournamentInfo
-import com.depromeet.team3.wishlist.repository.WishRepository
-import com.depromeet.team3.wishlist.service.WishException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -22,7 +20,6 @@ class TournamentService(
     private val tournamentUserRepository: TournamentUserRepository,
     private val tournamentRepository: TournamentRepository,
     private val tournamentItemRepository: TournamentItemRepository,
-    private val wishRepository: WishRepository,
 ) {
     @Transactional
     fun create(
@@ -42,9 +39,9 @@ class TournamentService(
     }
 
     @Transactional
-    fun addItems(
+    fun addItem(
         userId: UUID,
-        command: AddTournamentItems,
+        command: AddTournamentItem,
     ) {
         val tournament =
             tournamentRepository.findTournamentById(command.tournamentId)
@@ -52,19 +49,12 @@ class TournamentService(
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
         val existingItemIds =
             tournamentItemRepository
-                .findAllByTournamentId(
-                    command.tournamentId,
-                ).map { it.itemId }
+                .findAllByTournamentId(command.tournamentId)
+                .map { it.itemId }
                 .toSet()
-        val hasDuplicate =
-            command.itemIds.toSet().size != command.itemIds.size || command.itemIds.any { it in existingItemIds }
-        if (hasDuplicate) throw TournamentException.duplicateTournamentItem()
-        val ownedCount = wishRepository.countByIdsAndUserId(command.itemIds, userId)
-        if (ownedCount != command.itemIds.size.toLong()) throw WishException.forbiddenWishItems()
-        tournamentItemRepository.saveAll(
-            command.itemIds.map { itemId ->
-                TournamentItem(tournamentId = command.tournamentId, itemId = itemId, userId = userId)
-            },
+        if (command.itemId in existingItemIds) throw TournamentException.duplicateTournamentItem()
+        tournamentItemRepository.save(
+            TournamentItem(tournamentId = command.tournamentId, itemId = command.itemId, userId = userId),
         )
     }
 

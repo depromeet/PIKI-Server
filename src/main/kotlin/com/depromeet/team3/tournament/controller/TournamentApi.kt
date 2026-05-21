@@ -1,7 +1,7 @@
 package com.depromeet.team3.tournament.controller
 
 import com.depromeet.team3.common.response.ApiResponseBody
-import com.depromeet.team3.tournament.controller.dto.AddTournamentItemsRequest
+import com.depromeet.team3.tournament.controller.dto.AddTournamentItemRequest
 import com.depromeet.team3.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.team3.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.team3.tournament.controller.dto.RecordMatchRequest
@@ -37,7 +37,7 @@ interface TournamentApi {
 
     @Operation(
         summary = "토너먼트 아이템 추가",
-        description = "PENDING 상태의 토너먼트에 위시 아이템을 추가한다.",
+        description = "PENDING 상태의 토너먼트에 위시 아이템을 단건 추가한다.",
     )
     @ApiResponse(
         responseCode = "200",
@@ -49,10 +49,10 @@ interface TournamentApi {
             ),
         ],
     )
-    fun addItems(
+    fun addItem(
         userId: UUID,
         tournamentId: Long,
-        request: AddTournamentItemsRequest,
+        request: AddTournamentItemRequest,
     ): ApiResponseBody<Unit>
 
     @Operation(

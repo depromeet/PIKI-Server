@@ -1,7 +1,7 @@
 package com.depromeet.team3.tournament.controller
 
 import com.depromeet.team3.common.response.ApiResponseBody
-import com.depromeet.team3.tournament.controller.dto.AddTournamentItemsRequest
+import com.depromeet.team3.tournament.controller.dto.AddTournamentItemRequest
 import com.depromeet.team3.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.team3.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.team3.tournament.controller.dto.RecordMatchRequest
@@ -35,12 +35,12 @@ class TournamentController(
     }
 
     @PostMapping("/{tournamentId}/items")
-    override fun addItems(
+    override fun addItem(
         @RequestHeader("X-User-Id") userId: UUID,
         @PathVariable tournamentId: Long,
-        @RequestBody @Valid request: AddTournamentItemsRequest,
+        @RequestBody @Valid request: AddTournamentItemRequest,
     ): ApiResponseBody<Unit> {
-        tournamentService.addItems(userId, request.toAddTournamentItems(tournamentId))
+        tournamentService.addItem(userId, request.toAddTournamentItem(tournamentId))
         return ApiResponseBody.ok()
     }
 

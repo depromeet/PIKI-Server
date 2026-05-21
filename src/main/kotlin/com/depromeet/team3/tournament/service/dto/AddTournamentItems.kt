@@ -1,6 +1,6 @@
 package com.depromeet.team3.tournament.service.dto
 
-data class AddTournamentItems(
+data class AddTournamentItem(
     val tournamentId: Long,
-    val itemIds: List<Long>,
+    val itemId: Long,
 )
