@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
@@ -224,6 +225,62 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 get("/api/v1/tournaments/999999")
+                    .header("X-User-Id", userId),
+            ).andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+    }
+
+    @Test
+    fun `DELETE tournaments-id-items-itemId 는 PENDING 토너먼트에서 아이템을 삭제하고 200 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, 100L, 200L)
+        val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId/items/$itemId")
+                    .header("X-User-Id", userId),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+    }
+
+    @Test
+    fun `DELETE tournaments-id-items-itemId 에서 IN_PROGRESS 토너먼트이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, item1Id) = startTournamentWith2Items(mockMvc)
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId/items/$item1Id")
+                    .header("X-User-Id", userId),
+            ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.status").value(409))
+    }
+
+    @Test
+    fun `DELETE tournaments-id-items-itemId 에서 아이템 추가자가 아니고 소유자도 아니면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, 100L, 200L)
+        val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId/items/$itemId")
+                    .header("X-User-Id", otherUserId),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
+    }
+
+    @Test
+    fun `DELETE tournaments-id-items-itemId 에서 존재하지 않는 아이템이면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId/items/999999")
                     .header("X-User-Id", userId),
             ).andExpect(status().isNotFound)
             .andExpect(jsonPath("$.status").value(404))

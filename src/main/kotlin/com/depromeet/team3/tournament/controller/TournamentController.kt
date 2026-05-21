@@ -9,6 +9,7 @@ import com.depromeet.team3.tournament.controller.dto.TournamentInfoResponse
 import com.depromeet.team3.tournament.service.TournamentService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -41,6 +42,16 @@ class TournamentController(
         @RequestBody @Valid request: AddTournamentItemsRequest,
     ): ApiResponseBody<Unit> {
         tournamentService.addItems(userId, request.toAddTournamentItems(tournamentId))
+        return ApiResponseBody.ok()
+    }
+
+    @DeleteMapping("/{tournamentId}/items/{tournamentItemId}")
+    override fun deleteItem(
+        @RequestHeader("X-User-Id") userId: UUID,
+        @PathVariable tournamentId: Long,
+        @PathVariable tournamentItemId: Long,
+    ): ApiResponseBody<Unit> {
+        tournamentService.deleteItem(userId, tournamentId, tournamentItemId)
         return ApiResponseBody.ok()
     }
 

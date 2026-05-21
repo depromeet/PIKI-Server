@@ -30,6 +30,15 @@ class TournamentApiExamples(
                         )
                     }
 
+                handlerMethod.binds(TournamentController::deleteItem) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "아이템 삭제 성공",
+                            payload = ApiResponseBody.ok<Unit>(),
+                        )
+                    }
+
                 handlerMethod.binds(TournamentController::addItems) ->
                     operation.examples(openApiObjectMapper.delegate) {
                         add(

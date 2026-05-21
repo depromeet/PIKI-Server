@@ -6,4 +6,8 @@ interface TournamentItemRepository {
     fun saveAll(items: List<TournamentItem>): List<TournamentItem>
 
     fun findAllByTournamentId(tournamentId: Long): List<TournamentItem>
+
+    fun findById(id: Long): TournamentItem?
+
+    fun delete(tournamentItem: TournamentItem)
 }

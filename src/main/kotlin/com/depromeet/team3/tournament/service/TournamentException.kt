@@ -67,5 +67,12 @@ class TournamentException private constructor(
                 ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )
+
+        fun notFoundTournamentItem(): TournamentException =
+            TournamentException(
+                "토너먼트 아이템을 찾을 수 없습니다.",
+                ErrorCategory.NOT_FOUND,
+                HttpStatus.NOT_FOUND,
+            )
     }
 }

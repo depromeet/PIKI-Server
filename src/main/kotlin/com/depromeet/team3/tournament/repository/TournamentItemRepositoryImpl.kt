@@ -11,4 +11,8 @@ class TournamentItemRepositoryImpl(
 
     override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
         tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
+
+    override fun findById(id: Long): TournamentItem? = tournamentItemJpaRepository.findById(id).orElse(null)
+
+    override fun delete(tournamentItem: TournamentItem) = tournamentItemJpaRepository.delete(tournamentItem)
 }
