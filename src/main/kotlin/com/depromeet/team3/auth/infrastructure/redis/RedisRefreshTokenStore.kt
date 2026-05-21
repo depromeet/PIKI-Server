@@ -47,7 +47,10 @@ class RedisRefreshTokenStore(
         // -1 은 호출자 입장에선 거부 (false) 와 같지만, 도난 감지 시점을 로깅으로 남긴다.
         // 향후 사용자 알림 hook 의 사전 단계.
         if (result == -1L) {
-            logger.info("refresh token reuse detected — family invalidated. userId={}", userId)
+            // warn 레벨: 시스템 fail 아닌 보안 의심 이벤트. info 보다 가시성 ↑, error 는
+            // alert fatigue 위험 + 시스템 정상이라 의미 안 맞음. PIKI 로그 레벨 정책의
+            // "정상 흐름 아닌 의심 이벤트" 범주.
+            logger.warn("refresh token reuse detected — family invalidated. userId={}", userId)
         }
         return result == 1L
     }
