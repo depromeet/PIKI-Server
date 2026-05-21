@@ -52,6 +52,7 @@ class TournamentService(
                 .findAllByTournamentId(command.tournamentId)
                 .map { it.itemId }
                 .toSet()
+        if (existingItemIds.size >= MAX_ITEM_COUNT) throw TournamentException.maxItemCountExceeded()
         if (command.itemId in existingItemIds) throw TournamentException.duplicateTournamentItem()
         tournamentItemRepository.save(
             TournamentItem(tournamentId = command.tournamentId, itemId = command.itemId, userId = userId),

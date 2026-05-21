@@ -143,6 +143,16 @@ class TournamentServiceTest {
     }
 
     @Test
+    fun `addItem 에서 32개가 이미 등록된 경우 추가하면 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        (1L..32L).forEach { service.addItem(userId, AddTournamentItem(tournamentId, it)) }
+
+        assertFailsWith<TournamentException> {
+            service.addItem(userId, AddTournamentItem(tournamentId, 33L))
+        }
+    }
+
+    @Test
     fun `addItem 에서 이미 등록된 itemId 를 다시 추가하면 예외가 발생한다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
         service.addItem(userId, AddTournamentItem(tournamentId, 1L))
