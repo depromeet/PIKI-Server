@@ -152,7 +152,7 @@ A-1 과 동일.
 
 3. 모호하면 `chore` fallback.
 
-**브랜치 prefix**: 분류 라벨 그대로 (`feat` → `feat/`, `chore` → `chore/`, `infra` → `infra/` 등). 라벨 == prefix 1:1.
+**브랜치 prefix**: 라벨 문자열을 그대로 사용한다 (예: `feat`, `chore`, `infra`). 슬래시는 브랜치명 템플릿(`{prefix}/{이슈번호}-{slug}`)에서만 추가되므로 prefix 자체에 슬래시를 포함하지 않는다 (`feat/` 가 아니라 `feat`).
 
 **상위 Epic 추천**:
 ```bash
@@ -175,8 +175,8 @@ gh issue list --repo depromeet/18th-team3-server --label epic --state open --jso
 ...
 
 [자동 결정]
-- 분류: {라벨} (라벨 == prefix)
-- 브랜치 prefix: {라벨과 동일}
+- 분류 라벨: {라벨}
+- 브랜치 prefix: {라벨 그대로, 슬래시 없이}
 - 상위 Epic: #{번호} 또는 없음
 
 [중복 검사 결과]
@@ -187,7 +187,7 @@ gh issue list --repo depromeet/18th-team3-server --label epic --state open --jso
 
 - `OK 진행 (Recommended)`
 - `본문 수정 필요` — Other 로 어떤 부분을 어떻게
-- `분류/prefix 수정` — Other 로 어떻게
+- `라벨 수정` — Other 로 어떻게 (라벨이 곧 브랜치 prefix 라 함께 바뀜)
 - `중복 — 새 이슈 만들지 않음` (중복 검사 결과 있을 때만, 다른 옵션 1개와 묶어 4개 한도)
 
 수정 반영 후 만족할 때까지 반복.
