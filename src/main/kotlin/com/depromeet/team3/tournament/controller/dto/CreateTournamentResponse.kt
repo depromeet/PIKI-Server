@@ -1,5 +1,5 @@
 package com.depromeet.team3.tournament.controller.dto
 
-data class StartTournamentResponse(
+data class CreateTournamentResponse(
     val tournamentId: Long,
 )

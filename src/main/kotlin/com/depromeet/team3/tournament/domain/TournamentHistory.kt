@@ -8,8 +8,12 @@ import jakarta.persistence.Entity
 class TournamentHistory(
     @Column(name = "tournament_id", nullable = false)
     val tournamentId: Long,
+    @Column(name = "current_round", nullable = false)
     val currentRound: Int,
-    val firstWishItemId: Long,
-    val secondWishItemId: Long,
-    val winnerWishItemId: Long,
+    @Column(name = "first_tournament_item_id", nullable = false)
+    val firstTournamentItemId: Long,
+    @Column(name = "second_tournament_item_id", nullable = false)
+    val secondTournamentItemId: Long,
+    @Column(name = "selected_tournament_item_id", nullable = false)
+    val selectedTournamentItemId: Long,
 ) : LongBaseEntity()

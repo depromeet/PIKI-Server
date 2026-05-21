@@ -4,9 +4,10 @@ import com.depromeet.team3.common.openapi.OpenApiObjectMapper
 import com.depromeet.team3.common.openapi.binds
 import com.depromeet.team3.common.openapi.examples
 import com.depromeet.team3.common.response.ApiResponseBody
-import com.depromeet.team3.tournament.controller.dto.StartTournamentResponse
+import com.depromeet.team3.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.team3.tournament.controller.dto.TournamentHistoryInfoResponse
 import com.depromeet.team3.tournament.controller.dto.TournamentInfoResponse
+import com.depromeet.team3.tournament.controller.dto.TournamentItemInfoResponse
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -20,12 +21,30 @@ class TournamentApiExamples(
     fun tournamentOpenApiExamples(): OperationCustomizer =
         OperationCustomizer { operation, handlerMethod ->
             when {
-                handlerMethod.binds(TournamentController::start) ->
+                handlerMethod.binds(TournamentController::create) ->
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.CREATED,
                             name = "생성 성공",
-                            payload = ApiResponseBody.created(StartTournamentResponse(tournamentId = 1)),
+                            payload = ApiResponseBody.created(CreateTournamentResponse(tournamentId = 1)),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::addItems) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "아이템 추가 성공",
+                            payload = ApiResponseBody.ok<Unit>(),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::start) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "시작 성공",
+                            payload = ApiResponseBody.ok<Unit>(),
                         )
                     }
 
@@ -47,15 +66,19 @@ class TournamentApiExamples(
                                 ApiResponseBody.ok(
                                     TournamentInfoResponse(
                                         tournamentId = 1,
-                                        round = 4,
-                                        finalWinnerWishItemId = 3,
+                                        startRound = 2,
+                                        items =
+                                            listOf(
+                                                TournamentItemInfoResponse(tournamentItemId = 1, itemId = 10),
+                                                TournamentItemInfoResponse(tournamentItemId = 2, itemId = 20),
+                                            ),
                                         history =
                                             listOf(
                                                 TournamentHistoryInfoResponse(
-                                                    currentRound = 1,
-                                                    firstWishItemId = 1,
-                                                    secondWishItemId = 2,
-                                                    winnerWishItemId = 1,
+                                                    currentRound = 2,
+                                                    firstTournamentItemId = 1,
+                                                    secondTournamentItemId = 2,
+                                                    selectedTournamentItemId = 1,
                                                 ),
                                             ),
                                     ),
