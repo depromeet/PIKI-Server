@@ -42,9 +42,9 @@ class RedisRefreshTokenStore(
             )
         // Lua script 반환값 의미:
         //   1 = 정상 매치 + DEL (다음 R 발급으로 이어짐)
-        //   0 = 키 없음 또는 mismatch. mismatch 인 경우 살아있던 R 도 같이 DEL (family invalidation)
-        //  -1 = mismatch 로 family invalidation 트리거됨 (도난 의심)
-        // -1 은 호출자 입장에선 거부 (false) 와 같지만, 도난 감지 시점을 로깅으로 남긴다.
+        //   0 = 키 없음 (이미 소비됐거나 TTL 만료 — 거부)
+        //  -1 = mismatch (재사용 시도) → 살아있던 R 도 같이 DEL (family invalidation). 도난 의심
+        // 0 과 -1 모두 호출자 입장에선 거부 (false) 지만, -1 시점만 도난 감지로 로깅한다.
         // 향후 사용자 알림 hook 의 사전 단계.
         if (result == -1L) {
             // warn 레벨: 시스템 fail 아닌 보안 의심 이벤트. info 보다 가시성 ↑, error 는
