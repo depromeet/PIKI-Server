@@ -4,9 +4,13 @@
 
 **이슈는 "왜 / 무엇을" 만 받는다.** 우선순위·시작일·마감일 같은 메타 정보는 묻지 않는다. 작업 시작 시점에 적는 메타는 거의 추정치라 데이터 품질이 낮고, 진짜 메타 저장소는 GitHub Project 보드다 — 작업 진행 중 보드에서 채우면 충분하다.
 
+**Repository Issue 베타 필드는 채우지 않는다.** GitHub Issue 사이드바에 표시되는 베타 필드(Priority / Start date / Target date / Effort 등)는 Project 보드 필드와 **별개 저장소**다 — 자동 sync 없고 옵션 enum 도 일부 다르다 (예: 베타 Priority 에만 `Urgent` 추가). 메타는 Project 보드 한 곳을 single source 로 두고, 베타 필드는 None yet 으로 둔다. 베타가 정식 출시돼 sync 거동이 명확해지면 재평가.
+
 **이슈는 작업의 시작점이라 사용자 입력이 source of truth.** 모델이 추측해 본문을 채우거나 분류를 단정하지 않는다. 자동화하는 부분은 모두 검수 단계에서 사용자 OK 를 받는다.
 
-**Epic 과 일반 이슈는 본질이 다르다.** Epic 은 여러 작업의 묶음으로 자체 코드 작업이 없어 브랜치를 만들지 않는다. 일반 이슈(task/refactor/bug)는 코드 작업의 단위로 부모 Epic 에 묶일 수 있다. 이 구분만 사용자가 명시하고, 그 외 분류·prefix·상위 Epic 추천은 모델이 본문을 보고 자동 결정한 뒤 검수받는다.
+**Epic 과 일반 이슈는 본질이 다르다.** Epic 은 여러 작업의 묶음으로 자체 코드 작업이 없어 브랜치를 만들지 않는다. 일반 이슈는 코드 작업의 단위로 부모 Epic 에 묶일 수 있다. 이 구분만 사용자가 명시하고, 그 외 분류·prefix·상위 Epic 추천은 모델이 본문을 보고 자동 결정한 뒤 검수받는다.
+
+**라벨은 한 작업 한 개.** type 차원(`feat`/`fix`/`refactor`/`perf`/`chore`) 과 영역 차원(`docs`/`test`/`infra`) 이 한 라벨로 합쳐져 있다. "외부 가시적 변화" 가 본질이면 그 type, 특정 영역만 만지면 그 영역. multi-label 부여하지 않는다.
 
 **채팅 끊김을 최소화한다.** 자유 텍스트는 한 메시지로 일괄 받고, 옵션 결정은 `AskUserQuestion` 으로 묶어 받는다. 사용자 인터랙션은 보통 **3 라운드** (Epic 여부 → 자유 입력 → 검수) 안에 끝난다.
 
@@ -16,7 +20,7 @@
 
 `AskUserQuestion` (single-select):
 
-- `일반 이슈 (task/refactor/bug) (Recommended)`
+- `일반 이슈 (Recommended)`
 - `Epic`
 
 대화 컨텍스트가 명확하면 default 로 표시. 모호하면 추측 없이 그대로 보여준다.
@@ -130,20 +134,25 @@ A-1 과 동일.
 
 **자유 입력 분해** — A-2 와 동일 룰.
 
-**분류 자동 결정** (multi 가능): `task` / `refactor` / `bug`
-- "버그", "안 됨", "오류 수정" 시그널 → bug
-- "구조 개선", "리팩터링", "정리", "추출" 시그널 → refactor
-- "추가", "도입", "새" 시그널 → task
-- 둘 이상 시그널 명확하면 multi
-- 모호하면 `task` 로 fallback
+**분류 자동 결정** (single-select): `feat` / `fix` / `refactor` / `perf` / `chore` / `docs` / `test` / `infra`
 
-**브랜치 prefix** (주 분류 기준):
-- `bug` → `fix`
-- `refactor` → `refactor`
-- `task` → `chore` (default) 또는 `feat` (외부 사용자/클라이언트가 호출/이용할 새 기능 시그널이 본문에 명확히 있을 때만)
-- 모호하면 `chore`
+우선순위: **외부 가시적 변화** > **영역 한정**.
 
-**주 분류 결정** (multi 일 때): "주된 작업의 본질" 기준. 모호하면 검수 단계에서 묻기.
+1. 외부 가시적 변화 시그널 있으면:
+   - "버그", "안 됨", "결함 수정", "예외 발생" → `fix`
+   - "성능 개선", "속도", "메모리 절감", "latency" → `perf`
+   - "새 API", "새 엔드포인트", "외부 사용자/클라이언트 노출 새 기능" → `feat`
+   - "구조 개선", "리팩터링", "정리", "추출" (외부 동작 불변) → `refactor`
+
+2. 외부 동작 변화 없고 특정 영역만 만지면:
+   - 문서만 (CLAUDE.md, README, ADR 등) → `docs`
+   - 테스트만 → `test`
+   - 인프라 (Terraform, AWS, secret, 배포 workflow) → `infra`
+   - 그 외 (빌드·deps·CI 게이트·도구·리포 설정·잡일) → `chore`
+
+3. 모호하면 `chore` fallback.
+
+**브랜치 prefix**: 라벨 문자열을 그대로 사용한다 (예: `feat`, `chore`, `infra`). 슬래시는 브랜치명 템플릿(`{prefix}/{이슈번호}-{slug}`)에서만 추가되므로 prefix 자체에 슬래시를 포함하지 않는다 (`feat/` 가 아니라 `feat`).
 
 **상위 Epic 추천**:
 ```bash
@@ -166,8 +175,8 @@ gh issue list --repo depromeet/18th-team3-server --label epic --state open --jso
 ...
 
 [자동 결정]
-- 분류: {라벨들} (주 분류: {prefix 결정용})
-- 브랜치 prefix: {chore|feat|refactor|fix}
+- 분류 라벨: {라벨}
+- 브랜치 prefix: {라벨 그대로, 슬래시 없이}
 - 상위 Epic: #{번호} 또는 없음
 
 [중복 검사 결과]
@@ -178,7 +187,7 @@ gh issue list --repo depromeet/18th-team3-server --label epic --state open --jso
 
 - `OK 진행 (Recommended)`
 - `본문 수정 필요` — Other 로 어떤 부분을 어떻게
-- `분류/prefix 수정` — Other 로 어떻게
+- `라벨 수정` — Other 로 어떻게 (라벨이 곧 브랜치 prefix 라 함께 바뀜)
 - `중복 — 새 이슈 만들지 않음` (중복 검사 결과 있을 때만, 다른 옵션 1개와 묶어 4개 한도)
 
 수정 반영 후 만족할 때까지 반복.
@@ -190,7 +199,7 @@ gh issue create \
   --repo depromeet/18th-team3-server \
   --title "{제목}" \
   --body "{본문}" \
-  --label "{선택된 분류 라벨들 콤마 구분}" \
+  --label "{선택된 분류 라벨}" \
   --assignee @me
 ```
 
@@ -200,15 +209,14 @@ gh issue create \
 
 **분류 → org type 매핑** (depromeet 조직 정의 type 3종 — Task / Bug / Feature):
 
-| 우리 분류 | org type | type ID |
+| 우리 라벨 | org type | type ID |
 |---|---|---|
-| `bug` | Bug | `IT_kwDOARZVGM4AJck3` |
-| `refactor` | Task | `IT_kwDOARZVGM4AJck0` |
-| `task` + prefix `chore` | Task | `IT_kwDOARZVGM4AJck0` |
-| `task` + prefix `feat` | Feature | `IT_kwDOARZVGM4AJck6` |
+| `fix` | Bug | `IT_kwDOARZVGM4AJck3` |
+| `feat` | Feature | `IT_kwDOARZVGM4AJck6` |
+| `refactor` / `perf` / `chore` / `docs` / `test` / `infra` | Task | `IT_kwDOARZVGM4AJck0` |
 | (Epic 흐름) | Feature | `IT_kwDOARZVGM4AJck6` |
 
-복수 분류일 때는 **주 분류** 기준 매핑 (브랜치 prefix 결정과 동일 기준).
+라벨이 단일이므로 분기 단순.
 
 ```bash
 ISSUE_ID=$(gh issue view {이슈번호} --repo depromeet/18th-team3-server --json id --jq '.id')
@@ -251,7 +259,7 @@ gh project item-add 99 --owner depromeet --url {이슈 URL}
 
 - **자유 입력이 너무 짧으면 follow-up.** 다만 1~2 번 안에 끝낸다. 무한 follow-up 금지.
 - **모델 분해 결과는 검수 필수.** 사용자가 거부하면 즉시 부분 수정 또는 원본 그대로.
-- 분류 자동 결정은 시그널이 명확할 때만. 모호하면 `task` + `chore` fallback (보수적).
+- 분류 자동 결정은 시그널이 명확할 때만. 모호하면 `chore` fallback (보수적).
 - 라벨이 레포에 없어 `gh issue create` 가 실패하면 에러 그대로 보고.
 - `gh issue develop` 은 `--name` (브랜치 이름 옵션) + `--checkout` 둘 다 명시 (인터랙티브 회피). `--branch-name` 은 존재하지 않는 옵션이니 주의.
 - `gh project item-add` 권한 부족 시 사용자에게 `gh auth refresh -h github.com -s project` 안내 (인터랙티브 디바이스 인증, 일회성).
@@ -259,6 +267,6 @@ gh project item-add 99 --owner depromeet --url {이슈 URL}
 - 중복 이슈 검사 false positive 가능성 인지. 사용자가 "다른 이슈" 라 답하면 그대로 진행.
 - 이슈 템플릿(`.github/ISSUE_TEMPLATE/`)이 우선순위·일정을 required 로 정의해도 본문 자유 양식이라 강제받지 않는다. 이 스킬은 본질("왜/무엇을")만 받는 정책을 따른다.
 - **Assignee 는 `@me` 고정**. 이슈 만든 사람이 작업자라는 가정. 다른 사람에게 할당하려면 GitHub UI 에서 변경.
-- **Issue Type 은 GraphQL 별도 호출.** `gh issue create` 가 `--type` 미지원이라 `updateIssueIssueType` mutation 사용. depromeet org 의 type 은 Task / Bug / Feature 3종 — Refactor·Epic 같은 우리 분류와 1:1 매핑이 안 되는 부분은 가장 가까운 type 으로 (refactor → Task, epic → Feature). org 가 type 을 추가/제거하면 본문의 type ID 도 갱신 필요.
+- **Issue Type 은 GraphQL 별도 호출.** `gh issue create` 가 `--type` 미지원이라 `updateIssueIssueType` mutation 사용. depromeet org 의 type 은 Task / Bug / Feature 3종 — 우리 9개 라벨과 1:1 매핑이 안 되는 부분은 가장 가까운 type 으로 (refactor·perf·chore·docs·test·infra → Task, epic → Feature). org 가 type 을 추가/제거하면 본문의 type ID 도 갱신 필요.
 
 $ARGUMENTS
