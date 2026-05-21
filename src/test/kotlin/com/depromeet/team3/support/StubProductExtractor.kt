@@ -1,8 +1,8 @@
 package com.depromeet.team3.support
 
 import com.depromeet.team3.product.domain.ProductLink
-import com.depromeet.team3.product.domain.ProductSnapshot
 import com.depromeet.team3.product.service.ProductExtractor
+import com.depromeet.team3.product.service.ProductSnapshot
 
 // 외부 LLM 호출을 통합 테스트에서 격리하기 위한 stub.
 // 모든 통합 테스트가 같은 IntegrationTestSupport 컨텍스트를 공유하므로 이 빈도 단일 인스턴스다.

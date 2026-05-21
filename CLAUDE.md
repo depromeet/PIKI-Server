@@ -61,10 +61,72 @@
       require(winnerWishItemId in wishItemIds) { "우승자가 참가 목록에 없음" }  // 불변식: 서비스가 보장 → 500
   }
   ```
-- 커스텀 예외는 `*Exception : BaseException, HttpMappable` 패턴 (예: `TournamentException`, `UserException`). `private constructor` + `companion object` 의 factory 메서드로 사유별 메시지·`ErrorCategory`·`HttpStatus` 를 한 자리에 박는다.
+
+### 도메인 예외 이름
+
+도메인 커스텀 예외는 `{도메인 명사}Exception` 으로 짓는다 — `ProductLinkException` · `WishException` · `ProductSnapshotException` · `TournamentException` · `UserException`. 행위명(`...ExtractionException` 등)이 아니라 도메인 용어(명사)를 쓴다.
+
+### 도메인 예외 생성
+
+커스텀 예외는 `*Exception : BaseException, HttpMappable` 패턴이다. 생성자를 `private` 으로 막고 `companion object` 의 **정적 팩토리 메서드**로만 만든다. 각 팩토리는 사유 하나를 나타내며 그 사유에 맞는 message·`ErrorCategory`·`HttpStatus` 를 한 자리에 박는다.
+
+```kotlin
+class WishException private constructor(
+    message: String,
+    override val category: ErrorCategory,
+    override val httpStatus: HttpStatus,
+) : BaseException(message), HttpMappable {
+    companion object {
+        fun alreadyExists(): WishException =
+            WishException("이미 위시리스트에 등록된 상품입니다.", ErrorCategory.CONFLICT, HttpStatus.CONFLICT)
+    }
+}
+```
+
+호출부는 `throw WishException.alreadyExists()` 처럼 사유 이름만 읽으면 되고, status·메시지는 throw 지점에 흩어지지 않고 예외 클래스 한 곳에 모인다.
+
+### 클라이언트 응답에 내부 정보를 노출하지 않는다
+
+도메인 예외의 message 는 `GlobalExceptionHandler` 를 거쳐 응답 `detail` 로 클라이언트에 그대로 나간다. 따라서 예외 message 에 LLM 원문·사용자 입력 원본·내부 식별자·구체적 검증 사유 등 민감하거나 내부적인 정보를 담지 않는다. message 는 고정된 사용자 대면 문구로 두고, 디버깅에 필요한 구체 정보는 로그·cause 체인으로 남긴다.
+
+- 나쁜 예: `untrustworthyValue(reason: String)` — 호출부가 임의 문자열을 message 에 실어 보낼 수 있어, 향후 LLM 원문·입력값이 응답으로 샐 수 있다.
+- 좋은 예: 인자 없는 고정 message 팩토리. 사유 구분이 꼭 필요하면 노출돼도 안전한 enum/code 로 받는다.
+
+### 검증은 입력 경계와 엔티티 양쪽에 둔다
+
+같은 조건을 두 번 검증해도 된다 — 각 층이 다른 질문에 답하면 중복이 아니라 다층 방어다.
+
+- **입력 경계** (컨트롤러 요청 DTO, 외부 추출 파이프라인 등) — *계약* 검증. 각 입력 경로가 자기 경계에서 책임진다. 생성 경로가 새로 늘면 그 경로가 자기 계약 검증을 더한다.
+- **엔티티 생성자** — *불변식* 검증(`require`). 엔티티는 누가 어떤 경로로 만들든 스스로 유효함을 보장하는 최후의 보루다. 정상 흐름에선 경계가 다 걸러 여기 닿지 않는다. 닿았다면 어떤 경계가 검증을 빠뜨린 것이므로 `500`.
+- 엔티티 생성자에 HTTP status 같은 전송 계층 계약을 박지 않는다. status 는 각 입력 경계가 정한다.
 
 ### 한 줄 외울 것
 코드 모양 보지 말고 **"멀쩡한 클라이언트가 정상 요청으로 여기 닿을 수 있나?"** 만 물을 것. 닿으면 커스텀, 못 닿으면 `require` / `check` / `error`.
+
+## 가까운 미래는 고려한다
+
+YAGNI 는 **가설적·먼 미래**(올지 안 올지 모르는 요구)를 위한 추상화·일반화를 만들지 말라는 것이지, 모든 미래를 무시하라는 게 아니다.
+
+- 이미 예정됐거나 진행 중인 **가까운 미래**(보류 이슈, 합의된 후속 작업 등)는 설계에서 고려한다 — 미리 구현하지는 않더라도, 그 미래가 와도 깨지지 않는 구조로 둔다.
+- 구분: "정말 올지 모르는 것"은 무시, "올 게 거의 확실한 것"은 충돌하지 않게 설계한다.
+
+## 테이블 간 외래 키
+
+**DB `FOREIGN KEY` 제약을 두지 않는다.** 테이블 간 관계는 논리적으로만 연결한다.
+
+### 규칙
+- 마이그레이션에 `CONSTRAINT ... FOREIGN KEY` 를 추가하지 않는다. 엔티티는 raw ID 필드(`itemId: Long` 등)로 다른 테이블을 참조하며, JPA 연관관계 어노테이션(`@ManyToOne` 등)도 쓰지 않는다.
+- 조회 성능을 위한 인덱스(`KEY idx_*`)는 FK 와 무관하므로 그대로 둔다.
+- 참조 무결성은 애플리케이션 코드(서비스 계층의 존재 검증 등)가 책임진다.
+
+## 도메인 용어
+
+- **product** — 외부 상품(쇼핑몰 페이지)과 그 추출 파이프라인. `ProductLink`(외부 URL) · `ProductExtractor` · `ProductSnapshot`(추출 시점 결과).
+- **item** — 추출 결과를 영속화한 엔티티. 우리 시스템의 상품 단위. wish · tournament 가 참조한다.
+- **wish** — user 가 item 을 위시리스트에 담은 기록 (`user_id` + `item_id`).
+- **tournament** — item 들로 겨루는 토너먼트. `tournament_item`(출전 아이템) · `tournament_user`(참여자).
+
+추출 결과(`ProductSnapshot`)를 영속화하면 `item` 이 된다. 외부 경계를 가리키는 이름에 `item` 을, 우리 엔티티에 `product` 를 쓰지 않는다.
 
 ## 테스트 분류
 
@@ -110,12 +172,31 @@
 - 검증 실패(400) · 비즈니스 예외(409 등) 케이스도 contract 검증에 포함한다.
 - DB 는 Testcontainers MySQL 한정 (H2 등 다른 DB 로 대체 금지).
 
+### 통합 테스트 실행 전 Docker 확인
+
+통합 테스트는 Testcontainers 가 Docker 데몬을 필요로 한다. **Docker 가 떠 있지 않아 테스트가 실패하면, 테스트를 건너뛰지 말고 Docker 를 직접 띄운 뒤 다시 실행한다.**
+
+```bash
+# 1. Docker 데몬이 떠 있는지 확인
+docker info > /dev/null 2>&1 || open -a Docker
+
+# 2. 데몬이 준비될 때까지 대기 (macOS, 최대 약 60초)
+until docker info > /dev/null 2>&1; do sleep 2; done
+
+# 3. 통합 테스트 실행
+./gradlew test
+```
+
+- "Docker 가 안 떠 있어서 통합 테스트를 생략한다" 로 귀결시키지 않는다. 데몬 기동은 위 명령으로 직접 해결한다.
+- 위 대기 루프가 60초를 넘겨도 데몬이 안 뜨면, 그때는 환경 문제로 보고 사용자에게 알린다.
+
 ## 모킹 / Stub 정책
 
 **내부 컴포넌트는 모킹·stub 모두 금지하고 실제 빈으로 통합 테스트한다.** 외부 호출 경계(외부 HTTP API · 메시징 · 결제 등 우리 애플리케이션 바깥의 의존성)는 격리해야 하며, 격리 도구로 **프로그래머블 stub 을 기본**으로 한다.
 
 ### 규칙
 - 외부 호출 경계는 **프로그래머블 stub**(`@TestConfiguration` + 빈 교체) 으로 격리한다. 인터페이스(`ProductExtractor`)에 stub 구현(`StubProductExtractor`)을 만들어 빈으로 등록하고, stub 의 응답을 람다로 받아 매 테스트가 시나리오별로 교체한다.
+- **stub 빈에는 `@Primary` 를 붙인다.** 운영 `@Component` 빈과 타입이 같아 주입 후보가 2개가 되는데, `@Primary` 로 stub 우선을 명시한다. 빈 이름과 주입 지점 파라미터명이 우연히 일치하는 데 기대면 파라미터명 리팩터링 시 격리가 조용히 깨진다 — `@Primary` 는 그 의존을 끊는다.
 - **stub 의 default 람다는 throw 로 둔다.** 명시 세팅을 빠뜨리면 호출 시점에 즉시 `IllegalStateException` 으로 깨져 "이전 테스트의 build 가 살아남는" 함정을 차단한다. stub 을 호출하지 않는 테스트는 영향 없다.
   ```kotlin
   class StubProductExtractor : ProductExtractor {
