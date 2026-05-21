@@ -23,8 +23,8 @@ class AuthController(
     @PostMapping("/guest")
     @ResponseStatus(HttpStatus.CREATED)
     override fun createGuest(): ApiResponseBody<GuestCreateResponse> {
-        val tokenPair = authService.createGuest()
-        return ApiResponseBody.created(GuestCreateResponse.from(tokenPair))
+        val result = authService.createGuest()
+        return ApiResponseBody.created(GuestCreateResponse.from(result.tokenPair, result.user))
     }
 
     @PostMapping("/token/refresh")

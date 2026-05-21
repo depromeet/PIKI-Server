@@ -47,6 +47,11 @@ class SecurityConfig {
                     // 토너먼트 플레이는 GUEST 도 허용
                     .requestMatchers("/api/v1/tournaments/**")
                     .authenticated()
+                    // /users/me 와 /users/nickname/check 는 게스트도 호출 가능 (닉네임 확정/수정 흐름)
+                    .requestMatchers(HttpMethod.GET, "/api/v1/users/me", "/api/v1/users/nickname/check")
+                    .authenticated()
+                    .requestMatchers(HttpMethod.PATCH, "/api/v1/users/me")
+                    .authenticated()
                     .anyRequest()
                     .authenticated()
             }.exceptionHandling {

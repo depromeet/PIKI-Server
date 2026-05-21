@@ -38,16 +38,16 @@ class UserTest {
     }
 
     @Test
-    fun `닉네임 16자는 허용된다`() {
+    fun `닉네임 10자는 허용된다`() {
         val user = guest()
-        user.updateNickname("1234567890123456")
-        assertEquals("1234567890123456", user.nickname)
+        user.updateNickname("1234567890")
+        assertEquals("1234567890", user.nickname)
     }
 
     @Test
-    fun `닉네임 17자는 예외가 발생한다`() {
+    fun `닉네임 11자는 예외가 발생한다`() {
         val user = guest()
-        assertFailsWith<UserException> { user.updateNickname("12345678901234567") }
+        assertFailsWith<UserException> { user.updateNickname("12345678901") }
     }
 
     @Test

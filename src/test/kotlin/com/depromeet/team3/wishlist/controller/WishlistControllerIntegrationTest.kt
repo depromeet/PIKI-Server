@@ -43,7 +43,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         jdbcTemplate.update(
             "INSERT INTO user (id, nickname, identity_type, created_at, updated_at) VALUES (?, ?, ?, NOW(6), NOW(6))",
             uuidToBytes(userId),
-            userId.toString().take(16),
+            userId.toString().take(10),
             "MEMBER",
         )
     }

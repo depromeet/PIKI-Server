@@ -84,6 +84,9 @@ class UserService(
     @Transactional(readOnly = true)
     fun findById(userId: UUID): User = userRepository.findById(userId) ?: throw UserException.notFound(userId)
 
+    @Transactional(readOnly = true)
+    fun isNicknameAvailable(nickname: String): Boolean = !userRepository.existsByNickname(nickname)
+
     @Transactional
     fun updateNickname(
         userId: UUID,
