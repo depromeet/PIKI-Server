@@ -1,5 +1,6 @@
 package com.depromeet.team3.auth.infrastructure.jwt
 
+import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import org.hibernate.validator.constraints.time.DurationMin
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -15,6 +16,7 @@ import java.time.Duration
 @Validated
 @ConfigurationProperties("jwt")
 data class JwtProperties(
+    @field:NotBlank(message = "JWT secret 은 비어 있거나 공백만으로 구성될 수 없다.")
     @field:Size(min = MIN_SECRET_BYTES, message = "JWT secret 은 $MIN_SECRET_BYTES bytes 이상이어야 한다 (HS256 최소).")
     val secret: String,
     @field:DurationMin(seconds = 1, message = "accessTokenExpiry 는 1초 이상이어야 한다.")
