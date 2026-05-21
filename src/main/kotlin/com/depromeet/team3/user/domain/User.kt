@@ -11,7 +11,7 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 @Entity
-@Table(name = "user")
+@Table(name = "users")
 class User(
     id: UUID,
     nickname: String,

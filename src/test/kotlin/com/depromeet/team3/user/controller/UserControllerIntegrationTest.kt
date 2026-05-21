@@ -41,7 +41,7 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
         identityType: IdentityType = IdentityType.GUEST,
     ) {
         jdbcTemplate.update(
-            "INSERT INTO user (id, nickname, profile_image, identity_type, created_at, updated_at) " +
+            "INSERT INTO users (id, nickname, profile_image, identity_type, created_at, updated_at) " +
                 "VALUES (?, ?, ?, ?, NOW(6), NOW(6))",
             uuidToBytes(userId),
             nickname,

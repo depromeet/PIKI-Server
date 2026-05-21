@@ -8,7 +8,7 @@ import jakarta.persistence.Table
 import java.util.UUID
 
 @Entity
-@Table(name = "user_detail")
+@Table(name = "user_details")
 class UserDetail(
     userId: UUID,
     email: String,
