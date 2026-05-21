@@ -3,7 +3,7 @@ package com.depromeet.team3.wishlist.controller
 import com.depromeet.team3.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.team3.product.service.ProductSnapshot
 import com.depromeet.team3.support.IntegrationTestSupport
-import com.depromeet.team3.support.StubProductExtractor
+import com.depromeet.team3.support.StubProductLinkExtractor
 import com.depromeet.team3.support.uuidToBytes
 import com.depromeet.team3.user.domain.IdentityType
 import org.junit.jupiter.api.Test
@@ -31,7 +31,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     private lateinit var objectMapper: ObjectMapper
 
     @Autowired
-    private lateinit var stubExtractor: StubProductExtractor
+    private lateinit var stubProductLinkExtractor: StubProductLinkExtractor
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
@@ -61,7 +61,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val url = "https://shop.example.com/products/42"
         val userId = UUID.randomUUID()
         insertMember(userId)
-        stubExtractor.build = { link ->
+        stubProductLinkExtractor.build = { link ->
             ProductSnapshot(
                 link = link,
                 name = "나이키 에어포스",
@@ -101,7 +101,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val url = "https://shop.example.com/products/42"
         val userId = UUID.randomUUID()
         insertMember(userId)
-        stubExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
+        stubProductLinkExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
         val body = objectMapper.writeValueAsString(mapOf("url" to url))
         val authHeader = "Bearer ${memberToken(userId)}"
 
@@ -131,7 +131,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 ).apply<DefaultMockMvcBuilder>(springSecurity())
                 .build()
         val url = "https://shop.example.com/products/42"
-        stubExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
+        stubProductLinkExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
         val firstUserId = UUID.randomUUID()
         val secondUserId = UUID.randomUUID()
         insertMember(firstUserId)
