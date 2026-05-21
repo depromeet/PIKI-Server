@@ -27,6 +27,11 @@ class SecurityConfig {
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
                 auth
+                    // 배포 워크플로우의 health check (`curl http://localhost:$PORT/health`) 가 인증 없이
+                    // 통과해야 한다. anyRequest().authenticated() 에 잡히면 401 응답 → 워크플로우 실패 →
+                    // 신규 컨테이너 롤백 → 배포 차단으로 이어진다.
+                    .requestMatchers(HttpMethod.GET, "/health")
+                    .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/guest")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/token/refresh")
