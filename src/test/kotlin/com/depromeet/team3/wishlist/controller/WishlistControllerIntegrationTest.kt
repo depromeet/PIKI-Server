@@ -1,7 +1,7 @@
 package com.depromeet.team3.wishlist.controller
 
 import com.depromeet.team3.auth.infrastructure.jwt.JwtProvider
-import com.depromeet.team3.product.domain.ProductSnapshot
+import com.depromeet.team3.product.service.ProductSnapshot
 import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.support.StubProductExtractor
 import com.depromeet.team3.support.uuidToBytes
@@ -89,7 +89,9 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `같은 유저가 같은 URL 을 두 번 등록하면 409 CONFLICT 가 반환된다`() {
+    fun `같은 유저가 같은 URL 을 두 번 등록해도 둘 다 201 로 등록된다`() {
+        // dedup 정책은 #134 (item 독립 엔티티 분리) 에서 제거됨. wish 는 user 가 item 을 위시한 사건으로
+        // 보는 multi-record 모델이라 같은 URL 을 반복 등록해도 별개의 wish row 로 쌓인다.
         val mockMvc =
             MockMvcBuilders
                 .webAppContextSetup(
@@ -117,10 +119,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.AUTHORIZATION, authHeader)
                     .content(body),
-            ).andExpect(status().isConflict)
-            .andExpect(jsonPath("$.status").value(409))
-            .andExpect(jsonPath("$.code").value("CONFLICT"))
-            .andExpect(jsonPath("$.data").doesNotExist())
+            ).andExpect(status().isCreated)
     }
 
     @Test

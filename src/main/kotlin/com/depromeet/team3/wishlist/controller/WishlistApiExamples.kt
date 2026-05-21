@@ -44,16 +44,6 @@ class WishlistApiExamples(
                                 detail = "지원하지 않는 URL 형식입니다.",
                             ),
                     )
-                    add(
-                        status = HttpStatus.CONFLICT,
-                        name = "중복 등록",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.CONFLICT,
-                                status = HttpStatus.CONFLICT,
-                                detail = "이미 위시리스트에 등록된 상품입니다.",
-                            ),
-                    )
                 }
             }
             operation

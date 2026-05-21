@@ -1,8 +1,8 @@
 package com.depromeet.team3.product.service.gemini
 
 import com.depromeet.team3.product.domain.ProductLink
-import com.depromeet.team3.product.domain.ProductSnapshot
-import com.depromeet.team3.product.service.ProductExtractionException
+import com.depromeet.team3.product.service.ProductSnapshot
+import com.depromeet.team3.product.service.ProductSnapshotException
 
 data class GeminiExtractionResult(
     val isProductPage: Boolean,
@@ -12,15 +12,41 @@ data class GeminiExtractionResult(
     val imageUrl: String? = null,
 ) {
     fun toProductSnapshot(link: ProductLink): ProductSnapshot {
-        if (!isProductPage) throw ProductExtractionException.notProductPage()
+        if (!isProductPage) throw ProductSnapshotException.notProductPage()
+
+        val normalizedName = name?.takeIf { it.isNotBlank() }
+        // LLM 이 javascript:/data: 같은 스킴을 흘리면 클라이언트가 <img src> 로 쓰는
+        // 순간 XSS 사다리가 되므로 https 만 통과시킨다.
+        val normalizedImageUrl = imageUrl?.takeIf { it.isNotBlank() && it.startsWith("https://", ignoreCase = true) }
+        val normalizedCurrency = currency?.takeIf { it.isNotBlank() }
+
+        // 추출 결과가 DB 컬럼 제약·상식을 벗어나면 추출 실패로 본다 (입력 경계의 계약 검증).
+        if ((currentPrice ?: 0) < 0) {
+            throw ProductSnapshotException.untrustworthyValue()
+        }
+        if ((normalizedName?.length ?: 0) > NAME_MAX_LENGTH) {
+            throw ProductSnapshotException.untrustworthyValue()
+        }
+        if ((normalizedImageUrl?.length ?: 0) > IMAGE_URL_MAX_LENGTH) {
+            throw ProductSnapshotException.untrustworthyValue()
+        }
+        if ((normalizedCurrency?.length ?: 0) > CURRENCY_MAX_LENGTH) {
+            throw ProductSnapshotException.untrustworthyValue()
+        }
+
         return ProductSnapshot(
             link = link,
-            name = name?.takeIf { it.isNotBlank() },
-            // LLM 이 javascript:/data: 같은 스킴을 흘리면 클라이언트가 <img src> 로 쓰는
-            // 순간 XSS 사다리가 되므로 https 만 통과시킨다.
-            imageUrl = imageUrl?.takeIf { it.isNotBlank() && it.startsWith("https://", ignoreCase = true) },
+            name = normalizedName,
+            imageUrl = normalizedImageUrl,
             currentPrice = currentPrice,
-            currency = currency?.takeIf { it.isNotBlank() },
+            currency = normalizedCurrency,
         )
+    }
+
+    companion object {
+        // items 테이블 컬럼 길이와 일치시킨다.
+        private const val NAME_MAX_LENGTH = 512
+        private const val IMAGE_URL_MAX_LENGTH = 2048
+        private const val CURRENCY_MAX_LENGTH = 8
     }
 }

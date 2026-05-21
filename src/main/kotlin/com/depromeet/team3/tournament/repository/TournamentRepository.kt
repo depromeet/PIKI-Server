@@ -4,7 +4,7 @@ import com.depromeet.team3.tournament.domain.Tournament
 import com.depromeet.team3.tournament.domain.TournamentHistory
 
 interface TournamentRepository {
-    fun saveTournament(tournament: Tournament): Long
+    fun saveTournament(tournament: Tournament): Tournament
 
     fun saveHistory(history: TournamentHistory)
 

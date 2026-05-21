@@ -4,16 +4,16 @@ import com.depromeet.team3.tournament.service.dto.RecordMatch
 
 data class RecordMatchRequest(
     val currentRound: Int,
-    val firstWishItemId: Long,
-    val secondWishItemId: Long,
-    val winnerWishItemId: Long,
+    val firstTournamentItemId: Long,
+    val secondTournamentItemId: Long,
+    val selectedTournamentItemId: Long,
 ) {
     fun toRecordMatch(tournamentId: Long): RecordMatch =
         RecordMatch(
             tournamentId = tournamentId,
             currentRound = currentRound,
-            firstWishItemId = firstWishItemId,
-            secondWishItemId = secondWishItemId,
-            winnerWishItemId = winnerWishItemId,
+            firstTournamentItemId = firstTournamentItemId,
+            secondTournamentItemId = secondTournamentItemId,
+            selectedTournamentItemId = selectedTournamentItemId,
         )
 }

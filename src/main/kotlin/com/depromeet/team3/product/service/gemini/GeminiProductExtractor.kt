@@ -1,9 +1,9 @@
 package com.depromeet.team3.product.service.gemini
 
 import com.depromeet.team3.product.domain.ProductLink
-import com.depromeet.team3.product.domain.ProductSnapshot
 import com.depromeet.team3.product.service.PageFetcher
 import com.depromeet.team3.product.service.ProductExtractor
+import com.depromeet.team3.product.service.ProductSnapshot
 import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
 import org.springframework.http.client.SimpleClientHttpRequestFactory
