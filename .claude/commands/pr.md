@@ -160,9 +160,12 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
 6. **제목 변경 필요 검토**: 추가 변경으로 작업 의도/스코프가 바뀌었거나 기존 제목에 오타·부정확한 표현이 있으면 새 제목 제안. 그 외엔 제목 유지.
 7. 사용자에게 갱신본(필요시 새 제목 포함, 변경 이유 짚어서)을 보여주고 확인받는다.
 8. 확인 후 `gh pr edit --body-file /tmp/pr_body.md` 로 갱신. 제목 변경이 있으면 `--title "새 제목"` 추가.
-9. **인라인 리뷰 코멘트 처리** — 이번 변경이 CodeRabbit (또는 사람) 리뷰 대응이라면 commit + push 로 끝내지 않는다. 각 review thread 에 reply 를 남겨 **어떤 commit 으로 반영했는지 / reject 한 이유가 무엇인지**가 conversation 에 박혀야 다른 리뷰어가 처리 여부를 헷갈리지 않는다.
+9. **CodeRabbit 인라인 리뷰 코멘트 처리** — 이번 변경이 CodeRabbit 리뷰 대응이라면 commit + push 로 끝내지 않는다. 각 review thread 에 reply 를 남겨 **어떤 commit 으로 반영했는지 / reject 한 이유가 무엇인지**가 conversation 에 박혀야 다른 리뷰어가 처리 여부를 헷갈리지 않는다.
+
+   **사람 리뷰어 thread 는 자동 reply 하지 않는다.** author 가 `coderabbitai` 가 아니면 (즉 사람 리뷰면) reply / resolve 둘 다 모델이 건드리지 않는다 — 작성자(`@me`)가 직접 의도·뉘앙스를 담아 답한다. 처리해야 할 thread 가 사람이면 사용자에게 "사람 리뷰 N건 있습니다" 만 알리고 멈춘다.
+
    ```bash
-   # 1. Thread 조회 — CodeRabbit 필터 (사람 리뷰어면 author 만 바꾼다)
+   # 1. CodeRabbit thread 조회 — author "coderabbitai" 고정 필터
    gh api graphql -f query='
      query { repository(owner: "depromeet", name: "PIKI-Server") {
        pullRequest(number: {N}) {
@@ -175,7 +178,7 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
               | select(.comments.nodes[0].author.login == "coderabbitai")
               | {id, isResolved, path, line}'
 
-   # 2. 각 thread 에 reply
+   # 2. 각 CodeRabbit thread 에 reply
    gh api graphql -f query='
      mutation($t: ID!, $b: String!) {
        addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $t, body: $b}) {
