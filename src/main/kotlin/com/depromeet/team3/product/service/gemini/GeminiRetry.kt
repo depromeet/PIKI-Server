@@ -41,11 +41,22 @@ class GeminiRetry(
         }
     }
 
-    // 지수 백오프 + full jitter: [0, initial * 2^(attempt-1)] 범위의 난수.
+    // 지수 백오프 + full jitter: [0, initial * 2^shift] 범위의 난수.
     // jitter 는 동시에 실패한 다수 요청이 같은 시점에 재시도하며 몰리는 thundering herd 를 막는다.
-    // 상한 cap 은 두지 않는다 — max-attempts 가 깊어져(5+) 지수 증가가 부담될 시점에 cap 도 함께 도입한다.
+    //
+    // shift 는 MAX_SHIFT 로 제한 — 두 가지 목적의 안전망:
+    //   1. shl 결과가 Long 부호 비트를 넘어 음수가 되면 Random.nextLong 이 IllegalArgumentException
+    //      으로 깨진다. 운영자가 max-attempts 를 비현실적으로 크게 설정해도 산술적으로 안전.
+    //   2. 깊은 attempts 에서 base 가 분/시간 단위로 폭주하는 것을 방지.
+    // (운영자 튜닝용 max-delay-ms 와는 별개. 그건 의도적 cap, 이건 산술/폭주 안전망.)
     private fun backoffMillis(attempt: Int): Long {
-        val exponential = config.initialDelayMs shl (attempt - 1)
+        val shift = (attempt - 1).coerceAtMost(MAX_SHIFT)
+        val exponential = config.initialDelayMs shl shift
         return Random.nextLong(exponential + 1)
+    }
+
+    companion object {
+        // 2^5 = 32. initialDelayMs=1000 기본일 때 최대 base ≈ 32 초.
+        private const val MAX_SHIFT = 5
     }
 }
