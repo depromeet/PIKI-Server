@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 data class GeminiProperties(
     val apiKey: String,
     val model: String = "gemini-2.5-flash",
+    val retry: Retry = Retry(),
 ) {
     init {
         require(apiKey.isNotBlank()) { "GEMINI_API_KEY 가 비어 있습니다." }
@@ -13,5 +14,21 @@ data class GeminiProperties(
     }
 
     // data class 기본 toString 은 apiKey 를 그대로 노출하므로, 로그 유출 방지를 위해 마스킹한다.
-    override fun toString(): String = "GeminiProperties(apiKey=*secret*, model=$model)"
+    override fun toString(): String = "GeminiProperties(apiKey=*secret*, model=$model, retry=$retry)"
+
+    /**
+     * Gemini 호출 재시도 파라미터. maxAttempts 는 곧 한 요청이 유발할 수 있는
+     * billed API 호출 횟수 상한이므로, API 비용·quota 를 고려해 운영에서 직접 조정한다.
+     */
+    data class Retry(
+        // max-attempts 는 총 시도 횟수(초기 호출 + 재시도). 기본 2 = 초기 호출 1회 + 재시도 1회.
+        // 한 요청이 유발하는 billed API 호출 횟수 상한이므로 비용·quota 에 맞춰 운영에서 조정한다.
+        val maxAttempts: Int = 2,
+        val initialDelayMs: Long = 1_000,
+    ) {
+        init {
+            require(maxAttempts >= 1) { "gemini.retry.max-attempts 는 1 이상이어야 합니다: $maxAttempts" }
+            require(initialDelayMs >= 0) { "gemini.retry.initial-delay-ms 는 0 이상이어야 합니다: $initialDelayMs" }
+        }
+    }
 }

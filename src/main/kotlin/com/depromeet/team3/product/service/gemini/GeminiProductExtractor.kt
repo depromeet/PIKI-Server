@@ -23,6 +23,8 @@ class GeminiProductExtractor(
 ) : ProductExtractor {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    private val geminiRetry = GeminiRetry(geminiProperties.retry)
+
     private val restClient =
         RestClient
             .builder()
@@ -43,28 +45,36 @@ class GeminiProductExtractor(
         val request = GeminiExtractionRequest.forHtmlExtraction(link.value, html)
 
         val llmStart = System.nanoTime()
-        // TODO: Gemini API 의 간헐적 5xx/타임아웃 대응 재시도 로직 필요. RETRYABLE 카테고리 예외 대상.
-        val response =
-            try {
-                restClient
-                    .post()
-                    .uri {
-                        it
-                            .path("/v1beta/models/{model}:generateContent")
-                            .build(geminiProperties.model)
-                    }.header(GEMINI_API_KEY_HEADER, geminiProperties.apiKey)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(request)
-                    .retrieve()
-                    .body<GeminiExtractionResponse>()
-            } catch (e: RestClientResponseException) {
-                throw when {
-                    e.statusCode.is5xxServerError -> GeminiApiException.upstreamError(e)
-                    else -> GeminiApiException.clientError(e)
-                }
-            } catch (e: ResourceAccessException) {
-                throw GeminiApiException.upstreamError(e)
-            } ?: throw GeminiApiException.emptyResponse()
+        val snapshot =
+            geminiRetry.execute {
+                val response =
+                    try {
+                        restClient
+                            .post()
+                            .uri {
+                                it
+                                    .path("/v1beta/models/{model}:generateContent")
+                                    .build(geminiProperties.model)
+                            }.header(GEMINI_API_KEY_HEADER, geminiProperties.apiKey)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .body(request)
+                            .retrieve()
+                            .body<GeminiExtractionResponse>()
+                    } catch (e: RestClientResponseException) {
+                        throw GeminiApiException.fromResponseError(e)
+                    } catch (e: ResourceAccessException) {
+                        throw GeminiApiException.upstreamError(e)
+                    } ?: throw GeminiApiException.emptyResponse()
+
+                val text = response.extractText()
+                val result =
+                    try {
+                        objectMapper.readValue<GeminiExtractionResult>(text)
+                    } catch (e: Exception) {
+                        throw GeminiApiException.parseError(e)
+                    }
+                result.toProductSnapshot(link)
+            }
         val llmMs = (System.nanoTime() - llmStart) / 1_000_000
 
         log.info(
@@ -74,15 +84,7 @@ class GeminiProductExtractor(
             html.length,
             link.safeLogString(),
         )
-
-        val text = response.extractText()
-        val result =
-            try {
-                objectMapper.readValue<GeminiExtractionResult>(text)
-            } catch (e: Exception) {
-                throw GeminiApiException.parseError(e)
-            }
-        return result.toProductSnapshot(link)
+        return snapshot
     }
 
     // LLM 입력에서 <script>/<style>/주석을 제거해 토큰 낭비와 오판(스크립트 안의 가짜 가격 JSON 등)을 줄인다.
@@ -96,8 +98,9 @@ class GeminiProductExtractor(
     companion object {
         private const val CONNECT_TIMEOUT_MS = 5_000
 
-        // LLM 응답은 수십 초까지 갈 수 있어 넉넉하게 설정.
-        private const val READ_TIMEOUT_MS = 60_000
+        // LLM 응답이 길어질 수 있어 넉넉히 두되, 1 분 안에 재시도까지 끝낼 수 있도록 30 초로 제한.
+        // GeminiOcrClient 도 같은 30 초.
+        private const val READ_TIMEOUT_MS = 30_000
 
         // API 키는 access log 에 남지 않도록 쿼리 대신 헤더로 전달.
         // https://ai.google.dev/gemini-api/docs/api-key#provide-api-key-explicitly
