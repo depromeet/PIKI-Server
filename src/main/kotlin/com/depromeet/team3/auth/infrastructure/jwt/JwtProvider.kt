@@ -1,5 +1,6 @@
 package com.depromeet.team3.auth.infrastructure.jwt
 
+import com.depromeet.team3.user.domain.IdentityType
 import io.jsonwebtoken.Claims
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
@@ -11,6 +12,7 @@ import java.util.UUID
 import javax.crypto.SecretKey
 
 private const val CLAIM_TYPE = "type"
+private const val CLAIM_ROLE = "role"
 private val logger = LoggerFactory.getLogger(JwtProvider::class.java)
 
 @Component
@@ -23,48 +25,73 @@ class JwtProvider(
     private val secretKey: SecretKey =
         Keys.hmacShaKeyFor(jwtProperties.secret.toByteArray(Charsets.UTF_8))
 
-    fun generateAccessToken(userId: UUID): String =
-        buildToken(userId, TokenType.ACCESS, jwtProperties.accessTokenExpiry)
+    fun generateAccessToken(
+        userId: UUID,
+        identityType: IdentityType,
+    ): String =
+        buildToken(
+            userId = userId,
+            type = TokenType.ACCESS,
+            expiry = jwtProperties.accessTokenExpiry,
+            role = identityType.name,
+        )
 
     fun generateRefreshToken(userId: UUID): String =
-        buildToken(userId, TokenType.REFRESH, jwtProperties.refreshTokenExpiry)
+        buildToken(
+            userId = userId,
+            type = TokenType.REFRESH,
+            expiry = jwtProperties.refreshTokenExpiry,
+            role = null,
+        )
 
-    fun parseAccessToken(token: String): UUID? = parseToken(token, TokenType.ACCESS)
+    fun parseAccessToken(token: String): AccessTokenPayload? =
+        runCatching {
+            val claims = parseClaims(token)
+            val rawType = claims[CLAIM_TYPE] as? String
+            val actualType = TokenType.fromClaim(rawType)
+            check(actualType == TokenType.ACCESS) {
+                "JWT type mismatch: expected=access, actual=${rawType ?: "<missing>"}"
+            }
+            val rawRole = claims[CLAIM_ROLE] as? String ?: error("role claim missing in access token")
+            AccessTokenPayload(
+                userId = UUID.fromString(claims.subject),
+                identityType = IdentityType.valueOf(rawRole),
+            )
+        }.onFailure { logger.info("ACCESS JWT 파싱 실패: {}", it.message) }
+            .getOrNull()
 
-    fun parseRefreshToken(token: String): UUID? = parseToken(token, TokenType.REFRESH)
+    fun parseRefreshToken(token: String): UUID? =
+        runCatching {
+            val claims = parseClaims(token)
+            val rawType = claims[CLAIM_TYPE] as? String
+            val actualType = TokenType.fromClaim(rawType)
+            check(actualType == TokenType.REFRESH) {
+                "JWT type mismatch: expected=refresh, actual=${rawType ?: "<missing>"}"
+            }
+            UUID.fromString(claims.subject)
+        }.onFailure { logger.info("REFRESH JWT 파싱 실패: {}", it.message) }
+            .getOrNull()
+
+    fun validateToken(token: String): Boolean = runCatching { parseClaims(token) }.isSuccess
 
     private fun buildToken(
         userId: UUID,
         type: TokenType,
         expiry: Duration,
+        role: String?,
     ): String {
         val now = Date()
         return Jwts
             .builder()
+            .id(UUID.randomUUID().toString())
             .subject(userId.toString())
             .claim(CLAIM_TYPE, type.claimValue)
             .issuedAt(now)
             .expiration(Date(now.time + expiry.toMillis()))
+            .apply { role?.let { claim(CLAIM_ROLE, it) } }
             .signWith(secretKey)
             .compact()
     }
-
-    // 서명 검증 + 만료 검증 + token type 일치 검증을 한 번에 수행한다.
-    // 어느 단계든 실패하면 null 을 반환하여 호출자가 Elvis 로 분기할 수 있다.
-    private fun parseToken(
-        token: String,
-        expected: TokenType,
-    ): UUID? =
-        runCatching {
-            val claims = parseClaims(token)
-            val rawType = claims[CLAIM_TYPE] as? String
-            val actualType = TokenType.fromClaim(rawType)
-            check(actualType == expected) {
-                "JWT type mismatch: expected=${expected.claimValue}, actual=${rawType ?: "<missing>"}"
-            }
-            UUID.fromString(claims.subject)
-        }.onFailure { logger.debug("JWT 파싱 실패 (expected={}): {}", expected.claimValue, it.message) }
-            .getOrNull()
 
     private fun parseClaims(token: String): Claims =
         Jwts
@@ -74,4 +101,8 @@ class JwtProvider(
             .parseSignedClaims(token)
             .payload
 
+    data class AccessTokenPayload(
+        val userId: UUID,
+        val identityType: IdentityType,
+    )
 }

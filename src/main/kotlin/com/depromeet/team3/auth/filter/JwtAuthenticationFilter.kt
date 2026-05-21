@@ -5,6 +5,7 @@ import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.HttpHeaders
+import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken
 import org.springframework.stereotype.Component
@@ -19,15 +20,14 @@ class JwtAuthenticationFilter(
         response: HttpServletResponse,
         filterChain: FilterChain,
     ) {
-        authenticate(request)
+        extractToken(request)
+            ?.let { jwtProvider.parseAccessToken(it) }
+            ?.let { payload ->
+                val authority = SimpleGrantedAuthority(payload.identityType.name)
+                SecurityContextHolder.getContext().authentication =
+                    PreAuthenticatedAuthenticationToken(payload.userId, null, listOf(authority))
+            }
         filterChain.doFilter(request, response)
-    }
-
-    private fun authenticate(request: HttpServletRequest) {
-        val token = extractToken(request) ?: return
-        val userId = jwtProvider.parseAccessToken(token) ?: return
-        SecurityContextHolder.getContext().authentication =
-            PreAuthenticatedAuthenticationToken(userId, null, emptyList())
     }
 
     private fun extractToken(request: HttpServletRequest): String? {

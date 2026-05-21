@@ -1,8 +1,11 @@
 package com.depromeet.team3.auth.config
 
 import com.depromeet.team3.auth.filter.JwtAuthenticationFilter
+import com.depromeet.team3.user.domain.IdentityType
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
@@ -22,7 +25,30 @@ class SecurityConfig {
             .httpBasic { it.disable() }
             .formLogin { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
-            .authorizeHttpRequests { it.anyRequest().permitAll() }
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
+            .authorizeHttpRequests { auth ->
+                auth
+                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/guest")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/token/refresh")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout")
+                    .authenticated()
+                    .requestMatchers("/api/v1/dev/**")
+                    .hasAuthority(IdentityType.GUEST.name)
+                    .requestMatchers("/swagger-ui/**", "/v3/api-docs/**")
+                    .permitAll()
+                    .requestMatchers("/api/v1/wishlists/**")
+                    .hasAuthority(IdentityType.MEMBER.name)
+                    // 토너먼트 플레이는 GUEST 도 허용
+                    .requestMatchers("/api/v1/tournaments/**")
+                    .authenticated()
+                    .anyRequest()
+                    .authenticated()
+            }.exceptionHandling {
+                // 미인증 요청은 401, 인증됐지만 권한 없으면 403
+                it.authenticationEntryPoint { _, response, _ ->
+                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED)
+                }
+            }.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
             .build()
 }
