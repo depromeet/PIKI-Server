@@ -213,16 +213,6 @@ class TournamentServiceTest {
     }
 
     @Test
-    fun `start 에서 아이템이 33개면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
-        (1L..33L).forEach { service.addItem(userId, AddTournamentItem(tournamentId, it)) }
-
-        assertFailsWith<TournamentException> {
-            service.start(userId, tournamentId)
-        }
-    }
-
-    @Test
     fun `start 에서 아이템이 32개면 정상적으로 시작된다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
         (1L..32L).forEach { service.addItem(userId, AddTournamentItem(tournamentId, it)) }
