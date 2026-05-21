@@ -69,7 +69,7 @@ class UserService(
 
     @Transactional
     fun createMember(nickname: String): User {
-        if (userRepository.existsByNickname(nickname)) throw UserException.duplicateNickname(nickname)
+        if (userRepository.existsByNickname(nickname)) throw UserException.duplicateNickname()
         val id = UUID.randomUUID()
         val profileImage = dicebearUrl(id)
         return try {
@@ -77,7 +77,7 @@ class UserService(
                 User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.MEMBER),
             )
         } catch (e: DataIntegrityViolationException) {
-            throw UserException.duplicateNickname(nickname)
+            throw UserException.duplicateNickname()
         }
     }
 
@@ -95,7 +95,7 @@ class UserService(
         val user = findById(userId)
         user.deletedAt?.let { throw UserException.deletedUser(userId) }
         if (user.nickname != newNickname && userRepository.existsByNickname(newNickname)) {
-            throw UserException.duplicateNickname(newNickname)
+            throw UserException.duplicateNickname()
         }
         user.updateNickname(newNickname)
         return userRepository.save(user)
