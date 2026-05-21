@@ -199,7 +199,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.tournamentId").value(tournamentId))
-            .andExpect(jsonPath("$.data.initialRound").value(2))
+            .andExpect(jsonPath("$.data.startRound").value(2))
             .andExpect(jsonPath("$.data.items.length()").value(2))
             .andExpect(jsonPath("$.data.history[0].selectedTournamentItemId").value(item1Id))
     }

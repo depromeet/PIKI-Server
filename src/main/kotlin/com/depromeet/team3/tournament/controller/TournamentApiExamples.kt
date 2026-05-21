@@ -66,7 +66,7 @@ class TournamentApiExamples(
                                 ApiResponseBody.ok(
                                     TournamentInfoResponse(
                                         tournamentId = 1,
-                                        initialRound = 2,
+                                        startRound = 2,
                                         items =
                                             listOf(
                                                 TournamentItemInfoResponse(tournamentItemId = 1, itemId = 10),
