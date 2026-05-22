@@ -13,6 +13,7 @@ import com.depromeet.team3.tournament.service.dto.AddTournamentItems
 import com.depromeet.team3.tournament.service.dto.CreateTournament
 import com.depromeet.team3.tournament.service.dto.RecordMatch
 import com.depromeet.team3.wishlist.domain.Wish
+import com.depromeet.team3.wishlist.domain.WishCursor
 import com.depromeet.team3.wishlist.repository.WishRepository
 import com.depromeet.team3.wishlist.service.WishException
 import org.junit.jupiter.api.Test
@@ -56,6 +57,12 @@ class TournamentServiceTest {
             ids: List<Long>,
             userId: UUID,
         ): Long = if (allOwned) ids.size.toLong() else 0L
+
+        override fun findPage(
+            userId: UUID,
+            cursor: WishCursor?,
+            limit: Int,
+        ): List<Wish> = emptyList()
     }
 
     private class TestTournamentItemRepository : TournamentItemRepository {

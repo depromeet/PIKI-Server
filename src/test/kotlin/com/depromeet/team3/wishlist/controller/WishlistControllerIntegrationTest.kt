@@ -6,12 +6,15 @@ import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.support.StubProductLinkExtractor
 import com.depromeet.team3.support.uuidToBytes
 import com.depromeet.team3.user.domain.IdentityType
+import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -50,6 +53,40 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
     private fun memberToken(userId: UUID): String = jwtProvider.generateAccessToken(userId, IdentityType.MEMBER)
 
+    private fun buildMockMvc(): MockMvc =
+        MockMvcBuilders
+            .webAppContextSetup(webApplicationContext)
+            .apply<DefaultMockMvcBuilder>(springSecurity())
+            .build()
+
+    // POST 로 위시 한 건 등록하고 생성된 wishId 를 돌려준다. 조회 시나리오의 데이터 세팅용.
+    private fun registerWish(
+        mockMvc: MockMvc,
+        authHeader: String,
+        url: String,
+        name: String,
+    ): Long {
+        stubProductLinkExtractor.build = { ProductSnapshot(link = it, name = name) }
+        val body = objectMapper.writeValueAsString(mapOf("url" to url))
+        val response =
+            mockMvc
+                .perform(
+                    post("/api/v1/wishlists")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(HttpHeaders.AUTHORIZATION, authHeader)
+                        .content(body),
+                ).andExpect(status().isCreated)
+                .andReturn()
+                .response
+                .getContentAsString(Charsets.UTF_8)
+        return objectMapper
+            .readTree(response)
+            .path("data")
+            .path("wish")
+            .path("id")
+            .asLong()
+    }
+
     @Test
     fun `정상 등록 - 201 과 함께 추출 결과가 응답에 박힌다`() {
         val mockMvc =
@@ -81,11 +118,13 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             ).andExpect(status().isCreated)
             .andExpect(jsonPath("$.status").value(201))
             .andExpect(jsonPath("$.code").value("CREATED"))
-            .andExpect(jsonPath("$.data.wishId").isNumber)
-            .andExpect(jsonPath("$.data.name").value("나이키 에어포스"))
-            .andExpect(jsonPath("$.data.currentPrice").value(99_000))
-            .andExpect(jsonPath("$.data.currency").value("KRW"))
-            .andExpect(jsonPath("$.data.imageUrl").value("https://cdn.example.com/p/42.jpg"))
+            .andExpect(jsonPath("$.data.wish.id").isNumber)
+            .andExpect(jsonPath("$.data.wish.createdAt").exists())
+            .andExpect(jsonPath("$.data.item.name").value("나이키 에어포스"))
+            .andExpect(jsonPath("$.data.item.currentPrice").value(99_000))
+            .andExpect(jsonPath("$.data.item.currency").value("KRW"))
+            .andExpect(jsonPath("$.data.item.imageUrl").value("https://cdn.example.com/p/42.jpg"))
+            .andExpect(jsonPath("$.data.item.sourceUrl").value(url))
     }
 
     @Test
@@ -202,5 +241,83 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.status").value(400))
             .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
             .andExpect(jsonPath("$.detail").value("유효한 URL 형식이 아닙니다."))
+    }
+
+    @Test
+    fun `위시리스트가 비어 있으면 빈 배열과 hasNext=false 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+
+        mockMvc
+            .perform(
+                get("/api/v1/wishlists")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.code").value("OK"))
+            .andExpect(jsonPath("$.data.length()").value(0))
+            .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
+            .andExpect(jsonPath("$.pageResponse.nextCursor").value(nullValue()))
+    }
+
+    @Test
+    fun `본인 위시만 최신 등록순으로 반환하고 다른 유저 wish 는 섞이지 않는다`() {
+        val mockMvc = buildMockMvc()
+        val ownerId = UUID.randomUUID()
+        val otherId = UUID.randomUUID()
+        insertMember(ownerId)
+        insertMember(otherId)
+        val ownerAuth = "Bearer ${memberToken(ownerId)}"
+        registerWish(mockMvc, ownerAuth, "https://shop.example.com/products/1", "첫 상품")
+        val secondWishId = registerWish(mockMvc, ownerAuth, "https://shop.example.com/products/2", "둘째 상품")
+        registerWish(mockMvc, "Bearer ${memberToken(otherId)}", "https://shop.example.com/products/3", "남의 상품")
+
+        mockMvc
+            .perform(
+                get("/api/v1/wishlists")
+                    .header(HttpHeaders.AUTHORIZATION, ownerAuth),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(2))
+            // 최신 등록(둘째)이 맨 앞 (id desc)
+            .andExpect(jsonPath("$.data[0].wish.id").value(secondWishId))
+            .andExpect(jsonPath("$.data[0].item.name").value("둘째 상품"))
+            .andExpect(jsonPath("$.data[1].item.name").value("첫 상품"))
+            .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
+    }
+
+    @Test
+    fun `size 보다 많으면 hasNext 와 nextCursor 를 주고 그 cursor 로 다음 페이지를 잇는다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val firstWishId = registerWish(mockMvc, authHeader, "https://shop.example.com/products/1", "상품1")
+        val secondWishId = registerWish(mockMvc, authHeader, "https://shop.example.com/products/2", "상품2")
+        registerWish(mockMvc, authHeader, "https://shop.example.com/products/3", "상품3")
+
+        // 첫 페이지: 최신 2건 + 다음 페이지 존재
+        mockMvc
+            .perform(
+                get("/api/v1/wishlists")
+                    .param("size", "2")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(2))
+            .andExpect(jsonPath("$.pageResponse.hasNext").value(true))
+            .andExpect(jsonPath("$.pageResponse.nextCursor").value(secondWishId.toString()))
+
+        // 다음 페이지: cursor 이전(=더 오래된) 1건, 더 이상 없음
+        mockMvc
+            .perform(
+                get("/api/v1/wishlists")
+                    .param("size", "2")
+                    .param("cursor", secondWishId.toString())
+                    .header(HttpHeaders.AUTHORIZATION, authHeader),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].wish.id").value(firstWishId))
+            .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
+            .andExpect(jsonPath("$.pageResponse.nextCursor").value(nullValue()))
     }
 }
