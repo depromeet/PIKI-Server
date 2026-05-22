@@ -1,14 +1,21 @@
 package com.depromeet.team3.wishlist.controller
 
 import com.depromeet.team3.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.team3.ocr.domain.BoundingBox
+import com.depromeet.team3.ocr.service.OcrExtraction
 import com.depromeet.team3.product.service.ProductSnapshot
 import com.depromeet.team3.product.service.gemini.GeminiApiException
 import com.depromeet.team3.support.IntegrationTestSupport
+import com.depromeet.team3.support.StubImageStorage
 import com.depromeet.team3.support.StubProductImageExtractor
 import com.depromeet.team3.support.StubProductLinkExtractor
 import com.depromeet.team3.support.uuidToBytes
 import com.depromeet.team3.user.domain.IdentityType
 import org.hamcrest.Matchers.nullValue
+import org.hamcrest.Matchers.startsWith
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
+import javax.imageio.ImageIO
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
@@ -535,7 +542,10 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val userId = UUID.randomUUID()
         insertMember(userId)
         stubProductImageExtractor.build = {
-            ProductSnapshot(link = null, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW")
+            OcrExtraction(
+                snapshot = ProductSnapshot(link = null, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW"),
+                boundingBox = null,
+            )
         }
         val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
 
@@ -550,9 +560,37 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.item.name").value("나이키 에어포스"))
             .andExpect(jsonPath("$.data.item.currentPrice").value(99_000))
             .andExpect(jsonPath("$.data.item.currency").value("KRW"))
-            // OCR 항목은 URL·이미지가 없다 (category 는 버려짐, 이미지 저장은 후속)
+            // bbox 가 없으면 크롭을 건너뛰어 imageUrl 은 null. sourceUrl 도 OCR 이라 null.
             .andExpect(jsonPath("$.data.item.sourceUrl").value(nullValue()))
             .andExpect(jsonPath("$.data.item.imageUrl").value(nullValue()))
+    }
+
+    @Test
+    fun `OCR 이미지에 bbox 가 있으면 크롭 이미지를 업로드해 imageUrl 이 채워진다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        stubProductImageExtractor.build = {
+            OcrExtraction(
+                snapshot = ProductSnapshot(link = null, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW"),
+                boundingBox = BoundingBox(yMin = 100, xMin = 100, yMax = 500, xMax = 500),
+            )
+        }
+        // 크롭이 동작하려면 실제 디코딩 가능한 PNG 여야 한다 (ImageCropper 는 실제 빈, 업로드만 stub).
+        val pngBytes =
+            ByteArrayOutputStream().use { out ->
+                ImageIO.write(BufferedImage(800, 800, BufferedImage.TYPE_INT_RGB), "png", out)
+                out.toByteArray()
+            }
+        val image = MockMultipartFile("image", "product.png", "image/png", pngBytes)
+
+        mockMvc
+            .perform(
+                multipart("/api/v1/wishlists/ocr")
+                    .file(image)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isCreated)
+            .andExpect(jsonPath("$.data.item.imageUrl").value(startsWith(StubImageStorage.BASE_URL)))
     }
 
     @Test
@@ -561,7 +599,12 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val userId = UUID.randomUUID()
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
-        stubProductImageExtractor.build = { ProductSnapshot(link = null, name = "에어 조던", currentPrice = 119_000) }
+        stubProductImageExtractor.build = {
+            OcrExtraction(
+                snapshot = ProductSnapshot(link = null, name = "에어 조던", currentPrice = 119_000),
+                boundingBox = null,
+            )
+        }
         val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
 
         mockMvc

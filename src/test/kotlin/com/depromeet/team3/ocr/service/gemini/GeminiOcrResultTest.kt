@@ -17,7 +17,7 @@ class GeminiOcrResultTest {
     fun `toProductSnapshot 은 link 없이 name·price·currency 를 옮기고 category 는 버린다`() {
         val result = GeminiOcrResult(name = "우유", price = 3500, category = "음료", currency = "KRW")
 
-        val snapshot = result.toProductSnapshot()
+        val snapshot = result.toOcrExtraction().snapshot
 
         assertNull(snapshot.link)
         assertEquals("우유", snapshot.name)
@@ -30,7 +30,7 @@ class GeminiOcrResultTest {
     fun `toProductSnapshot 은 null 필드를 그대로 옮긴다`() {
         val result = GeminiOcrResult(name = null, price = null, category = null, currency = null)
 
-        val snapshot = result.toProductSnapshot()
+        val snapshot = result.toOcrExtraction().snapshot
 
         assertNull(snapshot.name)
         assertNull(snapshot.currentPrice)
@@ -41,14 +41,52 @@ class GeminiOcrResultTest {
     fun `toProductSnapshot 은 currency 대소문자·공백을 ISO 4217 로 정규화한다`() {
         val result = GeminiOcrResult(name = "우유", price = 3500, category = "음료", currency = " krw ")
 
-        assertEquals("KRW", result.toProductSnapshot().currency)
+        assertEquals("KRW", result.toOcrExtraction().snapshot.currency)
     }
 
     @Test
     fun `toProductSnapshot 은 ISO 4217 형식이 아닌 currency 를 null 로 떨어뜨린다`() {
         val result = GeminiOcrResult(name = "우유", price = 3500, category = "음료", currency = "원")
 
-        assertNull(result.toProductSnapshot().currency)
+        assertNull(result.toOcrExtraction().snapshot.currency)
+    }
+
+    // ---------- boundingBox 매핑 ----------
+
+    @Test
+    fun `toOcrExtraction 은 정상 좌표 boundingBox 를 매핑한다`() {
+        val result =
+            GeminiOcrResult(
+                name = "우유",
+                price = 3500,
+                category = null,
+                currency = null,
+                boundingBox = GeminiOcrResult.BoundingBoxDto(yMin = 100, xMin = 200, yMax = 800, xMax = 700),
+            )
+
+        val bbox = result.toOcrExtraction().boundingBox
+
+        assertEquals(100, bbox?.yMin)
+        assertEquals(200, bbox?.xMin)
+        assertEquals(800, bbox?.yMax)
+        assertEquals(700, bbox?.xMax)
+    }
+
+    @Test
+    fun `toOcrExtraction 은 boundingBox 가 없거나 비정상이면 null 이다`() {
+        val noBox = GeminiOcrResult(name = "우유", price = 3500, category = null, currency = null, boundingBox = null)
+        assertNull(noBox.toOcrExtraction().boundingBox)
+
+        // yMax < yMin (순서 역전) → null
+        val invalid =
+            GeminiOcrResult(
+                name = "우유",
+                price = 3500,
+                category = null,
+                currency = null,
+                boundingBox = GeminiOcrResult.BoundingBoxDto(yMin = 800, xMin = 200, yMax = 100, xMax = 700),
+            )
+        assertNull(invalid.toOcrExtraction().boundingBox)
     }
 
     // ---------- wire format 역직렬화 ----------
