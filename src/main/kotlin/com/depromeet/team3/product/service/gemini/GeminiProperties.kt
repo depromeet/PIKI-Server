@@ -5,7 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 @ConfigurationProperties(prefix = "gemini")
 data class GeminiProperties(
     val apiKey: String,
-    val model: String = "gemini-2.5-flash",
+    val model: String = DEFAULT_MODEL,
     val retry: Retry = Retry(),
 ) {
     init {
@@ -30,5 +30,18 @@ data class GeminiProperties(
             require(maxAttempts >= 1) { "gemini.retry.max-attempts 는 1 이상이어야 합니다: $maxAttempts" }
             require(initialDelayMs >= 0) { "gemini.retry.initial-delay-ms 는 0 이상이어야 합니다: $initialDelayMs" }
         }
+    }
+
+    companion object {
+        /**
+         * 기본 모델의 단일 진실 원천(single source of truth).
+         *
+         * application.yml 등 다른 곳에 모델 리터럴을 중복 정의하지 않는다 — 여러 곳에 흩어지면
+         * 한쪽만 바뀌어 "다른 모델이 기본값이 되는" drift 가 생긴다. 운영에서 모델을 바꾸려면
+         * GEMINI_MODEL 환경변수로 override 한다 (relaxed binding: GEMINI_MODEL -> gemini.model).
+         *
+         * preview 모델은 2 주 사전공지 후 deprecate 정책이라 운영 안정성을 위해 GA 모델만 기본값으로 둔다.
+         */
+        const val DEFAULT_MODEL = "gemini-3.1-flash-lite"
     }
 }

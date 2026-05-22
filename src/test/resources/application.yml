@@ -9,7 +9,7 @@ spring:
 # 컨텍스트 로딩 자체는 깨지지 않는다.
 gemini:
   api-key: ${GEMINI_API_KEY:test-dummy-key}
-  model: ${GEMINI_MODEL:gemini-2.5-flash}
+  # model 미지정 → GeminiProperties.DEFAULT_MODEL 적용. 테스트는 외부 호출을 stub 하므로 모델 문자열은 실제로 쓰이지 않는다.
 
 # 운영 application.yml 은 JWT_SECRET env 를 강제하지만 테스트는 dummy secret 으로
 # 컨텍스트 로딩만 통과시킨다 (HS256 최소 키 길이 32 bytes 충족).
