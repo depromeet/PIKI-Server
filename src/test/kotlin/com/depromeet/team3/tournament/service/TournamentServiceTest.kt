@@ -79,6 +79,12 @@ class TournamentServiceTest {
             items.remove(tournamentItem)
         }
 
+        override fun deleteIfPending(id: Long, tournamentId: Long): Int {
+            val item = items.find { it.getId() == id && it.tournamentId == tournamentId } ?: return 0
+            items.remove(item)
+            return 1
+        }
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
