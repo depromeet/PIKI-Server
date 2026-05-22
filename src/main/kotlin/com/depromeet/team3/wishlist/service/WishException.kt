@@ -18,5 +18,12 @@ class WishException private constructor(
                 ErrorCategory.FORBIDDEN,
                 HttpStatus.FORBIDDEN,
             )
+
+        fun invalidCursor(): WishException =
+            WishException(
+                "유효하지 않은 cursor 입니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
     }
 }
