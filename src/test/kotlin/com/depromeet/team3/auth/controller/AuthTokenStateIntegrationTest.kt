@@ -52,7 +52,7 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
 
     private fun cleanup(userId: UUID) {
         refreshTokenStore.delete(userId)
-        jdbcTemplate.update("DELETE FROM `user` WHERE id = ?", uuidToBytes(userId))
+        jdbcTemplate.update("DELETE FROM users WHERE id = ?", uuidToBytes(userId))
     }
 
     @Test
