@@ -24,9 +24,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          # 머지 날짜 (YYYY-MM-DD)
-          MERGE_DATE=$(echo "$MERGED_AT" | cut -d'T' -f1)
-          echo "Merge date: $MERGE_DATE"
+          # 머지 날짜 (YYYY-MM-DD, KST 기준)
+          # mergedAt 은 GitHub API 가 UTC 로 주는데(예: 2026-05-22T16:40:46Z),
+          # 단순 cut 으로 T 앞만 떼면 timezone 정보가 사라져 UTC 의 5/22 가 저장된다.
+          # KST(+9) 로는 5/23 새벽인데 보드의 Start date(KST 기준 첫 commit 일) 와 어긋나
+          # timeline 이 역행하는 사고가 있었음 (#195/#196). TZ 명시로 강제 변환한다.
+          MERGE_DATE=$(TZ=Asia/Seoul date -d "$MERGED_AT" '+%Y-%m-%d')
+          echo "Merge date (KST): $MERGE_DATE"
 
           # 프로젝트 + 필드 메타 동적 조회 (보드 변경에 자동 추종).
           PROJECT_ID=$(gh api graphql -f query='{
