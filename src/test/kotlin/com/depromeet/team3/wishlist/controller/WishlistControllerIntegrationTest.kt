@@ -1,8 +1,11 @@
 package com.depromeet.team3.wishlist.controller
 
 import com.depromeet.team3.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.team3.common.domain.Product
 import com.depromeet.team3.product.service.ProductSnapshot
+import com.depromeet.team3.product.service.gemini.GeminiApiException
 import com.depromeet.team3.support.IntegrationTestSupport
+import com.depromeet.team3.support.StubProductImageExtractor
 import com.depromeet.team3.support.StubProductLinkExtractor
 import com.depromeet.team3.support.uuidToBytes
 import com.depromeet.team3.user.domain.IdentityType
@@ -12,10 +15,12 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.mock.web.MockMultipartFile
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
@@ -37,6 +42,9 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
     @Autowired
     private lateinit var stubProductLinkExtractor: StubProductLinkExtractor
+
+    @Autowired
+    private lateinit var stubProductImageExtractor: StubProductImageExtractor
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
@@ -520,5 +528,103 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             ).andExpect(status().isNotFound)
             .andExpect(jsonPath("$.status").value(404))
             .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+    }
+
+    @Test
+    fun `OCR 이미지로 등록하면 201 과 함께 item·wish 가 저장되고 sourceUrl 은 null 이다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        stubProductImageExtractor.build = { Product(name = "나이키 에어포스", price = 99_000, category = "신발") }
+        val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
+
+        mockMvc
+            .perform(
+                multipart("/api/v1/wishlists/ocr")
+                    .file(image)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isCreated)
+            .andExpect(jsonPath("$.status").value(201))
+            .andExpect(jsonPath("$.data.wish.id").isNumber)
+            .andExpect(jsonPath("$.data.item.name").value("나이키 에어포스"))
+            .andExpect(jsonPath("$.data.item.currentPrice").value(99_000))
+            // OCR 항목은 URL·통화·이미지가 없다 (category 는 버려짐)
+            .andExpect(jsonPath("$.data.item.sourceUrl").value(nullValue()))
+            .andExpect(jsonPath("$.data.item.currency").value(nullValue()))
+            .andExpect(jsonPath("$.data.item.imageUrl").value(nullValue()))
+    }
+
+    @Test
+    fun `OCR 등록 후 조회하면 해당 항목이 sourceUrl null 로 함께 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        stubProductImageExtractor.build = { Product(name = "에어 조던", price = 119_000, category = null) }
+        val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
+
+        mockMvc
+            .perform(
+                multipart("/api/v1/wishlists/ocr").file(image).header(HttpHeaders.AUTHORIZATION, authHeader),
+            ).andExpect(status().isCreated)
+
+        mockMvc
+            .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].item.name").value("에어 조던"))
+            .andExpect(jsonPath("$.data[0].item.sourceUrl").value(nullValue()))
+    }
+
+    @Test
+    fun `빈 이미지로 OCR 등록하면 400 BAD_REQUEST 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val emptyImage = MockMultipartFile("image", "empty.png", "image/png", ByteArray(0))
+
+        mockMvc
+            .perform(
+                multipart("/api/v1/wishlists/ocr")
+                    .file(emptyImage)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+    }
+
+    @Test
+    fun `지원하지 않는 이미지 형식으로 OCR 등록하면 400 BAD_REQUEST 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val gif = MockMultipartFile("image", "product.gif", "image/gif", byteArrayOf(1, 2, 3))
+
+        mockMvc
+            .perform(
+                multipart("/api/v1/wishlists/ocr")
+                    .file(gif)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+    }
+
+    @Test
+    fun `OCR 등록 중 Gemini 호출이 실패하면 502 BAD_GATEWAY 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        stubProductImageExtractor.build = { throw GeminiApiException.upstreamError(RuntimeException("connection timeout")) }
+        val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
+
+        mockMvc
+            .perform(
+                multipart("/api/v1/wishlists/ocr")
+                    .file(image)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isBadGateway)
+            .andExpect(jsonPath("$.status").value(502))
+            .andExpect(jsonPath("$.code").value("BAD_GATEWAY"))
     }
 }

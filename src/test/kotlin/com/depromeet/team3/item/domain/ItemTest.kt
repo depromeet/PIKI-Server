@@ -1,5 +1,6 @@
 package com.depromeet.team3.item.domain
 
+import com.depromeet.team3.common.domain.Product
 import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.product.service.ProductSnapshot
 import org.junit.jupiter.api.Test
@@ -143,5 +144,26 @@ class ItemTest {
         val item = Item(link = link, name = "원래 이름")
 
         assertFailsWith<IllegalArgumentException> { item.update(name = "가".repeat(513)) }
+    }
+
+    @Test
+    fun `fromOcr 은 link 없이 name 과 price 를 매핑하고 category 는 버린다`() {
+        val product = Product(name = "나이키 에어포스", price = 99_000, category = "신발")
+
+        val item = Item.fromOcr(product)
+
+        assertNull(item.link)
+        assertEquals("나이키 에어포스", item.name)
+        assertEquals(99_000, item.currentPrice)
+        assertNull(item.imageUrl)
+        assertNull(item.currency)
+    }
+
+    @Test
+    fun `link 없이도 Item 이 생성된다 (OCR 경로)`() {
+        val item = Item(link = null, name = "상품")
+
+        assertNull(item.link)
+        assertEquals("상품", item.name)
     }
 }
