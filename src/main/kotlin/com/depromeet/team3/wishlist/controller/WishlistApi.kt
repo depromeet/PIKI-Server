@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.http.MediaType
+import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
 @Tag(name = "Wishlist", description = "위시리스트 등록/조회/수정/삭제 API")
@@ -184,4 +185,51 @@ interface WishlistApi {
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "위시 항목 ID", example = "1024") wishId: Long,
     ): ApiResponseBody<Unit>
+
+    @Operation(
+        summary = "위시리스트 OCR 등록",
+        description = """
+            상품 페이지를 캡처한 이미지를 받아 Gemini Vision 으로 상품명/가격을 추출한 뒤 유저의 위시리스트에 등록한다.
+            URL 등록과 결과 모양(WishItemResponse)이 같다. OCR 항목은 URL 이 없어 sourceUrl 이 null 이며,
+            추출이 부정확하면 수정 API 로 교정한다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "201",
+                description = "OCR 등록 성공",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "400",
+                description = "잘못된 요청 (빈 이미지 / 지원하지 않는 이미지 형식 등)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "502",
+                description = "Gemini 호출/응답 처리 실패",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun registerFromOcr(
+        @Parameter(hidden = true) userId: UUID,
+        image: MultipartFile,
+    ): ApiResponseBody<WishItemResponse>
 }

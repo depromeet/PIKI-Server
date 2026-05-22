@@ -128,16 +128,28 @@ class GeminiExtractionResultTest {
     }
 
     @Test
-    fun `currency 가 8자를 초과하면 ProductSnapshotException 을 던진다`() {
+    fun `ISO 4217 형식이 아닌 currency 는 예외 대신 null 로 정규화된다`() {
         val result =
             GeminiExtractionResult(
                 isProductPage = true,
                 name = "테스트",
+                currentPrice = 1_000,
                 currency = "ABCDEFGHI",
             )
 
-        assertFailsWith<ProductSnapshotException> {
-            result.toProductSnapshot(link)
-        }
+        assertNull(result.toProductSnapshot(link).currency)
+    }
+
+    @Test
+    fun `currency 대소문자·공백은 ISO 4217 대문자로 정규화된다`() {
+        val result =
+            GeminiExtractionResult(
+                isProductPage = true,
+                name = "테스트",
+                currentPrice = 1_000,
+                currency = " usd ",
+            )
+
+        assertEquals("USD", result.toProductSnapshot(link).currency)
     }
 }

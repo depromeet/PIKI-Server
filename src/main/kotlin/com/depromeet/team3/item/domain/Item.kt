@@ -12,13 +12,14 @@ import org.slf4j.LoggerFactory
 
 // wish 와 tournament_item 이 함께 참조하는 공유 엔티티.
 // 같은 link 라도 위시·출전마다 1:1 독립 행이라, 한쪽의 수정이 다른 쪽에 번지지 않는다(수정 격리).
-// link 는 바뀌면 사실상 다른 상품이라 재등록 영역으로 보고 불변(val), 나머지는 사용자가 수정할 수 있다.
+// link 는 바뀌면 사실상 다른 상품이라 재등록 영역으로 보고 불변(val). 단 OCR 등록 경로는 URL 이
+// 없어 link 가 null 일 수 있다 (URL 추출 / 이미지 추출 두 경로가 같은 item 을 만든다).
 @Entity
 @Table(name = "items")
 class Item(
     @Convert(converter = ProductLinkConverter::class)
-    @Column(name = "source_url", nullable = false, length = 2048)
-    val link: ProductLink,
+    @Column(name = "source_url", nullable = true, length = 2048)
+    val link: ProductLink? = null,
     name: String? = null,
     imageUrl: String? = null,
     currentPrice: Int? = null,
@@ -98,6 +99,7 @@ class Item(
         private const val IMAGE_URL_MAX_LENGTH = 2048
         private const val CURRENCY_MAX_LENGTH = 8
 
+        // URL 추출이든 OCR 추출이든 ProductSnapshot 으로 통일돼 들어온다. OCR 은 link 가 null 일 뿐.
         fun from(snapshot: ProductSnapshot): Item =
             Item(
                 link = snapshot.link,

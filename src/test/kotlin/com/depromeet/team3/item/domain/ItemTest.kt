@@ -144,4 +144,17 @@ class ItemTest {
 
         assertFailsWith<IllegalArgumentException> { item.update(name = "가".repeat(513)) }
     }
+
+    @Test
+    fun `link 가 null 인 ProductSnapshot(OCR 경로)도 Item 으로 매핑된다`() {
+        val snapshot = ProductSnapshot(link = null, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW")
+
+        val item = Item.from(snapshot)
+
+        assertNull(item.link)
+        assertEquals("나이키 에어포스", item.name)
+        assertEquals(99_000, item.currentPrice)
+        assertEquals("KRW", item.currency)
+        assertNull(item.imageUrl)
+    }
 }
