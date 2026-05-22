@@ -15,10 +15,6 @@ import com.depromeet.team3.tournament.service.dto.RecordMatch
 import com.depromeet.team3.user.domain.IdentityType
 import com.depromeet.team3.user.domain.User
 import com.depromeet.team3.user.repository.UserRepository
-import com.depromeet.team3.wishlist.domain.Wish
-import com.depromeet.team3.wishlist.domain.WishCursor
-import com.depromeet.team3.wishlist.domain.WishException
-import com.depromeet.team3.wishlist.repository.WishRepository
 import org.junit.jupiter.api.Test
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -68,24 +64,6 @@ class TournamentServiceTest {
         override fun existsByNickname(nickname: String): Boolean = users.values.any { it.nickname == nickname }
     }
 
-    private class TestWishRepository(
-        private val allOwned: Boolean = true,
-    ) : WishRepository {
-        override fun save(wish: Wish): Wish = wish
-
-        override fun countByIdsAndUserId(
-            ids: List<Long>,
-            userId: UUID,
-        ): Long = if (allOwned) ids.size.toLong() else 0L
-
-        override fun findPage(
-            userId: UUID,
-            cursor: WishCursor?,
-            limit: Int,
-        ): List<Wish> = emptyList()
-
-        override fun findById(id: Long): Wish? = null
-    }
 
     private class TestTournamentItemRepository : TournamentItemRepository {
         val items = mutableListOf<TournamentItem>()
@@ -164,9 +142,8 @@ class TournamentServiceTest {
     private val itemRepository = TestTournamentItemRepository()
     private val userRepository = TestTournamentUserRepository()
     private val repository = TestTournamentRepository()
-    private val wishRepository = TestWishRepository()
     private val testUserRepository = TestUserRepository()
-    private val service = TournamentService(userRepository, repository, itemRepository, wishRepository, testUserRepository)
+    private val service = TournamentService(userRepository, repository, itemRepository, testUserRepository)
     private val userId = UUID.randomUUID()
     private val otherUserId = UUID.randomUUID()
 
@@ -198,13 +175,27 @@ class TournamentServiceTest {
     }
 
     @Test
+<<<<<<< HEAD
     fun `addItems 에서 위시 아이템이 요청자의 것이 아니면 예외가 발생한다`() {
         val serviceWithNoOwnership =
             TournamentService(userRepository, repository, itemRepository, TestWishRepository(allOwned = false), testUserRepository)
+=======
+    fun `addItems 에서 토너먼트 참여자가 아니면 예외가 발생한다`() {
+>>>>>>> c3fdcbb (fix: addItems 권한 검사를 중복 검사 앞으로 이동)
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
 
-        assertFailsWith<WishException> {
-            serviceWithNoOwnership.addItems(userId, AddTournamentItems(tournamentId, (1L..4L).toList()))
+        assertFailsWith<TournamentException> {
+            service.addItems(otherUserId, AddTournamentItems(tournamentId, (1L..4L).toList()))
+        }
+    }
+
+    @Test
+    fun `addItems 에서 토너먼트 참여자가 아니면 중복 아이템이어도 권한 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L)))
+
+        assertFailsWith<TournamentException> {
+            service.addItems(otherUserId, AddTournamentItems(tournamentId, listOf(1L)))
         }
     }
 
@@ -574,6 +565,7 @@ class TournamentServiceTest {
     @Test
     fun `deleteItem 에서 토너먼트 소유자도 다른 사람이 추가한 아이템을 삭제할 수 있다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        userRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
         service.addItems(otherUserId, AddTournamentItems(tournamentId, listOf(1L)))
         val item = itemRepository.findAllByTournamentId(tournamentId).first()
 

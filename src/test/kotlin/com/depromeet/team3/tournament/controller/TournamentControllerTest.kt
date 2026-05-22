@@ -3,12 +3,12 @@ package com.depromeet.team3.tournament.controller
 import com.depromeet.team3.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.tournament.domain.TournamentItem
+import com.depromeet.team3.tournament.domain.TournamentUser
 import com.depromeet.team3.tournament.repository.TournamentItemJpaRepository
+import com.depromeet.team3.tournament.repository.TournamentUserJpaRepository
 import com.depromeet.team3.user.domain.IdentityType
 import com.depromeet.team3.user.domain.User
 import com.depromeet.team3.user.repository.UserJpaRepository
-import com.depromeet.team3.wishlist.domain.Wish
-import com.depromeet.team3.wishlist.repository.WishJpaRepository
 import kotlin.test.assertEquals
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -34,9 +34,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
     @Autowired private lateinit var objectMapper: ObjectMapper
 
-    @Autowired private lateinit var wishJpaRepository: WishJpaRepository
-
     @Autowired private lateinit var tournamentItemJpaRepository: TournamentItemJpaRepository
+
+    @Autowired private lateinit var tournamentUserJpaRepository: TournamentUserJpaRepository
 
     @Autowired private lateinit var userJpaRepository: UserJpaRepository
 
@@ -66,33 +66,31 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `POST tournaments-id-items 는 소유한 위시를 추가하면 200 을 반환한다`() {
+    fun `POST tournaments-id-items 는 참여자이면 200 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        val wishIds = saveWishes(userId, 100L, 200L)
 
         mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/items")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"itemIds":${wishIds.joinToString(",", "[", "]")}}"""),
+                    .content("""{"itemIds":[100,200]}"""),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
     }
 
     @Test
-    fun `POST tournaments-id-items 에서 소유하지 않은 위시이면 403 을 반환한다`() {
+    fun `POST tournaments-id-items 에서 토너먼트 참여자가 아니면 403 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        val otherWishIds = saveWishes(otherUserId, 100L, 200L)
 
         mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/items")
-                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"itemIds":${otherWishIds.joinToString(",", "[", "]")}}"""),
+                    .content("""{"itemIds":[100,200]}"""),
             ).andExpect(status().isForbidden)
             .andExpect(jsonPath("$.status").value(403))
     }
@@ -387,6 +385,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `DELETE tournaments-id-items-itemId 에서 소유자는 다른 참가자가 추가한 아이템도 삭제할 수 있다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
+        tournamentUserJpaRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
         addItemsToTournament(mockMvc, tournamentId, otherUserId, 300L, 400L)
         val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
 
@@ -457,10 +456,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
         nickname: String = "테스트유저",
     ): User = userJpaRepository.save(User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.MEMBER))
 
-    private fun saveWishes(
-        owner: UUID,
-        vararg itemIds: Long,
-    ): List<Long> = itemIds.map { itemId -> wishJpaRepository.save(Wish(userId = owner, itemId = itemId)).getId() }
 
     private fun addItemsToTournament(
         mockMvc: MockMvc,
@@ -468,12 +463,11 @@ class TournamentControllerTest : IntegrationTestSupport() {
         owner: UUID,
         vararg itemIds: Long,
     ) {
-        val wishIds = saveWishes(owner, *itemIds)
         mockMvc.perform(
             post("/api/v1/tournaments/$tournamentId/items")
                 .header(HttpHeaders.AUTHORIZATION, authHeader(owner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"itemIds":${wishIds.joinToString(",", "[", "]")}}"""),
+                .content("""{"itemIds":${itemIds.joinToString(",", "[", "]")}}"""),
         )
     }
 
