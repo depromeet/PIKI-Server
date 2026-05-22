@@ -206,9 +206,10 @@ class TournamentServiceTest {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
         service.addItems(userId, AddTournamentItems(tournamentId, (1L..32L).toList()))
 
-        assertFailsWith<TournamentException> {
+        val ex = assertFailsWith<TournamentException> {
             service.addItems(userId, AddTournamentItems(tournamentId, listOf(33L)))
         }
+        assertEquals(HttpStatus.BAD_REQUEST, ex.httpStatus)
     }
 
     @Test
@@ -287,7 +288,7 @@ class TournamentServiceTest {
         }
     }
 
-@Test
+    @Test
     fun `start 에서 아이템이 32개면 정상적으로 시작된다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
         service.addItems(userId, AddTournamentItems(tournamentId, (1L..32L).toList()))

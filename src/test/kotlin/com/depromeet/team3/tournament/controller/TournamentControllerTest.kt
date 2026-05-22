@@ -81,6 +81,36 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `POST tournaments-id-items 는 아이템 1개도 추가할 수 있다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/items")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"itemIds":[100]}"""),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+    }
+
+    @Test
+    fun `POST tournaments-id-items 에서 빈 itemIds 는 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/items")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"itemIds":[]}"""),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+    }
+
+    @Test
     fun `POST tournaments-id-items 에서 토너먼트 참여자가 아니면 403 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
