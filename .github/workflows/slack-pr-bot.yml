@@ -279,7 +279,9 @@ jobs:
         shell: bash
         run: |
           INITIAL_REVIEWERS=$(jq -c '[.pull_request.requested_reviewers[]?.login]' "$GITHUB_EVENT_PATH")
-          BODY="<!-- slack-pr-bot: {\"channel\":\"${{ secrets.SLACK_CHANNEL_ID }}\",\"ts\":\"${{ steps.post_parent.outputs.ts }}\",\"initial_reviewers\":$INITIAL_REVIEWERS} -->"
+          META="<!-- slack-pr-bot: {\"channel\":\"${{ secrets.SLACK_CHANNEL_ID }}\",\"ts\":\"${{ steps.post_parent.outputs.ts }}\",\"initial_reviewers\":$INITIAL_REVIEWERS} -->"
+          # visible 안내문 + 숨겨진 metadata 주석. find_ts 의 contains("slack-pr-bot") 검색은 주석을 그대로 잡으므로 연동에 영향 없다.
+          BODY=$(printf '%s\n%s' 'Slack 스레드 연동용 메타데이터입니다. slack-pr-bot 워크플로가 자동 생성하며, 수정·삭제하면 PR 과 Slack 알림 연동이 끊깁니다.' "$META")
 
           curl -s -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
