@@ -5,6 +5,7 @@ import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.product.service.ProductLinkExtractor
 import com.depromeet.team3.product.service.ProductSnapshot
 import com.depromeet.team3.wishlist.domain.WishCursor
+import com.depromeet.team3.wishlist.domain.WishException
 import com.depromeet.team3.wishlist.domain.WishlistSize
 import com.depromeet.team3.wishlist.repository.WishRepository
 import com.depromeet.team3.wishlist.service.dto.WishWithItem
@@ -51,13 +52,41 @@ class WishlistService(
         val itemsById = itemRepository.findByIds(pageWishes.map { it.itemId }).associateBy { it.getId() }
         val entries =
             pageWishes.map { wish ->
-                // item 은 스냅샷이라 삭제되지 않는다. 없으면 영속화 경로가 깨진 코드 버그다.
+                // item 은 wish 와 함께 영속화되며 별도 삭제 경로가 없다. 없으면 영속화 경로가 깨진 코드 버그다.
                 val item = itemsById[wish.itemId] ?: error("wish ${wish.getId()} 의 item ${wish.itemId} 가 없다")
                 WishWithItem(wish = wish, item = item)
             }
 
         val nextCursor = pageWishes.lastOrNull()?.getId()?.toString().takeIf { hasNext }
         return WishlistPage(entries = entries, nextCursor = nextCursor, hasNext = hasNext)
+    }
+
+    // item 의 name·currentPrice 를 수정한다. 변경은 @Transactional 커밋 시 dirty checking 으로 반영.
+    @Transactional
+    fun updateWish(
+        userId: UUID,
+        wishId: Long,
+        name: String?,
+        currentPrice: Int?,
+        imageUrl: String?,
+        currency: String?,
+    ): WishWithItem {
+        val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
+        wish.verifyOwnedBy(userId)
+        // wish 가 가리키는 item 은 반드시 존재한다. 없으면 영속화 경로가 깨진 코드 버그다.
+        val item = itemRepository.findById(wish.itemId) ?: error("wish ${wish.getId()} 의 item ${wish.itemId} 가 없다")
+        item.update(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
+        return WishWithItem(wish = wish, item = item)
+    }
+
+    @Transactional
+    fun deleteWish(
+        userId: UUID,
+        wishId: Long,
+    ) {
+        val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
+        wish.verifyOwnedBy(userId)
+        wish.delete()
     }
 
     private fun extractWithLatencyLog(link: ProductLink): ProductSnapshot {

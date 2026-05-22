@@ -17,8 +17,8 @@ import com.depromeet.team3.user.domain.User
 import com.depromeet.team3.user.repository.UserRepository
 import com.depromeet.team3.wishlist.domain.Wish
 import com.depromeet.team3.wishlist.domain.WishCursor
+import com.depromeet.team3.wishlist.domain.WishException
 import com.depromeet.team3.wishlist.repository.WishRepository
-import com.depromeet.team3.wishlist.service.WishException
 import org.junit.jupiter.api.Test
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -83,6 +83,8 @@ class TournamentServiceTest {
             cursor: WishCursor?,
             limit: Int,
         ): List<Wish> = emptyList()
+
+        override fun findById(id: Long): Wish? = null
     }
 
     private class TestTournamentItemRepository : TournamentItemRepository {

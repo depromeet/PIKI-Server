@@ -4,11 +4,15 @@ import com.depromeet.team3.common.response.ApiResponseBody
 import com.depromeet.team3.common.response.PageResponse
 import com.depromeet.team3.wishlist.controller.dto.WishItemResponse
 import com.depromeet.team3.wishlist.controller.dto.WishlistRegisterRequest
+import com.depromeet.team3.wishlist.controller.dto.WishlistUpdateRequest
 import com.depromeet.team3.wishlist.service.WishlistService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
@@ -44,5 +48,32 @@ class WishlistController(
             data = data,
             pageResponse = PageResponse(nextCursor = page.nextCursor, hasNext = page.hasNext),
         )
+    }
+
+    @PatchMapping("/{wishId}")
+    override fun updateWish(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable wishId: Long,
+        @Valid @RequestBody request: WishlistUpdateRequest,
+    ): ApiResponseBody<WishItemResponse> {
+        val result =
+            wishlistService.updateWish(
+                userId = userId,
+                wishId = wishId,
+                name = request.name,
+                currentPrice = request.currentPrice,
+                imageUrl = request.imageUrl,
+                currency = request.currency,
+            )
+        return ApiResponseBody.ok(WishItemResponse.from(result.wish, result.item))
+    }
+
+    @DeleteMapping("/{wishId}")
+    override fun deleteWish(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable wishId: Long,
+    ): ApiResponseBody<Unit> {
+        wishlistService.deleteWish(userId = userId, wishId = wishId)
+        return ApiResponseBody.ok()
     }
 }
