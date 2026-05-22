@@ -63,6 +63,8 @@ class TournamentServiceTest {
             cursor: WishCursor?,
             limit: Int,
         ): List<Wish> = emptyList()
+
+        override fun findById(id: Long): Wish? = null
     }
 
     private class TestTournamentItemRepository : TournamentItemRepository {

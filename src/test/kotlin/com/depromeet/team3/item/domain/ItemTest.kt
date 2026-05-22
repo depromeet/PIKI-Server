@@ -54,4 +54,48 @@ class ItemTest {
             Item(link = link, name = "가".repeat(513))
         }
     }
+
+    @Test
+    fun `update 로 name 과 currentPrice 를 모두 교체한다`() {
+        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000)
+
+        item.update(name = "새 이름", currentPrice = 20_000)
+
+        assertEquals("새 이름", item.name)
+        assertEquals(20_000, item.currentPrice)
+    }
+
+    @Test
+    fun `update 에 name 만 주면 currentPrice 는 유지된다`() {
+        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000)
+
+        item.update(name = "새 이름", currentPrice = null)
+
+        assertEquals("새 이름", item.name)
+        assertEquals(10_000, item.currentPrice)
+    }
+
+    @Test
+    fun `update 인자가 모두 null 이면 기존 값이 유지된다`() {
+        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000)
+
+        item.update(name = null, currentPrice = null)
+
+        assertEquals("원래 이름", item.name)
+        assertEquals(10_000, item.currentPrice)
+    }
+
+    @Test
+    fun `currentPrice 를 음수로 update 하면 불변식 위반으로 거부된다`() {
+        val item = Item(link = link, currentPrice = 10_000)
+
+        assertFailsWith<IllegalArgumentException> { item.update(currentPrice = -1) }
+    }
+
+    @Test
+    fun `name 을 512자 초과로 update 하면 불변식 위반으로 거부된다`() {
+        val item = Item(link = link, name = "원래 이름")
+
+        assertFailsWith<IllegalArgumentException> { item.update(name = "가".repeat(513)) }
+    }
 }
