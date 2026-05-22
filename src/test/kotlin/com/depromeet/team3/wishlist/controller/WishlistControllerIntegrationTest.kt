@@ -356,6 +356,54 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `name 만 수정하면 currentPrice·currency·imageUrl 은 유지된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        stubProductLinkExtractor.build = {
+            ProductSnapshot(
+                link = it,
+                name = "원래 이름",
+                currentPrice = 50_000,
+                currency = "KRW",
+                imageUrl = "https://cdn.example.com/orig.jpg",
+            )
+        }
+        val registerBody = objectMapper.writeValueAsString(mapOf("url" to "https://shop.example.com/products/1"))
+        val wishId =
+            objectMapper
+                .readTree(
+                    mockMvc
+                        .perform(
+                            post("/api/v1/wishlists")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .header(HttpHeaders.AUTHORIZATION, authHeader)
+                                .content(registerBody),
+                        ).andExpect(status().isCreated)
+                        .andReturn()
+                        .response
+                        .getContentAsString(Charsets.UTF_8),
+                ).path("data")
+                .path("wish")
+                .path("id")
+                .asLong()
+
+        mockMvc
+            .perform(
+                patch("/api/v1/wishlists/$wishId")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader)
+                    .content(objectMapper.writeValueAsString(mapOf("name" to "새 이름"))),
+            ).andExpect(status().isOk)
+            // name 만 갱신, 나머지는 등록 시점 값 유지
+            .andExpect(jsonPath("$.data.item.name").value("새 이름"))
+            .andExpect(jsonPath("$.data.item.currentPrice").value(50_000))
+            .andExpect(jsonPath("$.data.item.currency").value("KRW"))
+            .andExpect(jsonPath("$.data.item.imageUrl").value("https://cdn.example.com/orig.jpg"))
+    }
+
+    @Test
     fun `남의 위시를 수정하면 403 이 반환된다`() {
         val mockMvc = buildMockMvc()
         val ownerId = UUID.randomUUID()

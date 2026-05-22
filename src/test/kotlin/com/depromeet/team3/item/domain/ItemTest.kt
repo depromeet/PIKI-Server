@@ -98,6 +98,20 @@ class ItemTest {
     }
 
     @Test
+    fun `imageUrl 을 2048자 초과로 update 하면 불변식 위반으로 거부된다`() {
+        val item = Item(link = link, imageUrl = "https://example.com/img.jpg")
+
+        assertFailsWith<IllegalArgumentException> { item.update(imageUrl = "a".repeat(2049)) }
+    }
+
+    @Test
+    fun `imageUrl 이 2048자를 초과하면 Item 생성이 거부된다`() {
+        assertFailsWith<IllegalArgumentException> {
+            Item(link = link, imageUrl = "a".repeat(2049))
+        }
+    }
+
+    @Test
     fun `update 에 name 만 주면 currentPrice 는 유지된다`() {
         val item = Item(link = link, name = "원래 이름", currentPrice = 10_000)
 
