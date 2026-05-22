@@ -6,6 +6,7 @@ import com.depromeet.team3.common.openapi.binds
 import com.depromeet.team3.common.openapi.examples
 import com.depromeet.team3.common.response.ApiResponseBody
 import com.depromeet.team3.common.response.PageResponse
+import com.depromeet.team3.ocr.domain.OcrImage
 import com.depromeet.team3.wishlist.controller.dto.WishItemResponse
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
@@ -129,6 +130,35 @@ class WishlistApiExamples(
                     )
                 }
             }
+            if (handlerMethod.binds(WishlistController::registerFromOcr)) {
+                operation.examples(openApiObjectMapper.delegate) {
+                    add(
+                        status = HttpStatus.CREATED,
+                        name = "OCR 등록 성공 (URL 없음)",
+                        payload = ApiResponseBody.created(ocrSampleEntry),
+                    )
+                    add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "지원하지 않는 이미지 형식",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.INVALID_INPUT,
+                                status = HttpStatus.BAD_REQUEST,
+                                detail = OcrImage.unsupportedMimeTypeMessage("image/gif"),
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.BAD_GATEWAY,
+                        name = "Gemini 호출 실패",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.RETRYABLE,
+                                status = HttpStatus.BAD_GATEWAY,
+                                detail = "Gemini 호출 실패",
+                            ),
+                    )
+                }
+            }
             operation
         }
 
@@ -147,6 +177,25 @@ class WishlistApiExamples(
                     currency = "KRW",
                     imageUrl = "https://cdn.example.com/p/512.jpg",
                     sourceUrl = "https://www.example-shop.com/products/12345",
+                ),
+        )
+
+    // OCR 등록 항목 — URL·이미지·통화가 없어 해당 필드가 null 이다.
+    private val ocrSampleEntry =
+        WishItemResponse(
+            wish =
+                WishItemResponse.WishView(
+                    id = 1025,
+                    createdAt = LocalDateTime.of(2026, 5, 21, 10, 5, 0),
+                ),
+            item =
+                WishItemResponse.ItemView(
+                    id = 513,
+                    name = "에어 조던 1 미드",
+                    currentPrice = 119_000,
+                    currency = null,
+                    imageUrl = null,
+                    sourceUrl = null,
                 ),
         )
 }

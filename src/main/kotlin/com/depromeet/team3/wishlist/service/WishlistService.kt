@@ -1,6 +1,9 @@
 package com.depromeet.team3.wishlist.service
 
+import com.depromeet.team3.item.domain.Item
 import com.depromeet.team3.item.repository.ItemRepository
+import com.depromeet.team3.ocr.domain.OcrImage
+import com.depromeet.team3.ocr.service.ProductImageExtractor
 import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.product.service.ProductLinkExtractor
 import com.depromeet.team3.product.service.ProductSnapshot
@@ -13,11 +16,13 @@ import com.depromeet.team3.wishlist.service.dto.WishlistPage
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
 @Service
 class WishlistService(
     private val productLinkExtractor: ProductLinkExtractor,
+    private val productImageExtractor: ProductImageExtractor,
     private val wishPersistenceService: WishPersistenceService,
     private val wishRepository: WishRepository,
     private val itemRepository: ItemRepository,
@@ -33,7 +38,16 @@ class WishlistService(
     ): WishWithItem {
         val link = ProductLink.parse(rawUrl)
         val snapshot = extractWithLatencyLog(link)
-        return wishPersistenceService.persist(userId, snapshot)
+        return wishPersistenceService.persist(userId, Item.from(snapshot))
+    }
+
+    // OCR 등록도 link 와 같은 흐름 — 입력이 이미지일 뿐. 외부 추출은 트랜잭션 바깥, 영속화만 위임.
+    fun registerFromOcr(
+        image: MultipartFile,
+        userId: UUID,
+    ): WishWithItem {
+        val product = productImageExtractor.extract(OcrImage.of(image.bytes, image.contentType))
+        return wishPersistenceService.persist(userId, Item.fromOcr(product))
     }
 
     @Transactional(readOnly = true)

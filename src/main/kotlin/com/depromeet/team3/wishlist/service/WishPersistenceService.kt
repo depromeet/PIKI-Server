@@ -2,7 +2,6 @@ package com.depromeet.team3.wishlist.service
 
 import com.depromeet.team3.item.domain.Item
 import com.depromeet.team3.item.repository.ItemRepository
-import com.depromeet.team3.product.service.ProductSnapshot
 import com.depromeet.team3.wishlist.domain.Wish
 import com.depromeet.team3.wishlist.repository.WishRepository
 import com.depromeet.team3.wishlist.service.dto.WishWithItem
@@ -19,13 +18,14 @@ class WishPersistenceService(
     private val itemRepository: ItemRepository,
 ) {
     // item → wish 순서로 같은 트랜잭션에서 저장한다.
+    // item 생성(추출 결과 매핑)은 호출부가 트랜잭션 바깥에서 끝내고, 여기선 영속화만 한다.
     @Transactional
     fun persist(
         userId: UUID,
-        snapshot: ProductSnapshot,
+        item: Item,
     ): WishWithItem {
-        val item = itemRepository.save(Item.from(snapshot))
-        val wish = wishRepository.save(Wish(userId = userId, itemId = item.getId()))
-        return WishWithItem(wish = wish, item = item)
+        val saved = itemRepository.save(item)
+        val wish = wishRepository.save(Wish(userId = userId, itemId = saved.getId()))
+        return WishWithItem(wish = wish, item = saved)
     }
 }

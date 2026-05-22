@@ -56,10 +56,11 @@ data class WishItemResponse(
         )
         val imageUrl: String?,
         @field:Schema(
-            description = "원본 상품 페이지 URL",
+            description = "원본 상품 페이지 URL (OCR 등록 항목은 URL 이 없어 null)",
             example = "https://www.example-shop.com/products/12345",
+            nullable = true,
         )
-        val sourceUrl: String,
+        val sourceUrl: String?,
     ) {
         companion object {
             fun from(item: Item): ItemView =
@@ -69,7 +70,7 @@ data class WishItemResponse(
                     currentPrice = item.currentPrice,
                     currency = item.currency,
                     imageUrl = item.imageUrl,
-                    sourceUrl = item.link.toString(),
+                    sourceUrl = item.link?.toString(),
                 )
         }
     }

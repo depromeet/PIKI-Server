@@ -1,6 +1,7 @@
 package com.depromeet.team3.item.domain
 
 import com.depromeet.team3.common.domain.LongBaseEntity
+import com.depromeet.team3.common.domain.Product
 import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.product.domain.ProductLinkConverter
 import com.depromeet.team3.product.service.ProductSnapshot
@@ -12,13 +13,14 @@ import org.slf4j.LoggerFactory
 
 // wish 와 tournament_item 이 함께 참조하는 공유 엔티티.
 // 같은 link 라도 위시·출전마다 1:1 독립 행이라, 한쪽의 수정이 다른 쪽에 번지지 않는다(수정 격리).
-// link 는 바뀌면 사실상 다른 상품이라 재등록 영역으로 보고 불변(val), 나머지는 사용자가 수정할 수 있다.
+// link 는 바뀌면 사실상 다른 상품이라 재등록 영역으로 보고 불변(val). 단 OCR 등록 경로는 URL 이
+// 없어 link 가 null 일 수 있다 (URL 추출 / 이미지 추출 두 경로가 같은 item 을 만든다).
 @Entity
 @Table(name = "items")
 class Item(
     @Convert(converter = ProductLinkConverter::class)
-    @Column(name = "source_url", nullable = false, length = 2048)
-    val link: ProductLink,
+    @Column(name = "source_url", nullable = true, length = 2048)
+    val link: ProductLink? = null,
     name: String? = null,
     imageUrl: String? = null,
     currentPrice: Int? = null,
@@ -105,6 +107,15 @@ class Item(
                 imageUrl = snapshot.imageUrl,
                 currentPrice = snapshot.currentPrice,
                 currency = snapshot.currency,
+            )
+
+        // OCR 추출 결과로 item 을 만든다. URL 이 없어 link 는 null, 이미지·통화는 OCR 이 주지 않는다.
+        // category 는 현재 item 모델에 없어 버린다.
+        fun fromOcr(product: Product): Item =
+            Item(
+                link = null,
+                name = product.name,
+                currentPrice = product.price,
             )
     }
 }

@@ -8,6 +8,7 @@ import com.depromeet.team3.wishlist.controller.dto.WishlistUpdateRequest
 import com.depromeet.team3.wishlist.service.WishlistService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
 @RestController
@@ -33,6 +35,16 @@ class WishlistController(
         @Valid @RequestBody request: WishlistRegisterRequest,
     ): ApiResponseBody<WishItemResponse> {
         val result = wishlistService.register(rawUrl = request.url, userId = userId)
+        return ApiResponseBody.created(WishItemResponse.from(result.wish, result.item))
+    }
+
+    @PostMapping("/ocr", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    @ResponseStatus(HttpStatus.CREATED)
+    override fun registerFromOcr(
+        @AuthenticationPrincipal userId: UUID,
+        @RequestParam("image") image: MultipartFile,
+    ): ApiResponseBody<WishItemResponse> {
+        val result = wishlistService.registerFromOcr(image = image, userId = userId)
         return ApiResponseBody.created(WishItemResponse.from(result.wish, result.item))
     }
 
