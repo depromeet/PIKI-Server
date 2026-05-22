@@ -1,9 +1,11 @@
 package com.depromeet.team3.wishlist.domain
 
 import com.depromeet.team3.common.domain.LongBaseEntity
+import com.depromeet.team3.wishlist.service.WishException
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
+import java.time.LocalDateTime
 import java.util.UUID
 
 @Entity
@@ -13,4 +15,14 @@ class Wish(
     val userId: UUID,
     @Column(name = "item_id", nullable = false)
     val itemId: Long,
-) : LongBaseEntity()
+) : LongBaseEntity() {
+    // 소유자가 아니면 거부. 도메인이 자기방어해 어느 통로로 호출되든 같은 결과를 낸다.
+    fun verifyOwnedBy(userId: UUID) {
+        if (this.userId != userId) throw WishException.forbiddenWishItems()
+    }
+
+    // soft delete — 행을 지우지 않고 deletedAt 으로 마킹한다. 조회는 deletedAt IS NULL 만 본다.
+    fun delete() {
+        deletedAt = LocalDateTime.now()
+    }
+}

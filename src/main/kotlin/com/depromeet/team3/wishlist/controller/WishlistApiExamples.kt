@@ -61,6 +61,74 @@ class WishlistApiExamples(
                     )
                 }
             }
+            if (handlerMethod.binds(WishlistController::updateWish)) {
+                operation.examples(openApiObjectMapper.delegate) {
+                    add(
+                        status = HttpStatus.OK,
+                        name = "수정 성공",
+                        payload = ApiResponseBody.ok(sampleEntry),
+                    )
+                    add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "가격 음수",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.INVALID_INPUT,
+                                status = HttpStatus.BAD_REQUEST,
+                                detail = "가격은 0 이상이어야 합니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.FORBIDDEN,
+                        name = "본인 위시 아님",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.FORBIDDEN,
+                                status = HttpStatus.FORBIDDEN,
+                                detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.NOT_FOUND,
+                        name = "존재하지 않는 위시 항목",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.NOT_FOUND,
+                                status = HttpStatus.NOT_FOUND,
+                                detail = "존재하지 않는 위시리스트 항목입니다.",
+                            ),
+                    )
+                }
+            }
+            if (handlerMethod.binds(WishlistController::deleteWish)) {
+                operation.examples(openApiObjectMapper.delegate) {
+                    add(
+                        status = HttpStatus.OK,
+                        name = "삭제 성공",
+                        payload = ApiResponseBody.ok<Unit>(),
+                    )
+                    add(
+                        status = HttpStatus.FORBIDDEN,
+                        name = "본인 위시 아님",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.FORBIDDEN,
+                                status = HttpStatus.FORBIDDEN,
+                                detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.NOT_FOUND,
+                        name = "존재하지 않는 위시 항목",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.NOT_FOUND,
+                                status = HttpStatus.NOT_FOUND,
+                                detail = "존재하지 않는 위시리스트 항목입니다.",
+                            ),
+                    )
+                }
+            }
             operation
         }
 

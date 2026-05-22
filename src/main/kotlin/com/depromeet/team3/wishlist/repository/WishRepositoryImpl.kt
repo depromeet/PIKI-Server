@@ -23,7 +23,13 @@ class WishRepositoryImpl(
         limit: Int,
     ): List<Wish> {
         val limited = Limit.of(limit)
-        cursor ?: return wishJpaRepository.findByUserIdOrderByIdDesc(userId, limited)
-        return wishJpaRepository.findByUserIdAndIdLessThanOrderByIdDesc(userId, cursor.lastWishId, limited)
+        cursor ?: return wishJpaRepository.findByUserIdAndDeletedAtIsNullOrderByIdDesc(userId, limited)
+        return wishJpaRepository.findByUserIdAndIdLessThanAndDeletedAtIsNullOrderByIdDesc(
+            userId,
+            cursor.lastWishId,
+            limited,
+        )
     }
+
+    override fun findById(id: Long): Wish? = wishJpaRepository.findByIdAndDeletedAtIsNull(id)
 }

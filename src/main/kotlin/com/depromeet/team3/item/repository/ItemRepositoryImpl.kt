@@ -10,4 +10,6 @@ class ItemRepositoryImpl(
     override fun save(item: Item): Item = itemJpaRepository.save(item)
 
     override fun findByIds(ids: List<Long>): List<Item> = itemJpaRepository.findAllById(ids)
+
+    override fun findById(id: Long): Item? = itemJpaRepository.findById(id).orElse(null)
 }

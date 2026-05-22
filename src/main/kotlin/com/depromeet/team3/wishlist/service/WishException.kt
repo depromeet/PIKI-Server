@@ -25,5 +25,12 @@ class WishException private constructor(
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
+
+        fun notFound(): WishException =
+            WishException(
+                "존재하지 않는 위시리스트 항목입니다.",
+                ErrorCategory.NOT_FOUND,
+                HttpStatus.NOT_FOUND,
+            )
     }
 }
