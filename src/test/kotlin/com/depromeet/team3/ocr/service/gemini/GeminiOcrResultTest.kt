@@ -37,6 +37,20 @@ class GeminiOcrResultTest {
         assertNull(snapshot.currency)
     }
 
+    @Test
+    fun `toProductSnapshot 은 currency 대소문자·공백을 ISO 4217 로 정규화한다`() {
+        val result = GeminiOcrResult(name = "우유", price = 3500, category = "음료", currency = " krw ")
+
+        assertEquals("KRW", result.toProductSnapshot().currency)
+    }
+
+    @Test
+    fun `toProductSnapshot 은 ISO 4217 형식이 아닌 currency 를 null 로 떨어뜨린다`() {
+        val result = GeminiOcrResult(name = "우유", price = 3500, category = "음료", currency = "원")
+
+        assertNull(result.toProductSnapshot().currency)
+    }
+
     // ---------- wire format 역직렬화 ----------
 
     @Test
