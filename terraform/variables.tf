@@ -16,6 +16,12 @@ variable "aws_region" {
   default     = "ap-northeast-2"
 }
 
+variable "image_bucket_name" {
+  description = "크롭 상품 이미지 저장 버킷명. state 버킷(piki-tfstate-*)과 일관되게 piki-images-{account} 사용."
+  type        = string
+  default     = "piki-images-250758375457"
+}
+
 variable "vpc_cidr" {
   description = "VPC CIDR 블록"
   type        = string

@@ -39,6 +39,7 @@ resource "aws_instance" "app" {
   availability_zone      = var.azs[0]
   vpc_security_group_ids = [aws_security_group.ec2.id]
   key_name               = "team3-SE-1"
+  iam_instance_profile   = aws_iam_instance_profile.app.name
 
   # IMDSv2 강제 — 2019 Capital One 사태의 원인이었던 IMDSv1 SSRF 취약점 방어.
   # http_tokens = "required" 로 두면 메타데이터 조회 시 토큰 세션이 필수가 된다.
