@@ -29,6 +29,12 @@ class CurrencyCodeTest {
         assertNull(CurrencyCode.normalizeOrNull(raw))
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = ["ZZZ", "ABC", "QQQ"])
+    fun `형식은 맞지만 실제 ISO 4217 코드가 아니면 null 로 떨어뜨린다`(raw: String) {
+        assertNull(CurrencyCode.normalizeOrNull(raw))
+    }
+
     @Test
     fun `null·빈·공백은 null 이다`() {
         assertNull(CurrencyCode.normalizeOrNull(null))
