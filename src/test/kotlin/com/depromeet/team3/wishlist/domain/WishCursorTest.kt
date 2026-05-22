@@ -1,6 +1,5 @@
 package com.depromeet.team3.wishlist.domain
 
-import com.depromeet.team3.wishlist.service.WishException
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource

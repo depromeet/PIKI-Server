@@ -14,8 +14,8 @@ import com.depromeet.team3.tournament.service.dto.CreateTournament
 import com.depromeet.team3.tournament.service.dto.RecordMatch
 import com.depromeet.team3.wishlist.domain.Wish
 import com.depromeet.team3.wishlist.domain.WishCursor
+import com.depromeet.team3.wishlist.domain.WishException
 import com.depromeet.team3.wishlist.repository.WishRepository
-import com.depromeet.team3.wishlist.service.WishException
 import org.junit.jupiter.api.Test
 import java.util.UUID
 import kotlin.test.assertEquals

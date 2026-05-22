@@ -1,7 +1,5 @@
 package com.depromeet.team3.wishlist.domain
 
-import com.depromeet.team3.wishlist.service.WishException
-
 // 위시리스트 cursor 페이지네이션의 커서. 직전 페이지 마지막 wish 의 id 를 담는다.
 // 응답에서 String 으로 내려가고 다음 요청에 그대로 돌아오므로 입력 형식 분기를 여기서 흡수한다.
 @JvmInline

@@ -5,6 +5,7 @@ import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.product.service.ProductLinkExtractor
 import com.depromeet.team3.product.service.ProductSnapshot
 import com.depromeet.team3.wishlist.domain.WishCursor
+import com.depromeet.team3.wishlist.domain.WishException
 import com.depromeet.team3.wishlist.domain.WishlistSize
 import com.depromeet.team3.wishlist.repository.WishRepository
 import com.depromeet.team3.wishlist.service.dto.WishWithItem

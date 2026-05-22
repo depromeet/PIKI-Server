@@ -1,4 +1,4 @@
-package com.depromeet.team3.wishlist.service
+package com.depromeet.team3.wishlist.domain
 
 import com.depromeet.team3.common.exception.BaseException
 import com.depromeet.team3.common.exception.ErrorCategory

@@ -1,7 +1,6 @@
 package com.depromeet.team3.wishlist.domain
 
 import com.depromeet.team3.common.domain.LongBaseEntity
-import com.depromeet.team3.wishlist.service.WishException
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
