@@ -1,5 +1,7 @@
 package com.depromeet.team3.ocr.service.gemini
 
+import com.depromeet.team3.ocr.domain.BoundingBox
+import com.depromeet.team3.ocr.service.OcrExtraction
 import com.depromeet.team3.product.domain.CurrencyCode
 import com.depromeet.team3.product.service.ProductSnapshot
 
@@ -13,11 +15,29 @@ data class GeminiOcrResult(
     val price: Int?,
     val category: String?,
     val currency: String?,
+    val boundingBox: BoundingBoxDto? = null,
 ) {
+    // Gemini 가 normalized 좌표(0~1000)로 주는 상품 영역. 네 좌표가 한 객체로 묶여 온다.
+    data class BoundingBoxDto(
+        val yMin: Int? = null,
+        val xMin: Int? = null,
+        val yMax: Int? = null,
+        val xMax: Int? = null,
+    )
+
+    fun toOcrExtraction(): OcrExtraction =
+        OcrExtraction(
+            snapshot = toProductSnapshot(),
+            boundingBox =
+                boundingBox?.let {
+                    BoundingBox.ofNormalizedOrNull(yMin = it.yMin, xMin = it.xMin, yMax = it.yMax, xMax = it.xMax)
+                },
+        )
+
     // OCR 추출 결과를 URL 추출과 같은 ProductSnapshot 으로 옮긴다. URL 이 없어 link 는 null,
     // category 는 현재 item 모델에 없어 버린다. price → currentPrice 로 어휘를 통일한다.
     // currency 는 LLM 이 형식을 제각각 주므로 ISO 4217 로 정규화하고, 안 맞으면 null.
-    fun toProductSnapshot() = ProductSnapshot(
+    private fun toProductSnapshot() = ProductSnapshot(
         link = null,
         name = name,
         currentPrice = price,

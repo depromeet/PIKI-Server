@@ -1,8 +1,10 @@
 package com.depromeet.team3.wishlist.service
 
+import com.depromeet.team3.common.storage.ImageStorage
 import com.depromeet.team3.item.domain.Item
 import com.depromeet.team3.item.repository.ItemRepository
 import com.depromeet.team3.ocr.domain.OcrImage
+import com.depromeet.team3.ocr.service.ImageCropper
 import com.depromeet.team3.ocr.service.ProductImageExtractor
 import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.product.service.ProductLinkExtractor
@@ -23,6 +25,8 @@ import java.util.UUID
 class WishlistService(
     private val productLinkExtractor: ProductLinkExtractor,
     private val productImageExtractor: ProductImageExtractor,
+    private val imageCropper: ImageCropper,
+    private val imageStorage: ImageStorage,
     private val wishPersistenceService: WishPersistenceService,
     private val wishRepository: WishRepository,
     private val itemRepository: ItemRepository,
@@ -41,14 +45,21 @@ class WishlistService(
         return wishPersistenceService.persist(userId, Item.from(snapshot))
     }
 
-    // OCR 등록도 link 와 같은 흐름 — 입력이 이미지일 뿐. 외부 추출은 트랜잭션 바깥, 영속화만 위임.
-    // 추출 결과는 link 추출과 동일한 ProductSnapshot(link=null) 이라 Item.from 을 공유한다.
+    // OCR 등록도 link 와 같은 흐름 — 입력이 이미지일 뿐. 외부 추출·크롭·S3 업로드는 트랜잭션 바깥, 영속화만 위임.
+    // 추출 결과는 link 추출과 동일한 ProductSnapshot 이라 Item.from 을 공유한다 (link 만 null).
+    // bbox 가 있으면 상품 영역을 크롭해 S3 에 올리고 그 URL 을 imageUrl 로 채운다.
+    // bbox 가 없거나(못 잡음) 크롭이 불가한 포맷(HEIC 등)이면 imageUrl 은 null 로 둔다.
     fun registerFromOcr(
         image: MultipartFile,
         userId: UUID,
     ): WishWithItem {
-        val snapshot = productImageExtractor.extract(OcrImage.of(image.bytes, image.contentType))
-        return wishPersistenceService.persist(userId, Item.from(snapshot))
+        val ocrImage = OcrImage.of(image.bytes, image.contentType)
+        val extraction = productImageExtractor.extract(ocrImage)
+        val imageUrl =
+            extraction.boundingBox
+                ?.let { imageCropper.crop(ocrImage.bytes, it) }
+                ?.let { cropped -> imageStorage.upload(cropped, "items/${UUID.randomUUID()}.png", "image/png") }
+        return wishPersistenceService.persist(userId, Item.from(extraction.snapshot.copy(imageUrl = imageUrl)))
     }
 
     @Transactional(readOnly = true)
