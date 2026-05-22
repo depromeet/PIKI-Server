@@ -1,6 +1,7 @@
 package com.depromeet.team3.tournament.repository
 
 import com.depromeet.team3.tournament.domain.TournamentItem
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
 @Repository
@@ -12,7 +13,7 @@ class TournamentItemRepositoryImpl(
     override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
         tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
 
-    override fun findById(id: Long): TournamentItem? = tournamentItemJpaRepository.findById(id).orElse(null)
+    override fun findById(id: Long): TournamentItem? = tournamentItemJpaRepository.findByIdOrNull(id)
 
     override fun delete(tournamentItem: TournamentItem) = tournamentItemJpaRepository.delete(tournamentItem)
 }

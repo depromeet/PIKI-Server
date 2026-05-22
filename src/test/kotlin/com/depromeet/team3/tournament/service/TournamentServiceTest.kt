@@ -471,15 +471,12 @@ class TournamentServiceTest {
     @Test
     fun `deleteItem 에서 토너먼트 소유자도 다른 사람이 추가한 아이템을 삭제할 수 있다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
-        service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L, 2L)))
+        service.addItems(otherUserId, AddTournamentItems(tournamentId, listOf(1L)))
         val item = itemRepository.findAllByTournamentId(tournamentId).first()
 
-        // otherUserId가 아이템을 추가하고, userId(소유자)가 삭제하는 시나리오를 흉내내기 위해
-        // 이미 추가된 item의 userId를 otherUserId로 교체해 저장
-        val ownerAddedItem = itemRepository.findAllByTournamentId(tournamentId)[1]
-        service.deleteItem(userId, tournamentId, ownerAddedItem.getId())
+        service.deleteItem(userId, tournamentId, item.getId())
 
-        assertEquals(1, itemRepository.findAllByTournamentId(tournamentId).size)
+        assertEquals(0, itemRepository.findAllByTournamentId(tournamentId).size)
     }
 
     @Test
