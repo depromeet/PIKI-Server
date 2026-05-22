@@ -62,6 +62,8 @@ class WishlistController(
                 wishId = wishId,
                 name = request.name,
                 currentPrice = request.currentPrice,
+                imageUrl = request.imageUrl,
+                currency = request.currency,
             )
         return ApiResponseBody.ok(WishItemResponse.from(result.wish, result.item))
     }

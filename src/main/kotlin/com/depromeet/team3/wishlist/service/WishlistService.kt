@@ -67,12 +67,14 @@ class WishlistService(
         wishId: Long,
         name: String?,
         currentPrice: Int?,
+        imageUrl: String?,
+        currency: String?,
     ): WishWithItem {
         val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
         wish.verifyOwnedBy(userId)
         // wish 가 가리키는 item 은 반드시 존재한다. 없으면 영속화 경로가 깨진 코드 버그다.
         val item = itemRepository.findById(wish.itemId) ?: error("wish ${wish.getId()} 의 item ${wish.itemId} 가 없다")
-        item.update(name = name, currentPrice = currentPrice)
+        item.update(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
         return WishWithItem(wish = wish, item = item)
     }
 
