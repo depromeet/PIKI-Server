@@ -6,6 +6,7 @@ import com.depromeet.team3.tournament.repository.TournamentItemJpaRepository
 import com.depromeet.team3.user.domain.IdentityType
 import com.depromeet.team3.wishlist.domain.Wish
 import com.depromeet.team3.wishlist.repository.WishJpaRepository
+import kotlin.test.assertEquals
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
@@ -253,6 +254,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
+
+        val remaining = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
+        assertEquals(1, remaining.size)
+        assert(remaining.none { it.getId() == itemId })
     }
 
     @Test
@@ -296,6 +301,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
+
+        assert(tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).none { it.getId() == itemId })
     }
 
     @Test
