@@ -36,7 +36,7 @@ class TournamentApiExamples(
                                             tournamentId = 1,
                                             name = "내 토너먼트",
                                             status = TournamentStatus.PENDING,
-                                            updatedAt = LocalDateTime.of(2026, 5, 22, 12, 0, 0),
+                                            createdAt = LocalDateTime.of(2026, 5, 22, 12, 0, 0),
                                             participantProfileImages = listOf(
                                                 "https://cdn.example.com/profiles/user1.jpg",
                                                 "https://cdn.example.com/profiles/user2.jpg",

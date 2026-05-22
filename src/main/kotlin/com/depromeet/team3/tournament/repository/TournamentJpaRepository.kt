@@ -5,7 +5,7 @@ import com.depromeet.team3.tournament.domain.TournamentStatus
 import org.springframework.data.jpa.repository.JpaRepository
 
 interface TournamentJpaRepository : JpaRepository<Tournament, Long> {
-    fun findByIdInAndStatusOrderByUpdatedAtDesc(ids: Collection<Long>, status: TournamentStatus): List<Tournament>
+    fun findByIdInAndStatusInOrderByCreatedAtDesc(ids: List<Long>, statuses: List<TournamentStatus>): List<Tournament>
 
-    fun findByIdInOrderByUpdatedAtDesc(ids: Collection<Long>): List<Tournament>
+    fun findByIdInOrderByCreatedAtDesc(ids: List<Long>): List<Tournament>
 }

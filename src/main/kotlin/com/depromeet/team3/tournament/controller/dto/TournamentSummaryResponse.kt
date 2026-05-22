@@ -8,7 +8,7 @@ data class TournamentSummaryResponse(
     val tournamentId: Long,
     val name: String,
     val status: TournamentStatus,
-    val updatedAt: LocalDateTime,
+    val createdAt: LocalDateTime,
     val participantProfileImages: List<String>,
 ) {
     companion object {
@@ -17,7 +17,7 @@ data class TournamentSummaryResponse(
                 tournamentId = summary.tournamentId,
                 name = summary.name,
                 status = summary.status,
-                updatedAt = summary.updatedAt,
+                createdAt = summary.createdAt,
                 participantProfileImages = summary.participantProfileImages,
             )
     }

@@ -143,11 +143,11 @@ class TournamentServiceTest {
         override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
             histories.filter { it.tournamentId == tournamentId }
 
-        override fun findByIdsAndStatus(ids: List<Long>, status: TournamentStatus?): List<Tournament> =
+        override fun findByIdsAndStatuses(ids: List<Long>, statuses: List<TournamentStatus>?): List<Tournament> =
             tournaments.values
                 .filter { it.getId() in ids }
-                .filter { status?.let { s -> it.status == s } ?: true }
-                .sortedByDescending { it.updatedAt }
+                .filter { statuses.isNullOrEmpty() || it.status in statuses }
+                .sortedByDescending { it.createdAt }
 
         private fun setEntityId(
             entity: LongBaseEntity,
@@ -523,10 +523,28 @@ class TournamentServiceTest {
         service.addItems(userId, AddTournamentItems(startedId, listOf(1L, 2L)))
         service.start(userId, startedId)
 
-        val result = service.getTournaments(userId, TournamentStatus.PENDING)
+        val result = service.getTournaments(userId, listOf(TournamentStatus.PENDING))
 
         assertEquals(1, result.size)
         assertEquals("대기중", result[0].name)
+    }
+
+    @Test
+    fun `getTournaments 에서 복수 status 필터가 주어지면 해당 상태들만 반환한다`() {
+        service.create(userId, CreateTournament("대기중"))
+        val startedId = service.create(userId, CreateTournament("진행중"))
+        service.addItems(userId, AddTournamentItems(startedId, listOf(1L, 2L)))
+        service.start(userId, startedId)
+        val completedId = service.create(userId, CreateTournament("완료됨"))
+        service.addItems(userId, AddTournamentItems(completedId, listOf(3L, 4L)))
+        service.start(userId, completedId)
+        val completedItems = itemRepository.findAllByTournamentId(completedId)
+        service.recordMatch(userId, RecordMatch(completedId, 2, completedItems[0].getId(), completedItems[1].getId(), completedItems[0].getId()))
+
+        val result = service.getTournaments(userId, listOf(TournamentStatus.PENDING, TournamentStatus.COMPLETED))
+
+        assertEquals(2, result.size)
+        assert(result.none { it.status == TournamentStatus.IN_PROGRESS })
     }
 
     @Test

@@ -214,7 +214,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data[0].tournamentId").isNumber)
             .andExpect(jsonPath("$.data[0].name").isString)
             .andExpect(jsonPath("$.data[0].status").isString)
-            .andExpect(jsonPath("$.data[0].updatedAt").isString)
+            .andExpect(jsonPath("$.data[0].createdAt").isString)
             .andExpect(jsonPath("$.data[0].participantProfileImages").isArray)
             .andExpect(jsonPath("$.data[0].participantProfileImages[0]").value(userProfileImage))
     }
@@ -240,6 +240,28 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.length()").value(1))
             .andExpect(jsonPath("$.data[0].tournamentId").value(pendingId))
             .andExpect(jsonPath("$.data[0].participantProfileImages[0]").value(userProfileImage))
+    }
+
+    @Test
+    fun `GET tournaments 에서 복수 status 필터를 지정하면 해당 상태들만 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val pendingId = createTournament(mockMvc, "대기중")
+        val startedId = createTournament(mockMvc, "진행중")
+        addItemsToTournament(mockMvc, startedId, userId, 100L, 200L)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$startedId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .param("status", "PENDING", "IN_PROGRESS"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(2))
+            .andExpect(jsonPath("$.data[?(@.tournamentId == $pendingId)]").exists())
+            .andExpect(jsonPath("$.data[?(@.tournamentId == $startedId)]").exists())
     }
 
     @Test

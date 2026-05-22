@@ -108,10 +108,10 @@ class TournamentService(
     @Transactional(readOnly = true)
     fun getTournaments(
         userId: UUID,
-        status: TournamentStatus?,
+        statuses: List<TournamentStatus>?,
     ): List<TournamentSummary> {
         val tournamentIds = tournamentUserRepository.findTournamentIdsByUserId(userId)
-        val tournaments = tournamentRepository.findByIdsAndStatus(tournamentIds, status)
+        val tournaments = tournamentRepository.findByIdsAndStatuses(tournamentIds, statuses)
         if (tournaments.isEmpty()) return emptyList()
 
         val tournamentUsers = tournamentUserRepository.findByTournamentIds(tournaments.map { it.getId() })

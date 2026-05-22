@@ -23,9 +23,11 @@ class TournamentRepositoryImpl(
     override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
         tournamentHistoryJpaRepository.findAllByTournamentIdOrderByCurrentRoundAscIdAsc(tournamentId)
 
-    override fun findByIdsAndStatus(ids: List<Long>, status: TournamentStatus?): List<Tournament> {
+    override fun findByIdsAndStatuses(ids: List<Long>, statuses: List<TournamentStatus>?): List<Tournament> {
         if (ids.isEmpty()) return emptyList()
-        return status?.let { tournamentJpaRepository.findByIdInAndStatusOrderByUpdatedAtDesc(ids, it) }
-            ?: tournamentJpaRepository.findByIdInOrderByUpdatedAtDesc(ids)
+        return statuses
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { tournamentJpaRepository.findByIdInAndStatusInOrderByCreatedAtDesc(ids, it) }
+            ?: tournamentJpaRepository.findByIdInOrderByCreatedAtDesc(ids)
     }
 }

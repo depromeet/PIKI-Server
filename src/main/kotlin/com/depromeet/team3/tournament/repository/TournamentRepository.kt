@@ -13,5 +13,5 @@ interface TournamentRepository {
 
     fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory>
 
-    fun findByIdsAndStatus(ids: List<Long>, status: TournamentStatus?): List<Tournament>
+    fun findByIdsAndStatuses(ids: List<Long>, statuses: List<TournamentStatus>?): List<Tournament>
 }

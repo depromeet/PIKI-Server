@@ -80,7 +80,7 @@ class TournamentController(
     @GetMapping
     override fun getTournaments(
         @AuthenticationPrincipal userId: UUID,
-        @RequestParam(required = false) status: TournamentStatus?,
+        @RequestParam(required = false) status: List<TournamentStatus>?,
     ): ApiResponseBody<List<TournamentSummaryResponse>> {
         val summaries = tournamentService.getTournaments(userId, status)
         return ApiResponseBody.ok(summaries.map(TournamentSummaryResponse::from))
