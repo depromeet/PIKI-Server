@@ -15,7 +15,7 @@ import org.springframework.http.MediaType
 interface DevAuthApi {
     @Operation(
         summary = "개발용 MEMBER 생성",
-        description = "OAuth 없이 MEMBER User 를 생성하고 JWT 토큰 쌍을 발급한다. GUEST 토큰으로 호출해야 한다. dev/local 프로파일에서만 활성화된다.",
+        description = "OAuth 없이 MEMBER User 를 생성하고 JWT 토큰 쌍을 발급한다. GUEST 토큰으로 호출해야 한다. OAuth 통합 전까지의 임시 endpoint.",
     )
     @ApiResponses(
         value = [
