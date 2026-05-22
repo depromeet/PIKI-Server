@@ -147,20 +147,19 @@ class TournamentService(
         tournamentId: Long,
         tournamentItemId: Long,
     ) {
-        val tournament =
-            tournamentRepository.findTournamentById(tournamentId)
+        val tournament = tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
-        val tournamentItem =
-            tournamentItemRepository.findById(tournamentItemId)
+        val tournamentItem = tournamentItemRepository.findById(tournamentItemId)
                 ?: throw TournamentException.notFoundTournamentItem()
         if (tournamentItem.tournamentId != tournamentId) throw TournamentException.notFoundTournamentItem()
 
         val isItemAdder = tournamentItem.userId == userId
-        val isTournamentOwner =
-            tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
-                ?.getId() == tournament.ownerTournamentUserId
-        if (!isItemAdder && !isTournamentOwner) throw TournamentException.forbiddenTournament()
+        if (!isItemAdder) {
+            val isTournamentOwner = tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+                    ?.getId() == tournament.ownerTournamentUserId
+            if (!isTournamentOwner) throw TournamentException.forbiddenTournament()
+        }
 
         tournamentItemRepository.delete(tournamentItem)
     }
