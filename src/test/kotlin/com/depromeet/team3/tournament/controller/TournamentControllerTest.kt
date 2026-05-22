@@ -2,6 +2,7 @@ package com.depromeet.team3.tournament.controller
 
 import com.depromeet.team3.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.team3.support.IntegrationTestSupport
+import com.depromeet.team3.tournament.domain.TournamentItem
 import com.depromeet.team3.tournament.repository.TournamentItemJpaRepository
 import com.depromeet.team3.user.domain.IdentityType
 import com.depromeet.team3.wishlist.domain.Wish
@@ -313,6 +314,23 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 delete("/api/v1/tournaments/$tournamentId/items/999999")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+    }
+
+    @Test
+    fun `DELETE tournaments-id-items-itemId 에서 다른 토너먼트 소속 아이템이면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId1 = createTournament(mockMvc, "토너먼트1")
+        val tournamentId2 = createTournament(mockMvc, "토너먼트2")
+        val itemOfTournament2 = tournamentItemJpaRepository.save(
+            TournamentItem(tournamentId = tournamentId2, itemId = 999L, userId = userId),
+        ).getId()
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId1/items/$itemOfTournament2")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isNotFound)
             .andExpect(jsonPath("$.status").value(404))
