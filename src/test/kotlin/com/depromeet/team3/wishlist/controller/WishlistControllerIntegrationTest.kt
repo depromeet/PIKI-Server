@@ -535,7 +535,9 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
-        stubProductImageExtractor.build = { Product(name = "나이키 에어포스", price = 99_000, category = "신발") }
+        stubProductImageExtractor.build = {
+            Product(name = "나이키 에어포스", price = 99_000, category = "신발", currency = "KRW")
+        }
         val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
 
         mockMvc
@@ -548,9 +550,9 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.wish.id").isNumber)
             .andExpect(jsonPath("$.data.item.name").value("나이키 에어포스"))
             .andExpect(jsonPath("$.data.item.currentPrice").value(99_000))
-            // OCR 항목은 URL·통화·이미지가 없다 (category 는 버려짐)
+            .andExpect(jsonPath("$.data.item.currency").value("KRW"))
+            // OCR 항목은 URL·이미지가 없다 (category 는 버려짐, 이미지 저장은 후속)
             .andExpect(jsonPath("$.data.item.sourceUrl").value(nullValue()))
-            .andExpect(jsonPath("$.data.item.currency").value(nullValue()))
             .andExpect(jsonPath("$.data.item.imageUrl").value(nullValue()))
     }
 

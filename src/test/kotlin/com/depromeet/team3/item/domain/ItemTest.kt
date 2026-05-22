@@ -147,16 +147,16 @@ class ItemTest {
     }
 
     @Test
-    fun `fromOcr 은 link 없이 name 과 price 를 매핑하고 category 는 버린다`() {
-        val product = Product(name = "나이키 에어포스", price = 99_000, category = "신발")
+    fun `fromOcr 은 link·image 없이 name·price·currency 를 매핑하고 category 는 버린다`() {
+        val product = Product(name = "나이키 에어포스", price = 99_000, category = "신발", currency = "KRW")
 
         val item = Item.fromOcr(product)
 
         assertNull(item.link)
         assertEquals("나이키 에어포스", item.name)
         assertEquals(99_000, item.currentPrice)
+        assertEquals("KRW", item.currency)
         assertNull(item.imageUrl)
-        assertNull(item.currency)
     }
 
     @Test

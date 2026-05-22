@@ -15,37 +15,40 @@ class GeminiOcrResultTest {
 
     @Test
     fun `toProduct 는 값을 그대로 Product 로 옮긴다`() {
-        val result = GeminiOcrResult(name = "우유", price = 3500, category = "음료")
+        val result = GeminiOcrResult(name = "우유", price = 3500, category = "음료", currency = "KRW")
 
         val product = result.toProduct()
 
         assertEquals("우유", product.name)
         assertEquals(3500, product.price)
         assertEquals("음료", product.category)
+        assertEquals("KRW", product.currency)
     }
 
     @Test
     fun `toProduct 는 null 필드를 그대로 옮긴다`() {
-        val result = GeminiOcrResult(name = null, price = null, category = null)
+        val result = GeminiOcrResult(name = null, price = null, category = null, currency = null)
 
         val product = result.toProduct()
 
         assertNull(product.name)
         assertNull(product.price)
         assertNull(product.category)
+        assertNull(product.currency)
     }
 
     // ---------- wire format 역직렬화 ----------
 
     @Test
     fun `GeminiOcrResult 를 wire format JSON 에서 역직렬화할 수 있다`() {
-        val json = """{"name": "우유", "price": 3500, "category": "음료"}"""
+        val json = """{"name": "우유", "price": 3500, "category": "음료", "currency": "KRW"}"""
 
         val result = objectMapper.readValue<GeminiOcrResult>(json)
 
         assertEquals("우유", result.name)
         assertEquals(3500, result.price)
         assertEquals("음료", result.category)
+        assertEquals("KRW", result.currency)
     }
 
     @Test
@@ -57,5 +60,6 @@ class GeminiOcrResultTest {
         assertEquals("우유", result.name)
         assertNull(result.price)
         assertNull(result.category)
+        assertNull(result.currency)
     }
 }
