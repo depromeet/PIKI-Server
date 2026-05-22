@@ -109,13 +109,14 @@ class Item(
                 currency = snapshot.currency,
             )
 
-        // OCR 추출 결과로 item 을 만든다. URL 이 없어 link 는 null, 이미지·통화는 OCR 이 주지 않는다.
+        // OCR 추출 결과로 item 을 만든다. URL 이 없어 link 는 null, 이미지는 아직 저장하지 않아 null.
         // category 는 현재 item 모델에 없어 버린다.
         fun fromOcr(product: Product): Item =
             Item(
                 link = null,
                 name = product.name,
                 currentPrice = product.price,
+                currency = product.currency,
             )
     }
 }

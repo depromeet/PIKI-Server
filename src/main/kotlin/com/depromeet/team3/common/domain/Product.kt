@@ -5,4 +5,6 @@ data class Product(
     val name: String?,
     val price: Int?,
     val category: String?,
+    // price 의 통화 (ISO 4217, 예: KRW/USD). 통화 없는 가격은 의미가 불완전하므로 함께 추출한다.
+    val currency: String? = null,
 )

@@ -11,10 +11,12 @@ data class GeminiOcrResult(
     val name: String?,
     val price: Int?,
     val category: String?,
+    val currency: String?,
 ) {
     fun toProduct() = Product(
         name = name,
         price = price,
         category = category,
+        currency = currency,
     )
 }
