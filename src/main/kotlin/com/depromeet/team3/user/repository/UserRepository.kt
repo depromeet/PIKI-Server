@@ -8,5 +8,7 @@ interface UserRepository {
 
     fun findById(id: UUID): User?
 
+    fun findByIds(ids: Collection<UUID>): List<User>
+
     fun existsByNickname(nickname: String): Boolean
 }
