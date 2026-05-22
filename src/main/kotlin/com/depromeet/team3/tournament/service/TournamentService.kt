@@ -161,7 +161,8 @@ class TournamentService(
             if (!isTournamentOwner) throw TournamentException.forbiddenTournament()
         }
 
-        tournamentItemRepository.delete(tournamentItem)
+        val deleted = tournamentItemRepository.deleteIfPending(tournamentItemId, tournamentId)
+        if (deleted == 0) throw TournamentException.notPendingTournament()
     }
 
     companion object {
