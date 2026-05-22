@@ -29,7 +29,7 @@ class TournamentController(
     @ResponseStatus(HttpStatus.CREATED)
     override fun create(
         @AuthenticationPrincipal userId: UUID,
-        @RequestBody @Valid request: CreateTournamentRequest,
+        @Valid @RequestBody request: CreateTournamentRequest,
     ): ApiResponseBody<CreateTournamentResponse> {
         val tournamentId = tournamentService.create(userId, request.toCreateTournament())
         return ApiResponseBody.created(CreateTournamentResponse(tournamentId))
@@ -39,7 +39,7 @@ class TournamentController(
     override fun addItems(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
-        @RequestBody @Valid request: AddTournamentItemsRequest,
+        @Valid @RequestBody request: AddTournamentItemsRequest,
     ): ApiResponseBody<Unit> {
         tournamentService.addItems(userId, request.toAddTournamentItems(tournamentId))
         return ApiResponseBody.ok()
@@ -68,7 +68,7 @@ class TournamentController(
     override fun recordMatch(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
-        @RequestBody @Valid request: RecordMatchRequest,
+        @Valid @RequestBody request: RecordMatchRequest,
     ): ApiResponseBody<Unit> {
         tournamentService.recordMatch(userId, request.toRecordMatch(tournamentId))
         return ApiResponseBody.ok()
