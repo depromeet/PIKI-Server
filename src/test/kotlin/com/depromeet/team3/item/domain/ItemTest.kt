@@ -54,4 +54,94 @@ class ItemTest {
             Item(link = link, name = "가".repeat(513))
         }
     }
+
+    @Test
+    fun `update 로 name·currentPrice·imageUrl·currency 를 모두 교체한다`() {
+        val item =
+            Item(
+                link = link,
+                name = "원래 이름",
+                imageUrl = "https://cdn.example.com/old.jpg",
+                currentPrice = 10_000,
+                currency = "USD",
+            )
+
+        item.update(
+            name = "새 이름",
+            currentPrice = 20_000,
+            imageUrl = "https://cdn.example.com/new.jpg",
+            currency = "KRW",
+        )
+
+        assertEquals("새 이름", item.name)
+        assertEquals(20_000, item.currentPrice)
+        assertEquals("https://cdn.example.com/new.jpg", item.imageUrl)
+        assertEquals("KRW", item.currency)
+    }
+
+    @Test
+    fun `update 에 currency 만 주면 나머지는 유지된다`() {
+        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000, currency = "USD")
+
+        item.update(currency = "KRW")
+
+        assertEquals("원래 이름", item.name)
+        assertEquals(10_000, item.currentPrice)
+        assertEquals("KRW", item.currency)
+    }
+
+    @Test
+    fun `currency 를 8자 초과로 update 하면 불변식 위반으로 거부된다`() {
+        val item = Item(link = link, currency = "KRW")
+
+        assertFailsWith<IllegalArgumentException> { item.update(currency = "a".repeat(9)) }
+    }
+
+    @Test
+    fun `imageUrl 을 2048자 초과로 update 하면 불변식 위반으로 거부된다`() {
+        val item = Item(link = link, imageUrl = "https://example.com/img.jpg")
+
+        assertFailsWith<IllegalArgumentException> { item.update(imageUrl = "a".repeat(2049)) }
+    }
+
+    @Test
+    fun `imageUrl 이 2048자를 초과하면 Item 생성이 거부된다`() {
+        assertFailsWith<IllegalArgumentException> {
+            Item(link = link, imageUrl = "a".repeat(2049))
+        }
+    }
+
+    @Test
+    fun `update 에 name 만 주면 currentPrice 는 유지된다`() {
+        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000)
+
+        item.update(name = "새 이름", currentPrice = null)
+
+        assertEquals("새 이름", item.name)
+        assertEquals(10_000, item.currentPrice)
+    }
+
+    @Test
+    fun `update 인자가 모두 null 이면 기존 값이 유지된다`() {
+        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000)
+
+        item.update(name = null, currentPrice = null)
+
+        assertEquals("원래 이름", item.name)
+        assertEquals(10_000, item.currentPrice)
+    }
+
+    @Test
+    fun `currentPrice 를 음수로 update 하면 불변식 위반으로 거부된다`() {
+        val item = Item(link = link, currentPrice = 10_000)
+
+        assertFailsWith<IllegalArgumentException> { item.update(currentPrice = -1) }
+    }
+
+    @Test
+    fun `name 을 512자 초과로 update 하면 불변식 위반으로 거부된다`() {
+        val item = Item(link = link, name = "원래 이름")
+
+        assertFailsWith<IllegalArgumentException> { item.update(name = "가".repeat(513)) }
+    }
 }

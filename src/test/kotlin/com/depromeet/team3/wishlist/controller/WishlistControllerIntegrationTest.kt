@@ -14,7 +14,9 @@ import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -319,5 +321,204 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data[0].wish.id").value(firstWishId))
             .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
             .andExpect(jsonPath("$.pageResponse.nextCursor").value(nullValue()))
+    }
+
+    @Test
+    fun `위시 item 의 이름·가격·이미지·통화를 수정하면 200 과 갱신된 값이 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = registerWish(mockMvc, authHeader, "https://shop.example.com/products/1", "잘못 읽힌 이름")
+        val body =
+            objectMapper.writeValueAsString(
+                mapOf(
+                    "name" to "교정된 이름",
+                    "currentPrice" to 88_000,
+                    "imageUrl" to "https://cdn.example.com/fixed.jpg",
+                    "currency" to "KRW",
+                ),
+            )
+
+        mockMvc
+            .perform(
+                patch("/api/v1/wishlists/$wishId")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader)
+                    .content(body),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.wish.id").value(wishId))
+            .andExpect(jsonPath("$.data.item.name").value("교정된 이름"))
+            .andExpect(jsonPath("$.data.item.currentPrice").value(88_000))
+            .andExpect(jsonPath("$.data.item.imageUrl").value("https://cdn.example.com/fixed.jpg"))
+            .andExpect(jsonPath("$.data.item.currency").value("KRW"))
+    }
+
+    @Test
+    fun `name 만 수정하면 currentPrice·currency·imageUrl 은 유지된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        stubProductLinkExtractor.build = {
+            ProductSnapshot(
+                link = it,
+                name = "원래 이름",
+                currentPrice = 50_000,
+                currency = "KRW",
+                imageUrl = "https://cdn.example.com/orig.jpg",
+            )
+        }
+        val registerBody = objectMapper.writeValueAsString(mapOf("url" to "https://shop.example.com/products/1"))
+        val wishId =
+            objectMapper
+                .readTree(
+                    mockMvc
+                        .perform(
+                            post("/api/v1/wishlists")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .header(HttpHeaders.AUTHORIZATION, authHeader)
+                                .content(registerBody),
+                        ).andExpect(status().isCreated)
+                        .andReturn()
+                        .response
+                        .getContentAsString(Charsets.UTF_8),
+                ).path("data")
+                .path("wish")
+                .path("id")
+                .asLong()
+
+        mockMvc
+            .perform(
+                patch("/api/v1/wishlists/$wishId")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader)
+                    .content(objectMapper.writeValueAsString(mapOf("name" to "새 이름"))),
+            ).andExpect(status().isOk)
+            // name 만 갱신, 나머지는 등록 시점 값 유지
+            .andExpect(jsonPath("$.data.item.name").value("새 이름"))
+            .andExpect(jsonPath("$.data.item.currentPrice").value(50_000))
+            .andExpect(jsonPath("$.data.item.currency").value("KRW"))
+            .andExpect(jsonPath("$.data.item.imageUrl").value("https://cdn.example.com/orig.jpg"))
+    }
+
+    @Test
+    fun `남의 위시를 수정하면 403 이 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val ownerId = UUID.randomUUID()
+        val otherId = UUID.randomUUID()
+        insertMember(ownerId)
+        insertMember(otherId)
+        val wishId =
+            registerWish(mockMvc, "Bearer ${memberToken(ownerId)}", "https://shop.example.com/products/1", "내 상품")
+        val body = objectMapper.writeValueAsString(mapOf("name" to "남이 바꾼 이름"))
+
+        mockMvc
+            .perform(
+                patch("/api/v1/wishlists/$wishId")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(otherId)}")
+                    .content(body),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+    }
+
+    @Test
+    fun `존재하지 않는 위시를 수정하면 404 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val body = objectMapper.writeValueAsString(mapOf("name" to "아무거나"))
+
+        mockMvc
+            .perform(
+                patch("/api/v1/wishlists/99999999")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}")
+                    .content(body),
+            ).andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+    }
+
+    @Test
+    fun `가격을 음수로 수정하면 400 BAD_REQUEST 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = registerWish(mockMvc, authHeader, "https://shop.example.com/products/1", "상품")
+        val body = objectMapper.writeValueAsString(mapOf("currentPrice" to -1))
+
+        mockMvc
+            .perform(
+                patch("/api/v1/wishlists/$wishId")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader)
+                    .content(body),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+    }
+
+    @Test
+    fun `위시를 삭제하면 200 이고 이후 조회에서 제외된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val keptWishId = registerWish(mockMvc, authHeader, "https://shop.example.com/products/1", "남길 상품")
+        val deletedWishId = registerWish(mockMvc, authHeader, "https://shop.example.com/products/2", "지울 상품")
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists/$deletedWishId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+
+        mockMvc
+            .perform(
+                get("/api/v1/wishlists")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].wish.id").value(keptWishId))
+    }
+
+    @Test
+    fun `남의 위시를 삭제하면 403 이 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val ownerId = UUID.randomUUID()
+        val otherId = UUID.randomUUID()
+        insertMember(ownerId)
+        insertMember(otherId)
+        val wishId =
+            registerWish(mockMvc, "Bearer ${memberToken(ownerId)}", "https://shop.example.com/products/1", "내 상품")
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists/$wishId")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(otherId)}"),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+    }
+
+    @Test
+    fun `존재하지 않는 위시를 삭제하면 404 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists/99999999")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
     }
 }
