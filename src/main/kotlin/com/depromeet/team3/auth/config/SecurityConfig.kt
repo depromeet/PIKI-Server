@@ -40,7 +40,9 @@ class SecurityConfig {
                     .authenticated()
                     .requestMatchers("/api/v1/dev/**")
                     .hasAuthority(IdentityType.GUEST.name)
-                    .requestMatchers("/swagger-ui/**", "/v3/api-docs/**")
+                    // API 문서: Stoplight Elements UI (/docs/**, static resource) + OpenAPI spec
+                    // (/v3/api-docs/**, springdoc 제공). Swagger UI 는 사용하지 않음.
+                    .requestMatchers("/docs/**", "/v3/api-docs/**")
                     .permitAll()
                     .requestMatchers("/api/v1/wishlists/**")
                     .hasAuthority(IdentityType.MEMBER.name)
