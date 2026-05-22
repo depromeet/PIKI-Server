@@ -1,8 +1,8 @@
 package com.depromeet.team3.wishlist.controller
 
 import com.depromeet.team3.common.response.ApiResponseBody
+import com.depromeet.team3.wishlist.controller.dto.WishItemResponse
 import com.depromeet.team3.wishlist.controller.dto.WishlistRegisterRequest
-import com.depromeet.team3.wishlist.controller.dto.WishlistRegisterResponse
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
@@ -48,5 +48,36 @@ interface WishlistApi {
     fun register(
         @Parameter(hidden = true) userId: UUID,
         request: WishlistRegisterRequest,
-    ): ApiResponseBody<WishlistRegisterResponse>
+    ): ApiResponseBody<WishItemResponse>
+
+    @Operation(
+        summary = "위시리스트 조회",
+        description = """
+            로그인한 유저 본인의 위시리스트를 최신 등록순(id desc)으로 조회한다.
+            cursor 페이지네이션: 직전 응답의 pageResponse.nextCursor 를 다음 요청 cursor 로 그대로 전달한다.
+            마지막 페이지면 nextCursor 는 null, hasNext 는 false.
+            size 는 미지정 시 20, 1~50 범위를 벗어나면 양 끝으로 보정된다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "위시리스트 조회 성공",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun getWishlist(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "직전 응답의 nextCursor (없으면 첫 페이지)", example = "1010")
+        cursor: String?,
+        @Parameter(description = "페이지 크기 (기본 20, 최대 50)", example = "20")
+        size: Int?,
+    ): ApiResponseBody<List<WishItemResponse>>
 }

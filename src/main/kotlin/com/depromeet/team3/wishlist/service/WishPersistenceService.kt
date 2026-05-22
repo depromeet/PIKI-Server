@@ -5,7 +5,7 @@ import com.depromeet.team3.item.repository.ItemRepository
 import com.depromeet.team3.product.service.ProductSnapshot
 import com.depromeet.team3.wishlist.domain.Wish
 import com.depromeet.team3.wishlist.repository.WishRepository
-import com.depromeet.team3.wishlist.service.dto.WishRegisterResult
+import com.depromeet.team3.wishlist.service.dto.WishWithItem
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -23,9 +23,9 @@ class WishPersistenceService(
     fun persist(
         userId: UUID,
         snapshot: ProductSnapshot,
-    ): WishRegisterResult {
+    ): WishWithItem {
         val item = itemRepository.save(Item.from(snapshot))
         val wish = wishRepository.save(Wish(userId = userId, itemId = item.getId()))
-        return WishRegisterResult(wish = wish, item = item)
+        return WishWithItem(wish = wish, item = item)
     }
 }

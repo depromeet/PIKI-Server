@@ -13,7 +13,10 @@ data class ApiResponseBody<T>(
     val pageResponse: PageResponse? = null,
 ) {
     companion object {
-        fun <T> ok(data: T? = null): ApiResponseBody<T> = success(HttpStatus.OK, data)
+        fun <T> ok(
+            data: T? = null,
+            pageResponse: PageResponse? = null,
+        ): ApiResponseBody<T> = success(HttpStatus.OK, data, pageResponse)
 
         fun <T> created(data: T? = null): ApiResponseBody<T> = success(HttpStatus.CREATED, data)
 
@@ -32,12 +35,14 @@ data class ApiResponseBody<T>(
         private fun <T> success(
             status: HttpStatus,
             data: T?,
+            pageResponse: PageResponse? = null,
         ): ApiResponseBody<T> =
             ApiResponseBody(
                 status = status.value(),
                 data = data,
                 detail = "정상적으로 처리되었습니다.",
                 code = status.name,
+                pageResponse = pageResponse,
             )
     }
 }

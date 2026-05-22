@@ -8,4 +8,6 @@ class ItemRepositoryImpl(
     private val itemJpaRepository: ItemJpaRepository,
 ) : ItemRepository {
     override fun save(item: Item): Item = itemJpaRepository.save(item)
+
+    override fun findByIds(ids: List<Long>): List<Item> = itemJpaRepository.findAllById(ids)
 }

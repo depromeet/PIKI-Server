@@ -1,17 +1,25 @@
 package com.depromeet.team3.wishlist.service
 
+import com.depromeet.team3.item.repository.ItemRepository
 import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.product.service.ProductLinkExtractor
 import com.depromeet.team3.product.service.ProductSnapshot
-import com.depromeet.team3.wishlist.service.dto.WishRegisterResult
+import com.depromeet.team3.wishlist.domain.WishCursor
+import com.depromeet.team3.wishlist.domain.WishlistSize
+import com.depromeet.team3.wishlist.repository.WishRepository
+import com.depromeet.team3.wishlist.service.dto.WishWithItem
+import com.depromeet.team3.wishlist.service.dto.WishlistPage
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 @Service
 class WishlistService(
     private val productLinkExtractor: ProductLinkExtractor,
     private val wishPersistenceService: WishPersistenceService,
+    private val wishRepository: WishRepository,
+    private val itemRepository: ItemRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -21,10 +29,35 @@ class WishlistService(
     fun register(
         rawUrl: String,
         userId: UUID,
-    ): WishRegisterResult {
+    ): WishWithItem {
         val link = ProductLink.parse(rawUrl)
         val snapshot = extractWithLatencyLog(link)
         return wishPersistenceService.persist(userId, snapshot)
+    }
+
+    @Transactional(readOnly = true)
+    fun getWishlist(
+        userId: UUID,
+        rawCursor: String?,
+        rawSize: Int?,
+    ): WishlistPage {
+        val cursor = WishCursor.parse(rawCursor)
+        val size = WishlistSize.of(rawSize).value
+        // hasNext 판단을 위해 한 건 더 조회하고, 초과분은 응답에서 잘라낸다.
+        val fetched = wishRepository.findPage(userId, cursor, size + 1)
+        val hasNext = fetched.size > size
+        val pageWishes = fetched.take(size)
+
+        val itemsById = itemRepository.findByIds(pageWishes.map { it.itemId }).associateBy { it.getId() }
+        val entries =
+            pageWishes.map { wish ->
+                // item 은 스냅샷이라 삭제되지 않는다. 없으면 영속화 경로가 깨진 코드 버그다.
+                val item = itemsById[wish.itemId] ?: error("wish ${wish.getId()} 의 item ${wish.itemId} 가 없다")
+                WishWithItem(wish = wish, item = item)
+            }
+
+        val nextCursor = pageWishes.lastOrNull()?.getId()?.toString().takeIf { hasNext }
+        return WishlistPage(entries = entries, nextCursor = nextCursor, hasNext = hasNext)
     }
 
     private fun extractWithLatencyLog(link: ProductLink): ProductSnapshot {
