@@ -1,17 +1,25 @@
 package com.depromeet.team3.tournament.controller
 
+import com.depromeet.team3.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.team3.support.IntegrationTestSupport
+import com.depromeet.team3.tournament.domain.TournamentItem
 import com.depromeet.team3.tournament.repository.TournamentItemJpaRepository
+import com.depromeet.team3.user.domain.IdentityType
 import com.depromeet.team3.wishlist.domain.Wish
 import com.depromeet.team3.wishlist.repository.WishJpaRepository
+import kotlin.test.assertEquals
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
+import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
@@ -28,8 +36,13 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
     @Autowired private lateinit var tournamentItemJpaRepository: TournamentItemJpaRepository
 
+    @Autowired private lateinit var jwtProvider: JwtProvider
+
     private val userId: UUID = UUID.fromString("11111111-2222-3333-4444-555555555555")
     private val otherUserId: UUID = UUID.fromString("99999999-8888-7777-6666-555555555555")
+
+    private fun authHeader(userId: UUID): String =
+        "Bearer ${jwtProvider.generateAccessToken(userId, IdentityType.MEMBER)}"
 
     @Test
     fun `POST tournaments 는 201 과 함께 tournamentId 를 반환한다`() {
@@ -38,7 +51,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 post("/api/v1/tournaments")
-                    .header("X-User-Id", userId)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"name":"테스트 토너먼트"}"""),
             ).andExpect(status().isCreated)
@@ -56,7 +69,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/items")
-                    .header("X-User-Id", userId)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":${wishIds.joinToString(",", "[", "]")}}"""),
             ).andExpect(status().isOk)
@@ -72,7 +85,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/items")
-                    .header("X-User-Id", userId)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":${otherWishIds.joinToString(",", "[", "]")}}"""),
             ).andExpect(status().isForbidden)
@@ -88,7 +101,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/start")
-                    .header("X-User-Id", userId),
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
     }
@@ -102,7 +115,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/start")
-                    .header("X-User-Id", otherUserId),
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
             ).andExpect(status().isForbidden)
             .andExpect(jsonPath("$.status").value(403))
     }
@@ -115,7 +128,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/start")
-                    .header("X-User-Id", userId),
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.status").value(400))
     }
@@ -128,7 +141,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/matches")
-                    .header("X-User-Id", userId)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         """{"currentRound":2,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}""",
@@ -146,7 +159,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         mockMvc.perform(
             post("/api/v1/tournaments/$tournamentId/matches")
-                .header("X-User-Id", userId)
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(matchBody),
         )
@@ -154,7 +167,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/matches")
-                    .header("X-User-Id", userId)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(matchBody),
             ).andExpect(status().isConflict)
@@ -169,7 +182,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/matches")
-                    .header("X-User-Id", otherUserId)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(
                         """{"currentRound":2,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}""",
@@ -185,7 +198,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         mockMvc.perform(
             post("/api/v1/tournaments/$tournamentId/matches")
-                .header("X-User-Id", userId)
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """{"currentRound":2,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}""",
@@ -195,7 +208,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 get("/api/v1/tournaments/$tournamentId")
-                    .header("X-User-Id", userId),
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.tournamentId").value(tournamentId))
@@ -212,7 +225,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 get("/api/v1/tournaments/$tournamentId")
-                    .header("X-User-Id", otherUserId),
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
             ).andExpect(status().isForbidden)
             .andExpect(jsonPath("$.status").value(403))
     }
@@ -224,12 +237,110 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 get("/api/v1/tournaments/999999")
-                    .header("X-User-Id", userId),
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isNotFound)
             .andExpect(jsonPath("$.status").value(404))
     }
 
-    private fun buildMockMvc(): MockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build()
+    @Test
+    fun `DELETE tournaments-id-items-itemId 는 PENDING 토너먼트에서 아이템을 삭제하고 200 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, 100L, 200L)
+        val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId/items/$itemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+
+        val remaining = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
+        assertEquals(1, remaining.size)
+        assert(remaining.none { it.getId() == itemId })
+    }
+
+    @Test
+    fun `DELETE tournaments-id-items-itemId 에서 IN_PROGRESS 토너먼트이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, item1Id) = startTournamentWith2Items(mockMvc)
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId/items/$item1Id")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.status").value(409))
+    }
+
+    @Test
+    fun `DELETE tournaments-id-items-itemId 에서 아이템 추가자가 아니고 소유자도 아니면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, 100L, 200L)
+        val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId/items/$itemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
+    }
+
+    @Test
+    fun `DELETE tournaments-id-items-itemId 에서 소유자는 다른 참가자가 추가한 아이템도 삭제할 수 있다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, otherUserId, 300L, 400L)
+        val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId/items/$itemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+
+        assert(tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).none { it.getId() == itemId })
+    }
+
+    @Test
+    fun `DELETE tournaments-id-items-itemId 에서 존재하지 않는 아이템이면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId/items/999999")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+    }
+
+    @Test
+    fun `DELETE tournaments-id-items-itemId 에서 다른 토너먼트 소속 아이템이면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId1 = createTournament(mockMvc, "토너먼트1")
+        val tournamentId2 = createTournament(mockMvc, "토너먼트2")
+        val itemOfTournament2 = tournamentItemJpaRepository.save(
+            TournamentItem(tournamentId = tournamentId2, itemId = 999L, userId = userId),
+        ).getId()
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId1/items/$itemOfTournament2")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+    }
+
+    private fun buildMockMvc(): MockMvc =
+        MockMvcBuilders
+            .webAppContextSetup(webApplicationContext)
+            .apply<DefaultMockMvcBuilder>(springSecurity())
+            .build()
 
     private fun createTournament(
         mockMvc: MockMvc,
@@ -239,7 +350,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             mockMvc
                 .perform(
                     post("/api/v1/tournaments")
-                        .header("X-User-Id", userId)
+                        .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""{"name":"$name"}"""),
                 ).andReturn()
@@ -260,7 +371,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val wishIds = saveWishes(owner, *itemIds)
         mockMvc.perform(
             post("/api/v1/tournaments/$tournamentId/items")
-                .header("X-User-Id", owner)
+                .header(HttpHeaders.AUTHORIZATION, authHeader(owner))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"itemIds":${wishIds.joinToString(",", "[", "]")}}"""),
         )
@@ -277,7 +388,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         addItemsToTournament(mockMvc, tournamentId, userId, 100L, 200L)
         mockMvc.perform(
             post("/api/v1/tournaments/$tournamentId/start")
-                .header("X-User-Id", userId),
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
         )
         val items = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
         return TournamentStart(

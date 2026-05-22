@@ -80,6 +80,18 @@ class TournamentServiceTest {
         override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
             items.filter { it.tournamentId == tournamentId }
 
+        override fun findById(id: Long): TournamentItem? = items.find { it.getId() == id }
+
+        override fun delete(tournamentItem: TournamentItem) {
+            items.remove(tournamentItem)
+        }
+
+        override fun deleteIfPending(id: Long, tournamentId: Long): Int {
+            val item = items.find { it.getId() == id && it.tournamentId == tournamentId } ?: return 0
+            items.remove(item)
+            return 1
+        }
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
@@ -455,6 +467,71 @@ class TournamentServiceTest {
     fun `getTournamentById 에서 존재하지 않는 tournamentId 면 예외가 발생한다`() {
         assertFailsWith<TournamentException> {
             service.getTournamentById(999L, userId)
+        }
+    }
+
+    @Test
+    fun `deleteItem 은 PENDING 토너먼트에서 아이템을 삭제한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L, 2L)))
+        val item = itemRepository.findAllByTournamentId(tournamentId).first()
+
+        service.deleteItem(userId, tournamentId, item.getId())
+
+        assertEquals(1, itemRepository.findAllByTournamentId(tournamentId).size)
+    }
+
+    @Test
+    fun `deleteItem 에서 토너먼트 소유자도 다른 사람이 추가한 아이템을 삭제할 수 있다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        service.addItems(otherUserId, AddTournamentItems(tournamentId, listOf(1L)))
+        val item = itemRepository.findAllByTournamentId(tournamentId).first()
+
+        service.deleteItem(userId, tournamentId, item.getId())
+
+        assertEquals(0, itemRepository.findAllByTournamentId(tournamentId).size)
+    }
+
+    @Test
+    fun `deleteItem 에서 PENDING 이 아닌 토너먼트면 예외가 발생한다`() {
+        val tournamentId = createAndStart(listOf(1L, 2L))
+        val item = itemRepository.findAllByTournamentId(tournamentId).first()
+
+        assertFailsWith<TournamentException> {
+            service.deleteItem(userId, tournamentId, item.getId())
+        }
+    }
+
+    @Test
+    fun `deleteItem 에서 존재하지 않는 tournamentItemId 면 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+
+        assertFailsWith<TournamentException> {
+            service.deleteItem(userId, tournamentId, 999L)
+        }
+    }
+
+    @Test
+    fun `deleteItem 에서 다른 토너먼트 아이템이면 예외가 발생한다`() {
+        val tournamentId1 = service.create(userId, CreateTournament("토너먼트1"))
+        val tournamentId2 = service.create(userId, CreateTournament("토너먼트2"))
+        service.addItems(userId, AddTournamentItems(tournamentId1, listOf(1L)))
+        service.addItems(userId, AddTournamentItems(tournamentId2, listOf(2L)))
+        val itemOfTournament2 = itemRepository.findAllByTournamentId(tournamentId2).first()
+
+        assertFailsWith<TournamentException> {
+            service.deleteItem(userId, tournamentId1, itemOfTournament2.getId())
+        }
+    }
+
+    @Test
+    fun `deleteItem 에서 아이템을 추가하지 않은 타인이면 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L)))
+        val item = itemRepository.findAllByTournamentId(tournamentId).first()
+
+        assertFailsWith<TournamentException> {
+            service.deleteItem(otherUserId, tournamentId, item.getId())
         }
     }
 }

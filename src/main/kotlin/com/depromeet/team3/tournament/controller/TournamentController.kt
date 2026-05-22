@@ -9,11 +9,12 @@ import com.depromeet.team3.tournament.controller.dto.TournamentInfoResponse
 import com.depromeet.team3.tournament.service.TournamentService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
@@ -27,8 +28,8 @@ class TournamentController(
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     override fun create(
-        @RequestHeader("X-User-Id") userId: UUID,
-        @RequestBody @Valid request: CreateTournamentRequest,
+        @AuthenticationPrincipal userId: UUID,
+        @Valid @RequestBody request: CreateTournamentRequest,
     ): ApiResponseBody<CreateTournamentResponse> {
         val tournamentId = tournamentService.create(userId, request.toCreateTournament())
         return ApiResponseBody.created(CreateTournamentResponse(tournamentId))
@@ -36,17 +37,27 @@ class TournamentController(
 
     @PostMapping("/{tournamentId}/items")
     override fun addItems(
-        @RequestHeader("X-User-Id") userId: UUID,
+        @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
-        @RequestBody @Valid request: AddTournamentItemsRequest,
+        @Valid @RequestBody request: AddTournamentItemsRequest,
     ): ApiResponseBody<Unit> {
         tournamentService.addItems(userId, request.toAddTournamentItems(tournamentId))
         return ApiResponseBody.ok()
     }
 
+    @DeleteMapping("/{tournamentId}/items/{tournamentItemId}")
+    override fun deleteItem(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+        @PathVariable tournamentItemId: Long,
+    ): ApiResponseBody<Unit> {
+        tournamentService.deleteItem(userId, tournamentId, tournamentItemId)
+        return ApiResponseBody.ok()
+    }
+
     @PostMapping("/{tournamentId}/start")
     override fun start(
-        @RequestHeader("X-User-Id") userId: UUID,
+        @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
     ): ApiResponseBody<Unit> {
         tournamentService.start(userId, tournamentId)
@@ -55,9 +66,9 @@ class TournamentController(
 
     @PostMapping("/{tournamentId}/matches")
     override fun recordMatch(
-        @RequestHeader("X-User-Id") userId: UUID,
+        @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
-        @RequestBody @Valid request: RecordMatchRequest,
+        @Valid @RequestBody request: RecordMatchRequest,
     ): ApiResponseBody<Unit> {
         tournamentService.recordMatch(userId, request.toRecordMatch(tournamentId))
         return ApiResponseBody.ok()
@@ -65,7 +76,7 @@ class TournamentController(
 
     @GetMapping("/{tournamentId}")
     override fun getTournamentById(
-        @RequestHeader("X-User-Id") userId: UUID,
+        @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
     ): ApiResponseBody<TournamentInfoResponse> {
         val tournamentInfo = tournamentService.getTournamentById(tournamentId, userId)

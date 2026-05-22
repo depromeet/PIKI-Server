@@ -141,6 +141,30 @@ class TournamentService(
         }
     }
 
+    @Transactional
+    fun deleteItem(
+        userId: UUID,
+        tournamentId: Long,
+        tournamentItemId: Long,
+    ) {
+        val tournament = tournamentRepository.findTournamentById(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        if (!tournament.isPending()) throw TournamentException.notPendingTournament()
+        val tournamentItem = tournamentItemRepository.findById(tournamentItemId)
+                ?: throw TournamentException.notFoundTournamentItem()
+        if (tournamentItem.tournamentId != tournamentId) throw TournamentException.notFoundTournamentItem()
+
+        val isItemAdder = tournamentItem.userId == userId
+        if (!isItemAdder) {
+            val isTournamentOwner = tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+                    ?.getId() == tournament.ownerTournamentUserId
+            if (!isTournamentOwner) throw TournamentException.forbiddenTournament()
+        }
+
+        val deleted = tournamentItemRepository.deleteIfPending(tournamentItemId, tournamentId)
+        if (deleted == 0) throw TournamentException.notPendingTournament()
+    }
+
     companion object {
         private const val MIN_ITEM_COUNT = 2
         private const val MAX_ITEM_COUNT = 32
