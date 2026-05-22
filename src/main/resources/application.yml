@@ -48,8 +48,8 @@ oauth:
 
 gemini:
   api-key: ${GEMINI_API_KEY:}
-  # preview 모델은 2 주 사전공지 후 deprecate 정책이라 운영 안정성을 위해 GA 모델 사용.
-  model: ${GEMINI_MODEL:gemini-2.5-flash}
+  # 기본 모델은 GeminiProperties.DEFAULT_MODEL 한 곳에서만 정의한다 (drift 방지). 여기엔 리터럴을 두지 않는다.
+  # 운영에서 모델을 바꾸려면 GEMINI_MODEL 환경변수로 override (relaxed binding: GEMINI_MODEL -> gemini.model).
   retry:
     # max-attempts 는 총 시도 횟수(초기 호출 + 재시도). 기본 2 = 초기 호출 1회 + 재시도 1회.
     # 한 요청이 유발하는 billed API 호출 횟수 상한이므로 비용·quota 에 맞춰 환경변수로 조정.
