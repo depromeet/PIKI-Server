@@ -324,13 +324,21 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `위시 item 의 이름과 가격을 수정하면 200 과 갱신된 값이 반환된다`() {
+    fun `위시 item 의 이름·가격·이미지·통화를 수정하면 200 과 갱신된 값이 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
         val wishId = registerWish(mockMvc, authHeader, "https://shop.example.com/products/1", "잘못 읽힌 이름")
-        val body = objectMapper.writeValueAsString(mapOf("name" to "교정된 이름", "currentPrice" to 88_000))
+        val body =
+            objectMapper.writeValueAsString(
+                mapOf(
+                    "name" to "교정된 이름",
+                    "currentPrice" to 88_000,
+                    "imageUrl" to "https://cdn.example.com/fixed.jpg",
+                    "currency" to "KRW",
+                ),
+            )
 
         mockMvc
             .perform(
@@ -343,6 +351,8 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.wish.id").value(wishId))
             .andExpect(jsonPath("$.data.item.name").value("교정된 이름"))
             .andExpect(jsonPath("$.data.item.currentPrice").value(88_000))
+            .andExpect(jsonPath("$.data.item.imageUrl").value("https://cdn.example.com/fixed.jpg"))
+            .andExpect(jsonPath("$.data.item.currency").value("KRW"))
     }
 
     @Test

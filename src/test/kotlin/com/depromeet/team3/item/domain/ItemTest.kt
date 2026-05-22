@@ -56,13 +56,45 @@ class ItemTest {
     }
 
     @Test
-    fun `update 로 name 과 currentPrice 를 모두 교체한다`() {
-        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000)
+    fun `update 로 name·currentPrice·imageUrl·currency 를 모두 교체한다`() {
+        val item =
+            Item(
+                link = link,
+                name = "원래 이름",
+                imageUrl = "https://cdn.example.com/old.jpg",
+                currentPrice = 10_000,
+                currency = "USD",
+            )
 
-        item.update(name = "새 이름", currentPrice = 20_000)
+        item.update(
+            name = "새 이름",
+            currentPrice = 20_000,
+            imageUrl = "https://cdn.example.com/new.jpg",
+            currency = "KRW",
+        )
 
         assertEquals("새 이름", item.name)
         assertEquals(20_000, item.currentPrice)
+        assertEquals("https://cdn.example.com/new.jpg", item.imageUrl)
+        assertEquals("KRW", item.currency)
+    }
+
+    @Test
+    fun `update 에 currency 만 주면 나머지는 유지된다`() {
+        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000, currency = "USD")
+
+        item.update(currency = "KRW")
+
+        assertEquals("원래 이름", item.name)
+        assertEquals(10_000, item.currentPrice)
+        assertEquals("KRW", item.currency)
+    }
+
+    @Test
+    fun `currency 를 8자 초과로 update 하면 불변식 위반으로 거부된다`() {
+        val item = Item(link = link, currency = "KRW")
+
+        assertFailsWith<IllegalArgumentException> { item.update(currency = "a".repeat(9)) }
     }
 
     @Test
