@@ -1,7 +1,6 @@
 package com.depromeet.team3.wishlist.controller
 
 import com.depromeet.team3.auth.infrastructure.jwt.JwtProvider
-import com.depromeet.team3.common.domain.Product
 import com.depromeet.team3.product.service.ProductSnapshot
 import com.depromeet.team3.product.service.gemini.GeminiApiException
 import com.depromeet.team3.support.IntegrationTestSupport
@@ -536,7 +535,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val userId = UUID.randomUUID()
         insertMember(userId)
         stubProductImageExtractor.build = {
-            Product(name = "나이키 에어포스", price = 99_000, category = "신발", currency = "KRW")
+            ProductSnapshot(link = null, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW")
         }
         val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
 
@@ -562,7 +561,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val userId = UUID.randomUUID()
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
-        stubProductImageExtractor.build = { Product(name = "에어 조던", price = 119_000, category = null) }
+        stubProductImageExtractor.build = { ProductSnapshot(link = null, name = "에어 조던", currentPrice = 119_000) }
         val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
 
         mockMvc

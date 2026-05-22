@@ -1,6 +1,5 @@
 package com.depromeet.team3.item.domain
 
-import com.depromeet.team3.common.domain.Product
 import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.product.service.ProductSnapshot
 import org.junit.jupiter.api.Test
@@ -147,23 +146,15 @@ class ItemTest {
     }
 
     @Test
-    fun `fromOcr 은 link·image 없이 name·price·currency 를 매핑하고 category 는 버린다`() {
-        val product = Product(name = "나이키 에어포스", price = 99_000, category = "신발", currency = "KRW")
+    fun `link 가 null 인 ProductSnapshot(OCR 경로)도 Item 으로 매핑된다`() {
+        val snapshot = ProductSnapshot(link = null, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW")
 
-        val item = Item.fromOcr(product)
+        val item = Item.from(snapshot)
 
         assertNull(item.link)
         assertEquals("나이키 에어포스", item.name)
         assertEquals(99_000, item.currentPrice)
         assertEquals("KRW", item.currency)
         assertNull(item.imageUrl)
-    }
-
-    @Test
-    fun `link 없이도 Item 이 생성된다 (OCR 경로)`() {
-        val item = Item(link = null, name = "상품")
-
-        assertNull(item.link)
-        assertEquals("상품", item.name)
     }
 }

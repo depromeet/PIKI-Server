@@ -11,30 +11,30 @@ class GeminiOcrResultTest {
 
     private val objectMapper: ObjectMapper = jacksonObjectMapper()
 
-    // ---------- toProduct 매핑 ----------
+    // ---------- toProductSnapshot 매핑 ----------
 
     @Test
-    fun `toProduct 는 값을 그대로 Product 로 옮긴다`() {
+    fun `toProductSnapshot 은 link 없이 name·price·currency 를 옮기고 category 는 버린다`() {
         val result = GeminiOcrResult(name = "우유", price = 3500, category = "음료", currency = "KRW")
 
-        val product = result.toProduct()
+        val snapshot = result.toProductSnapshot()
 
-        assertEquals("우유", product.name)
-        assertEquals(3500, product.price)
-        assertEquals("음료", product.category)
-        assertEquals("KRW", product.currency)
+        assertNull(snapshot.link)
+        assertEquals("우유", snapshot.name)
+        assertEquals(3500, snapshot.currentPrice)
+        assertEquals("KRW", snapshot.currency)
+        assertNull(snapshot.imageUrl)
     }
 
     @Test
-    fun `toProduct 는 null 필드를 그대로 옮긴다`() {
+    fun `toProductSnapshot 은 null 필드를 그대로 옮긴다`() {
         val result = GeminiOcrResult(name = null, price = null, category = null, currency = null)
 
-        val product = result.toProduct()
+        val snapshot = result.toProductSnapshot()
 
-        assertNull(product.name)
-        assertNull(product.price)
-        assertNull(product.category)
-        assertNull(product.currency)
+        assertNull(snapshot.name)
+        assertNull(snapshot.currentPrice)
+        assertNull(snapshot.currency)
     }
 
     // ---------- wire format 역직렬화 ----------

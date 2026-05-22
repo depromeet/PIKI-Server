@@ -1,7 +1,6 @@
 package com.depromeet.team3.item.domain
 
 import com.depromeet.team3.common.domain.LongBaseEntity
-import com.depromeet.team3.common.domain.Product
 import com.depromeet.team3.product.domain.ProductLink
 import com.depromeet.team3.product.domain.ProductLinkConverter
 import com.depromeet.team3.product.service.ProductSnapshot
@@ -100,6 +99,7 @@ class Item(
         private const val IMAGE_URL_MAX_LENGTH = 2048
         private const val CURRENCY_MAX_LENGTH = 8
 
+        // URL 추출이든 OCR 추출이든 ProductSnapshot 으로 통일돼 들어온다. OCR 은 link 가 null 일 뿐.
         fun from(snapshot: ProductSnapshot): Item =
             Item(
                 link = snapshot.link,
@@ -107,16 +107,6 @@ class Item(
                 imageUrl = snapshot.imageUrl,
                 currentPrice = snapshot.currentPrice,
                 currency = snapshot.currency,
-            )
-
-        // OCR 추출 결과로 item 을 만든다. URL 이 없어 link 는 null, 이미지는 아직 저장하지 않아 null.
-        // category 는 현재 item 모델에 없어 버린다.
-        fun fromOcr(product: Product): Item =
-            Item(
-                link = null,
-                name = product.name,
-                currentPrice = product.price,
-                currency = product.currency,
             )
     }
 }

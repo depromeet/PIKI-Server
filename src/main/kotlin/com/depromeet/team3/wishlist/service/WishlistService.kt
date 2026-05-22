@@ -42,12 +42,13 @@ class WishlistService(
     }
 
     // OCR 등록도 link 와 같은 흐름 — 입력이 이미지일 뿐. 외부 추출은 트랜잭션 바깥, 영속화만 위임.
+    // 추출 결과는 link 추출과 동일한 ProductSnapshot(link=null) 이라 Item.from 을 공유한다.
     fun registerFromOcr(
         image: MultipartFile,
         userId: UUID,
     ): WishWithItem {
-        val product = productImageExtractor.extract(OcrImage.of(image.bytes, image.contentType))
-        return wishPersistenceService.persist(userId, Item.fromOcr(product))
+        val snapshot = productImageExtractor.extract(OcrImage.of(image.bytes, image.contentType))
+        return wishPersistenceService.persist(userId, Item.from(snapshot))
     }
 
     @Transactional(readOnly = true)
