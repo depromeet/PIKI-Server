@@ -9,7 +9,7 @@ import java.util.UUID
 // 토너먼트에 올라간 아이템. 게스트·회원이 추가한 item 을 토너먼트가 참조하는 연결 엔티티.
 // userId 는 이 아이템을 토너먼트에 추가한 주체 (게스트·회원 모두 수용).
 @Entity
-@Table(name = "tournament_item")
+@Table(name = "tournament_items")
 class TournamentItem(
     @Column(name = "tournament_id", nullable = false)
     val tournamentId: Long,

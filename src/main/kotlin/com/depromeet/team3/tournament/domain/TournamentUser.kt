@@ -9,7 +9,7 @@ import java.util.UUID
 // 어떤 유저가 어떤 토너먼트에 참여했는지를 명시 관리하는 매핑 테이블.
 // userId 는 게스트·회원 모두 수용 (현재는 Guest 의 UUID).
 @Entity
-@Table(name = "tournament_user")
+@Table(name = "tournament_users")
 class TournamentUser(
     @Column(name = "tournament_id", nullable = false)
     val tournamentId: Long,
