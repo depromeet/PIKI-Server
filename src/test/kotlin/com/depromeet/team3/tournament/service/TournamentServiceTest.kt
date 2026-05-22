@@ -16,6 +16,7 @@ import com.depromeet.team3.user.domain.IdentityType
 import com.depromeet.team3.user.domain.User
 import com.depromeet.team3.user.repository.UserRepository
 import org.junit.jupiter.api.Test
+import org.springframework.http.HttpStatus
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -194,8 +195,19 @@ class TournamentServiceTest {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
         service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L)))
 
-        assertFailsWith<TournamentException> {
+        val ex = assertFailsWith<TournamentException> {
             service.addItems(otherUserId, AddTournamentItems(tournamentId, listOf(1L)))
+        }
+        assertEquals(HttpStatus.FORBIDDEN, ex.httpStatus)
+    }
+
+    @Test
+    fun `addItems 에서 기존 아이템과 합산해 32개를 초과하면 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        service.addItems(userId, AddTournamentItems(tournamentId, (1L..32L).toList()))
+
+        assertFailsWith<TournamentException> {
+            service.addItems(userId, AddTournamentItems(tournamentId, listOf(33L)))
         }
     }
 
@@ -275,17 +287,7 @@ class TournamentServiceTest {
         }
     }
 
-    @Test
-    fun `start 에서 아이템이 33개면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
-        service.addItems(userId, AddTournamentItems(tournamentId, (1L..33L).toList()))
-
-        assertFailsWith<TournamentException> {
-            service.start(userId, tournamentId)
-        }
-    }
-
-    @Test
+@Test
     fun `start 에서 아이템이 32개면 정상적으로 시작된다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
         service.addItems(userId, AddTournamentItems(tournamentId, (1L..32L).toList()))

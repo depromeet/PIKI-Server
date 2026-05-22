@@ -47,7 +47,8 @@ class TournamentService(
         userId: UUID,
         command: AddTournamentItems,
     ) {
-        val tournament = tournamentRepository.findTournamentById(command.tournamentId)
+        val tournament =
+            tournamentRepository.findTournamentById(command.tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
         tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)
@@ -60,6 +61,7 @@ class TournamentService(
         val hasDuplicate =
             command.itemIds.toSet().size != command.itemIds.size || command.itemIds.any { it in existingItemIds }
         if (hasDuplicate) throw TournamentException.duplicateTournamentItem()
+        if (existingItemIds.size + command.itemIds.size > MAX_ITEM_COUNT) throw TournamentException.invalidItemCount()
         tournamentItemRepository.saveAll(
             command.itemIds.map { itemId ->
                 TournamentItem(tournamentId = command.tournamentId, itemId = itemId, userId = userId)
@@ -170,10 +172,12 @@ class TournamentService(
         tournamentId: Long,
         tournamentItemId: Long,
     ) {
-        val tournament = tournamentRepository.findTournamentById(tournamentId)
+        val tournament =
+            tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
-        val tournamentItem = tournamentItemRepository.findById(tournamentItemId)
+        val tournamentItem =
+            tournamentItemRepository.findById(tournamentItemId)
                 ?: throw TournamentException.notFoundTournamentItem()
         if (tournamentItem.tournamentId != tournamentId) throw TournamentException.notFoundTournamentItem()
 
