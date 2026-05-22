@@ -49,7 +49,7 @@ data class GeminiOcrRequest(
             1. **name**: The product name exactly as displayed. null if not found.
             2. **price**: The price as an integer (remove currency symbols, commas). If multiple prices exist, use the final/sale price. null if not found.
             3. **category**: The category for the product (e.g. "식품", "음료", "생활용품", "의류", "전자기기", "화장품" etc.). If the category is explicitly shown on the page (e.g. breadcrumb, tag), use that text. Otherwise infer from the product. null if completely unclear.
-            4. **currency**: The ISO 4217 currency code of the price, inferred from the currency symbol or context (e.g. "KRW" for ₩/원, "USD" for $, "JPY" for ¥/円, "EUR" for €). null if there is no price or the currency is unclear.
+            4. **currency**: The ISO 4217 currency code (3 letters) of the price. Map unambiguous symbols/text directly (₩/원 → KRW, ¥/円 → JPY, € → EUR). For ambiguous symbols like "$" (used by USD, CAD, AUD, SGD, etc.), infer ONLY from page context (language/country/domain); if the context is unclear, return null. null if there is no price or the currency cannot be determined confidently.
 
             Return information for the single main product only. Do NOT include related/recommended/ad products.
             Handle any language (Korean, Japanese, English, etc.).
