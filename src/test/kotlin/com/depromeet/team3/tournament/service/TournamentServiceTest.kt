@@ -185,9 +185,10 @@ class TournamentServiceTest {
 >>>>>>> c3fdcbb (fix: addItems 권한 검사를 중복 검사 앞으로 이동)
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
 
-        assertFailsWith<TournamentException> {
+        val ex = assertFailsWith<TournamentException> {
             service.addItems(otherUserId, AddTournamentItems(tournamentId, (1L..4L).toList()))
         }
+        assertEquals(HttpStatus.FORBIDDEN, ex.httpStatus)
     }
 
     @Test
