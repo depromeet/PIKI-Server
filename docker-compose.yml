@@ -1,17 +1,17 @@
 services:
   mysql:
     image: mysql:8.4
-    container_name: team3-mysql
+    container_name: piki-mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
-      MYSQL_DATABASE: ${DB_NAME:-team3}
-      MYSQL_USER: ${DB_USERNAME:-team3}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-team3}
+      MYSQL_DATABASE: ${DB_NAME:-piki}
+      MYSQL_USER: ${DB_USERNAME:-piki}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-piki}
     ports:
       - "3306:3306"
     volumes:
-      - team3-mysql-data:/var/lib/mysql
+      - piki-mysql-data:/var/lib/mysql
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
@@ -24,4 +24,4 @@ services:
       retries: 10
 
 volumes:
-  team3-mysql-data:
+  piki-mysql-data:

@@ -1,0 +1,17 @@
+package com.depromeet.piki.tournament.repository
+
+import com.depromeet.piki.tournament.domain.Tournament
+import com.depromeet.piki.tournament.domain.TournamentHistory
+import com.depromeet.piki.tournament.domain.TournamentStatus
+
+interface TournamentRepository {
+    fun saveTournament(tournament: Tournament): Tournament
+
+    fun saveHistory(history: TournamentHistory)
+
+    fun findTournamentById(tournamentId: Long): Tournament?
+
+    fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory>
+
+    fun findByIdsAndStatuses(ids: List<Long>, statuses: List<TournamentStatus>?): List<Tournament>
+}

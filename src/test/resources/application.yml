@@ -1,6 +1,6 @@
 spring:
   application:
-    name: team3-test
+    name: PIKI-test
   config:
     import: optional:file:.env.test[.properties]
 
