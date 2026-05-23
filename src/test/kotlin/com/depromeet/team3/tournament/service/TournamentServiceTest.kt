@@ -176,13 +176,7 @@ class TournamentServiceTest {
     }
 
     @Test
-<<<<<<< HEAD
-    fun `addItems 에서 위시 아이템이 요청자의 것이 아니면 예외가 발생한다`() {
-        val serviceWithNoOwnership =
-            TournamentService(userRepository, repository, itemRepository, TestWishRepository(allOwned = false), testUserRepository)
-=======
     fun `addItems 에서 토너먼트 참여자가 아니면 예외가 발생한다`() {
->>>>>>> c3fdcbb (fix: addItems 권한 검사를 중복 검사 앞으로 이동)
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
 
         val ex = assertFailsWith<TournamentException> {
