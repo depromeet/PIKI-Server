@@ -228,7 +228,7 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
 
 **create / update 양 모드 완료 후 (PR URL 확정 후), 이어서 `/notion-board` 스킬을 실행한다.** 이번 PR을 Notion `프로젝트 일정 관리` 보드의 매칭 카드에 반영한다 (카드 본문 `개발 로그` 에 PR 링크 append + `계획중` 이면 `진행중` 으로). 사용자가 따로 호출하지 않아도 `/pr` 흐름의 일부로 돈다.
 
-- 이번 PR 의 URL · 번호 · 브랜치명 · 연관 이슈 번호 · `$ISSUE_LABELS` · 제목과 대화 맥락을 그대로 입력으로 넘긴다.
+- 이번 PR 의 URL · 번호 · 브랜치명 · 연관 이슈 번호·제목 · `$ISSUE_LABELS` · 제목과 대화 맥락을 그대로 입력으로 넘긴다.
 - `chore` / `test` / `infra` / `docs` / `refactor` 라벨이거나 `$NOTION_TOKEN` 이 없으면 `/notion-board` 가 알아서 조용히 스킵한다.
 - **best-effort** 다 — 보드 반영이 실패해도 PR 생성/갱신 결과를 되돌리지 않는다.
 

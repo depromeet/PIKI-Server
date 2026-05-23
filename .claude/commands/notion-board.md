@@ -7,6 +7,7 @@
   ```bash
   [ -z "$NOTION_TOKEN" ] && eval "$(grep '^export NOTION_TOKEN=' ~/.zshrc 2>/dev/null)"
   ```
+- **모든 Notion 호출은 HTTP 200 을 확인한다.** read(카드 조회·본문 조회)가 비-200이면 그 단계에서 멈추고 보드 반영을 생략한다(best-effort). 비-200 응답을 본문인 양 파싱하면 401/403/429/5xx 를 "카드 없음"·"미기록"으로 오인해 잘못 진행한다.
 
 ## 상수
 
@@ -37,9 +38,10 @@
 ```bash
 [ -z "$NOTION_TOKEN" ] && eval "$(grep '^export NOTION_TOKEN=' ~/.zshrc 2>/dev/null)"
 DB=5a0c800c-72cf-8307-8297-8124d888ca79
-curl -s -X POST "https://api.notion.com/v1/databases/$DB/query" \
+code=$(curl -s -X POST "https://api.notion.com/v1/databases/$DB/query" \
   -H "Authorization: Bearer $NOTION_TOKEN" -H "Notion-Version: 2022-06-28" -H "Content-Type: application/json" \
-  --data '{"page_size":100}' -o /tmp/nb_cards.json
+  --data '{"page_size":100}' -o /tmp/nb_cards.json -w "%{http_code}")
+[ "$code" = "200" ] || { echo "Notion query 실패 (HTTP $code) — 보드 반영 생략"; exit 0; }
 python3 - <<'PY'
 import json
 d=json.load(open('/tmp/nb_cards.json'))
@@ -65,8 +67,9 @@ PY
 
 ```bash
 [ -z "$NOTION_TOKEN" ] && eval "$(grep '^export NOTION_TOKEN=' ~/.zshrc 2>/dev/null)"
-curl -s "https://api.notion.com/v1/blocks/<PAGE_ID>/children?page_size=100" \
-  -H "Authorization: Bearer $NOTION_TOKEN" -H "Notion-Version: 2022-06-28" -o /tmp/nb_body.json
+code=$(curl -s "https://api.notion.com/v1/blocks/<PAGE_ID>/children?page_size=100" \
+  -H "Authorization: Bearer $NOTION_TOKEN" -H "Notion-Version: 2022-06-28" -o /tmp/nb_body.json -w "%{http_code}")
+[ "$code" = "200" ] || { echo "카드 본문 조회 실패 (HTTP $code) — 보드 반영 생략"; exit 0; }
 python3 - <<'PY'
 import json
 d=json.load(open('/tmp/nb_body.json'))
@@ -101,9 +104,10 @@ PY
 
 ```bash
 [ -z "$NOTION_TOKEN" ] && eval "$(grep '^export NOTION_TOKEN=' ~/.zshrc 2>/dev/null)"
-curl -s -X PATCH "https://api.notion.com/v1/blocks/<PAGE_ID>/children" \
+code=$(curl -s -X PATCH "https://api.notion.com/v1/blocks/<PAGE_ID>/children" \
   -H "Authorization: Bearer $NOTION_TOKEN" -H "Notion-Version: 2022-06-28" -H "Content-Type: application/json" \
-  --data @/tmp/nb_append.json -o /dev/null -w "append HTTP %{http_code}\n"
+  --data @/tmp/nb_append.json -o /dev/null -w "%{http_code}")
+echo "append HTTP $code"; [ "$code" = "200" ] || echo "append 실패 — 사용자에게 보고"
 ```
 
 ### 6. 상태 이동 (계획중 → 진행중만)
@@ -113,9 +117,10 @@ curl -s -X PATCH "https://api.notion.com/v1/blocks/<PAGE_ID>/children" \
 - `계획중` → `진행중` 으로:
   ```bash
   [ -z "$NOTION_TOKEN" ] && eval "$(grep '^export NOTION_TOKEN=' ~/.zshrc 2>/dev/null)"
-  curl -s -X PATCH "https://api.notion.com/v1/pages/<PAGE_ID>" \
+  code=$(curl -s -X PATCH "https://api.notion.com/v1/pages/<PAGE_ID>" \
     -H "Authorization: Bearer $NOTION_TOKEN" -H "Notion-Version: 2022-06-28" -H "Content-Type: application/json" \
-    --data '{"properties":{"상태":{"status":{"name":"진행중"}}}}' -o /dev/null -w "status HTTP %{http_code}\n"
+    --data '{"properties":{"상태":{"status":{"name":"진행중"}}}}' -o /dev/null -w "%{http_code}")
+  echo "status HTTP $code"; [ "$code" = "200" ] || echo "상태 변경 실패 — 사용자에게 보고"
   ```
 - `진행중` / `보류` / `완료` → 건드리지 않는다. **`완료` 이동은 자동화하지 않는다** — 기능 완료는 사람의 편집적 판단이다.
 
