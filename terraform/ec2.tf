@@ -43,10 +43,13 @@ resource "aws_instance" "app" {
 
   # IMDSv2 강제 — 2019 Capital One 사태의 원인이었던 IMDSv1 SSRF 취약점 방어.
   # http_tokens = "required" 로 두면 메타데이터 조회 시 토큰 세션이 필수가 된다.
+  # hop_limit = 2 — 앱이 Docker bridge 컨테이너에서 돌아 IMDS(169.254.169.254)까지
+  # "컨테이너 → 호스트" 1홉이 더 필요하다. 1 이면 컨테이너 안 앱이 instance role
+  # 자격증명을 못 받아 S3 업로드가 실패한다. 2 는 컨테이너 한 단계까지만 허용해 여전히 안전.
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
-    http_put_response_hop_limit = 1
+    http_put_response_hop_limit = 2
   }
 
   root_block_device {
