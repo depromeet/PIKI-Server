@@ -21,6 +21,9 @@ class SecurityConfig {
         jwtAuthenticationFilter: JwtAuthenticationFilter,
     ): SecurityFilterChain =
         http
+            // CorsConfigurationSource 빈을 사용해 CORS 를 Security 필터 단에서 처리한다.
+            // 이걸 빼면 preflight(OPTIONS) 가 anyRequest().authenticated() 에 잡혀 401 이 된다.
+            .cors { }
             .csrf { it.disable() }
             .httpBasic { it.disable() }
             .formLogin { it.disable() }
