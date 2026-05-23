@@ -10,11 +10,11 @@ import com.depromeet.piki.tournament.controller.dto.TournamentInfoResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentItemInfoResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
-import java.time.LocalDateTime
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpStatus
+import java.time.LocalDateTime
 
 @Configuration
 class TournamentApiExamples(
@@ -37,10 +37,11 @@ class TournamentApiExamples(
                                             name = "내 토너먼트",
                                             status = TournamentStatus.PENDING,
                                             createdAt = LocalDateTime.of(2026, 5, 22, 12, 0, 0),
-                                            participantProfileImages = listOf(
-                                                "https://cdn.example.com/profiles/user1.jpg",
-                                                "https://cdn.example.com/profiles/user2.jpg",
-                                            ),
+                                            participantProfileImages =
+                                                listOf(
+                                                    "https://cdn.example.com/profiles/user1.jpg",
+                                                    "https://cdn.example.com/profiles/user2.jpg",
+                                                ),
                                         ),
                                     ),
                                 ),

@@ -61,7 +61,11 @@ class TournamentService(
         val hasDuplicate =
             command.itemIds.toSet().size != command.itemIds.size || command.itemIds.any { it in existingItemIds }
         if (hasDuplicate) throw TournamentException.duplicateTournamentItem()
-        if (existingItemIds.size + command.itemIds.size > MAX_ITEM_COUNT) throw TournamentException.tooManyTournamentItems()
+        if (existingItemIds.size + command.itemIds.size >
+            MAX_ITEM_COUNT
+        ) {
+            throw TournamentException.tooManyTournamentItems()
+        }
         tournamentItemRepository.saveAll(
             command.itemIds.map { itemId ->
                 TournamentItem(tournamentId = command.tournamentId, itemId = itemId, userId = userId)
@@ -114,9 +118,10 @@ class TournamentService(
         val tournamentUsers = tournamentUserRepository.findByTournamentIds(tournaments.map { it.getId() })
         val userIds = tournamentUsers.map { it.userId }.toSet()
         val profileImageByUserId = userRepository.findByIds(userIds).associate { it.id to it.profileImage }
-        val profileImagesByTournamentId = tournamentUsers
-            .groupBy { it.tournamentId }
-            .mapValues { (_, users) -> users.mapNotNull { profileImageByUserId[it.userId] } }
+        val profileImagesByTournamentId =
+            tournamentUsers
+                .groupBy { it.tournamentId }
+                .mapValues { (_, users) -> users.mapNotNull { profileImageByUserId[it.userId] } }
 
         return tournaments.map { tournament ->
             TournamentSummary.of(
@@ -183,7 +188,9 @@ class TournamentService(
 
         val isItemAdder = tournamentItem.userId == userId
         if (!isItemAdder) {
-            val isTournamentOwner = tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+            val isTournamentOwner =
+                tournamentUserRepository
+                    .findByTournamentIdAndUserId(tournamentId, userId)
                     ?.getId() == tournament.ownerTournamentUserId
             if (!isTournamentOwner) throw TournamentException.forbiddenTournament()
         }

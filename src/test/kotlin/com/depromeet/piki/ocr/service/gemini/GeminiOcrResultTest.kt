@@ -8,7 +8,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class GeminiOcrResultTest {
-
     private val objectMapper: ObjectMapper = jacksonObjectMapper()
 
     // ---------- toProductSnapshot 매핑 ----------

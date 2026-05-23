@@ -10,7 +10,6 @@ import org.springframework.web.client.HttpServerErrorException
 import kotlin.test.assertEquals
 
 class GeminiApiExceptionTest {
-
     @ParameterizedTest
     @ValueSource(ints = [500, 502, 503, 504])
     fun `5xx 응답은 RETRYABLE 로 분류된다`(status: Int) {

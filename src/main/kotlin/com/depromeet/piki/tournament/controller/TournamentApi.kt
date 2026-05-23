@@ -118,7 +118,10 @@ interface TournamentApi {
 
     @Operation(
         summary = "토너먼트 목록 조회",
-        description = "내 토너먼트 목록을 최근 생성 순으로 조회한다. status 파라미터로 상태 필터링 가능하며 여러 값을 중복 전달할 수 있다(예: ?status=PENDING&status=IN_PROGRESS). 생략 시 전체 반환. status 값은 대문자(PENDING/IN_PROGRESS/COMPLETED)로 전달해야 한다.",
+        description =
+            "내 토너먼트 목록을 최근 생성 순으로 조회한다. status 파라미터로 상태 필터링 가능하며 " +
+                "여러 값을 중복 전달할 수 있다(예: ?status=PENDING&status=IN_PROGRESS). 생략 시 전체 반환. " +
+                "status 값은 대문자(PENDING/IN_PROGRESS/COMPLETED)로 전달해야 한다.",
     )
     @ApiResponse(
         responseCode = "200",

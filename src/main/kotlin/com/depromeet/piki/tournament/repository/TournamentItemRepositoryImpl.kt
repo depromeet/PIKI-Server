@@ -17,6 +17,8 @@ class TournamentItemRepositoryImpl(
 
     override fun delete(tournamentItem: TournamentItem) = tournamentItemJpaRepository.delete(tournamentItem)
 
-    override fun deleteIfPending(id: Long, tournamentId: Long): Int =
-        tournamentItemJpaRepository.deleteIfPending(id, tournamentId)
+    override fun deleteIfPending(
+        id: Long,
+        tournamentId: Long,
+    ): Int = tournamentItemJpaRepository.deleteIfPending(id, tournamentId)
 }

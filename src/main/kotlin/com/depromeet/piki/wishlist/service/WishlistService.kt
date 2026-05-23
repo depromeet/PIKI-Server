@@ -72,7 +72,12 @@ class WishlistService(
                 WishWithItem(wish = wish, item = item)
             }
 
-        val nextCursor = pageWishes.lastOrNull()?.getId()?.toString().takeIf { hasNext }
+        val nextCursor =
+            pageWishes
+                .lastOrNull()
+                ?.getId()
+                ?.toString()
+                .takeIf { hasNext }
         return WishlistPage(entries = entries, nextCursor = nextCursor, hasNext = hasNext)
     }
 

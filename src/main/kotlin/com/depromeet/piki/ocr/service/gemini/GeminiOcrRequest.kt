@@ -14,8 +14,13 @@ data class GeminiOcrRequest(
     )
 
     sealed interface Part {
-        data class Text(val text: String) : Part
-        data class Image(val inlineData: InlineData) : Part
+        data class Text(
+            val text: String,
+        ) : Part
+
+        data class Image(
+            val inlineData: InlineData,
+        ) : Part
     }
 
     data class InlineData(
@@ -39,7 +44,8 @@ data class GeminiOcrRequest(
     }
 
     companion object {
-        private val SYSTEM_PROMPT = """
+        private val SYSTEM_PROMPT =
+            """
             You are a product information extractor. The user captured a product page to identify the product they are interested in.
 
             **Intent inference**: The user wants information about the MAIN product on the page. Ignore related products, recommended items, ads, and sidebar content. Focus on the primary product that occupies the central area of the page.
@@ -53,32 +59,40 @@ data class GeminiOcrRequest(
 
             Return information for the single main product only. Do NOT include related/recommended/ad products.
             Handle any language (Korean, Japanese, English, etc.).
-        """.trimIndent()
+            """.trimIndent()
 
-        private val PRODUCT_SCHEMA = Schema(
-            type = SchemaType.OBJECT,
-            properties = mapOf(
-                "name" to Schema(type = SchemaType.STRING, nullable = true),
-                "price" to Schema(type = SchemaType.INTEGER, nullable = true),
-                "category" to Schema(type = SchemaType.STRING, nullable = true),
-                "currency" to Schema(type = SchemaType.STRING, nullable = true),
-            ),
-        )
+        private val PRODUCT_SCHEMA =
+            Schema(
+                type = SchemaType.OBJECT,
+                properties =
+                    mapOf(
+                        "name" to Schema(type = SchemaType.STRING, nullable = true),
+                        "price" to Schema(type = SchemaType.INTEGER, nullable = true),
+                        "category" to Schema(type = SchemaType.STRING, nullable = true),
+                        "currency" to Schema(type = SchemaType.STRING, nullable = true),
+                    ),
+            )
 
-        fun forImageAnalysis(base64Image: String, mimeType: String): GeminiOcrRequest =
+        fun forImageAnalysis(
+            base64Image: String,
+            mimeType: String,
+        ): GeminiOcrRequest =
             GeminiOcrRequest(
-                generationConfig = GenerationConfig(
-                    responseMimeType = "application/json",
-                    responseSchema = PRODUCT_SCHEMA,
-                ),
-                contents = listOf(
-                    Content(
-                        parts = listOf(
-                            Part.Text(SYSTEM_PROMPT),
-                            Part.Image(InlineData(mimeType = mimeType, data = base64Image)),
+                generationConfig =
+                    GenerationConfig(
+                        responseMimeType = "application/json",
+                        responseSchema = PRODUCT_SCHEMA,
+                    ),
+                contents =
+                    listOf(
+                        Content(
+                            parts =
+                                listOf(
+                                    Part.Text(SYSTEM_PROMPT),
+                                    Part.Image(InlineData(mimeType = mimeType, data = base64Image)),
+                                ),
                         ),
                     ),
-                ),
             )
     }
 }

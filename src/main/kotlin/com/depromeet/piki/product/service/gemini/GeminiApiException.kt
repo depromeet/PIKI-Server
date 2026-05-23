@@ -26,9 +26,10 @@ class GeminiApiException private constructor(
         // 그 외 4xx(잘못된 키·요청 등) 는 재시도해도 의미 없으므로 SERVER_ERROR.
         fun fromResponseError(e: RestClientResponseException): GeminiApiException {
             val status = e.statusCode
-            val retryable = status.is5xxServerError ||
-                status.value() == HttpStatus.TOO_MANY_REQUESTS.value() ||
-                status.value() == HttpStatus.REQUEST_TIMEOUT.value()
+            val retryable =
+                status.is5xxServerError ||
+                    status.value() == HttpStatus.TOO_MANY_REQUESTS.value() ||
+                    status.value() == HttpStatus.REQUEST_TIMEOUT.value()
             return if (retryable) upstreamError(e) else clientError(e)
         }
 

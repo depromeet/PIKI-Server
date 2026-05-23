@@ -616,7 +616,8 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
-        stubProductImageExtractor.build = { throw GeminiApiException.upstreamError(RuntimeException("connection timeout")) }
+        stubProductImageExtractor.build =
+            { throw GeminiApiException.upstreamError(RuntimeException("connection timeout")) }
         val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
 
         mockMvc

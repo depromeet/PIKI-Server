@@ -9,7 +9,6 @@ import com.depromeet.piki.tournament.repository.TournamentUserJpaRepository
 import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.user.domain.User
 import com.depromeet.piki.user.repository.UserJpaRepository
-import kotlin.test.assertEquals
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
@@ -27,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
 import java.util.UUID
+import kotlin.test.assertEquals
 
 @Transactional
 class TournamentControllerTest : IntegrationTestSupport() {
@@ -426,7 +426,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
 
-        assert(tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).none { it.getId() == itemId })
+        assert(
+            tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).none { it.getId() == itemId },
+        )
     }
 
     @Test
@@ -447,9 +449,11 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId1 = createTournament(mockMvc, "토너먼트1")
         val tournamentId2 = createTournament(mockMvc, "토너먼트2")
-        val itemOfTournament2 = tournamentItemJpaRepository.save(
-            TournamentItem(tournamentId = tournamentId2, itemId = 999L, userId = userId),
-        ).getId()
+        val itemOfTournament2 =
+            tournamentItemJpaRepository
+                .save(
+                    TournamentItem(tournamentId = tournamentId2, itemId = 999L, userId = userId),
+                ).getId()
 
         mockMvc
             .perform(
@@ -484,8 +488,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
         id: UUID,
         profileImage: String,
         nickname: String = "테스트유저",
-    ): User = userJpaRepository.save(User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.MEMBER))
-
+    ): User =
+        userJpaRepository.save(
+            User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.MEMBER),
+        )
 
     private fun addItemsToTournament(
         mockMvc: MockMvc,

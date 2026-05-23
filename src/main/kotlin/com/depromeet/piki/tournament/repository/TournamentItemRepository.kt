@@ -11,5 +11,8 @@ interface TournamentItemRepository {
 
     fun delete(tournamentItem: TournamentItem)
 
-    fun deleteIfPending(id: Long, tournamentId: Long): Int
+    fun deleteIfPending(
+        id: Long,
+        tournamentId: Long,
+    ): Int
 }

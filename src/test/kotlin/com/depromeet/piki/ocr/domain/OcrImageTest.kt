@@ -8,7 +8,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class OcrImageTest {
-
     @ParameterizedTest
     @ValueSource(strings = ["image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"])
     fun `지원하는 MIME 타입이면 OcrImage 가 생성된다`(mimeType: String) {

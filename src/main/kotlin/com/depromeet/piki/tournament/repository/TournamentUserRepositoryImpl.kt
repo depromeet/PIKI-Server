@@ -19,6 +19,9 @@ class TournamentUserRepositoryImpl(
         tournamentUserJpaRepository.findTournamentIdsByUserId(userId)
 
     override fun findByTournamentIds(tournamentIds: List<Long>): List<TournamentUser> =
-        if (tournamentIds.isEmpty()) emptyList()
-        else tournamentUserJpaRepository.findByTournamentIdIn(tournamentIds)
+        if (tournamentIds.isEmpty()) {
+            emptyList()
+        } else {
+            tournamentUserJpaRepository.findByTournamentIdIn(tournamentIds)
+        }
 }

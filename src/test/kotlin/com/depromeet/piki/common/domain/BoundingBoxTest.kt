@@ -9,7 +9,6 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class BoundingBoxTest {
-
     @Test
     fun `0~1000 범위 안의 정상 좌표로 생성된다`() {
         val box = BoundingBox(yMin = 0, xMin = 100, yMax = 1000, xMax = 500)

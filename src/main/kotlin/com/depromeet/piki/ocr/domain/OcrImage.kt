@@ -38,10 +38,11 @@ class OcrImage private constructor(
             require(bytes.isNotEmpty()) { "빈 이미지 파일은 처리할 수 없습니다." }
             // media type 은 RFC 상 대소문자를 가리지 않고 `;` 뒤에 파라미터가 붙을 수 있다.
             // (예: "IMAGE/JPEG", "image/jpeg; charset=utf-8") 정규화 후 비교한다.
-            val type = requireNotNull(mimeType) { "이미지 타입이 지정되지 않았습니다." }
-                .substringBefore(';')
-                .trim()
-                .lowercase()
+            val type =
+                requireNotNull(mimeType) { "이미지 타입이 지정되지 않았습니다." }
+                    .substringBefore(';')
+                    .trim()
+                    .lowercase()
             require(type in SUPPORTED_MIME_TYPES) { unsupportedMimeTypeMessage(type) }
             return OcrImage(bytes.copyOf(), type)
         }
