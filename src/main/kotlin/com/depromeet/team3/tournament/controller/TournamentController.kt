@@ -6,6 +6,8 @@ import com.depromeet.team3.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.team3.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.team3.tournament.controller.dto.RecordMatchRequest
 import com.depromeet.team3.tournament.controller.dto.TournamentInfoResponse
+import com.depromeet.team3.tournament.controller.dto.TournamentSummaryResponse
+import com.depromeet.team3.tournament.domain.TournamentStatus
 import com.depromeet.team3.tournament.service.TournamentService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
@@ -72,6 +75,15 @@ class TournamentController(
     ): ApiResponseBody<Unit> {
         tournamentService.recordMatch(userId, request.toRecordMatch(tournamentId))
         return ApiResponseBody.ok()
+    }
+
+    @GetMapping
+    override fun getTournaments(
+        @AuthenticationPrincipal userId: UUID,
+        @RequestParam(required = false) status: List<TournamentStatus>?,
+    ): ApiResponseBody<List<TournamentSummaryResponse>> {
+        val summaries = tournamentService.getTournaments(userId, status)
+        return ApiResponseBody.ok(summaries.map(TournamentSummaryResponse::from))
     }
 
     @GetMapping("/{tournamentId}")

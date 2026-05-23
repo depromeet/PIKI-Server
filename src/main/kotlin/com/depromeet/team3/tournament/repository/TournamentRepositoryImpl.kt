@@ -2,6 +2,7 @@ package com.depromeet.team3.tournament.repository
 
 import com.depromeet.team3.tournament.domain.Tournament
 import com.depromeet.team3.tournament.domain.TournamentHistory
+import com.depromeet.team3.tournament.domain.TournamentStatus
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
@@ -19,7 +20,14 @@ class TournamentRepositoryImpl(
     override fun findTournamentById(tournamentId: Long): Tournament? =
         tournamentJpaRepository.findByIdOrNull(tournamentId)
 
-    // 인덱스 추가 필요: tournament_id, current_round, id
     override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
         tournamentHistoryJpaRepository.findAllByTournamentIdOrderByCurrentRoundAscIdAsc(tournamentId)
+
+    override fun findByIdsAndStatuses(ids: List<Long>, statuses: List<TournamentStatus>?): List<Tournament> {
+        if (ids.isEmpty()) return emptyList()
+        return statuses
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { tournamentJpaRepository.findByIdInAndStatusInOrderByCreatedAtDesc(ids, it) }
+            ?: tournamentJpaRepository.findByIdInOrderByCreatedAtDesc(ids)
+    }
 }

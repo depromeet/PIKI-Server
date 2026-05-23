@@ -10,4 +10,8 @@ interface TournamentUserRepository {
         tournamentId: Long,
         userId: UUID,
     ): TournamentUser?
+
+    fun findTournamentIdsByUserId(userId: UUID): List<Long>
+
+    fun findByTournamentIds(tournamentIds: List<Long>): List<TournamentUser>
 }

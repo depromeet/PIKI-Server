@@ -8,6 +8,9 @@ import com.depromeet.team3.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.team3.tournament.controller.dto.TournamentHistoryInfoResponse
 import com.depromeet.team3.tournament.controller.dto.TournamentInfoResponse
 import com.depromeet.team3.tournament.controller.dto.TournamentItemInfoResponse
+import com.depromeet.team3.tournament.controller.dto.TournamentSummaryResponse
+import com.depromeet.team3.tournament.domain.TournamentStatus
+import java.time.LocalDateTime
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -21,6 +24,29 @@ class TournamentApiExamples(
     fun tournamentOpenApiExamples(): OperationCustomizer =
         OperationCustomizer { operation, handlerMethod ->
             when {
+                handlerMethod.binds(TournamentController::getTournaments) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "목록 조회 성공",
+                            payload =
+                                ApiResponseBody.ok(
+                                    listOf(
+                                        TournamentSummaryResponse(
+                                            tournamentId = 1,
+                                            name = "내 토너먼트",
+                                            status = TournamentStatus.PENDING,
+                                            createdAt = LocalDateTime.of(2026, 5, 22, 12, 0, 0),
+                                            participantProfileImages = listOf(
+                                                "https://cdn.example.com/profiles/user1.jpg",
+                                                "https://cdn.example.com/profiles/user2.jpg",
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                        )
+                    }
+
                 handlerMethod.binds(TournamentController::create) ->
                     operation.examples(openApiObjectMapper.delegate) {
                         add(

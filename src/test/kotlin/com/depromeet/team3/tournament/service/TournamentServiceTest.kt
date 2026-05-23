@@ -12,6 +12,9 @@ import com.depromeet.team3.tournament.repository.TournamentUserRepository
 import com.depromeet.team3.tournament.service.dto.AddTournamentItems
 import com.depromeet.team3.tournament.service.dto.CreateTournament
 import com.depromeet.team3.tournament.service.dto.RecordMatch
+import com.depromeet.team3.user.domain.IdentityType
+import com.depromeet.team3.user.domain.User
+import com.depromeet.team3.user.repository.UserRepository
 import com.depromeet.team3.wishlist.domain.Wish
 import com.depromeet.team3.wishlist.domain.WishCursor
 import com.depromeet.team3.wishlist.domain.WishException
@@ -38,6 +41,12 @@ class TournamentServiceTest {
             userId: UUID,
         ): TournamentUser? = users.find { it.tournamentId == tournamentId && it.userId == userId }
 
+        override fun findTournamentIdsByUserId(userId: UUID): List<Long> =
+            users.filter { it.userId == userId }.map { it.tournamentId }
+
+        override fun findByTournamentIds(tournamentIds: List<Long>): List<TournamentUser> =
+            users.filter { it.tournamentId in tournamentIds }
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
@@ -46,6 +55,17 @@ class TournamentServiceTest {
             field.isAccessible = true
             field.set(entity, id)
         }
+    }
+
+    private class TestUserRepository : UserRepository {
+        private val users = mutableMapOf<UUID, User>()
+
+        fun add(user: User) { users[user.id] = user }
+
+        override fun save(user: User): User = user.also { users[it.id] = it }
+        override fun findById(id: UUID): User? = users[id]
+        override fun findByIds(ids: Collection<UUID>): List<User> = ids.mapNotNull { users[it] }
+        override fun existsByNickname(nickname: String): Boolean = users.values.any { it.nickname == nickname }
     }
 
     private class TestWishRepository(
@@ -125,6 +145,12 @@ class TournamentServiceTest {
         override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
             histories.filter { it.tournamentId == tournamentId }
 
+        override fun findByIdsAndStatuses(ids: List<Long>, statuses: List<TournamentStatus>?): List<Tournament> =
+            tournaments.values
+                .filter { it.getId() in ids }
+                .filter { statuses.isNullOrEmpty() || it.status in statuses }
+                .sortedByDescending { it.createdAt }
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
@@ -139,7 +165,8 @@ class TournamentServiceTest {
     private val userRepository = TestTournamentUserRepository()
     private val repository = TestTournamentRepository()
     private val wishRepository = TestWishRepository()
-    private val service = TournamentService(userRepository, repository, itemRepository, wishRepository)
+    private val testUserRepository = TestUserRepository()
+    private val service = TournamentService(userRepository, repository, itemRepository, wishRepository, testUserRepository)
     private val userId = UUID.randomUUID()
     private val otherUserId = UUID.randomUUID()
 
@@ -173,7 +200,7 @@ class TournamentServiceTest {
     @Test
     fun `addItems 에서 위시 아이템이 요청자의 것이 아니면 예외가 발생한다`() {
         val serviceWithNoOwnership =
-            TournamentService(userRepository, repository, itemRepository, TestWishRepository(allOwned = false))
+            TournamentService(userRepository, repository, itemRepository, TestWishRepository(allOwned = false), testUserRepository)
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
 
         assertFailsWith<WishException> {
@@ -470,6 +497,67 @@ class TournamentServiceTest {
         assertFailsWith<TournamentException> {
             service.getTournamentById(999L, userId)
         }
+    }
+
+    @Test
+    fun `getTournaments 는 자신이 참여한 토너먼트만 반환한다`() {
+        service.create(userId, CreateTournament("내 토너먼트1"))
+        service.create(userId, CreateTournament("내 토너먼트2"))
+        service.create(otherUserId, CreateTournament("남의 토너먼트"))
+
+        val result = service.getTournaments(userId, null)
+
+        assertEquals(2, result.size)
+        assert(result.all { r -> repository.tournaments.containsKey(r.tournamentId) })
+    }
+
+    @Test
+    fun `getTournaments 에서 참여한 토너먼트가 없으면 빈 리스트를 반환한다`() {
+        val result = service.getTournaments(userId, null)
+
+        assertEquals(0, result.size)
+    }
+
+    @Test
+    fun `getTournaments 에서 status 필터가 주어지면 해당 상태만 반환한다`() {
+        service.create(userId, CreateTournament("대기중"))
+        val startedId = service.create(userId, CreateTournament("진행중"))
+        service.addItems(userId, AddTournamentItems(startedId, listOf(1L, 2L)))
+        service.start(userId, startedId)
+
+        val result = service.getTournaments(userId, listOf(TournamentStatus.PENDING))
+
+        assertEquals(1, result.size)
+        assertEquals("대기중", result[0].name)
+    }
+
+    @Test
+    fun `getTournaments 에서 복수 status 필터가 주어지면 해당 상태들만 반환한다`() {
+        service.create(userId, CreateTournament("대기중"))
+        val startedId = service.create(userId, CreateTournament("진행중"))
+        service.addItems(userId, AddTournamentItems(startedId, listOf(1L, 2L)))
+        service.start(userId, startedId)
+        val completedId = service.create(userId, CreateTournament("완료됨"))
+        service.addItems(userId, AddTournamentItems(completedId, listOf(3L, 4L)))
+        service.start(userId, completedId)
+        val completedItems = itemRepository.findAllByTournamentId(completedId)
+        service.recordMatch(userId, RecordMatch(completedId, 2, completedItems[0].getId(), completedItems[1].getId(), completedItems[0].getId()))
+
+        val result = service.getTournaments(userId, listOf(TournamentStatus.PENDING, TournamentStatus.COMPLETED))
+
+        assertEquals(2, result.size)
+        assert(result.none { it.status == TournamentStatus.IN_PROGRESS })
+    }
+
+    @Test
+    fun `getTournaments 에서 참여자 프로필 이미지를 반환한다`() {
+        testUserRepository.add(User(id = userId, nickname = "테스터", profileImage = "https://cdn.example.com/test.jpg", identityType = IdentityType.MEMBER))
+        service.create(userId, CreateTournament("이미지 토너먼트"))
+
+        val result = service.getTournaments(userId, null)
+
+        assertEquals(1, result.size)
+        assertEquals(listOf("https://cdn.example.com/test.jpg"), result[0].participantProfileImages)
     }
 
     @Test

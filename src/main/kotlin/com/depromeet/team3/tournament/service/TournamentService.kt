@@ -3,6 +3,7 @@ package com.depromeet.team3.tournament.service
 import com.depromeet.team3.tournament.domain.Tournament
 import com.depromeet.team3.tournament.domain.TournamentHistory
 import com.depromeet.team3.tournament.domain.TournamentItem
+import com.depromeet.team3.tournament.domain.TournamentStatus
 import com.depromeet.team3.tournament.domain.TournamentUser
 import com.depromeet.team3.tournament.repository.TournamentItemRepository
 import com.depromeet.team3.tournament.repository.TournamentRepository
@@ -11,6 +12,8 @@ import com.depromeet.team3.tournament.service.dto.AddTournamentItems
 import com.depromeet.team3.tournament.service.dto.CreateTournament
 import com.depromeet.team3.tournament.service.dto.RecordMatch
 import com.depromeet.team3.tournament.service.dto.TournamentInfo
+import com.depromeet.team3.tournament.service.dto.TournamentSummary
+import com.depromeet.team3.user.repository.UserRepository
 import com.depromeet.team3.wishlist.domain.WishException
 import com.depromeet.team3.wishlist.repository.WishRepository
 import org.springframework.stereotype.Service
@@ -23,6 +26,7 @@ class TournamentService(
     private val tournamentRepository: TournamentRepository,
     private val tournamentItemRepository: TournamentItemRepository,
     private val wishRepository: WishRepository,
+    private val userRepository: UserRepository,
 ) {
     @Transactional
     fun create(
@@ -99,6 +103,30 @@ class TournamentService(
         val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
         val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
         return TournamentInfo.of(tournament, items, histories)
+    }
+
+    @Transactional(readOnly = true)
+    fun getTournaments(
+        userId: UUID,
+        statuses: List<TournamentStatus>?,
+    ): List<TournamentSummary> {
+        val tournamentIds = tournamentUserRepository.findTournamentIdsByUserId(userId)
+        val tournaments = tournamentRepository.findByIdsAndStatuses(tournamentIds, statuses)
+        if (tournaments.isEmpty()) return emptyList()
+
+        val tournamentUsers = tournamentUserRepository.findByTournamentIds(tournaments.map { it.getId() })
+        val userIds = tournamentUsers.map { it.userId }.toSet()
+        val profileImageByUserId = userRepository.findByIds(userIds).associate { it.id to it.profileImage }
+        val profileImagesByTournamentId = tournamentUsers
+            .groupBy { it.tournamentId }
+            .mapValues { (_, users) -> users.mapNotNull { profileImageByUserId[it.userId] } }
+
+        return tournaments.map { tournament ->
+            TournamentSummary.of(
+                tournament = tournament,
+                participantProfileImages = profileImagesByTournamentId[tournament.getId()] ?: emptyList(),
+            )
+        }
     }
 
     @Transactional

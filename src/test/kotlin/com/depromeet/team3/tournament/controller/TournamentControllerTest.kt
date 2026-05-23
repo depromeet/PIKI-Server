@@ -5,6 +5,8 @@ import com.depromeet.team3.support.IntegrationTestSupport
 import com.depromeet.team3.tournament.domain.TournamentItem
 import com.depromeet.team3.tournament.repository.TournamentItemJpaRepository
 import com.depromeet.team3.user.domain.IdentityType
+import com.depromeet.team3.user.domain.User
+import com.depromeet.team3.user.repository.UserJpaRepository
 import com.depromeet.team3.wishlist.domain.Wish
 import com.depromeet.team3.wishlist.repository.WishJpaRepository
 import kotlin.test.assertEquals
@@ -36,10 +38,13 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
     @Autowired private lateinit var tournamentItemJpaRepository: TournamentItemJpaRepository
 
+    @Autowired private lateinit var userJpaRepository: UserJpaRepository
+
     @Autowired private lateinit var jwtProvider: JwtProvider
 
     private val userId: UUID = UUID.fromString("11111111-2222-3333-4444-555555555555")
     private val otherUserId: UUID = UUID.fromString("99999999-8888-7777-6666-555555555555")
+    private val userProfileImage = "https://cdn.example.com/profiles/user.jpg"
 
     private fun authHeader(userId: UUID): String =
         "Bearer ${jwtProvider.generateAccessToken(userId, IdentityType.MEMBER)}"
@@ -189,6 +194,95 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     ),
             ).andExpect(status().isForbidden)
             .andExpect(jsonPath("$.status").value(403))
+    }
+
+    @Test
+    fun `GET tournaments 는 내 토너먼트 목록을 200 과 함께 반환하고 참여자 프로필 이미지를 포함한다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(userId, userProfileImage)
+        createTournament(mockMvc, "토너먼트A")
+        createTournament(mockMvc, "토너먼트B")
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.code").value("OK"))
+            .andExpect(jsonPath("$.data.length()").value(2))
+            .andExpect(jsonPath("$.data[0].tournamentId").isNumber)
+            .andExpect(jsonPath("$.data[0].name").isString)
+            .andExpect(jsonPath("$.data[0].status").isString)
+            .andExpect(jsonPath("$.data[0].createdAt").isString)
+            .andExpect(jsonPath("$.data[0].participantProfileImages").isArray)
+            .andExpect(jsonPath("$.data[0].participantProfileImages[0]").value(userProfileImage))
+    }
+
+    @Test
+    fun `GET tournaments 에서 status 필터를 지정하면 해당 상태만 반환된다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(userId, userProfileImage)
+        val pendingId = createTournament(mockMvc, "대기중")
+        val startedId = createTournament(mockMvc, "진행중")
+        addItemsToTournament(mockMvc, startedId, userId, 100L, 200L)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$startedId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .param("status", "PENDING"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].tournamentId").value(pendingId))
+            .andExpect(jsonPath("$.data[0].participantProfileImages[0]").value(userProfileImage))
+    }
+
+    @Test
+    fun `GET tournaments 에서 복수 status 필터를 지정하면 해당 상태들만 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val pendingId = createTournament(mockMvc, "대기중")
+        val startedId = createTournament(mockMvc, "진행중")
+        addItemsToTournament(mockMvc, startedId, userId, 100L, 200L)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$startedId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .param("status", "PENDING", "IN_PROGRESS"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(2))
+            .andExpect(jsonPath("$.data[?(@.tournamentId == $pendingId)]").exists())
+            .andExpect(jsonPath("$.data[?(@.tournamentId == $startedId)]").exists())
+    }
+
+    @Test
+    fun `GET tournaments 에서 토너먼트가 없으면 빈 배열을 반환한다`() {
+        val mockMvc = buildMockMvc()
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(0))
+    }
+
+    @Test
+    fun `GET tournaments 에서 인증 없이 요청하면 401 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+
+        mockMvc
+            .perform(get("/api/v1/tournaments"))
+            .andExpect(status().isUnauthorized)
     }
 
     @Test
@@ -356,6 +450,12 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 ).andReturn()
         return objectMapper.readTree(result.response.contentAsString)["data"]["tournamentId"].asLong()
     }
+
+    private fun saveUser(
+        id: UUID,
+        profileImage: String,
+        nickname: String = "테스트유저",
+    ): User = userJpaRepository.save(User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.MEMBER))
 
     private fun saveWishes(
         owner: UUID,

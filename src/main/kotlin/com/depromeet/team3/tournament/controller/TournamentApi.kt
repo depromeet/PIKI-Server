@@ -6,6 +6,8 @@ import com.depromeet.team3.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.team3.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.team3.tournament.controller.dto.RecordMatchRequest
 import com.depromeet.team3.tournament.controller.dto.TournamentInfoResponse
+import com.depromeet.team3.tournament.controller.dto.TournamentSummaryResponse
+import com.depromeet.team3.tournament.domain.TournamentStatus
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
@@ -113,6 +115,25 @@ interface TournamentApi {
         tournamentId: Long,
         request: RecordMatchRequest,
     ): ApiResponseBody<Unit>
+
+    @Operation(
+        summary = "토너먼트 목록 조회",
+        description = "내 토너먼트 목록을 최근 생성 순으로 조회한다. status 파라미터로 상태 필터링 가능하며 여러 값을 중복 전달할 수 있다(예: ?status=PENDING&status=IN_PROGRESS). 생략 시 전체 반환. status 값은 대문자(PENDING/IN_PROGRESS/COMPLETED)로 전달해야 한다.",
+    )
+    @ApiResponse(
+        responseCode = "200",
+        description = "목록 조회 성공",
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = Schema(implementation = ApiResponseBody::class),
+            ),
+        ],
+    )
+    fun getTournaments(
+        userId: UUID,
+        status: List<TournamentStatus>?,
+    ): ApiResponseBody<List<TournamentSummaryResponse>>
 
     @Operation(
         summary = "토너먼트 조회",
