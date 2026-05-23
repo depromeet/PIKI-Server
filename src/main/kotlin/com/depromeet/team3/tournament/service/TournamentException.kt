@@ -61,6 +61,13 @@ class TournamentException private constructor(
                 HttpStatus.BAD_REQUEST,
             )
 
+        fun tooManyTournamentItems(): TournamentException =
+            TournamentException(
+                "토너먼트 아이템은 최대 32개까지 추가할 수 있습니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
+
         fun duplicateTournamentItem(): TournamentException =
             TournamentException(
                 "이미 토너먼트에 등록된 아이템입니다.",
