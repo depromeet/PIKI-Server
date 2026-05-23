@@ -44,6 +44,15 @@ class WishlistApiExamples(
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.OK,
+                        name = "조회 성공 (마지막 페이지)",
+                        payload =
+                            ApiResponseBody.ok(
+                                data = listOf(sampleEntry),
+                                pageResponse = PageResponse(nextCursor = null, hasNext = false),
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.OK,
                         name = "조회 성공 (다음 페이지 있음)",
                         payload =
                             ApiResponseBody.ok(
