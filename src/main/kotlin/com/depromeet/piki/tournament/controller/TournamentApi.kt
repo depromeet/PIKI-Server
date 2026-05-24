@@ -5,6 +5,7 @@ import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.RecordMatchRequest
+import com.depromeet.piki.tournament.controller.dto.TournamentBracketResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentInfoResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
@@ -94,7 +95,7 @@ interface TournamentApi {
     fun start(
         userId: UUID,
         tournamentId: Long,
-    ): ApiResponseBody<Unit>
+    ): ApiResponseBody<TournamentBracketResponse>
 
     @Operation(
         summary = "매치 결과 기록",

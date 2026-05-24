@@ -5,16 +5,17 @@ import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
+import com.depromeet.piki.tournament.controller.dto.TournamentBracketResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentHistoryInfoResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentInfoResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentItemInfoResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
+import java.time.LocalDateTime
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpStatus
-import java.time.LocalDateTime
 
 @Configuration
 class TournamentApiExamples(
@@ -80,7 +81,44 @@ class TournamentApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "시작 성공",
-                            payload = ApiResponseBody.ok<Unit>(),
+                            payload = ApiResponseBody.ok(
+                                TournamentBracketResponse(
+                                    matches = listOf(
+                                        TournamentBracketResponse.MatchResponse(
+                                            firstItem = TournamentBracketResponse.MatchItemResponse(
+                                                tournamentItemId = 1,
+                                                name = "나이키 에어맥스",
+                                                price = 129_000,
+                                                currency = "KRW",
+                                                imageUrl = "https://cdn.example.com/items/1.jpg",
+                                            ),
+                                            secondItem = TournamentBracketResponse.MatchItemResponse(
+                                                tournamentItemId = 2,
+                                                name = "아디다스 울트라부스트",
+                                                price = 189_000,
+                                                currency = "KRW",
+                                                imageUrl = "https://cdn.example.com/items/2.jpg",
+                                            ),
+                                        ),
+                                        TournamentBracketResponse.MatchResponse(
+                                            firstItem = TournamentBracketResponse.MatchItemResponse(
+                                                tournamentItemId = 3,
+                                                name = "뉴발란스 993",
+                                                price = 259_000,
+                                                currency = "KRW",
+                                                imageUrl = "https://cdn.example.com/items/3.jpg",
+                                            ),
+                                            secondItem = TournamentBracketResponse.MatchItemResponse(
+                                                tournamentItemId = 4,
+                                                name = "살로몬 XT-6",
+                                                price = 279_000,
+                                                currency = "USD",
+                                                imageUrl = null,
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
                         )
                     }
 

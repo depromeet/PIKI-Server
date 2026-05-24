@@ -1,6 +1,8 @@
 package com.depromeet.piki.tournament.service
 
 import com.depromeet.piki.common.domain.LongBaseEntity
+import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.tournament.domain.Tournament
 import com.depromeet.piki.tournament.domain.TournamentHistory
 import com.depromeet.piki.tournament.domain.TournamentItem
@@ -51,6 +53,23 @@ class TournamentServiceTest {
             val field = LongBaseEntity::class.java.getDeclaredField("id")
             field.isAccessible = true
             field.set(entity, id)
+        }
+    }
+
+    private class TestItemRepository : ItemRepository {
+        var validIds: Set<Long>? = null  // null = 모든 ID 유효
+
+        override fun save(item: Item): Item = item
+        override fun findById(id: Long): Item? = null
+        override fun findByIds(ids: List<Long>): List<Item> {
+            val effective = validIds?.let { valid -> ids.filter { it in valid } } ?: ids
+            return effective.map { id ->
+                Item().also { item ->
+                    val field = LongBaseEntity::class.java.getDeclaredField("id")
+                    field.isAccessible = true
+                    field.set(item, id)
+                }
+            }
         }
     }
 
@@ -154,7 +173,8 @@ class TournamentServiceTest {
     private val userRepository = TestTournamentUserRepository()
     private val repository = TestTournamentRepository()
     private val testUserRepository = TestUserRepository()
-    private val service = TournamentService(userRepository, repository, itemRepository, testUserRepository)
+    private val testItemRepository = TestItemRepository()
+    private val service = TournamentService(userRepository, repository, itemRepository, testUserRepository, testItemRepository)
     private val userId = UUID.randomUUID()
     private val otherUserId = UUID.randomUUID()
 
@@ -246,6 +266,18 @@ class TournamentServiceTest {
         assertFailsWith<TournamentException> {
             service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L)))
         }
+    }
+
+    @Test
+    fun `addItems 에서 존재하지 않는 itemId 이면 예외가 발생한다`() {
+        testItemRepository.validIds = setOf(1L, 2L)
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+
+        val ex =
+            assertFailsWith<TournamentException> {
+                service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L, 999L)))
+            }
+        assertEquals(HttpStatus.NOT_FOUND, ex.httpStatus)
     }
 
     @Test
