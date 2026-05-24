@@ -55,10 +55,19 @@ class WishlistService(
     ): WishWithItem {
         val ocrImage = OcrImage.of(image.bytes, image.contentType)
         val extraction = productImageExtractor.extract(ocrImage)
+        // 크롭 이미지는 부가 정보다. S3 일시 장애·타임아웃이 OCR 등록 전체를 5xx 로 깨뜨리지 않도록,
+        // 업로드 실패는 imageUrl=null 로 degrade 한다 (imageUrl 없이도 등록 가능한 계약).
         val imageUrl =
             extraction.boundingBox
                 ?.let { imageCropper.crop(ocrImage.bytes, it) }
-                ?.let { cropped -> imageStorage.upload(cropped, "items/${UUID.randomUUID()}.png", "image/png") }
+                ?.let { cropped ->
+                    runCatching {
+                        imageStorage.upload(cropped, "items/${UUID.randomUUID()}.png", "image/png")
+                    }.getOrElse { e ->
+                        log.warn("크롭 이미지 S3 업로드 실패, imageUrl 없이 등록 진행: {}", e.message)
+                        null
+                    }
+                }
         return wishPersistenceService.persist(userId, Item.from(extraction.snapshot.copy(imageUrl = imageUrl)))
     }
 
