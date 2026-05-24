@@ -81,5 +81,12 @@ class TournamentException private constructor(
                 ErrorCategory.NOT_FOUND,
                 HttpStatus.NOT_FOUND,
             )
+
+        fun notFoundItems(): TournamentException =
+            TournamentException(
+                "존재하지 않는 아이템이 포함되어 있습니다.",
+                ErrorCategory.NOT_FOUND,
+                HttpStatus.NOT_FOUND,
+            )
     }
 }

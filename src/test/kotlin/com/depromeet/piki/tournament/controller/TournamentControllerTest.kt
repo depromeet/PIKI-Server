@@ -73,13 +73,15 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `POST tournaments-id-items 는 참여자이면 200 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
+        val item1Id = saveItem()
+        val item2Id = saveItem()
 
         mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/items")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"itemIds":[100,200]}"""),
+                    .content("""{"itemIds":[$item1Id,$item2Id]}"""),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
     }
@@ -88,15 +90,31 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `POST tournaments-id-items 는 아이템 1개도 추가할 수 있다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
+        val itemId = saveItem()
 
         mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/items")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"itemIds":[100]}"""),
+                    .content("""{"itemIds":[$itemId]}"""),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
+    }
+
+    @Test
+    fun `POST tournaments-id-items 에서 존재하지 않는 아이템 ID 이면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/items")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"itemIds":[999999]}"""),
+            ).andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
     }
 
     @Test
@@ -269,7 +287,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         saveUser(userId, userProfileImage)
         val pendingId = createTournament(mockMvc, "대기중")
         val startedId = createTournament(mockMvc, "진행중")
-        addItemsToTournament(mockMvc, startedId, userId, 100L, 200L)
+        addItemsToTournament(mockMvc, startedId, userId, saveItem(), saveItem())
         mockMvc.perform(
             post("/api/v1/tournaments/$startedId/start")
                 .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
@@ -291,7 +309,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val pendingId = createTournament(mockMvc, "대기중")
         val startedId = createTournament(mockMvc, "진행중")
-        addItemsToTournament(mockMvc, startedId, userId, 100L, 200L)
+        addItemsToTournament(mockMvc, startedId, userId, saveItem(), saveItem())
         mockMvc.perform(
             post("/api/v1/tournaments/$startedId/start")
                 .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
@@ -384,7 +402,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `DELETE tournaments-id-items-itemId 는 PENDING 토너먼트에서 아이템을 삭제하고 200 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        addItemsToTournament(mockMvc, tournamentId, userId, 100L, 200L)
+        addItemsToTournament(mockMvc, tournamentId, userId, saveItem(), saveItem())
         val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
 
         mockMvc
@@ -416,7 +434,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `DELETE tournaments-id-items-itemId 에서 아이템 추가자가 아니고 소유자도 아니면 403 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        addItemsToTournament(mockMvc, tournamentId, userId, 100L, 200L)
+        addItemsToTournament(mockMvc, tournamentId, userId, saveItem(), saveItem())
         val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
 
         mockMvc
@@ -432,7 +450,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         tournamentUserJpaRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
-        addItemsToTournament(mockMvc, tournamentId, otherUserId, 300L, 400L)
+        addItemsToTournament(mockMvc, tournamentId, otherUserId, saveItem(), saveItem())
         val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
 
         mockMvc
@@ -529,9 +547,12 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val item2Id: Long,
     )
 
+    private fun saveItem(name: String = "테스트 아이템"): Long =
+        itemJpaRepository.save(Item(name = name)).getId()
+
     private fun startTournamentWith2Items(mockMvc: MockMvc): TournamentStart {
         val tournamentId = createTournament(mockMvc)
-        addItemsToTournament(mockMvc, tournamentId, userId, 100L, 200L)
+        addItemsToTournament(mockMvc, tournamentId, userId, saveItem("아이템1"), saveItem("아이템2"))
         mockMvc.perform(
             post("/api/v1/tournaments/$tournamentId/start")
                 .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),

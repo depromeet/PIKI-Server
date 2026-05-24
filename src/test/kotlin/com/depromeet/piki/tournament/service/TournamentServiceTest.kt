@@ -57,16 +57,20 @@ class TournamentServiceTest {
     }
 
     private class TestItemRepository : ItemRepository {
+        var validIds: Set<Long>? = null  // null = 모든 ID 유효
+
         override fun save(item: Item): Item = item
         override fun findById(id: Long): Item? = null
-        override fun findByIds(ids: List<Long>): List<Item> =
-            ids.map { id ->
+        override fun findByIds(ids: List<Long>): List<Item> {
+            val effective = validIds?.let { valid -> ids.filter { it in valid } } ?: ids
+            return effective.map { id ->
                 Item().also { item ->
                     val field = LongBaseEntity::class.java.getDeclaredField("id")
                     field.isAccessible = true
                     field.set(item, id)
                 }
             }
+        }
     }
 
     private class TestUserRepository : UserRepository {
@@ -262,6 +266,18 @@ class TournamentServiceTest {
         assertFailsWith<TournamentException> {
             service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L)))
         }
+    }
+
+    @Test
+    fun `addItems 에서 존재하지 않는 itemId 이면 예외가 발생한다`() {
+        testItemRepository.validIds = setOf(1L, 2L)
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+
+        val ex =
+            assertFailsWith<TournamentException> {
+                service.addItems(userId, AddTournamentItems(tournamentId, listOf(1L, 999L)))
+            }
+        assertEquals(HttpStatus.NOT_FOUND, ex.httpStatus)
     }
 
     @Test

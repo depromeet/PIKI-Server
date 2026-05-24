@@ -65,11 +65,11 @@ class TournamentService(
         val hasDuplicate =
             command.itemIds.toSet().size != command.itemIds.size || command.itemIds.any { it in existingItemIds }
         if (hasDuplicate) throw TournamentException.duplicateTournamentItem()
-        if (existingItemIds.size + command.itemIds.size >
-            MAX_ITEM_COUNT
-        ) {
+        if (existingItemIds.size + command.itemIds.size > MAX_ITEM_COUNT) {
             throw TournamentException.tooManyTournamentItems()
         }
+        val foundItemIds = itemRepository.findByIds(command.itemIds).map { it.getId() }.toSet()
+        if (command.itemIds.any { it !in foundItemIds }) throw TournamentException.notFoundItems()
         tournamentItemRepository.saveAll(
             command.itemIds.map { itemId ->
                 TournamentItem(tournamentId = command.tournamentId, itemId = itemId, userId = userId)
