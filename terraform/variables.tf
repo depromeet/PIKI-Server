@@ -62,7 +62,9 @@ variable "ec2_ami_id" {
     운영 단계에서는 반드시 조회된 AMI ID 를 이 변수로 고정할 것.
   EOT
   type        = string
-  default     = null
+  # 현재 운영 인스턴스(i-019866a91d6822a4c)의 AMI 로 고정 — null 로 두면 apply 시 최신 AMI 로
+  # 교체돼 인스턴스가 파괴+재생성된다. 인스턴스를 의도적으로 교체할 때만 새 AMI 로 바꾼다.
+  default = "ami-0f5ddb19e2fbe4cc4"
 }
 
 variable "ssh_ingress_cidr" {
