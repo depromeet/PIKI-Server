@@ -1,6 +1,8 @@
 package com.depromeet.piki.tournament.service
 
+import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.tournament.domain.Tournament
+import com.depromeet.piki.tournament.domain.TournamentBracket
 import com.depromeet.piki.tournament.domain.TournamentHistory
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentStatus
@@ -11,6 +13,7 @@ import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.tournament.service.dto.AddTournamentItems
 import com.depromeet.piki.tournament.service.dto.CreateTournament
 import com.depromeet.piki.tournament.service.dto.RecordMatch
+import com.depromeet.piki.tournament.service.dto.TournamentBracketResult
 import com.depromeet.piki.tournament.service.dto.TournamentInfo
 import com.depromeet.piki.tournament.service.dto.TournamentSummary
 import com.depromeet.piki.user.repository.UserRepository
@@ -24,6 +27,7 @@ class TournamentService(
     private val tournamentRepository: TournamentRepository,
     private val tournamentItemRepository: TournamentItemRepository,
     private val userRepository: UserRepository,
+    private val itemRepository: ItemRepository,
 ) {
     @Transactional
     fun create(
@@ -77,7 +81,7 @@ class TournamentService(
     fun start(
         userId: UUID,
         tournamentId: Long,
-    ) {
+    ): TournamentBracketResult {
         val tournament =
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
@@ -86,9 +90,25 @@ class TournamentService(
             tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
                 ?: throw TournamentException.forbiddenTournament()
         if (owner.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
-        val itemCount = tournamentItemRepository.findAllByTournamentId(tournamentId).size
-        if (itemCount !in MIN_ITEM_COUNT..MAX_ITEM_COUNT) throw TournamentException.invalidItemCount()
+        val tournamentItems = tournamentItemRepository.findAllByTournamentId(tournamentId)
+        if (tournamentItems.size !in MIN_ITEM_COUNT..MAX_ITEM_COUNT) throw TournamentException.invalidItemCount()
+        val itemById = itemRepository
+            .findByIds(tournamentItems.map { it.itemId })
+            .associate { it.getId() to it }
+        val itemsWithPrice = tournamentItems.map { it.getId() to itemById[it.itemId]?.currentPrice }
+        val bracket = TournamentBracket.generate(itemsWithPrice)
+
+        val itemDetailsByTournamentItemId = tournamentItems.associate { tournamentItem ->
+            val item = itemById[tournamentItem.itemId]
+            tournamentItem.getId() to TournamentBracketResult.ItemDetail(
+                name = item?.name,
+                price = item?.currentPrice,
+                currency = item?.currency,
+                imageUrl = item?.imageUrl,
+            )
+        }
         tournament.start()
+        return TournamentBracketResult(bracket, itemDetailsByTournamentItemId)
     }
 
     @Transactional(readOnly = true)
@@ -116,8 +136,12 @@ class TournamentService(
         if (tournaments.isEmpty()) return emptyList()
 
         val tournamentUsers = tournamentUserRepository.findByTournamentIds(tournaments.map { it.getId() })
-        val userIds = tournamentUsers.map { it.userId }.toSet()
-        val profileImageByUserId = userRepository.findByIds(userIds).associate { it.id to it.profileImage }
+        val userIds = tournamentUsers
+            .map { it.userId }
+            .toSet()
+        val profileImageByUserId = userRepository
+            .findByIds(userIds)
+            .associate { it.id to it.profileImage }
         val profileImagesByTournamentId =
             tournamentUsers
                 .groupBy { it.tournamentId }

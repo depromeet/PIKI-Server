@@ -1,6 +1,8 @@
 package com.depromeet.piki.tournament.controller
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.repository.ItemJpaRepository
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
@@ -39,6 +41,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
     @Autowired private lateinit var tournamentUserJpaRepository: TournamentUserJpaRepository
 
     @Autowired private lateinit var userJpaRepository: UserJpaRepository
+
+    @Autowired private lateinit var itemJpaRepository: ItemJpaRepository
 
     @Autowired private lateinit var jwtProvider: JwtProvider
 
@@ -126,10 +130,12 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `POST tournaments-id-start 는 아이템이 있는 PENDING 토너먼트를 시작하고 200 을 반환한다`() {
+    fun `POST tournaments-id-start 는 아이템이 있는 PENDING 토너먼트를 시작하고 아이템 상세가 포함된 대진표를 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        addItemsToTournament(mockMvc, tournamentId, userId, 100L, 200L)
+        val item1 = itemJpaRepository.save(Item(name = "나이키 에어맥스", currentPrice = 129_000, currency = "KRW"))
+        val item2 = itemJpaRepository.save(Item(name = "아디다스 울트라부스트", currentPrice = 189_000, currency = "KRW"))
+        addItemsToTournament(mockMvc, tournamentId, userId, item1.getId(), item2.getId())
 
         mockMvc
             .perform(
@@ -137,6 +143,16 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.matches").isArray)
+            .andExpect(jsonPath("$.data.matches.length()").value(1))
+            .andExpect(jsonPath("$.data.matches[0].firstItem.tournamentItemId").isNumber)
+            .andExpect(jsonPath("$.data.matches[0].firstItem.name").value("나이키 에어맥스"))
+            .andExpect(jsonPath("$.data.matches[0].firstItem.price").value(129_000))
+            .andExpect(jsonPath("$.data.matches[0].firstItem.currency").value("KRW"))
+            .andExpect(jsonPath("$.data.matches[0].secondItem.tournamentItemId").isNumber)
+            .andExpect(jsonPath("$.data.matches[0].secondItem.name").value("아디다스 울트라부스트"))
+            .andExpect(jsonPath("$.data.matches[0].secondItem.price").value(189_000))
+            .andExpect(jsonPath("$.data.matches[0].secondItem.currency").value("KRW"))
     }
 
     @Test

@@ -1,6 +1,8 @@
 package com.depromeet.piki.tournament.service
 
 import com.depromeet.piki.common.domain.LongBaseEntity
+import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.tournament.domain.Tournament
 import com.depromeet.piki.tournament.domain.TournamentHistory
 import com.depromeet.piki.tournament.domain.TournamentItem
@@ -52,6 +54,19 @@ class TournamentServiceTest {
             field.isAccessible = true
             field.set(entity, id)
         }
+    }
+
+    private class TestItemRepository : ItemRepository {
+        override fun save(item: Item): Item = item
+        override fun findById(id: Long): Item? = null
+        override fun findByIds(ids: List<Long>): List<Item> =
+            ids.map { id ->
+                Item().also { item ->
+                    val field = LongBaseEntity::class.java.getDeclaredField("id")
+                    field.isAccessible = true
+                    field.set(item, id)
+                }
+            }
     }
 
     private class TestUserRepository : UserRepository {
@@ -154,7 +169,8 @@ class TournamentServiceTest {
     private val userRepository = TestTournamentUserRepository()
     private val repository = TestTournamentRepository()
     private val testUserRepository = TestUserRepository()
-    private val service = TournamentService(userRepository, repository, itemRepository, testUserRepository)
+    private val testItemRepository = TestItemRepository()
+    private val service = TournamentService(userRepository, repository, itemRepository, testUserRepository, testItemRepository)
     private val userId = UUID.randomUUID()
     private val otherUserId = UUID.randomUUID()
 
