@@ -22,6 +22,10 @@ class IntegrationStubs {
     @Primary
     fun productImageExtractor(): StubProductImageExtractor = StubProductImageExtractor()
 
+    @Bean
+    @Primary
+    fun imageStorage(): StubImageStorage = StubImageStorage()
+
     // OAuth client 는 운영에서 아직 Bean 으로 등록되지 않은 상태 (Task 6 에서 OAuthClient
     // Bean 등록 예정 — epic #122). 주입 후보가 stub 하나뿐이라 @Primary 불필요.
     @Bean

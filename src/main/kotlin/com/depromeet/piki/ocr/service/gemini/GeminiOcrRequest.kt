@@ -14,13 +14,8 @@ data class GeminiOcrRequest(
     )
 
     sealed interface Part {
-        data class Text(
-            val text: String,
-        ) : Part
-
-        data class Image(
-            val inlineData: InlineData,
-        ) : Part
+        data class Text(val text: String) : Part
+        data class Image(val inlineData: InlineData) : Part
     }
 
     data class InlineData(
@@ -44,8 +39,7 @@ data class GeminiOcrRequest(
     }
 
     companion object {
-        private val SYSTEM_PROMPT =
-            """
+        private val SYSTEM_PROMPT = """
             You are a product information extractor. The user captured a product page to identify the product they are interested in.
 
             **Intent inference**: The user wants information about the MAIN product on the page. Ignore related products, recommended items, ads, and sidebar content. Focus on the primary product that occupies the central area of the page.
@@ -56,43 +50,46 @@ data class GeminiOcrRequest(
             2. **price**: The price as an integer (remove currency symbols, commas). If multiple prices exist, use the final/sale price. null if not found.
             3. **category**: The category for the product (e.g. "식품", "음료", "생활용품", "의류", "전자기기", "화장품" etc.). If the category is explicitly shown on the page (e.g. breadcrumb, tag), use that text. Otherwise infer from the product. null if completely unclear.
             4. **currency**: The ISO 4217 currency code (3 letters) of the price. Map unambiguous symbols/text directly (₩/원 → KRW, ¥/円 → JPY, € → EUR). For ambiguous symbols like "$" (used by USD, CAD, AUD, SGD, etc.), infer ONLY from page context (language/country/domain); if the context is unclear, return null. null if there is no price or the currency cannot be determined confidently.
+            5. **boundingBox**: The bounding box of the MAIN product's image (photo) region in the captured image, as integers normalized to 0-1000 (yMin, xMin, yMax, xMax) — (0,0) is top-left, (1000,1000) is bottom-right. Box only the product photo, not text/price/UI. null if the product photo region cannot be located.
 
             Return information for the single main product only. Do NOT include related/recommended/ad products.
             Handle any language (Korean, Japanese, English, etc.).
-            """.trimIndent()
+        """.trimIndent()
 
-        private val PRODUCT_SCHEMA =
-            Schema(
-                type = SchemaType.OBJECT,
-                properties =
-                    mapOf(
-                        "name" to Schema(type = SchemaType.STRING, nullable = true),
-                        "price" to Schema(type = SchemaType.INTEGER, nullable = true),
-                        "category" to Schema(type = SchemaType.STRING, nullable = true),
-                        "currency" to Schema(type = SchemaType.STRING, nullable = true),
+        private val PRODUCT_SCHEMA = Schema(
+            type = SchemaType.OBJECT,
+            properties = mapOf(
+                "name" to Schema(type = SchemaType.STRING, nullable = true),
+                "price" to Schema(type = SchemaType.INTEGER, nullable = true),
+                "category" to Schema(type = SchemaType.STRING, nullable = true),
+                "currency" to Schema(type = SchemaType.STRING, nullable = true),
+                "boundingBox" to Schema(
+                    type = SchemaType.OBJECT,
+                    nullable = true,
+                    properties = mapOf(
+                        "yMin" to Schema(type = SchemaType.INTEGER, nullable = true),
+                        "xMin" to Schema(type = SchemaType.INTEGER, nullable = true),
+                        "yMax" to Schema(type = SchemaType.INTEGER, nullable = true),
+                        "xMax" to Schema(type = SchemaType.INTEGER, nullable = true),
                     ),
-            )
+                ),
+            ),
+        )
 
-        fun forImageAnalysis(
-            base64Image: String,
-            mimeType: String,
-        ): GeminiOcrRequest =
+        fun forImageAnalysis(base64Image: String, mimeType: String): GeminiOcrRequest =
             GeminiOcrRequest(
-                generationConfig =
-                    GenerationConfig(
-                        responseMimeType = "application/json",
-                        responseSchema = PRODUCT_SCHEMA,
-                    ),
-                contents =
-                    listOf(
-                        Content(
-                            parts =
-                                listOf(
-                                    Part.Text(SYSTEM_PROMPT),
-                                    Part.Image(InlineData(mimeType = mimeType, data = base64Image)),
-                                ),
+                generationConfig = GenerationConfig(
+                    responseMimeType = "application/json",
+                    responseSchema = PRODUCT_SCHEMA,
+                ),
+                contents = listOf(
+                    Content(
+                        parts = listOf(
+                            Part.Text(SYSTEM_PROMPT),
+                            Part.Image(InlineData(mimeType = mimeType, data = base64Image)),
                         ),
                     ),
+                ),
             )
     }
 }

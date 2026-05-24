@@ -1,8 +1,8 @@
 package com.depromeet.piki.support
 
 import com.depromeet.piki.ocr.domain.OcrImage
+import com.depromeet.piki.ocr.service.OcrExtraction
 import com.depromeet.piki.ocr.service.ProductImageExtractor
-import com.depromeet.piki.product.service.ProductSnapshot
 
 // 이미지 OCR 외부 호출(Gemini Vision)을 통합 테스트에서 격리하기 위한 stub.
 // StubProductLinkExtractor 와 동일 정책: 모든 통합 테스트가 같은 IntegrationTestSupport 컨텍스트를
@@ -14,9 +14,9 @@ import com.depromeet.piki.product.service.ProductSnapshot
 // 필드 이름이 `build` 인 이유: 인터페이스 메서드 `extract(image)` 와 같은 이름의 var 를 두면
 // `override fun extract = extract(image)` 가 자기 재귀가 된다. StubProductLinkExtractor 와 동일 패턴.
 class StubProductImageExtractor : ProductImageExtractor {
-    var build: (OcrImage) -> ProductSnapshot = {
+    var build: (OcrImage) -> OcrExtraction = {
         error("stub.build 를 테스트 본문에서 명시 세팅해야 한다. CLAUDE.md '테스트 셋업 원칙' 참고.")
     }
 
-    override fun extract(image: OcrImage): ProductSnapshot = build(image)
+    override fun extract(image: OcrImage): OcrExtraction = build(image)
 }
