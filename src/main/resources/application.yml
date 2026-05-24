@@ -1,6 +1,6 @@
 spring:
   application:
-    name: team3
+    name: PIKI
   config:
     import: optional:file:.env[.properties]
   servlet:
@@ -8,9 +8,9 @@ spring:
       max-file-size: 10MB
       max-request-size: 10MB
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:team3}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
-    username: ${DB_USERNAME:team3}
-    password: ${DB_PASSWORD:team3}
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:piki}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
+    username: ${DB_USERNAME:piki}
+    password: ${DB_PASSWORD:piki}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
