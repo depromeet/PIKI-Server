@@ -95,6 +95,7 @@ class TournamentService(
         val itemById = itemRepository
             .findByIds(tournamentItems.map { it.itemId })
             .associate { it.getId() to it }
+        if (tournamentItems.any { it.itemId !in itemById }) throw TournamentException.notFoundItems()
         val itemsWithPrice = tournamentItems.map { it.getId() to itemById[it.itemId]?.currentPrice }
         val bracket = TournamentBracket.generate(itemsWithPrice)
 
