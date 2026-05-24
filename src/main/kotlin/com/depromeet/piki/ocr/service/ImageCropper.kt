@@ -29,7 +29,8 @@ class ImageCropper {
         return runCatching {
             val cropped = source.getSubimage(cropX, cropY, cropWidth, cropHeight)
             ByteArrayOutputStream().use { out ->
-                ImageIO.write(cropped, "png", out)
+                // write 가 false 면 해당 포맷 인코더가 없어 빈 바이트가 나온다 — 빈 이미지를 올리지 않도록 막는다.
+                require(ImageIO.write(cropped, "png", out)) { "PNG 인코더를 찾지 못했다" }
                 out.toByteArray()
             }
         }.getOrElse { e ->

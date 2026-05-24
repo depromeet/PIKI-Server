@@ -8,6 +8,18 @@ data class BoundingBox(
     val yMax: Int,
     val xMax: Int,
 ) {
+    // 불변식 — 정상 흐름은 ofNormalizedOrNull 이 먼저 거른다. 직접 생성으로 비정상 좌표가
+    // 들어오면 크롭이 조용히 어긋나므로 생성 시점에 막는다.
+    init {
+        val range = 0..NORMALIZED_MAX
+        require(yMin in range && xMin in range && yMax in range && xMax in range) {
+            "좌표는 0~$NORMALIZED_MAX 범위여야 한다: ($yMin, $xMin, $yMax, $xMax)"
+        }
+        require(yMax > yMin && xMax > xMin) {
+            "max 는 min 보다 커야 한다: ($yMin, $xMin, $yMax, $xMax)"
+        }
+    }
+
     companion object {
         const val NORMALIZED_MAX = 1000
 
