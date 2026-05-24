@@ -11,8 +11,8 @@
 - **CodeRabbit 은 코멘트를 두 곳에 나눠 단다 — 반드시 둘 다 본다.**
   - **인라인 review thread**: actionable 코멘트. `reviewThreads` 로 조회되고 개별 resolve 가능.
   - **review body 안에 접힌 nitpick / 추가 코멘트**: `🧹 Nitpick comments (N)` 같은 `<details>` 블록. `reviewThreads` 에 **안 잡힌다** — `pulls/{PR}/reviews` 의 review body 를 따로 조회해야 보인다. 이걸 빠뜨리면 nitpick 을 통째로 놓친다 (resolve 대상은 아니지만 평가는 해야 한다).
-- **author 매칭은 `coderabbitai[bot]` 로 한다.** CodeRabbit 의 login 은 `coderabbitai` 가 아니라 `coderabbitai[bot]` 이다 (`[bot]` 접미사). `== "coderabbitai"` 로 비교하면 영원히 매칭되지 않아 봇을 사람으로 오인한다.
-- **사람 리뷰어 thread 는 자동 reply 하지 않는다.** author 가 `coderabbitai[bot]` 이 아니면 (즉 사람 리뷰면) reply / resolve 둘 다 모델이 건드리지 않는다 — 작성자(`@me`)가 직접 의도·뉘앙스를 담아 답한다. 1단계 카운트에서 1건 이상이면 3~4단계(thread reply/resolve)는 건너뛰고 사용자에게 "사람 리뷰 N건 있습니다" 만 알린다. (단 2.5단계 nitpick 조회·평가는 사람 리뷰 여부와 무관하게 수행한다.)
+- **author 매칭은 `coderabbitai` 로 시작하는지(`startswith`)로 한다.** GitHub 의 두 API 가 같은 봇을 다르게 표기한다 — GraphQL `reviewThreads` 의 `author.login` 은 `coderabbitai`, REST `pulls/{PR}/reviews` 의 `user.login` 은 `coderabbitai[bot]`. 어느 한쪽 값으로 고정하면 다른 API 에서 매칭이 깨져 봇을 사람으로 오인하므로(예: reviewThreads 를 `coderabbitai[bot]` 로 비교하면 영원히 안 잡힘), 양쪽 모두 `coderabbitai` 로 시작하는지로 매칭한다.
+- **사람 리뷰어 thread 는 자동 reply 하지 않는다.** author 가 `coderabbitai` 로 시작하지 않으면 (즉 사람 리뷰면) reply / resolve 둘 다 모델이 건드리지 않는다 — 작성자(`@me`)가 직접 의도·뉘앙스를 담아 답한다. 1단계 카운트에서 1건 이상이면 3~4단계(thread reply/resolve)는 건너뛰고 사용자에게 "사람 리뷰 N건 있습니다" 만 알린다. (단 2.5단계 nitpick 조회·평가는 사람 리뷰 여부와 무관하게 수행한다.)
 
 ## 절차
 
@@ -36,12 +36,12 @@ HUMAN_THREADS=$(gh api graphql -f query='
       } }
     }
   }}' --jq '[.data.repository.pullRequest.reviewThreads.nodes[]
-             | select(.comments.nodes[0].author.login != "coderabbitai[bot]")] | length')
+             | select(((.comments.nodes[0].author.login // "") | startswith("coderabbitai")) | not)] | length')
 echo "사람 리뷰 thread: ${HUMAN_THREADS}건"
 # HUMAN_THREADS > 0 → 3~4단계(thread reply/resolve) 건너뛰고 사용자에게 알림 (2.5 nitpick 은 그대로)
 ```
 
-### 2. CodeRabbit 인라인 thread 조회 — author `coderabbitai[bot]` 고정 필터
+### 2. CodeRabbit 인라인 thread 조회 — author `coderabbitai*` 필터
 
 ```bash
 gh api graphql -f query='
@@ -53,7 +53,7 @@ gh api graphql -f query='
       } }
     }
   }}' --jq '.data.repository.pullRequest.reviewThreads.nodes[]
-            | select(.comments.nodes[0].author.login == "coderabbitai[bot]")
+            | select((.comments.nodes[0].author.login // "") | startswith("coderabbitai"))
             | {id, isResolved, path, line}'
 ```
 
@@ -61,7 +61,7 @@ gh api graphql -f query='
 
 ```bash
 gh api repos/depromeet/PIKI-Server/pulls/$PR/reviews \
-  --jq '.[] | select(.user.login == "coderabbitai[bot]" and (.body | length) > 100) | .body'
+  --jq '.[] | select(((.user.login // "") | startswith("coderabbitai")) and (.body | length) > 100) | .body'
 ```
 
 출력된 body 를 읽고 `🧹 Nitpick comments` 등 접힌 코멘트를 건별 평가한다. nitpick 은 thread 가 아니라 **resolve 대상이 아니므로**, 반영하면 커밋 + PR `## Updates`(또는 PR 일반 코멘트)로 처리 사실을 남긴다.

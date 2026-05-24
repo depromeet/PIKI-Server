@@ -1,4 +1,4 @@
-브랜치에서 작업한 내용을 STAR 구조 PR로 정리하여 GitHub에 올립니다. 이미 PR이 있으면 본문을 덮어쓰지 않고 `## Updates` 섹션에 추가 변경 내역을 append 합니다. assignee(`@me`) · 라벨(연관 이슈에서 복사) · Project(99) 도 자동 설정합니다.
+브랜치에서 작업한 내용을 STAR 구조 PR로 정리하여 GitHub에 올립니다. 이미 PR이 있으면 본문을 덮어쓰지 않고 `## Updates` 섹션에 추가 변경 내역을 append 합니다. assignee(`@me`) · 라벨(연관 이슈에서 복사) · Project(99) 도 자동 설정합니다. 마지막에 `/notion-board` 로 Notion `프로젝트 일정 관리` 보드 반영도 자동 시도합니다 (내부 작업 라벨이거나 토큰 없으면 조용히 생략).
 
 ## PR 본문 작성 원칙
 
@@ -123,19 +123,35 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
    - `--assignee @me` — PR 작성자가 작업자라는 가정 (`issue` 스킬과 동일).
    - `--label` — 1단계에서 수집한 `$ISSUE_LABELS` 가 있을 때만 붙인다.
    - 라벨이 레포에 없어 실패하면 라벨 없이 재시도하고 사용자에게 보고한다.
-4. **Project 추가 + Status In review** — 생성된 PR 을 Project 99 에 등록하고 Status 를 `In review` 로 세팅한다. `item-add` 만 하면 기본값 `Backlog` 이 되므로, 반환된 item id 로 `item-edit` 를 이어서 호출한다:
+4. **Project 추가 + Status In review + Start date** — 생성된 PR 을 Project 99 에 등록하고 Status 를 `In review`, Start date 를 첫 commit author date 로 세팅한다. `item-add` 만 하면 기본값 `Backlog` 이 되므로, 반환된 item id 로 후속 mutation 들을 이어서 호출한다:
    ```bash
    ITEM_ID=$(gh project item-add 99 --owner depromeet --url {PR URL} --format json --jq '.id')
+
+   # Status → In review
    gh project item-edit \
      --project-id PVT_kwDOARZVGM4BVVRV \
      --id "$ITEM_ID" \
      --field-id PVTSSF_lADOARZVGM4BVVRVzhQxyAA \
      --single-select-option-id df73e18b
+
+   # Start date → 첫 commit author date (작업이 실제로 시작된 시점의 fact)
+   START_DATE=$(git log --reverse "$BASE..HEAD" --format=%aI | head -1 | cut -d'T' -f1)
+   gh api graphql -F itemId="$ITEM_ID" -F date="$START_DATE" -f query='
+     mutation($itemId: ID!, $date: Date!) {
+       updateProjectV2ItemFieldValue(input: {
+         projectId: "PVT_kwDOARZVGM4BVVRV"
+         itemId: $itemId
+         fieldId: "PVTF_lADOARZVGM4BVVRVzhQxyGA"
+         value: { date: $date }
+       }) { projectV2Item { id } }
+     }'
    ```
    - PR 을 올린다는 것은 곧 리뷰 대기 상태이므로 `In review` 가 자연스럽다. create 모드는 방금 만든 PR 이라 Status 가 항상 기본값(`Backlog`)이므로 조건 없이 세팅한다 (update 모드 10단계는 기존 Status 를 확인 후 분기).
-   - ID 의미: project=99 노드 ID, field=Status 필드 ID, option=`In review` 옵션 ID. 보드에서 Status 옵션이 바뀌면 이 ID 들도 갱신 필요.
-   - 권한 부족 시 사용자에게 `gh auth refresh -h github.com -s project` 안내 (일회성 디바이스 인증).
-5. PR URL 과 부여된 assignee / 라벨 / Project(Status: In review) 결과를 사용자에게 전달
+   - Start date 는 "이슈 생성일" 이 아니라 **첫 commit author date** 를 쓴다 — 이슈만 만들어 두고 작업 안 들어가는 백로그 케이스의 노이즈를 피하기 위해. 첫 commit 은 history rewrite 가 없는 한 바뀌지 않는 fact 라 create 모드에선 무조건 set.
+   - ID 의미: project=99 노드 ID, Status 필드/`In review` 옵션 ID, Start date 필드 ID(`PVTF_..GA`, DATE 타입). 보드에서 필드/옵션이 바뀌면 이 ID 들도 갱신 필요.
+   - Target date 와 Status `Done` 은 PR 머지 시점에 별도 CI workflow (`.github/workflows/project-sync-on-pr-close.yml`) 가 자동 세팅. PR 스킬은 머지 이전 단계만 책임짐.
+   - 권한 부족 시 사용자에게 `gh auth refresh -h github.com -s project,read:project` 안내 (일회성 디바이스 인증).
+5. PR URL 과 부여된 assignee / 라벨 / Project(Status: In review, Start date) 결과를 사용자에게 전달한 뒤, `### 4. Notion 보드 반영` 으로 이어진다.
 
 ### 3-B. Update 모드 — 기존 PR 본문 갱신
 
@@ -160,23 +176,30 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
 6. **제목 변경 필요 검토**: 추가 변경으로 작업 의도/스코프가 바뀌었거나 기존 제목에 오타·부정확한 표현이 있으면 새 제목 제안. 그 외엔 제목 유지.
 7. 사용자에게 갱신본(필요시 새 제목 포함, 변경 이유 짚어서)을 보여주고 확인받는다.
 8. 확인 후 `gh pr edit --body-file /tmp/pr_body.md` 로 갱신. 제목 변경이 있으면 `--title "새 제목"` 추가.
-9. **CodeRabbit 리뷰 대응** — 이번 변경이 CodeRabbit 리뷰 대응이라면 commit + push 로 끝내지 않는다. CodeRabbit 리뷰(인라인 thread + review body nitpick) 조회·평가·reply·resolve 는 **`/coderabbit` 스킬**로 처리한다. 그 스킬이 author `coderabbitai[bot]` 매칭, nitpick 조회, accept/reject reply·resolve 정책을 담는다. (사람 리뷰 thread 는 작성자가 직접 답하므로 `/coderabbit` 도 건드리지 않는다.)
+9. **CodeRabbit 리뷰 대응** — 이번 변경이 CodeRabbit 리뷰 대응이라면 commit + push 로 끝내지 않는다. CodeRabbit 리뷰(인라인 thread + review body nitpick) 조회·평가·reply·resolve 는 **`/coderabbit` 스킬**로 처리한다. 그 스킬이 author 매칭(GraphQL `reviewThreads` 는 `coderabbitai`, REST `reviews` 는 `coderabbitai[bot]` 이라 `coderabbitai` 로 시작하는지로 판별), nitpick 조회, accept/reject reply·resolve 정책을 담는다. (사람 리뷰 thread 는 작성자가 직접 답하므로 `/coderabbit` 도 건드리지 않는다.)
 
-10. **메타데이터 보정** — 이전 버전 스킬로 만든 PR 은 assignee / 라벨 / Project 가 비어 있을 수 있다. update 모드에서도 멱등하게 보정한다 (이미 설정돼 있으면 no-op). `item-add` 는 이미 등록된 PR 이면 기존 item id 를 그대로 반환한다.
-    Status 는 **현재 값을 먼저 조회해, 리뷰 이전 단계(`Backlog` / `Ready` / `In progress`)일 때만** `In review` 로 올린다 — 이미 `Done` 등으로 옮긴 PR 을 되돌리지 않기 위함이다. Status 조회는 item 노드를 직접 부르는 GraphQL 이 안정적이다 (`gh project item-list` 는 단일 선택 필드 값을 신뢰성 있게 주지 않는다):
+10. **메타데이터 보정** — 이전 버전 스킬로 만든 PR 은 assignee / 라벨 / Project / Start date 가 비어 있을 수 있다. update 모드에서도 멱등하게 보정한다 (이미 설정돼 있으면 no-op). `item-add` 는 이미 등록된 PR 이면 기존 item id 를 그대로 반환한다.
+    Status 는 **현재 값을 먼저 조회해, 리뷰 이전 단계(`Backlog` / `Ready` / `In progress`)일 때만** `In review` 로 올린다 — 이미 `Done` 등으로 옮긴 PR 을 되돌리지 않기 위함이다. Start date 도 멱등 — 이미 set 되어 있으면 건드리지 않는다 (사람이 수동으로 다른 의미로 박았을 수 있어 보존). Status / Start date 조회는 item 노드를 직접 부르는 GraphQL 이 안정적이다 (`gh project item-list` 는 단일 선택 필드 값을 신뢰성 있게 주지 않는다):
     ```bash
     gh pr edit --add-assignee @me ${ISSUE_LABELS:+--add-label "$ISSUE_LABELS"}
     ITEM_ID=$(gh project item-add 99 --owner depromeet --url {PR URL} --format json --jq '.id')
-    CURRENT_STATUS=$(gh api graphql -F id="$ITEM_ID" -f query='
+
+    # Status + Start date 현재 값 동시 조회
+    read CURRENT_STATUS CURRENT_START < <(gh api graphql -F id="$ITEM_ID" -f query='
       query($id: ID!) {
         node(id: $id) {
           ... on ProjectV2Item {
-            fieldValueByName(name: "Status") {
+            status: fieldValueByName(name: "Status") {
               ... on ProjectV2ItemFieldSingleSelectValue { name }
+            }
+            start: fieldValueByName(name: "Start date") {
+              ... on ProjectV2ItemFieldDateValue { date }
             }
           }
         }
-      }' --jq '.data.node.fieldValueByName.name')
+      }' --jq '[(.data.node.status.name // "null"), (.data.node.start.date // "null")] | @tsv')
+
+    # Status: 리뷰 이전 단계일 때만 In review 로 올림
     if [[ "$CURRENT_STATUS" == "Backlog" || "$CURRENT_STATUS" == "Ready" || "$CURRENT_STATUS" == "In progress" ]]; then
       gh project item-edit \
         --project-id PVT_kwDOARZVGM4BVVRV \
@@ -184,8 +207,30 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
         --field-id PVTSSF_lADOARZVGM4BVVRVzhQxyAA \
         --single-select-option-id df73e18b
     fi
+
+    # Start date: 비어있을 때만 첫 commit author date 로 세팅
+    if [[ "$CURRENT_START" == "null" ]]; then
+      START_DATE=$(git log --reverse "$BASE..HEAD" --format=%aI | head -1 | cut -d'T' -f1)
+      gh api graphql -F itemId="$ITEM_ID" -F date="$START_DATE" -f query='
+        mutation($itemId: ID!, $date: Date!) {
+          updateProjectV2ItemFieldValue(input: {
+            projectId: "PVT_kwDOARZVGM4BVVRV"
+            itemId: $itemId
+            fieldId: "PVTF_lADOARZVGM4BVVRVzhQxyGA"
+            value: { date: $date }
+          }) { projectV2Item { id } }
+        }'
+    fi
     ```
-11. PR URL 재출력.
+11. PR URL 재출력 후, `### 4. Notion 보드 반영` 으로 이어진다.
+
+### 4. Notion 보드 반영 (자동)
+
+**create / update 양 모드 완료 후 (PR URL 확정 후), 이어서 `/notion-board` 스킬을 실행한다.** 이번 PR을 Notion `프로젝트 일정 관리` 보드의 매칭 카드에 반영한다 (카드 본문 `개발 로그` 에 PR 링크 append + `계획중` 이면 `진행중` 으로). 사용자가 따로 호출하지 않아도 `/pr` 흐름의 일부로 돈다.
+
+- 이번 PR 의 URL · 번호 · 브랜치명 · 연관 이슈 번호·제목 · `$ISSUE_LABELS` · 제목과 대화 맥락을 그대로 입력으로 넘긴다.
+- `chore` / `test` / `infra` / `docs` / `refactor` 라벨이거나 `$NOTION_TOKEN` 이 없으면 `/notion-board` 가 알아서 조용히 스킵한다.
+- **best-effort** 다 — 보드 반영이 실패해도 PR 생성/갱신 결과를 되돌리지 않는다.
 
 ### PR 제목 규칙
 - 70자 이내
