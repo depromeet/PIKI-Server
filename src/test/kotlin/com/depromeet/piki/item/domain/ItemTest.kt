@@ -5,7 +5,9 @@ import com.depromeet.piki.product.service.ProductSnapshot
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ItemTest {
     private val link = ProductLink.parse("https://shop.example.com/products/42")
@@ -156,5 +158,82 @@ class ItemTest {
         assertEquals(99_000, item.currentPrice)
         assertEquals("KRW", item.currency)
         assertNull(item.imageUrl)
+    }
+
+    @Test
+    fun `from 으로 만든 item 은 READY 상태다`() {
+        val item = Item.from(ProductSnapshot(link = link, name = "나이키"))
+
+        assertEquals(ItemStatus.READY, item.status)
+    }
+
+    @Test
+    fun `processing 으로 만든 item 은 PROCESSING 상태이며 추출 필드가 비어 있다`() {
+        val item = Item.processing(link)
+
+        assertEquals(ItemStatus.PROCESSING, item.status)
+        assertEquals(link, item.link)
+        assertNull(item.name)
+        assertNull(item.currentPrice)
+        assertNull(item.imageUrl)
+        assertNull(item.currency)
+    }
+
+    @Test
+    fun `PROCESSING item 을 markReady 하면 READY 로 전이하며 추출 결과가 채워진다`() {
+        val item = Item.processing(link)
+
+        item.markReady(
+            ProductSnapshot(
+                link = link,
+                name = "나이키 에어포스",
+                currentPrice = 99_000,
+                currency = "KRW",
+                imageUrl = "https://cdn.example.com/p/42.jpg",
+            ),
+        )
+
+        assertEquals(ItemStatus.READY, item.status)
+        assertEquals("나이키 에어포스", item.name)
+        assertEquals(99_000, item.currentPrice)
+        assertEquals("KRW", item.currency)
+        assertEquals("https://cdn.example.com/p/42.jpg", item.imageUrl)
+    }
+
+    @Test
+    fun `PROCESSING item 을 markFailed 하면 FAILED 로 전이한다`() {
+        val item = Item.processing(link)
+
+        item.markFailed()
+
+        assertEquals(ItemStatus.FAILED, item.status)
+    }
+
+    @Test
+    fun `이미 READY 인 item 을 다시 markReady 하면 전이 불변식 위반으로 거부된다`() {
+        val item = Item.from(ProductSnapshot(link = link, name = "나이키"))
+
+        assertFailsWith<IllegalStateException> { item.markReady(ProductSnapshot(link = link, name = "변경")) }
+    }
+
+    @Test
+    fun `READY 인 item 을 markFailed 하면 전이 불변식 위반으로 거부된다`() {
+        val item = Item.from(ProductSnapshot(link = link, name = "나이키"))
+
+        assertFailsWith<IllegalStateException> { item.markFailed() }
+    }
+
+    @Test
+    fun `FAILED 인 item 을 markReady 하면 전이 불변식 위반으로 거부된다`() {
+        val item = Item.processing(link).apply { markFailed() }
+
+        assertFailsWith<IllegalStateException> { item.markReady(ProductSnapshot(link = link, name = "나이키")) }
+    }
+
+    @Test
+    fun `isReady 는 READY 일 때만 true 다`() {
+        assertTrue(Item.from(ProductSnapshot(link = link, name = "나이키")).isReady())
+        assertFalse(Item.processing(link).isReady())
+        assertFalse(Item.processing(link).apply { markFailed() }.isReady())
     }
 }

@@ -7,6 +7,8 @@ import com.depromeet.piki.product.service.ProductSnapshot
 import jakarta.persistence.Column
 import jakarta.persistence.Convert
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.Table
 import org.slf4j.LoggerFactory
 
@@ -24,6 +26,7 @@ class Item(
     imageUrl: String? = null,
     currentPrice: Int? = null,
     currency: String? = null,
+    status: ItemStatus = ItemStatus.READY,
 ) : LongBaseEntity() {
     // 사용자가 수정하는 필드 — setter 직접 노출 대신 update() 로만 바꾼다.
     @Column(name = "name", length = 512)
@@ -40,6 +43,14 @@ class Item(
 
     @Column(name = "currency", length = 8)
     var currency: String? = currency
+        protected set
+
+    // 파싱 생애주기. 전이는 markReady/markFailed 로만 일어난다 (setter 비노출).
+    // 기본값 READY 는 동기 완성 경로(Item.from)·DB 로딩 행과의 호환을 위한 것이고,
+    // 비동기 등록은 Item.processing 으로 PROCESSING 을 명시한다.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 16)
+    var status: ItemStatus = status
         protected set
 
     // 엔티티 불변식 — 최후의 보루. 정상 흐름에선 입력 경계(요청 DTO 검증 등)가 먼저
@@ -81,6 +92,30 @@ class Item(
         this.currency = newCurrency
     }
 
+    // PROCESSING → READY. 백그라운드 파싱이 성공해 추출 결과(snapshot)를 채우며 전이한다.
+    // 전이 가능 상태가 아닌데 호출되면 워커가 잘못된 item 을 집은 코드 버그이므로 check(500).
+    fun markReady(snapshot: ProductSnapshot) {
+        check(status == ItemStatus.PROCESSING) { "PROCESSING 이 아닌 item(status=$status)은 READY 로 전이할 수 없다" }
+        update(
+            name = snapshot.name,
+            currentPrice = snapshot.currentPrice,
+            imageUrl = snapshot.imageUrl,
+            currency = snapshot.currency,
+        )
+        status = ItemStatus.READY
+    }
+
+    // PROCESSING → FAILED. 파싱 실패(상품 아님·신뢰 불가·타임아웃)를 동기 400 대신 상태로 남긴다.
+    fun markFailed() {
+        check(status == ItemStatus.PROCESSING) { "PROCESSING 이 아닌 item(status=$status)은 FAILED 로 전이할 수 없다" }
+        status = ItemStatus.FAILED
+        log.info("item {} 파싱 실패 → FAILED 전이", getIdOrNull())
+    }
+
+    // 파싱이 끝나 추출 결과가 채워진 상태인지. 토너먼트 출전처럼 "완성된 상품만" 을 요구하는 곳에서 쓴다.
+    // PROCESSING(파싱 중)·FAILED(실패)는 false — 이름·가격이 비어 있어 출전에 부적합하다.
+    fun isReady(): Boolean = status == ItemStatus.READY
+
     private fun validate(
         name: String?,
         currentPrice: Int?,
@@ -99,6 +134,7 @@ class Item(
         private const val IMAGE_URL_MAX_LENGTH = 2048
         private const val CURRENCY_MAX_LENGTH = 8
 
+        // 동기 완성 경로 — 이미 추출이 끝난 snapshot 으로 READY 상태 item 을 만든다 (OCR 등록 등).
         // URL 추출이든 OCR 추출이든 ProductSnapshot 으로 통일돼 들어온다. OCR 은 link 가 null 일 뿐.
         fun from(snapshot: ProductSnapshot): Item =
             Item(
@@ -107,6 +143,10 @@ class Item(
                 imageUrl = snapshot.imageUrl,
                 currentPrice = snapshot.currentPrice,
                 currency = snapshot.currency,
+                status = ItemStatus.READY,
             )
+
+        // 비동기 등록 시작점 — link 만 가진 PROCESSING item. 파싱이 끝나면 markReady/markFailed 로 전이한다.
+        fun processing(link: ProductLink): Item = Item(link = link, status = ItemStatus.PROCESSING)
     }
 }

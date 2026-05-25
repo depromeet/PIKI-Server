@@ -2,6 +2,7 @@ package com.depromeet.piki.tournament.controller
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemJpaRepository
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.tournament.domain.TournamentItem
@@ -115,6 +116,22 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .content("""{"itemIds":[999999]}"""),
             ).andExpect(status().isNotFound)
             .andExpect(jsonPath("$.status").value(404))
+    }
+
+    @Test
+    fun `POST tournaments-id-items 에서 아직 파싱 중(PROCESSING)인 아이템이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val processingItemId = itemJpaRepository.save(Item(status = ItemStatus.PROCESSING)).getId()
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/items")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"itemIds":[$processingItemId]}"""),
+            ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.status").value(409))
     }
 
     @Test

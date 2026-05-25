@@ -68,8 +68,11 @@ class TournamentService(
         if (existingItemIds.size + command.itemIds.size > MAX_ITEM_COUNT) {
             throw TournamentException.tooManyTournamentItems()
         }
-        val foundItemIds = itemRepository.findByIds(command.itemIds).map { it.getId() }.toSet()
+        val foundItems = itemRepository.findByIds(command.itemIds)
+        val foundItemIds = foundItems.map { it.getId() }.toSet()
         if (command.itemIds.any { it !in foundItemIds }) throw TournamentException.notFoundItems()
+        // 비동기 파싱 중(PROCESSING)이거나 실패(FAILED)한 상품은 이름·가격이 비어 출전에 부적합하다. READY 만 허용.
+        if (foundItems.any { !it.isReady() }) throw TournamentException.itemNotReady()
         tournamentItemRepository.saveAll(
             command.itemIds.map { itemId ->
                 TournamentItem(tournamentId = command.tournamentId, itemId = itemId, userId = userId)
