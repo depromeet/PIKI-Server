@@ -1,9 +1,12 @@
 package com.depromeet.piki.common.config
 
+import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.info.Contact
 import io.swagger.v3.oas.models.info.Info
 import io.swagger.v3.oas.models.info.License
+import io.swagger.v3.oas.models.security.SecurityRequirement
+import io.swagger.v3.oas.models.security.SecurityScheme
 import io.swagger.v3.oas.models.servers.Server
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -31,5 +34,25 @@ class OpenApiConfig {
                         """.trimIndent(),
                     ).contact(Contact().name("PIKI").url("https://github.com/depromeet/PIKI-Server"))
                     .license(License().name("Apache-2.0").url("https://www.apache.org/licenses/LICENSE-2.0")),
-            ).addServersItem(Server().url("/").description("Current host"))
+            )
+            // JWT Bearer 인증 스킴을 스펙에 선언한다. 이게 없으면 문서 UI 가 "인증 필요" 를 알 수 없어
+            // 토큰 입력란·Authorization 헤더 cURL 샘플을 그리지 못한다 (Security 필터 규칙은 springdoc 이 모름).
+            .components(
+                Components().addSecuritySchemes(
+                    SECURITY_SCHEME_NAME,
+                    SecurityScheme()
+                        .type(SecurityScheme.Type.HTTP)
+                        .scheme("bearer")
+                        .bearerFormat("JWT")
+                        .description("게스트 생성·소셜 로그인으로 발급받은 액세스 토큰. `Bearer ` 접두어는 문서 UI 가 자동으로 붙인다."),
+                ),
+            )
+            // 기본적으로 모든 엔드포인트에 Bearer 를 요구한다. 인증이 필요 없는 public 엔드포인트
+            // (게스트 생성·토큰 갱신·health) 는 각 핸들러에서 `@SecurityRequirements` 로 이 요구를 해제한다.
+            .addSecurityItem(SecurityRequirement().addList(SECURITY_SCHEME_NAME))
+            .addServersItem(Server().url("/").description("Current host"))
+
+    companion object {
+        private const val SECURITY_SCHEME_NAME = "bearerAuth"
+    }
 }

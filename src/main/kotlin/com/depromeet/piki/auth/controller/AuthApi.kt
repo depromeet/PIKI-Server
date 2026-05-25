@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.security.SecurityRequirements
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.http.MediaType
 import java.util.UUID
@@ -20,6 +21,8 @@ interface AuthApi {
         summary = "게스트 생성",
         description = "새 GUEST User 를 생성하고 JWT 토큰 쌍을 발급한다.",
     )
+    // 인증 없이 호출하는 진입점 (SecurityConfig 의 permitAll). 글로벌 Bearer 요구를 해제한다.
+    @SecurityRequirements
     @ApiResponses(
         value = [
             ApiResponse(
@@ -40,6 +43,8 @@ interface AuthApi {
         summary = "토큰 갱신",
         description = "리프레시 토큰을 검증하고 새 액세스·리프레시 토큰 쌍을 발급한다.",
     )
+    // 만료된 액세스 토큰을 가진 클라이언트도 호출해야 하므로 인증 없이 진입 (SecurityConfig 의 permitAll).
+    @SecurityRequirements
     @ApiResponses(
         value = [
             ApiResponse(
