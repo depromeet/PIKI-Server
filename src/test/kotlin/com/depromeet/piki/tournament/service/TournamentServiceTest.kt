@@ -89,6 +89,11 @@ class TournamentServiceTest {
         override fun findByIds(ids: Collection<UUID>): List<User> = ids.mapNotNull { users[it] }
 
         override fun existsByNickname(nickname: String): Boolean = users.values.any { it.nickname == nickname }
+
+        override fun existsByNicknameAndIdNot(
+            nickname: String,
+            excludeUserId: UUID,
+        ): Boolean = users.values.any { it.nickname == nickname && it.id != excludeUserId }
     }
 
     private class TestTournamentItemRepository : TournamentItemRepository {

@@ -84,8 +84,13 @@ class UserService(
     @Transactional(readOnly = true)
     fun findById(userId: UUID): User = userRepository.findById(userId) ?: throw UserException.notFound(userId)
 
+    // 본인 닉네임은 중복으로 잡지 않는다 (#230). 게스트가 자기 닉네임 그대로 유지하거나, 본인이
+    // 자기 닉네임으로 다시 변경하는 흐름이 자연스럽게 통과되도록 본인 제외 후 검사.
     @Transactional(readOnly = true)
-    fun isNicknameAvailable(nickname: String): Boolean = !userRepository.existsByNickname(nickname)
+    fun isNicknameAvailable(
+        nickname: String,
+        userId: UUID,
+    ): Boolean = !userRepository.existsByNicknameAndIdNot(nickname, userId)
 
     @Transactional
     fun updateNickname(
@@ -94,11 +99,18 @@ class UserService(
     ): User {
         val user = findById(userId)
         user.deletedAt?.let { throw UserException.deletedUser(userId) }
-        if (user.nickname != newNickname && userRepository.existsByNickname(newNickname)) {
+        if (userRepository.existsByNicknameAndIdNot(newNickname, userId)) {
             throw UserException.duplicateNickname()
         }
         user.updateNickname(newNickname)
-        return userRepository.save(user)
+        // existsByNicknameAndIdNot 체크와 save 사이에 다른 트랜잭션이 같은 nickname 으로
+        // update / insert 하면 DB unique constraint (uq_users_nickname) 위반이 떠 race 케이스에서
+        // 500 이 새어나갈 수 있다. createMember 와 같은 패턴으로 catch → 409 로 매핑.
+        return try {
+            userRepository.save(user)
+        } catch (e: DataIntegrityViolationException) {
+            throw UserException.duplicateNickname()
+        }
     }
 
     @Transactional

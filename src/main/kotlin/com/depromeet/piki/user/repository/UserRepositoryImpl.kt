@@ -16,4 +16,9 @@ class UserRepositoryImpl(
     override fun findByIds(ids: Collection<UUID>): List<User> = userJpaRepository.findAllById(ids)
 
     override fun existsByNickname(nickname: String): Boolean = userJpaRepository.existsByNickname(nickname)
+
+    override fun existsByNicknameAndIdNot(
+        nickname: String,
+        excludeUserId: UUID,
+    ): Boolean = userJpaRepository.existsByNicknameAndIdNot(nickname, excludeUserId)
 }
