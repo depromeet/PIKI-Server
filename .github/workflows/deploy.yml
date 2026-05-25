@@ -102,10 +102,10 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: GEMINI_API_KEY,DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,JWT_SECRET,REDIS_HOST,REDIS_PORT,KAKAO_CLIENT_ID,KAKAO_CLIENT_SECRET,KAKAO_REDIRECT_URI,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,S3_BUCKET,S3_PUBLIC_BASE_URL,DOCKERHUB_USERNAME,IMAGE_TAG
           script: |
-            # 앱 부팅 필수 환경변수 검증 — 누락/오타 시 비활성 슬롯 기동 전에 즉시 실패시켜 배포를 중단한다.
-            # (필수값이 비면 새 컨테이너가 못 떠 배포만 실패한다. KAKAO/GOOGLE OAuth·*_EXPIRY 등
-            #  기본값/선택값은 제외 — 비어도 부팅되므로 가드하면 정상 배포까지 막는다)
-            for v in JWT_SECRET GEMINI_API_KEY S3_BUCKET S3_PUBLIC_BASE_URL DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD REDIS_HOST REDIS_PORT; do
+            # 배포에 필요한 환경변수 검증 — 누락/오타 시 비활성 슬롯 기동 전에 즉시 실패시켜 배포를 중단한다.
+            # 위 envs 로 넘기는 값 전부를 검사한다. (KAKAO/GOOGLE 등 OAuth secret 이 비면 부팅은 되지만
+            #  소셜 로그인이 조용히 깨지므로 포함 — "부팅 여부"가 아니라 "운영에 필요한가"로 판단)
+            for v in GEMINI_API_KEY DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD JWT_SECRET REDIS_HOST REDIS_PORT KAKAO_CLIENT_ID KAKAO_CLIENT_SECRET KAKAO_REDIRECT_URI GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_REDIRECT_URI S3_BUCKET S3_PUBLIC_BASE_URL DOCKERHUB_USERNAME IMAGE_TAG; do
               if [ -z "${!v:-}" ]; then echo "ERROR: 필수 환경변수 $v 가 비어 있습니다 — repo secret 을 확인하세요" >&2; exit 1; fi
             done
 
