@@ -5,7 +5,9 @@ import com.depromeet.piki.product.service.ProductSnapshot
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ItemTest {
     private val link = ProductLink.parse("https://shop.example.com/products/42")
@@ -226,5 +228,12 @@ class ItemTest {
         val item = Item.processing(link).apply { markFailed() }
 
         assertFailsWith<IllegalStateException> { item.markReady(ProductSnapshot(link = link, name = "나이키")) }
+    }
+
+    @Test
+    fun `isReady 는 READY 일 때만 true 다`() {
+        assertTrue(Item.from(ProductSnapshot(link = link, name = "나이키")).isReady())
+        assertFalse(Item.processing(link).isReady())
+        assertFalse(Item.processing(link).apply { markFailed() }.isReady())
     }
 }
