@@ -40,7 +40,9 @@ interface TournamentApi {
 
     @Operation(
         summary = "토너먼트 아이템 추가",
-        description = "PENDING 상태의 토너먼트에 아이템을 추가한다. 토너먼트 참여자만 추가할 수 있다.",
+        description =
+            "PENDING 상태의 토너먼트에 아이템을 추가한다. 토너먼트 참여자만 추가할 수 있다. " +
+                "파싱이 끝난 READY 아이템만 추가할 수 있으며, 아직 파싱 중(PROCESSING)이거나 실패(FAILED)한 아이템은 409 로 거부된다.",
     )
     @ApiResponse(
         responseCode = "200",

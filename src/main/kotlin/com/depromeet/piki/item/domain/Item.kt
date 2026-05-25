@@ -112,6 +112,10 @@ class Item(
         log.info("item {} 파싱 실패 → FAILED 전이", getIdOrNull())
     }
 
+    // 파싱이 끝나 추출 결과가 채워진 상태인지. 토너먼트 출전처럼 "완성된 상품만" 을 요구하는 곳에서 쓴다.
+    // PROCESSING(파싱 중)·FAILED(실패)는 false — 이름·가격이 비어 있어 출전에 부적합하다.
+    fun isReady(): Boolean = status == ItemStatus.READY
+
     private fun validate(
         name: String?,
         currentPrice: Int?,

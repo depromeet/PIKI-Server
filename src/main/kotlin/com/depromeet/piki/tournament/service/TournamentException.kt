@@ -88,5 +88,14 @@ class TournamentException private constructor(
                 ErrorCategory.NOT_FOUND,
                 HttpStatus.NOT_FOUND,
             )
+
+        // 비동기 파싱이 끝나지 않은(PROCESSING) 또는 실패한(FAILED) 상품을 토너먼트에 추가하려 한 경우.
+        // 곧 READY 가 되거나 영구 실패라 현재 상태와 충돌 → 409.
+        fun itemNotReady(): TournamentException =
+            TournamentException(
+                "아직 준비되지 않은 상품은 토너먼트에 추가할 수 없습니다.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
     }
 }
