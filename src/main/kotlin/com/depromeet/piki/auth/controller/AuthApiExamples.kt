@@ -88,6 +88,41 @@ class AuthApiExamples(
                                 ),
                         )
                     }
+
+                handlerMethod.binds(DevAuthController::createDevUser) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.CREATED,
+                            name = "MEMBER 생성 성공",
+                            payload =
+                                ApiResponseBody.created(
+                                    GuestCreateResponse(
+                                        accessToken = "eyJhbGciOiJIUzI1NiJ9.access",
+                                        refreshToken = "eyJhbGciOiJIUzI1NiJ9.refresh",
+                                        user =
+                                            UserResponse(
+                                                id = UUID.fromString("3b9c1d2e-4f5a-4b6c-8d7e-9f0a1b2c3d4e"),
+                                                nickname = "홍길동",
+                                                profileImage =
+                                                    "https://api.dicebear.com/9.x/bottts/svg?seed=3b9c1d2e-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
+                                                identityType = IdentityType.MEMBER,
+                                            ),
+                                    ),
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.BAD_REQUEST,
+                            name = "닉네임 미입력",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.INVALID_INPUT,
+                                    status = HttpStatus.BAD_REQUEST,
+                                    detail = "nickname: must not be blank",
+                                ),
+                        )
+                        // 401(GUEST 토큰 누락)은 Security 필터 단계 거부라 본문이 ApiResponseBody 가 아닌
+                        // Spring 기본 /error 응답이다. 거짓 example 을 박지 않기 위해 의도적으로 생략한다.
+                    }
             }
             operation
         }
