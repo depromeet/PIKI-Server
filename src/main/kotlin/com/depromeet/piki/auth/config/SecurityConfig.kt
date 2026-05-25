@@ -2,7 +2,6 @@ package com.depromeet.piki.auth.config
 
 import com.depromeet.piki.auth.filter.JwtAuthenticationFilter
 import com.depromeet.piki.user.domain.IdentityType
-import jakarta.servlet.http.HttpServletResponse
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
@@ -14,7 +13,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableWebSecurity
-class SecurityConfig {
+class SecurityConfig(
+    private val authenticationEntryPoint: ApiResponseAuthenticationEntryPoint,
+    private val accessDeniedHandler: ApiResponseAccessDeniedHandler,
+) {
     @Bean
     fun securityFilterChain(
         http: HttpSecurity,
@@ -60,10 +62,11 @@ class SecurityConfig {
                     .anyRequest()
                     .authenticated()
             }.exceptionHandling {
-                // 미인증 요청은 401, 인증됐지만 권한 없으면 403
-                it.authenticationEntryPoint { _, response, _ ->
-                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED)
-                }
+                // 미인증 요청은 401, 인증됐지만 권한 없으면 403.
+                // Security 필터 체인은 DispatcherServlet 이전이라 GlobalExceptionHandler 가 잡지 못하므로,
+                // 두 경로 모두 ApiResponseBody contract 로 응답을 직접 작성하는 핸들러를 꽂는다.
+                it.authenticationEntryPoint(authenticationEntryPoint)
+                it.accessDeniedHandler(accessDeniedHandler)
             }.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
             .build()
 }
