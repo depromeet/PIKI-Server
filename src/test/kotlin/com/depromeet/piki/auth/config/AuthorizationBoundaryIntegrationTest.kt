@@ -47,6 +47,7 @@ class AuthorizationBoundaryIntegrationTest : IntegrationTestSupport() {
         fun protectedEndpoints(): List<Arguments> =
             listOf(
                 arguments(HttpMethod.POST, "/api/v1/dev/users"),
+                arguments(HttpMethod.POST, "/api/v1/dev/00000000-0000-0000-0000-000000000000/token"),
                 arguments(HttpMethod.POST, "/api/v1/auth/logout"),
                 arguments(HttpMethod.POST, "/api/v1/wishlists"),
                 arguments(HttpMethod.POST, "/api/v1/wishlists/ocr"),
