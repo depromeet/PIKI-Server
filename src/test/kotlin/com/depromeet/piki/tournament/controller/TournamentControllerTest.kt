@@ -4,7 +4,12 @@ import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemJpaRepository
+import com.depromeet.piki.ocr.domain.OcrImage
+import com.depromeet.piki.ocr.service.OcrExtraction
+import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.support.IntegrationTestSupport
+import com.depromeet.piki.support.StubProductImageExtractor
+import com.depromeet.piki.support.StubProductLinkExtractor
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.repository.TournamentItemJpaRepository
@@ -16,10 +21,12 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
+import org.springframework.mock.web.MockMultipartFile
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -46,6 +53,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
     @Autowired private lateinit var itemJpaRepository: ItemJpaRepository
 
     @Autowired private lateinit var jwtProvider: JwtProvider
+
+    @Autowired private lateinit var stubProductLinkExtractor: StubProductLinkExtractor
+
+    @Autowired private lateinit var stubProductImageExtractor: StubProductImageExtractor
 
     private val userId: UUID = UUID.fromString("11111111-2222-3333-4444-555555555555")
     private val otherUserId: UUID = UUID.fromString("99999999-8888-7777-6666-555555555555")
@@ -79,7 +90,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                post("/api/v1/tournaments/$tournamentId/items")
+                post("/api/v1/tournaments/$tournamentId/items/wish")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":[$item1Id,$item2Id]}"""),
@@ -95,7 +106,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                post("/api/v1/tournaments/$tournamentId/items")
+                post("/api/v1/tournaments/$tournamentId/items/wish")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":[$itemId]}"""),
@@ -110,7 +121,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                post("/api/v1/tournaments/$tournamentId/items")
+                post("/api/v1/tournaments/$tournamentId/items/wish")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":[999999]}"""),
@@ -141,7 +152,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                post("/api/v1/tournaments/$tournamentId/items")
+                post("/api/v1/tournaments/$tournamentId/items/wish")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":[]}"""),
@@ -156,7 +167,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                post("/api/v1/tournaments/$tournamentId/items")
+                post("/api/v1/tournaments/$tournamentId/items/wish")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":[100,200]}"""),
@@ -514,6 +525,156 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.status").value(404))
     }
 
+    @Test
+    fun `POST tournaments-id-items-link 는 참여자이면 아이템을 추가하고 200 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        stubProductLinkExtractor.build = { _ ->
+            ProductSnapshot(name = "테스트 상품", currentPrice = 10_000, currency = "KRW")
+        }
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/items/link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"url":"https://example.com/product"}"""),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+
+        assertEquals(1, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
+    }
+
+    @Test
+    fun `POST tournaments-id-items-link 에서 url 이 빈 값이면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/items/link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"url":""}"""),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+    }
+
+    @Test
+    fun `POST tournaments-id-items-link 에서 토너먼트 참여자가 아니면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/items/link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"url":"https://example.com/product"}"""),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
+    }
+
+    @Test
+    fun `POST tournaments-id-items-link 에서 토너먼트가 없으면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/999999/items/link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"url":"https://example.com/product"}"""),
+            ).andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+    }
+
+    @Test
+    fun `POST tournaments-id-items-images 는 참여자이면 이미지를 추가하고 200 과 failedCount 0 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        stubProductImageExtractor.build = { _ ->
+            OcrExtraction(
+                snapshot = ProductSnapshot(name = "이미지 상품", currentPrice = 50_000, currency = "KRW"),
+                boundingBox = null,
+            )
+        }
+        val image = MockMultipartFile("images", "test.jpg", "image/jpeg", ByteArray(100) { 1 })
+
+        mockMvc
+            .perform(
+                multipart("/api/v1/tournaments/$tournamentId/items/images")
+                    .file(image)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.failedCount").value(0))
+            .andExpect(jsonPath("$.data.failedIndices").isEmpty)
+
+        assertEquals(1, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
+    }
+
+    @Test
+    fun `POST tournaments-id-items-images 에서 일부 이미지 처리 실패 시 성공한 이미지는 저장되고 failedIndices 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        var callCount = 0
+        stubProductImageExtractor.build = { _ ->
+            val current = ++callCount
+            if (current == 2) error("OCR 실패 시뮬레이션")
+            OcrExtraction(
+                snapshot = ProductSnapshot(name = "이미지 상품 $current", currentPrice = 10_000 * current, currency = "KRW"),
+                boundingBox = null,
+            )
+        }
+        val image1 = MockMultipartFile("images", "img1.jpg", "image/jpeg", ByteArray(100) { 1 })
+        val image2 = MockMultipartFile("images", "img2.jpg", "image/jpeg", ByteArray(100) { 2 })
+
+        mockMvc
+            .perform(
+                multipart("/api/v1/tournaments/$tournamentId/items/images")
+                    .file(image1)
+                    .file(image2)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.failedCount").value(1))
+            .andExpect(jsonPath("$.data.failedIndices[0]").value(1))
+
+        assertEquals(1, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
+    }
+
+    @Test
+    fun `POST tournaments-id-items-images 에서 토너먼트 참여자가 아니면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val image = MockMultipartFile("images", "test.jpg", "image/jpeg", ByteArray(100) { 1 })
+
+        mockMvc
+            .perform(
+                multipart("/api/v1/tournaments/$tournamentId/items/images")
+                    .file(image)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
+    }
+
+    @Test
+    fun `POST tournaments-id-items-images 에서 이미지 6개 이상이면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val images = (1..6).map { i -> MockMultipartFile("images", "img$i.jpg", "image/jpeg", ByteArray(100) { 1 }) }
+
+        val request = images.fold(multipart("/api/v1/tournaments/$tournamentId/items/images")) { req, file ->
+            req.file(file)
+        }.header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+
+        mockMvc
+            .perform(request)
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+    }
+
     private fun buildMockMvc(): MockMvc =
         MockMvcBuilders
             .webAppContextSetup(webApplicationContext)
@@ -551,7 +712,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         vararg itemIds: Long,
     ) {
         mockMvc.perform(
-            post("/api/v1/tournaments/$tournamentId/items")
+            post("/api/v1/tournaments/$tournamentId/items/wish")
                 .header(HttpHeaders.AUTHORIZATION, authHeader(owner))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"itemIds":${itemIds.joinToString(",", "[", "]")}}"""),

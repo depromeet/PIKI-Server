@@ -97,5 +97,12 @@ class TournamentException private constructor(
                 ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )
+
+        fun invalidImageCount(): TournamentException =
+            TournamentException(
+                "이미지는 최소 1개, 최대 5개까지 전송할 수 있습니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
     }
 }

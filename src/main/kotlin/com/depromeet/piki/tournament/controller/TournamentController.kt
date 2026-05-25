@@ -1,6 +1,8 @@
 package com.depromeet.piki.tournament.controller
 
 import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkRequest
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
@@ -9,9 +11,11 @@ import com.depromeet.piki.tournament.controller.dto.TournamentBracketResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentInfoResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
+import com.depromeet.piki.tournament.service.TournamentItemService
 import com.depromeet.piki.tournament.service.TournamentService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -22,12 +26,14 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
 @RestController
 @RequestMapping("/api/v1/tournaments")
 class TournamentController(
     private val tournamentService: TournamentService,
+    private val tournamentItemService: TournamentItemService,
 ) : TournamentApi {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -39,14 +45,34 @@ class TournamentController(
         return ApiResponseBody.created(CreateTournamentResponse(tournamentId))
     }
 
-    @PostMapping("/{tournamentId}/items")
-    override fun addItems(
+    @PostMapping("/{tournamentId}/items/wish")
+    override fun addItemsFromWish(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
         @Valid @RequestBody request: AddTournamentItemsRequest,
     ): ApiResponseBody<Unit> {
-        tournamentService.addItems(userId, request.toAddTournamentItems(tournamentId))
+        tournamentService.addItemsFromWish(userId, request.toAddTournamentItemsFromWish(tournamentId))
         return ApiResponseBody.ok()
+    }
+
+    @PostMapping("/{tournamentId}/items/link")
+    override fun addItemFromLink(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+        @Valid @RequestBody request: AddTournamentItemFromLinkRequest,
+    ): ApiResponseBody<Unit> {
+        tournamentItemService.addItemFromLink(userId, tournamentId, request.url)
+        return ApiResponseBody.ok()
+    }
+
+    @PostMapping("/{tournamentId}/items/images", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    override fun addItemsFromImages(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+        @RequestParam("images") images: List<MultipartFile>,
+    ): ApiResponseBody<AddTournamentItemsFromImagesResponse> {
+        val result = tournamentItemService.addItemsFromImages(userId, tournamentId, images)
+        return ApiResponseBody.ok(AddTournamentItemsFromImagesResponse.from(result))
     }
 
     @DeleteMapping("/{tournamentId}/items/{tournamentItemId}")

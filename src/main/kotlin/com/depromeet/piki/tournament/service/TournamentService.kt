@@ -10,7 +10,7 @@ import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
-import com.depromeet.piki.tournament.service.dto.AddTournamentItems
+import com.depromeet.piki.tournament.service.dto.AddTournamentItemsFromWish
 import com.depromeet.piki.tournament.service.dto.CreateTournament
 import com.depromeet.piki.tournament.service.dto.RecordMatch
 import com.depromeet.piki.tournament.service.dto.TournamentBracketResult
@@ -47,9 +47,9 @@ class TournamentService(
     }
 
     @Transactional
-    fun addItems(
+    fun addItemsFromWish(
         userId: UUID,
-        command: AddTournamentItems,
+        command: AddTournamentItemsFromWish,
     ) {
         val tournament =
             tournamentRepository.findTournamentById(command.tournamentId)
@@ -65,7 +65,7 @@ class TournamentService(
         val hasDuplicate =
             command.itemIds.toSet().size != command.itemIds.size || command.itemIds.any { it in existingItemIds }
         if (hasDuplicate) throw TournamentException.duplicateTournamentItem()
-        if (existingItemIds.size + command.itemIds.size > MAX_ITEM_COUNT) {
+        if (existingItemIds.size + command.itemIds.size > TOURNAMENT_MAX_ITEM_COUNT) {
             throw TournamentException.tooManyTournamentItems()
         }
         val foundItems = itemRepository.findByIds(command.itemIds)
@@ -94,7 +94,7 @@ class TournamentService(
                 ?: throw TournamentException.forbiddenTournament()
         if (owner.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
         val tournamentItems = tournamentItemRepository.findAllByTournamentId(tournamentId)
-        if (tournamentItems.size !in MIN_ITEM_COUNT..MAX_ITEM_COUNT) throw TournamentException.invalidItemCount()
+        if (tournamentItems.size !in TOURNAMENT_MIN_ITEM_COUNT..TOURNAMENT_MAX_ITEM_COUNT) throw TournamentException.invalidItemCount()
         val itemById = itemRepository
             .findByIds(tournamentItems.map { it.itemId })
             .associate { it.getId() to it }
@@ -227,8 +227,4 @@ class TournamentService(
         if (deleted == 0) throw TournamentException.notPendingTournament()
     }
 
-    companion object {
-        private const val MIN_ITEM_COUNT = 2
-        private const val MAX_ITEM_COUNT = 32
-    }
 }

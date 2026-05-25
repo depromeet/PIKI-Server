@@ -67,12 +67,45 @@ class TournamentApiExamples(
                         )
                     }
 
-                handlerMethod.binds(TournamentController::addItems) ->
+                handlerMethod.binds(TournamentController::addItemsFromWish) ->
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.OK,
-                            name = "아이템 추가 성공",
+                            name = "위시 아이템 추가 성공",
                             payload = ApiResponseBody.ok<Unit>(),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::addItemFromLink) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "링크 아이템 추가 성공",
+                            payload = ApiResponseBody.ok<Unit>(),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::addItemsFromImages) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "이미지 아이템 추가 성공 (일부 실패 없음)",
+                            payload = ApiResponseBody.ok(
+                                com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse(
+                                    failedCount = 0,
+                                    failedIndices = emptyList(),
+                                ),
+                            ),
+                        )
+                        add(
+                            status = HttpStatus.OK,
+                            name = "이미지 아이템 추가 성공 (일부 실패)",
+                            payload = ApiResponseBody.ok(
+                                com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse(
+                                    failedCount = 1,
+                                    failedIndices = listOf(2),
+                                ),
+                            ),
                         )
                     }
 
