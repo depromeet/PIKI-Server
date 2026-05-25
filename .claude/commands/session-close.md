@@ -33,13 +33,17 @@ BR=$(git rev-parse --abbrev-ref HEAD)
 ### 2. 안전 재확인 후 제거 (CUR != MAIN)
 
 ```bash
-git status --porcelain                                                     # 비어야 함 (clean)
-git for-each-ref --format='%(upstream:track)' "refs/heads/$BR"             # [gone] 이면 머지+원격삭제
-gh pr list --state merged --search "head:$BR" --json number --jq 'length'  # >0 이면 머지됨
+git status --porcelain          # 비어야 함 (clean)
+# 머지 판정: head 가 정확히 $BR 인 merged PR 이 있어야 "진짜 머지"로 본다.
+#  - [gone](upstream:track)은 '원격 ref 미존재'일 뿐 머지 보장이 아니다 (버려서 삭제된 브랜치도 [gone]) → 머지 근거로 쓰지 않는다.
+#  - --search "head:..." 는 fuzzy 라 fork 동명 브랜치까지 매치된다 → --head 정확 일치 + headRefName 재필터.
+#  - merge-base --is-ancestor 도 안 쓴다: 이 레포는 squash-merge라 머지돼도 ancestor 가 아니라 미머지로 오판한다.
+gh pr list --head "$BR" --state merged --json number,headRefName \
+  --jq '[.[] | select(.headRefName == "'"$BR"'")] | length'   # >0 이면 이 브랜치 head 의 merged PR 존재
 ```
 
 - **dirty** (status 비어있지 않음) → **거부.** "uncommitted N건 — 먼저 `/commit` 하거나 `/session-check`." 중단.
-- **미머지** (`[gone]` 아니고 머지 PR 0건) → **거부.** "브랜치 `$BR` 미머지 — PR 머지 후 다시." 중단.
+- **미머지** (위 merged PR 카운트가 0) → **거부.** "브랜치 `$BR` 미머지 — PR 머지 후 다시." 중단. (열린 PR 만 있는 경우도 여기 해당 — 머지 전이므로 삭제 금지.)
 - 둘 다 통과(clean + 머지됨) → **제거한다**:
   1. `ExitWorktree({action: "remove"})` 를 호출한다.
   2. 거부하면서 변경 목록을 돌려주면 — clean 은 이미 확인했으니 그 목록은 **squash-merge 커밋(원래 브랜치 dev 의 ancestor 가 아닌 것)** 인 false alarm 이다. 이때만 `ExitWorktree({action: "remove", discard_changes: true})` 로 재호출한다. (clean·머지를 확인하기 **전에는 절대** `discard_changes: true` 를 주지 않는다.)
