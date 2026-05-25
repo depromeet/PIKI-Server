@@ -5,6 +5,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.client.ResourceAccessException
 import org.springframework.web.client.RestClient
+import org.springframework.web.client.RestClientException
 import org.springframework.web.client.RestClientResponseException
 import tools.jackson.databind.ObjectMapper
 
@@ -61,6 +62,11 @@ class GeminiHttpClient(
                 } catch (e: RestClientResponseException) {
                     throw GeminiApiException.fromResponseError(e)
                 } catch (e: ResourceAccessException) {
+                    throw GeminiApiException.upstreamError(e)
+                } catch (e: RestClientException) {
+                    // 응답 본문 추출 중 read-timeout 등은 RestClientResponseException 도 ResourceAccessException 도
+                    // 아닌 raw RestClientException("Error while extracting response", content-type octet-stream)으로 온다.
+                    // 위 두 catch 를 빠져나가 500 으로 새던 것을 막고, transport 장애로 보고 retryable(502)로 분류한다.
                     throw GeminiApiException.upstreamError(e)
                 } ?: throw GeminiApiException.emptyResponse()
 

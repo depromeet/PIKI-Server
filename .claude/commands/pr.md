@@ -96,6 +96,7 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
 - diff에서만 보이는 기계적 변경 나열은 최소화
 - Task 섹션은 Slack PR 봇이 읽으므로, 핵심 작업을 간결하게 요약
 - 한국어로 작성, 기술 용어는 영어 허용
+- **본문에 `~` 를 쓰지 않는다** — GitHub-flavored markdown 이 `~text~` 를 취소선(strikethrough)으로 렌더링해, approximately/범위 의도로 쓴 물결이 두 개 사이 텍스트를 통째로 줄 그어버린다. approximately 는 "약", 범위는 en dash(–) 나 "에서"로 표현.
 - **1단계에서 수집한 `git log` 의 모든 커밋이 STAR(특히 Action)에 빠짐없이 반영됐는지 최종 점검한다.** 해시 명기는 update 모드 전용이지만, "누락된 커밋이 없는지" 점검은 create 모드도 같은 레벨로 거친다 — 기억·추측이 아니라 로그와 대조한다.
 
 **Action 섹션 그룹화 가이드:**

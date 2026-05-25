@@ -1,5 +1,10 @@
 package com.depromeet.piki.ocr.service.gemini
 
+import com.fasterxml.jackson.annotation.JsonInclude
+
+// Gemini JSON Schema 파서는 `"properties": null` 같은 잉여 null 필드를 스키마 위반으로 취급한다.
+// (GeminiExtractionRequest 와 동일 정책) 직렬화 단계에서 null 필드를 전부 생략한다.
+@JsonInclude(JsonInclude.Include.NON_NULL)
 data class GeminiOcrRequest(
     val generationConfig: GenerationConfig,
     val contents: List<Content>,
@@ -7,6 +12,14 @@ data class GeminiOcrRequest(
     data class GenerationConfig(
         val responseMimeType: String,
         val responseSchema: Schema,
+        // gemini-3.1-flash-lite 는 thinkingLevel 을 명시하지 않으면 dynamic thinking 이 붙어
+        // OCR 같은 단순 추출에도 응답이 간헐적으로 ~20s 까지 튄다 (read-timeout 초과 → 호출 실패).
+        // OCR 은 이미지에서 직접 읽는 작업이라 깊은 추론이 불필요하므로 minimal 로 고정해 ~3s 로 안정화한다.
+        val thinkingConfig: ThinkingConfig,
+    )
+
+    data class ThinkingConfig(
+        val thinkingLevel: String,
     )
 
     data class Content(
@@ -23,6 +36,7 @@ data class GeminiOcrRequest(
         val data: String,
     )
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class Schema(
         val type: SchemaType,
         val properties: Map<String, Schema>? = null,
@@ -39,6 +53,9 @@ data class GeminiOcrRequest(
     }
 
     companion object {
+        // OCR 은 이미지에서 직접 정보를 읽는 작업이라 깊은 추론이 불필요하다. dynamic thinking 비활성.
+        private const val MINIMAL_THINKING = "minimal"
+
         private val SYSTEM_PROMPT = """
             You are a product information extractor. The user captured a product page to identify the product they are interested in.
 
@@ -81,6 +98,7 @@ data class GeminiOcrRequest(
                 generationConfig = GenerationConfig(
                     responseMimeType = "application/json",
                     responseSchema = PRODUCT_SCHEMA,
+                    thinkingConfig = ThinkingConfig(thinkingLevel = MINIMAL_THINKING),
                 ),
                 contents = listOf(
                     Content(
