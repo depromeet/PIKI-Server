@@ -26,8 +26,8 @@ class OpenApiConfig {
                         """
                         피키(PIKI) 위시리스트 서비스 API 문서.
 
-                        - 모든 응답의 에러 포맷은 RFC 7807 `application/problem+json` 을 따른다.
-                        - 게스트 식별자는 클라이언트가 발급받아 보관하며, 위시리스트 등록 시 함께 전달한다.
+                        - 모든 응답은 공통 래퍼(`ApiResponseBody`)로 `application/json` 으로 내려간다. 필드는 `status`·`code`·`detail`·`data`·`pageResponse` 이며, 성공·실패가 같은 형태다. 실패 시 `data` 는 null 이고 `code`·`detail` 에 사유가 담긴다.
+                        - 인증은 JWT 기반이다. 게스트 생성 또는 소셜 로그인으로 액세스·리프레시 토큰 쌍을 발급받고, 보호된 API 는 액세스 토큰을 `Authorization: Bearer {accessToken}` 헤더로 전달한다. 만료 시 리프레시 토큰으로 갱신한다.
                         """.trimIndent(),
                     ).contact(Contact().name("PIKI").url("https://github.com/depromeet/PIKI-Server"))
                     .license(License().name("Apache-2.0").url("https://www.apache.org/licenses/LICENSE-2.0")),
