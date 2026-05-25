@@ -6,6 +6,7 @@ import com.depromeet.piki.auth.infrastructure.redis.RefreshTokenStore
 import com.depromeet.piki.auth.service.dto.SignupResult
 import com.depromeet.piki.auth.service.dto.TokenPair
 import com.depromeet.piki.user.domain.User
+import com.depromeet.piki.user.domain.UserException
 import com.depromeet.piki.user.service.UserService
 import org.springframework.stereotype.Service
 import java.util.UUID
@@ -24,6 +25,15 @@ class AuthService(
 
     fun createMember(nickname: String): SignupResult {
         val user = userService.createMember(nickname)
+        val tokenPair = issueTokenPair(user)
+        return SignupResult(tokenPair = tokenPair, user = user)
+    }
+
+    // Dev 전용. 기존 user 의 token pair 를 발급해 임의 user 시나리오를 재현할 수 있게 한다.
+    // OAuth 통합 (epic #122) 전까지의 임시 endpoint 와 같은 결로 묶여 운영 노출 차단 예정 (#177 후속).
+    fun issueTokenForExistingUser(userId: UUID): SignupResult {
+        val user = userService.findById(userId)
+        user.deletedAt?.let { throw UserException.deletedUser(userId) }
         val tokenPair = issueTokenPair(user)
         return SignupResult(tokenPair = tokenPair, user = user)
     }
