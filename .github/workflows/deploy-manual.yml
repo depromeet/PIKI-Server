@@ -102,10 +102,12 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: GEMINI_API_KEY,DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,JWT_SECRET,REDIS_HOST,REDIS_PORT,KAKAO_CLIENT_ID,KAKAO_CLIENT_SECRET,KAKAO_REDIRECT_URI,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,S3_BUCKET,S3_PUBLIC_BASE_URL,DOCKERHUB_USERNAME,IMAGE_TAG
           script: |
-            # 필수 S3 환경변수 검증 — docker stop 으로 기존 컨테이너를 내리기 전에 먼저 실패시킨다.
-            # (단순 교체 방식이라 검증 없이 내리면 새 컨테이너 부팅 실패 시 서비스가 다운된다)
-            : "${S3_BUCKET:?S3_BUCKET 이 비어 있습니다. repo secret 을 확인하세요}"
-            : "${S3_PUBLIC_BASE_URL:?S3_PUBLIC_BASE_URL 이 비어 있습니다. repo secret 을 확인하세요}"
+            # 앱 부팅 필수 환경변수 검증 — docker stop 으로 기존 컨테이너를 내리기 전에 먼저 실패시킨다.
+            # (단순 교체 방식이라 검증 없이 내리면 새 컨테이너 부팅 실패 시 서비스가 다운된다.
+            #  KAKAO/GOOGLE OAuth·*_EXPIRY 등 기본값/선택값은 제외 — 비어도 부팅되므로)
+            for v in JWT_SECRET GEMINI_API_KEY S3_BUCKET S3_PUBLIC_BASE_URL DB_HOST DB_PORT DB_NAME DB_USERNAME DB_PASSWORD REDIS_HOST REDIS_PORT; do
+              if [ -z "${!v:-}" ]; then echo "ERROR: 필수 환경변수 $v 가 비어 있습니다 — repo secret 을 확인하세요" >&2; exit 1; fi
+            done
 
             IMAGE="$DOCKERHUB_USERNAME/team3-server:$IMAGE_TAG"
             docker pull "$IMAGE"
