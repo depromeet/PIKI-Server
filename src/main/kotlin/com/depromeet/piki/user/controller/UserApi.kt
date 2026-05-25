@@ -106,7 +106,9 @@ interface UserApi {
 
     @Operation(
         summary = "닉네임 중복 체크",
-        description = "닉네임이 이미 다른 유저에게 점유됐는지 확인한다. 회원 전환 / 닉네임 수정 전 사전 확인용.",
+        description =
+            "닉네임이 이미 다른 유저에게 점유됐는지 확인한다. 회원 전환 / 닉네임 수정 전 사전 확인용. " +
+                "본인의 현재 닉네임은 중복으로 잡지 않는다 — 자기 닉네임 유지 / 자기 닉네임으로 재확인 흐름이 자연스럽게 통과.",
     )
     @ApiResponses(
         value = [
@@ -142,5 +144,8 @@ interface UserApi {
             ),
         ],
     )
-    fun checkNickname(request: NicknameCheckRequest): ApiResponseBody<NicknameCheckResponse>
+    fun checkNickname(
+        @Parameter(hidden = true) userId: UUID,
+        request: NicknameCheckRequest,
+    ): ApiResponseBody<NicknameCheckResponse>
 }

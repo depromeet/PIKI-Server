@@ -173,22 +173,64 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `GET users nickname check - 이미 사용 중인 닉네임이면 available false 가 반환된다`() {
+    fun `GET users nickname check - 다른 user 가 이미 점유한 닉네임이면 available false 가 반환된다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val otherUserId = UUID.randomUUID()
+        insertUser(otherUserId, nickname = "점유닉네임")
+        val myUserId = UUID.randomUUID()
+        insertUser(myUserId, nickname = "내닉네임")
+
+        mockMvc
+            .perform(
+                get("/api/v1/users/nickname/check")
+                    .param("nickname", "점유닉네임")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(myUserId)}"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.available").value(false))
+    }
+
+    @Test
+    fun `GET users nickname check - 본인이 자기 닉네임으로 호출하면 본인 제외로 available true 가 반환된다`() {
         val mockMvc =
             MockMvcBuilders
                 .webAppContextSetup(webApplicationContext)
                 .apply<DefaultMockMvcBuilder>(springSecurity())
                 .build()
         val userId = UUID.randomUUID()
-        insertUser(userId, nickname = "점유닉네임")
+        insertUser(userId, nickname = "내닉네임")
 
         mockMvc
             .perform(
                 get("/api/v1/users/nickname/check")
-                    .param("nickname", "점유닉네임")
+                    .param("nickname", "내닉네임")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}"),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.available").value(false))
+            .andExpect(jsonPath("$.data.available").value(true))
+    }
+
+    @Test
+    fun `PATCH users me - 본인이 자기 닉네임 그대로 보내면 200 으로 통과한다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId, nickname = "내닉네임")
+        val body = objectMapper.writeValueAsString(mapOf("nickname" to "내닉네임"))
+
+        mockMvc
+            .perform(
+                patch("/api/v1/users/me")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}")
+                    .content(body),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.nickname").value("내닉네임"))
     }
 
     @Test
