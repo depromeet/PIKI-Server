@@ -6,6 +6,7 @@ import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.common.response.PageResponse
+import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.ocr.domain.OcrImage
 import com.depromeet.piki.wishlist.controller.dto.WishItemResponse
 import org.springdoc.core.customizers.OperationCustomizer
@@ -25,8 +26,8 @@ class WishlistApiExamples(
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.CREATED,
-                        name = "등록 성공",
-                        payload = ApiResponseBody.created(sampleEntry),
+                        name = "등록 접수 (파싱 중)",
+                        payload = ApiResponseBody.created(processingSampleEntry),
                     )
                     add(
                         status = HttpStatus.BAD_REQUEST,
@@ -44,10 +45,10 @@ class WishlistApiExamples(
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.OK,
-                        name = "조회 성공 (마지막 페이지)",
+                        name = "조회 성공 (담는 중 + 완성 혼재, 마지막 페이지)",
                         payload =
                             ApiResponseBody.ok(
-                                data = listOf(sampleEntry),
+                                data = listOf(processingSampleEntry, sampleEntry),
                                 pageResponse = PageResponse(nextCursor = null, hasNext = false),
                             ),
                     )
@@ -171,6 +172,7 @@ class WishlistApiExamples(
             operation
         }
 
+    // 파싱이 끝난 완성 항목 (READY).
     private val sampleEntry =
         WishItemResponse(
             wish =
@@ -181,6 +183,7 @@ class WishlistApiExamples(
             item =
                 WishItemResponse.ItemView(
                     id = 512,
+                    status = ItemStatus.READY,
                     name = "에어 조던 1 미드",
                     currentPrice = 119_000,
                     currency = "KRW",
@@ -189,7 +192,27 @@ class WishlistApiExamples(
                 ),
         )
 
-    // OCR 등록 항목 — URL·이미지·통화가 없어 해당 필드가 null 이다.
+    // 등록 직후 파싱 중 항목 (PROCESSING) — link 만 있고 name·가격·이미지는 아직 비어 있다.
+    private val processingSampleEntry =
+        WishItemResponse(
+            wish =
+                WishItemResponse.WishView(
+                    id = 1026,
+                    createdAt = LocalDateTime.of(2026, 5, 21, 10, 10, 0),
+                ),
+            item =
+                WishItemResponse.ItemView(
+                    id = 514,
+                    status = ItemStatus.PROCESSING,
+                    name = null,
+                    currentPrice = null,
+                    currency = null,
+                    imageUrl = null,
+                    sourceUrl = "https://www.example-shop.com/products/67890",
+                ),
+        )
+
+    // OCR 등록 항목 — URL·이미지·통화가 없어 해당 필드가 null 이다. 동기 완성이라 READY.
     private val ocrSampleEntry =
         WishItemResponse(
             wish =
@@ -200,6 +223,7 @@ class WishlistApiExamples(
             item =
                 WishItemResponse.ItemView(
                     id = 513,
+                    status = ItemStatus.READY,
                     name = "에어 조던 1 미드",
                     currentPrice = 119_000,
                     currency = null,

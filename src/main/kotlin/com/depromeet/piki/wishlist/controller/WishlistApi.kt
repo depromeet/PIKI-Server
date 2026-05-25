@@ -20,14 +20,17 @@ interface WishlistApi {
     @Operation(
         summary = "위시리스트 등록",
         description = """
-            상품 페이지 URL 을 받아 메타데이터(이름/가격/이미지 등)를 추출한 뒤 유저의 위시리스트에 등록한다.
+            상품 페이지 URL 을 받아 위시리스트에 등록한다. 메타데이터(이름/가격/이미지) 추출은 외부 LLM 호출이라
+            오래 걸리므로 동기로 기다리지 않는다. 등록 즉시 item.status=PROCESSING 인 항목을 201 로 반환하고,
+            실제 파싱은 백그라운드에서 진행되어 READY(완료) 또는 FAILED(파싱 실패) 로 전이한다.
+            클라이언트는 위시리스트 조회를 폴링해 status 변화를 확인한다. URL 형식 오류는 등록 전에 400 으로 거른다.
         """,
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "201",
-                description = "위시리스트 등록 성공",
+                description = "위시리스트 등록 접수 (item.status=PROCESSING, 파싱은 백그라운드)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -59,6 +62,8 @@ interface WishlistApi {
             cursor 페이지네이션: 직전 응답의 pageResponse.nextCursor 를 다음 요청 cursor 로 그대로 전달한다.
             마지막 페이지면 nextCursor 는 null, hasNext 는 false.
             size 는 미지정 시 20, 1~50 범위를 벗어나면 양 끝으로 보정된다.
+            각 항목의 item.status 로 파싱 상태(PROCESSING/READY/FAILED)를 구분한다 —
+            등록 직후 PROCESSING 인 항목은 이 조회를 폴링해 READY/FAILED 로 전이되는지 확인한다.
         """,
     )
     @ApiResponses(

@@ -1,6 +1,7 @@
 package com.depromeet.piki.wishlist.controller.dto
 
 import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.wishlist.domain.Wish
 import io.swagger.v3.oas.annotations.media.Schema
 import java.time.LocalDateTime
@@ -43,14 +44,19 @@ data class WishItemResponse(
     data class ItemView(
         @field:Schema(description = "상품 ID", example = "512")
         val id: Long,
-        @field:Schema(description = "상품명 (추출 실패 시 null)", example = "에어 조던 1 미드", nullable = true)
+        @field:Schema(
+            description = "파싱 상태 — PROCESSING(담는 중)/READY(완료)/FAILED(파싱 실패). PROCESSING 동안은 name·currentPrice·imageUrl 이 비어 있다.",
+            example = "READY",
+        )
+        val status: ItemStatus,
+        @field:Schema(description = "상품명 (PROCESSING·실패 시 null)", example = "에어 조던 1 미드", nullable = true)
         val name: String?,
-        @field:Schema(description = "스냅샷 시점의 현재 판매가", example = "119000", nullable = true)
+        @field:Schema(description = "스냅샷 시점의 현재 판매가 (PROCESSING·실패 시 null)", example = "119000", nullable = true)
         val currentPrice: Int?,
         @field:Schema(description = "통화 코드 (ISO 4217)", example = "KRW", nullable = true)
         val currency: String?,
         @field:Schema(
-            description = "상품 대표 이미지 URL",
+            description = "상품 대표 이미지 URL (PROCESSING·실패 시 null)",
             example = "https://cdn.example.com/p/512.jpg",
             nullable = true,
         )
@@ -66,6 +72,7 @@ data class WishItemResponse(
             fun from(item: Item): ItemView =
                 ItemView(
                     id = item.getId(),
+                    status = item.status,
                     name = item.name,
                     currentPrice = item.currentPrice,
                     currency = item.currency,

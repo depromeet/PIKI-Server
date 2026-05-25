@@ -3,12 +3,12 @@ package com.depromeet.piki.wishlist.service
 import com.depromeet.piki.common.storage.ImageStorage
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.repository.ItemRepository
+import com.depromeet.piki.item.service.ItemParsingService
+import com.depromeet.piki.item.service.ItemParsingWorker
 import com.depromeet.piki.ocr.domain.OcrImage
 import com.depromeet.piki.ocr.service.ImageCropper
 import com.depromeet.piki.ocr.service.ProductImageExtractor
 import com.depromeet.piki.product.domain.ProductLink
-import com.depromeet.piki.product.service.ProductLinkExtractor
-import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.wishlist.domain.WishCursor
 import com.depromeet.piki.wishlist.domain.WishException
 import com.depromeet.piki.wishlist.domain.WishlistSize
@@ -23,26 +23,34 @@ import java.util.UUID
 
 @Service
 class WishlistService(
-    private val productLinkExtractor: ProductLinkExtractor,
     private val productImageExtractor: ProductImageExtractor,
     private val imageCropper: ImageCropper,
     private val imageStorage: ImageStorage,
+    private val itemParsingWorker: ItemParsingWorker,
+    private val itemParsingService: ItemParsingService,
     private val wishPersistenceService: WishPersistenceService,
     private val wishRepository: WishRepository,
     private val itemRepository: ItemRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    // register 전체를 @Transactional 로 묶으면 외부 fetch + Gemini 호출 (read-timeout 60s)
-    // 동안 DB 커넥션이 잡혀 풀 고갈 → 다른 API 까지 latency 폭증으로 번진다.
-    // 외부 호출은 트랜잭션 바깥에서 끝내고, 영속화는 별도 빈에 위임해 proxy 를 통해 호출.
+    // register 는 외부 LLM 호출(read-timeout 60s)을 동기로 기다리지 않는다.
+    // link 만 가진 PROCESSING item 을 즉시 저장해 응답을 돌려주고(클라이언트는 "담는 중" 표시),
+    // 실제 파싱은 itemParsingWorker 가 백그라운드에서 수행해 READY/FAILED 로 전이시킨다.
+    // URL 형식 같은 계약 위반은 ProductLink.parse 가 동기로 거른다(400). 파싱 결과 실패만 FAILED 로 간다.
     fun register(
         rawUrl: String,
         userId: UUID,
     ): WishWithItem {
         val link = ProductLink.parse(rawUrl)
-        val snapshot = extractWithLatencyLog(link)
-        return wishPersistenceService.persist(userId, Item.from(snapshot))
+        val result = wishPersistenceService.persist(userId, Item.processing(link))
+        // 워커 디스패치가 큐 포화 등으로 거부되면 PROCESSING 으로 방치하지 않고 즉시 FAILED 로 떨어뜨린다.
+        runCatching { itemParsingWorker.parse(result.item.getId(), link) }
+            .onFailure { e ->
+                log.warn("파싱 워커 디스패치 실패, item {} 를 FAILED 처리: {}", result.item.getId(), e.message)
+                itemParsingService.markFailed(result.item.getId())
+            }
+        return result
     }
 
     // OCR 등록도 link 와 같은 흐름 — 입력이 이미지일 뿐. 외부 추출·크롭·S3 업로드는 트랜잭션 바깥, 영속화만 위임.
@@ -122,13 +130,5 @@ class WishlistService(
         val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
         wish.verifyOwnedBy(userId)
         wish.delete()
-    }
-
-    private fun extractWithLatencyLog(link: ProductLink): ProductSnapshot {
-        val started = System.nanoTime()
-        val snapshot = productLinkExtractor.extract(link)
-        val elapsedMs = (System.nanoTime() - started) / 1_000_000
-        log.info("extract latency: total={}ms url={}", elapsedMs, link.safeLogString())
-        return snapshot
     }
 }
