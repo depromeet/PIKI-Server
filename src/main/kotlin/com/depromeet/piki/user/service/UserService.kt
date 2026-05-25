@@ -103,7 +103,14 @@ class UserService(
             throw UserException.duplicateNickname()
         }
         user.updateNickname(newNickname)
-        return userRepository.save(user)
+        // existsByNicknameAndIdNot 체크와 save 사이에 다른 트랜잭션이 같은 nickname 으로
+        // update / insert 하면 DB unique constraint (uq_users_nickname) 위반이 떠 race 케이스에서
+        // 500 이 새어나갈 수 있다. createMember 와 같은 패턴으로 catch → 409 로 매핑.
+        return try {
+            userRepository.save(user)
+        } catch (e: DataIntegrityViolationException) {
+            throw UserException.duplicateNickname()
+        }
     }
 
     @Transactional
