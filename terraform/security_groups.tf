@@ -43,6 +43,14 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # SSH(22) 등 ingress 규칙은 PIKI-Infra maintainer 들이 콘솔/cli 로 직접 관리한다.
+  # github actions 배포용 0.0.0.0/0:22, 팀원 SSH IP 등이 콘솔/cli 로 추가돼 있어,
+  # terraform 이 ingress 를 덮어쓰면 그 규칙이 제거돼 배포·팀원 SSH 가 끊긴다.
+  # 위 ingress 블록은 신규 환경의 초기 생성값일 뿐, 이후엔 콘솔이 권위를 가지므로 변경을 무시한다.
+  lifecycle {
+    ignore_changes = [ingress]
+  }
+
   tags = {
     Name = "${local.name_prefix}-ec2-sg"
   }
