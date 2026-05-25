@@ -71,6 +71,8 @@ class TournamentServiceTest {
                 }
             }
         }
+
+        override fun findStaleProcessingIds(cutoff: java.time.LocalDateTime): List<Long> = emptyList()
     }
 
     private class TestUserRepository : UserRepository {

@@ -1,16 +1,18 @@
 package com.depromeet.piki.wishlist.controller
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.ocr.domain.BoundingBox
 import com.depromeet.piki.ocr.service.OcrExtraction
+import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.product.service.gemini.GeminiApiException
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubImageStorage
 import com.depromeet.piki.support.StubProductImageExtractor
-import com.depromeet.piki.support.StubProductLinkExtractor
 import com.depromeet.piki.support.uuidToBytes
 import com.depromeet.piki.user.domain.IdentityType
+import com.depromeet.piki.wishlist.service.WishPersistenceService
 import org.hamcrest.Matchers.nullValue
 import org.hamcrest.Matchers.startsWith
 import java.awt.image.BufferedImage
@@ -38,6 +40,9 @@ import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
 import java.util.UUID
 
+// 조회·수정·삭제 contract 검증. 이 시나리오들의 본질은 "완성된 위시가 있을 때의 동작"이라
+// 등록(비동기) 경로를 거치지 않고 seedReadyWish 로 READY 상태를 시딩한다.
+// 등록 PROCESSING 응답·파싱 전이는 WishlistRegisterAsyncIntegrationTest 가 검증한다.
 @Transactional
 class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     @Autowired
@@ -47,10 +52,10 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     private lateinit var objectMapper: ObjectMapper
 
     @Autowired
-    private lateinit var stubProductLinkExtractor: StubProductLinkExtractor
+    private lateinit var stubProductImageExtractor: StubProductImageExtractor
 
     @Autowired
-    private lateinit var stubProductImageExtractor: StubProductImageExtractor
+    private lateinit var wishPersistenceService: WishPersistenceService
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
@@ -75,149 +80,34 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             .apply<DefaultMockMvcBuilder>(springSecurity())
             .build()
 
-    // POST 로 위시 한 건 등록하고 생성된 wishId 를 돌려준다. 조회 시나리오의 데이터 세팅용.
-    private fun registerWish(
-        mockMvc: MockMvc,
-        authHeader: String,
+    // 조회·수정·삭제 시나리오의 데이터 시딩. 등록 API(비동기)를 거치지 않고 영속화 빈으로 READY item+wish 를
+    // 바로 만든다 — 이 테스트들의 관심사는 "완성된 위시가 있을 때"이지 등록 흐름이 아니기 때문.
+    private fun seedReadyWish(
+        userId: UUID,
         url: String,
         name: String,
-    ): Long {
-        stubProductLinkExtractor.build = { ProductSnapshot(link = it, name = name) }
-        val body = objectMapper.writeValueAsString(mapOf("url" to url))
-        val response =
-            mockMvc
-                .perform(
-                    post("/api/v1/wishlists")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .header(HttpHeaders.AUTHORIZATION, authHeader)
-                        .content(body),
-                ).andExpect(status().isCreated)
-                .andReturn()
-                .response
-                .getContentAsString(Charsets.UTF_8)
-        return objectMapper
-            .readTree(response)
-            .path("data")
-            .path("wish")
-            .path("id")
-            .asLong()
-    }
-
-    @Test
-    fun `정상 등록 - 201 과 함께 추출 결과가 응답에 박힌다`() {
-        val mockMvc =
-            MockMvcBuilders
-                .webAppContextSetup(
-                    webApplicationContext,
-                ).apply<DefaultMockMvcBuilder>(springSecurity())
-                .build()
-        val url = "https://shop.example.com/products/42"
-        val userId = UUID.randomUUID()
-        insertMember(userId)
-        stubProductLinkExtractor.build = { link ->
-            ProductSnapshot(
-                link = link,
-                name = "나이키 에어포스",
-                currentPrice = 99_000,
-                currency = "KRW",
-                imageUrl = "https://cdn.example.com/p/42.jpg",
-            )
-        }
-        val body = objectMapper.writeValueAsString(mapOf("url" to url))
-
-        mockMvc
-            .perform(
-                post("/api/v1/wishlists")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}")
-                    .content(body),
-            ).andExpect(status().isCreated)
-            .andExpect(jsonPath("$.status").value(201))
-            .andExpect(jsonPath("$.code").value("CREATED"))
-            .andExpect(jsonPath("$.data.wish.id").isNumber)
-            .andExpect(jsonPath("$.data.wish.createdAt").exists())
-            .andExpect(jsonPath("$.data.item.name").value("나이키 에어포스"))
-            .andExpect(jsonPath("$.data.item.currentPrice").value(99_000))
-            .andExpect(jsonPath("$.data.item.currency").value("KRW"))
-            .andExpect(jsonPath("$.data.item.imageUrl").value("https://cdn.example.com/p/42.jpg"))
-            .andExpect(jsonPath("$.data.item.sourceUrl").value(url))
-    }
-
-    @Test
-    fun `같은 유저가 같은 URL 을 두 번 등록해도 둘 다 201 로 등록된다`() {
-        // dedup 정책은 #134 (item 독립 엔티티 분리) 에서 제거됨. wish 는 user 가 item 을 위시한 사건으로
-        // 보는 multi-record 모델이라 같은 URL 을 반복 등록해도 별개의 wish row 로 쌓인다.
-        val mockMvc =
-            MockMvcBuilders
-                .webAppContextSetup(
-                    webApplicationContext,
-                ).apply<DefaultMockMvcBuilder>(springSecurity())
-                .build()
-        val url = "https://shop.example.com/products/42"
-        val userId = UUID.randomUUID()
-        insertMember(userId)
-        stubProductLinkExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
-        val body = objectMapper.writeValueAsString(mapOf("url" to url))
-        val authHeader = "Bearer ${memberToken(userId)}"
-
-        mockMvc
-            .perform(
-                post("/api/v1/wishlists")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, authHeader)
-                    .content(body),
-            ).andExpect(status().isCreated)
-
-        mockMvc
-            .perform(
-                post("/api/v1/wishlists")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, authHeader)
-                    .content(body),
-            ).andExpect(status().isCreated)
-    }
-
-    @Test
-    fun `다른 유저가 같은 URL 을 등록하면 둘 다 201 로 등록된다`() {
-        val mockMvc =
-            MockMvcBuilders
-                .webAppContextSetup(
-                    webApplicationContext,
-                ).apply<DefaultMockMvcBuilder>(springSecurity())
-                .build()
-        val url = "https://shop.example.com/products/42"
-        stubProductLinkExtractor.build = { ProductSnapshot(link = it, name = "기본 상품") }
-        val firstUserId = UUID.randomUUID()
-        val secondUserId = UUID.randomUUID()
-        insertMember(firstUserId)
-        insertMember(secondUserId)
-        val body = objectMapper.writeValueAsString(mapOf("url" to url))
-
-        mockMvc
-            .perform(
-                post("/api/v1/wishlists")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(firstUserId)}")
-                    .content(body),
-            ).andExpect(status().isCreated)
-
-        mockMvc
-            .perform(
-                post("/api/v1/wishlists")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(secondUserId)}")
-                    .content(body),
-            ).andExpect(status().isCreated)
-    }
+        currentPrice: Int? = null,
+        currency: String? = null,
+        imageUrl: String? = null,
+    ): Long =
+        wishPersistenceService
+            .persist(
+                userId,
+                Item.from(
+                    ProductSnapshot(
+                        link = ProductLink.parse(url),
+                        name = name,
+                        currentPrice = currentPrice,
+                        currency = currency,
+                        imageUrl = imageUrl,
+                    ),
+                ),
+            ).wish
+            .getId()
 
     @Test
     fun `url 이 빈 문자열이면 400 BAD_REQUEST 가 반환된다`() {
-        val mockMvc =
-            MockMvcBuilders
-                .webAppContextSetup(
-                    webApplicationContext,
-                ).apply<DefaultMockMvcBuilder>(springSecurity())
-                .build()
+        val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
         val body = objectMapper.writeValueAsString(mapOf("url" to ""))
@@ -235,13 +125,8 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     fun `잘못된 형식의 url 은 400 BAD_REQUEST 로 응답되며 detail 에 원본 url 이 새지 않는다`() {
         // GlobalExceptionHandler 가 IllegalArgumentException_message 를 응답 detail 에 그대로 박는 구조라
         // ProductLink_parse 가 원본을 메시지에 담으면 쿼리스트링 토큰이 클라이언트 응답으로 새어 나간다.
-        // ProductLink_parse 의 message 정책과 contract 양 끝을 함께 묶어 회귀를 잡는다.
-        val mockMvc =
-            MockMvcBuilders
-                .webAppContextSetup(
-                    webApplicationContext,
-                ).apply<DefaultMockMvcBuilder>(springSecurity())
-                .build()
+        // URL 형식 위반은 등록 전(ProductLink.parse) 동기로 거르므로 백그라운드 파싱에 닿지 않는다.
+        val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
         val rawWithSecret = "data:text/html,<token=SHOULD_NOT_LEAK>"
@@ -278,26 +163,26 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `본인 위시만 최신 등록순으로 반환하고 다른 유저 wish 는 섞이지 않는다`() {
+    fun `본인 위시만 최신 등록순으로 반환하고 다른 유저 wish 는 섞이지 않으며 status 가 함께 내려간다`() {
         val mockMvc = buildMockMvc()
         val ownerId = UUID.randomUUID()
         val otherId = UUID.randomUUID()
         insertMember(ownerId)
         insertMember(otherId)
-        val ownerAuth = "Bearer ${memberToken(ownerId)}"
-        registerWish(mockMvc, ownerAuth, "https://shop.example.com/products/1", "첫 상품")
-        val secondWishId = registerWish(mockMvc, ownerAuth, "https://shop.example.com/products/2", "둘째 상품")
-        registerWish(mockMvc, "Bearer ${memberToken(otherId)}", "https://shop.example.com/products/3", "남의 상품")
+        seedReadyWish(ownerId, "https://shop.example.com/products/1", "첫 상품")
+        val secondWishId = seedReadyWish(ownerId, "https://shop.example.com/products/2", "둘째 상품")
+        seedReadyWish(otherId, "https://shop.example.com/products/3", "남의 상품")
 
         mockMvc
             .perform(
                 get("/api/v1/wishlists")
-                    .header(HttpHeaders.AUTHORIZATION, ownerAuth),
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(ownerId)}"),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.data.length()").value(2))
             // 최신 등록(둘째)이 맨 앞 (id desc)
             .andExpect(jsonPath("$.data[0].wish.id").value(secondWishId))
             .andExpect(jsonPath("$.data[0].item.name").value("둘째 상품"))
+            .andExpect(jsonPath("$.data[0].item.status").value("READY"))
             .andExpect(jsonPath("$.data[1].item.name").value("첫 상품"))
             .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
     }
@@ -307,10 +192,10 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
+        val firstWishId = seedReadyWish(userId, "https://shop.example.com/products/1", "상품1")
+        val secondWishId = seedReadyWish(userId, "https://shop.example.com/products/2", "상품2")
+        seedReadyWish(userId, "https://shop.example.com/products/3", "상품3")
         val authHeader = "Bearer ${memberToken(userId)}"
-        val firstWishId = registerWish(mockMvc, authHeader, "https://shop.example.com/products/1", "상품1")
-        val secondWishId = registerWish(mockMvc, authHeader, "https://shop.example.com/products/2", "상품2")
-        registerWish(mockMvc, authHeader, "https://shop.example.com/products/3", "상품3")
 
         // 첫 페이지: 최신 2건 + 다음 페이지 존재
         mockMvc
@@ -343,7 +228,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val userId = UUID.randomUUID()
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
-        val wishId = registerWish(mockMvc, authHeader, "https://shop.example.com/products/1", "잘못 읽힌 이름")
+        val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "잘못 읽힌 이름")
         val body =
             objectMapper.writeValueAsString(
                 mapOf(
@@ -375,33 +260,15 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val userId = UUID.randomUUID()
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
-        stubProductLinkExtractor.build = {
-            ProductSnapshot(
-                link = it,
+        val wishId =
+            seedReadyWish(
+                userId,
+                "https://shop.example.com/products/1",
                 name = "원래 이름",
                 currentPrice = 50_000,
                 currency = "KRW",
                 imageUrl = "https://cdn.example.com/orig.jpg",
             )
-        }
-        val registerBody = objectMapper.writeValueAsString(mapOf("url" to "https://shop.example.com/products/1"))
-        val wishId =
-            objectMapper
-                .readTree(
-                    mockMvc
-                        .perform(
-                            post("/api/v1/wishlists")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .header(HttpHeaders.AUTHORIZATION, authHeader)
-                                .content(registerBody),
-                        ).andExpect(status().isCreated)
-                        .andReturn()
-                        .response
-                        .getContentAsString(Charsets.UTF_8),
-                ).path("data")
-                .path("wish")
-                .path("id")
-                .asLong()
 
         mockMvc
             .perform(
@@ -410,7 +277,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, authHeader)
                     .content(objectMapper.writeValueAsString(mapOf("name" to "새 이름"))),
             ).andExpect(status().isOk)
-            // name 만 갱신, 나머지는 등록 시점 값 유지
+            // name 만 갱신, 나머지는 시딩 시점 값 유지
             .andExpect(jsonPath("$.data.item.name").value("새 이름"))
             .andExpect(jsonPath("$.data.item.currentPrice").value(50_000))
             .andExpect(jsonPath("$.data.item.currency").value("KRW"))
@@ -424,8 +291,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val otherId = UUID.randomUUID()
         insertMember(ownerId)
         insertMember(otherId)
-        val wishId =
-            registerWish(mockMvc, "Bearer ${memberToken(ownerId)}", "https://shop.example.com/products/1", "내 상품")
+        val wishId = seedReadyWish(ownerId, "https://shop.example.com/products/1", "내 상품")
         val body = objectMapper.writeValueAsString(mapOf("name" to "남이 바꾼 이름"))
 
         mockMvc
@@ -463,7 +329,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val userId = UUID.randomUUID()
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
-        val wishId = registerWish(mockMvc, authHeader, "https://shop.example.com/products/1", "상품")
+        val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "상품")
         val body = objectMapper.writeValueAsString(mapOf("currentPrice" to -1))
 
         mockMvc
@@ -483,8 +349,8 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val userId = UUID.randomUUID()
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
-        val keptWishId = registerWish(mockMvc, authHeader, "https://shop.example.com/products/1", "남길 상품")
-        val deletedWishId = registerWish(mockMvc, authHeader, "https://shop.example.com/products/2", "지울 상품")
+        val keptWishId = seedReadyWish(userId, "https://shop.example.com/products/1", "남길 상품")
+        val deletedWishId = seedReadyWish(userId, "https://shop.example.com/products/2", "지울 상품")
 
         mockMvc
             .perform(
@@ -509,8 +375,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val otherId = UUID.randomUUID()
         insertMember(ownerId)
         insertMember(otherId)
-        val wishId =
-            registerWish(mockMvc, "Bearer ${memberToken(ownerId)}", "https://shop.example.com/products/1", "내 상품")
+        val wishId = seedReadyWish(ownerId, "https://shop.example.com/products/1", "내 상품")
 
         mockMvc
             .perform(
@@ -560,6 +425,8 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.item.name").value("나이키 에어포스"))
             .andExpect(jsonPath("$.data.item.currentPrice").value(99_000))
             .andExpect(jsonPath("$.data.item.currency").value("KRW"))
+            // OCR 은 동기 완성이라 status 는 READY.
+            .andExpect(jsonPath("$.data.item.status").value("READY"))
             // bbox 가 없으면 크롭을 건너뛰어 imageUrl 은 null. sourceUrl 도 OCR 이라 null.
             .andExpect(jsonPath("$.data.item.sourceUrl").value(nullValue()))
             .andExpect(jsonPath("$.data.item.imageUrl").value(nullValue()))
