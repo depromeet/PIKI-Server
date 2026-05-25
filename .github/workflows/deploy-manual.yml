@@ -8,8 +8,12 @@ on:
         required: true
         default: 'dev'
 
+# 자동 deploy (deploy.yml) 와 같은 EC2 한 대를 공유하므로 group 을 통일해
+# 두 워크플로우가 동시에 컨테이너를 조작하는 race 를 차단한다. cancel-in-progress: false
+# 로 두어 새 deploy 가 옛 deploy 를 죽이지 않고 대기 — 롤백 가능성을 줄이는 안전 정책.
+# 향후 진짜 staging 환경이 분리되면 deploy-staging.yml 신규 + 자기 group 으로 다시 분리한다.
 concurrency:
-  group: deploy-staging
+  group: deploy-ec2-dev
   cancel-in-progress: false
 
 jobs:
