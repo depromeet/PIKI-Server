@@ -28,10 +28,12 @@ repositories {
 // junit-jupiter / mysql 모듈은 1.21.x 라인이 최신이라 BOM 불일치가 난다.
 // 모듈이 따라올 때까지 testcontainers BOM 을 1.21.4 로 명시 고정.
 val testcontainersVersion = "1.21.4"
+val awsSdkVersion = "2.44.11"
 
 dependencyManagement {
     imports {
         mavenBom("org.testcontainers:testcontainers-bom:$testcontainersVersion")
+        mavenBom("software.amazon.awssdk:bom:$awsSdkVersion")
     }
 }
 
@@ -51,6 +53,9 @@ dependencies {
 
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
+
+    // 크롭한 상품 이미지를 S3 에 업로드 (#144). 버전은 BOM 이 관리.
+    implementation("software.amazon.awssdk:s3")
 
     // JJWT - Jackson 2.x 와 3.x 는 그룹 ID 가 달라 공존 가능 (com.fasterxml vs tools.jackson)
     val jjwtVersion = "0.13.0"

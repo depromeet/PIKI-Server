@@ -32,3 +32,13 @@ output "rds_address" {
   description = "RDS 호스트"
   value       = aws_db_instance.mysql.address
 }
+
+output "image_bucket_name" {
+  description = "크롭 상품 이미지 저장 버킷명 (앱 S3_BUCKET)"
+  value       = aws_s3_bucket.images.id
+}
+
+output "image_public_base_url" {
+  description = "이미지 버킷 공개 베이스 URL (앱 S3_PUBLIC_BASE_URL)"
+  value       = "https://${aws_s3_bucket.images.bucket_regional_domain_name}"
+}

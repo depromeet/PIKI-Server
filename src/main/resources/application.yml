@@ -1,16 +1,16 @@
 spring:
   application:
-    name: team3
+    name: PIKI
   config:
     import: optional:file:.env[.properties]
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+      max-file-size: 5MB
+      max-request-size: 5MB
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:team3}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
-    username: ${DB_USERNAME:team3}
-    password: ${DB_PASSWORD:team3}
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:piki}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
+    username: ${DB_USERNAME:piki}
+    password: ${DB_PASSWORD:piki}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
@@ -48,13 +48,19 @@ oauth:
 
 gemini:
   api-key: ${GEMINI_API_KEY:}
-  # preview 모델은 2 주 사전공지 후 deprecate 정책이라 운영 안정성을 위해 GA 모델 사용.
-  model: ${GEMINI_MODEL:gemini-2.5-flash}
+  # 기본 모델은 GeminiProperties.DEFAULT_MODEL 한 곳에서만 정의한다 (drift 방지). 여기엔 리터럴을 두지 않는다.
+  # 운영에서 모델을 바꾸려면 GEMINI_MODEL 환경변수로 override (relaxed binding: GEMINI_MODEL -> gemini.model).
   retry:
     # max-attempts 는 총 시도 횟수(초기 호출 + 재시도). 기본 2 = 초기 호출 1회 + 재시도 1회.
     # 한 요청이 유발하는 billed API 호출 횟수 상한이므로 비용·quota 에 맞춰 환경변수로 조정.
     max-attempts: ${GEMINI_RETRY_MAX_ATTEMPTS:2}
     initial-delay-ms: ${GEMINI_RETRY_INITIAL_DELAY_MS:1000}
+
+s3:
+  # 크롭한 상품 이미지 저장 버킷. 자격증명은 EC2 instance role / 로컬 환경변수(DefaultCredentialsProvider).
+  bucket: ${S3_BUCKET:}
+  region: ${S3_REGION:ap-northeast-2}
+  public-base-url: ${S3_PUBLIC_BASE_URL:}
 
 springdoc:
   api-docs:

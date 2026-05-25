@@ -1,0 +1,100 @@
+현재 브랜치 PR 의 CodeRabbit 리뷰를 처리한다 — 인라인 review thread 와 review body 의 nitpick 을 모두 조회해 평가하고, accept/reject 를 reply·resolve 로 남긴다.
+
+## 언제 쓰나
+
+- PR 에 CodeRabbit 리뷰가 달린 뒤, 그 지적을 반영·답변할 때.
+- `/pr` 로 PR 을 올린 뒤 리뷰 대응 단계에서 이어서 호출하거나, 단독으로 호출한다.
+
+## 원칙
+
+- **commit + push 로 끝내지 않는다.** 각 review thread 에 reply 를 남겨 **어떤 commit 으로 반영했는지 / reject 한 이유가 무엇인지** 가 conversation 에 박혀야 다른 리뷰어가 처리 여부를 헷갈리지 않는다.
+- **CodeRabbit 은 코멘트를 두 곳에 나눠 단다 — 반드시 둘 다 본다.**
+  - **인라인 review thread**: actionable 코멘트. `reviewThreads` 로 조회되고 개별 resolve 가능.
+  - **review body 안에 접힌 nitpick / 추가 코멘트**: `🧹 Nitpick comments (N)` 같은 `<details>` 블록. `reviewThreads` 에 **안 잡힌다** — `pulls/{PR}/reviews` 의 review body 를 따로 조회해야 보인다. 이걸 빠뜨리면 nitpick 을 통째로 놓친다 (resolve 대상은 아니지만 평가는 해야 한다).
+- **author 매칭은 `coderabbitai` 로 시작하는지(`startswith`)로 한다.** GitHub 의 두 API 가 같은 봇을 다르게 표기한다 — GraphQL `reviewThreads` 의 `author.login` 은 `coderabbitai`, REST `pulls/{PR}/reviews` 의 `user.login` 은 `coderabbitai[bot]`. 어느 한쪽 값으로 고정하면 다른 API 에서 매칭이 깨져 봇을 사람으로 오인하므로(예: reviewThreads 를 `coderabbitai[bot]` 로 비교하면 영원히 안 잡힘), 양쪽 모두 `coderabbitai` 로 시작하는지로 매칭한다.
+- **사람 리뷰어 thread 는 자동 reply 하지 않는다.** author 가 `coderabbitai` 로 시작하지 않으면 (즉 사람 리뷰면) reply / resolve 둘 다 모델이 건드리지 않는다 — 작성자(`@me`)가 직접 의도·뉘앙스를 담아 답한다. 1단계 카운트에서 1건 이상이면 3~4단계(thread reply/resolve)는 건너뛰고 사용자에게 "사람 리뷰 N건 있습니다" 만 알린다. (단 2.5단계 nitpick 조회·평가는 사람 리뷰 여부와 무관하게 수행한다.)
+
+## 절차
+
+### 0. PR 번호 확인
+
+```bash
+PR=$(gh pr view --json number --jq '.number')
+echo "PR #${PR}"
+```
+
+PR 이 없으면 (`gh pr view` 실패) 먼저 `/pr` 로 PR 을 만들라고 안내하고 중단한다.
+
+### 1. 사람 리뷰 thread 카운트 — 1 이상이면 3~4단계 건너뛴다
+
+```bash
+HUMAN_THREADS=$(gh api graphql -f query='
+  query { repository(owner: "depromeet", name: "PIKI-Server") {
+    pullRequest(number: '"$PR"') {
+      reviewThreads(first: 50) { nodes {
+        comments(first: 1) { nodes { author { login } } }
+      } }
+    }
+  }}' --jq '[.data.repository.pullRequest.reviewThreads.nodes[]
+             | select(((.comments.nodes[0].author.login // "") | startswith("coderabbitai")) | not)] | length')
+echo "사람 리뷰 thread: ${HUMAN_THREADS}건"
+# HUMAN_THREADS > 0 → 3~4단계(thread reply/resolve) 건너뛰고 사용자에게 알림 (2.5 nitpick 은 그대로)
+```
+
+### 2. CodeRabbit 인라인 thread 조회 — author `coderabbitai*` 필터
+
+```bash
+gh api graphql -f query='
+  query { repository(owner: "depromeet", name: "PIKI-Server") {
+    pullRequest(number: '"$PR"') {
+      reviewThreads(first: 50) { nodes {
+        id isResolved path line
+        comments(first: 1) { nodes { author { login } body } }
+      } }
+    }
+  }}' --jq '.data.repository.pullRequest.reviewThreads.nodes[]
+            | select((.comments.nodes[0].author.login // "") | startswith("coderabbitai"))
+            | {id, isResolved, path, line}'
+```
+
+### 2.5. review body 의 nitpick·추가 코멘트 조회 — reviewThreads 에 안 잡히므로 필수
+
+```bash
+gh api repos/depromeet/PIKI-Server/pulls/$PR/reviews \
+  --jq '.[] | select(((.user.login // "") | startswith("coderabbitai")) and (.body | length) > 100) | .body'
+```
+
+출력된 body 를 읽고 `🧹 Nitpick comments` 등 접힌 코멘트를 건별 평가한다. nitpick 은 thread 가 아니라 **resolve 대상이 아니므로**, 반영하면 커밋 + PR `## Updates`(또는 PR 일반 코멘트)로 처리 사실을 남긴다.
+
+### 3. 각 CodeRabbit thread 에 reply
+
+```bash
+gh api graphql -f query='
+  mutation($t: ID!, $b: String!) {
+    addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $t, body: $b}) {
+      comment { url }
+    }
+  }' -F t="<thread id>" -f b="<reply 내용>"
+```
+
+### 4. 자동 resolve 안 된 thread 면 resolve
+
+CodeRabbit 은 자동 resolve 하는 경우가 있어 `isResolved` 확인 후 분기한다.
+
+```bash
+gh api graphql -f query='
+  mutation($t: ID!) {
+    resolveReviewThread(input: {threadId: $t}) { thread { isResolved } }
+  }' -F t="<thread id>"
+```
+
+### accept / reject 규칙
+
+- **accept**: reply 에 fix commit hash 명기 (예: "Accepted. Fixed in `371b5ba`."). 자동 resolve 안 됐으면 resolve 까지.
+- **reject**: reply 에 reject 이유 (예: "CLAUDE.md '테스트 셋업 원칙' 과 충돌 — 셋업 hook 으로 stub 상태 리셋 금지"). **resolve 하지 않는다** — 사용자가 검토할 기회 보존.
+- 한 thread 가 여러 commit 으로 해소됐으면 해시 모두 명기.
+
+## 주의
+
+- owner/repo 는 `depromeet/PIKI-Server` 고정. 레포가 바뀌면 갱신한다.
+- nitpick 반영 여부·범위는 선택적이다. actionable thread 와 달리 강제가 아니므로, 반영할지 사용자와 합의하고 진행한다.

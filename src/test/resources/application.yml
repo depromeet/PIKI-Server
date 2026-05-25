@@ -1,6 +1,6 @@
 spring:
   application:
-    name: team3-test
+    name: PIKI-test
   config:
     import: optional:file:.env.test[.properties]
 
@@ -9,7 +9,7 @@ spring:
 # 컨텍스트 로딩 자체는 깨지지 않는다.
 gemini:
   api-key: ${GEMINI_API_KEY:test-dummy-key}
-  model: ${GEMINI_MODEL:gemini-2.5-flash}
+  # model 미지정 → GeminiProperties.DEFAULT_MODEL 적용. 테스트는 외부 호출을 stub 하므로 모델 문자열은 실제로 쓰이지 않는다.
 
 # 운영 application.yml 은 JWT_SECRET env 를 강제하지만 테스트는 dummy secret 으로
 # 컨텍스트 로딩만 통과시킨다 (HS256 최소 키 길이 32 bytes 충족).
@@ -19,3 +19,10 @@ jwt:
   secret: ${JWT_SECRET:test-jwt-secret-key-must-be-at-least-32-chars!}
   access-token-expiry: 1h
   refresh-token-expiry: 14d
+
+# S3 업로드는 ImageStorage stub 으로 격리되지만, S3Properties·S3Client 빈 자체는 컨텍스트에 생성되므로
+# 더미 값으로 부팅만 통과시킨다 (S3Properties.init 의 notBlank 검증 충족).
+s3:
+  bucket: test-bucket
+  region: ap-northeast-2
+  public-base-url: https://test-bucket.s3.ap-northeast-2.amazonaws.com
