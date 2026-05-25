@@ -45,23 +45,28 @@ git -C "<worktree_path>" status --porcelain
 ### C. 브랜치 / PR
 
 ```bash
-git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads   # ahead/behind, no-upstream
-gh pr list --author "@me" --state open   --json number,title,headRefName,reviewDecision,statusCheckRollup
-gh pr list --author "@me" --state merged --json number,headRefName
+git for-each-ref --format='%(refname:short) | %(upstream:short) | %(upstream:track)' refs/heads   # ahead / no-upstream / [gone]
+gh pr list --author "@me" --state open --json number,title,headRefName,reviewDecision,statusCheckRollup
+git worktree list   # 어느 브랜치가 워크트리에 물려 있는지 (삭제 가능 여부 판별)
 ```
 
-- 로컬 브랜치가 upstream보다 ahead거나 upstream이 없음(=한 번도 push 안 됨) → **액션**: `git push`(필요 시 `-u`) / 그대로 둠
-- 머지된 PR의 `headRefName` 과 같은 이름의 로컬 브랜치가 아직 있음 → **액션**: `git branch -d <branch>` / 그대로 둠
-  - 단, 그 브랜치가 어느 워크트리에 체크아웃돼 있으면 `-d` 불가 → 삭제 대신 "워크트리 먼저 정리 필요"로 안내한다(워크트리 제거는 사용자가 명시할 때만).
+- `%(upstream:track)` 가 `[gone]` → upstream(원격 추적 브랜치)이 삭제됨. PR 머지 후 원격 브랜치가 지워지면 이렇게 뜨므로, **머지됐는데 안 지운 로컬 브랜치**의 정확한 신호다 — 머지 PR 의 `headRefName` 을 일일이 매칭하는 것보다 신뢰도가 높다. → **액션**: 삭제.
+  - **삭제는 `git branch -D` 를 쓴다.** squash/rebase 머지된 브랜치는 커밋이 현재 HEAD 의 ancestor 가 아니라 `git branch -d`(안전 삭제)가 "not fully merged" 로 거부한다. `[gone]` 은 원격에서 이미 사라진 머지 완료 브랜치라 force 삭제(`-D`)가 안전하다. 확신이 필요하면 `gh pr list --state merged --json headRefName` 로 머지 여부를 교차 확인한다.
+  - 단, 그 브랜치가 어느 워크트리에 체크아웃돼 있으면(위 `git worktree list` 의 branch 칼럼으로 판별) 삭제 불가 → 삭제 대신 "워크트리 먼저 정리 필요"로 안내한다(워크트리 제거는 사용자가 명시할 때만).
+- upstream 이 없음(=한 번도 push 안 됨)이거나 ahead → **액션**: `git push`(필요 시 `-u`) / 그대로 둠. `[gone]` 과 혼동하지 않는다 — `[gone]` 은 push 가 아니라 삭제 대상이다.
 - 열린 본인 PR의 CI 실패(`statusCheckRollup` 에 FAILURE)·리뷰 대기(`reviewDecision` 가 REVIEW_REQUIRED / CHANGES_REQUESTED) → **정보성** 리포트
 
 ### D. 작업 흔적 (정보성, 선택)
 
 ```bash
-git diff origin/main...HEAD | grep -nE '^\+[^+].*(TODO|FIXME)'
+# base 는 origin/dev (이 레포의 PR base). origin/main 이 아니다.
+# .claude/** (커맨드 문서 등 툴링)는 제외 — 스킬 자기 문서의 "TODO" 단어가 오탐되므로.
+git diff origin/dev...HEAD -- ':(exclude).claude/**' | grep -nE '^\+[^+].*(TODO|FIXME)'
 ```
 
 - 이번 브랜치에서 새로 추가된 TODO/FIXME → 리포트만.
+- **base 는 `origin/dev`** 다 — 이 레포 PR base 가 dev 이므로. `origin/main` 으로 비교하면 엉뚱한 diff 가 나온다.
+- `.claude/**` 는 pathspec 으로 제외한다 — 이 스킬 문서처럼 산문에 "TODO"·"FIXME" 단어가 들어가면 코드 TODO 가 아닌데도 잡히는 오탐을 막기 위함.
 - 현재 브랜치 PR에 미해결 CodeRabbit/사람 리뷰 thread가 있으면 건수만 알리고 `/coderabbit` 로 처리하라고 안내한다(여기서 처리하지 않는다).
 
 ## 액션 처리 (AskUserQuestion)
@@ -84,7 +89,7 @@ git diff origin/main...HEAD | grep -nE '^\+[^+].*(TODO|FIXME)'
 - (현재) uncommitted <n>건 — staged <a> / unstaged <b> / untracked <c>
 - (워크트리 <name>) dirty <n>건
 - 미푸시: <branch> ahead <n>
-- 미삭제: 머지된 PR #<num> 의 로컬 브랜치 <branch>
+- 미삭제(머지됨): 로컬 브랜치 <branch> (upstream [gone])
 - CI 실패: PR #<num> (정보성)
 
 **안전**
