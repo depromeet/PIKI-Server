@@ -1,4 +1,4 @@
-이슈를 생성하고, 브랜치를 만들고, 이슈에 매핑하고, 라벨/Project를 설정합니다.
+이슈를 생성하고, 브랜치(또는 워크트리)를 만들고, 이슈에 매핑하고, 라벨/Project를 설정합니다.
 
 ## 원칙
 
@@ -10,9 +10,11 @@
 
 **Epic 과 일반 이슈는 본질이 다르다.** Epic 은 여러 작업의 묶음으로 자체 코드 작업이 없어 브랜치를 만들지 않는다. 일반 이슈는 코드 작업의 단위로 부모 Epic 에 묶일 수 있다. 이 구분만 사용자가 명시하고, 그 외 분류·prefix·상위 Epic 추천은 모델이 본문을 보고 자동 결정한 뒤 검수받는다.
 
+**작업 공간은 워크트리를 기본으로 한다.** 일반 이슈의 브랜치를 만들 때 현재 체크아웃을 그 브랜치로 끌고 가는 대신, `.claude/worktrees/` 에 격리된 워크트리로 분리하는 것을 추천(첫 번째 옵션)한다. 메인 체크아웃이 작업 중 외부에서 바뀌어도 격리되고 CLAUDE.md "별도 작업은 worktree 로 분리" 정책과 맞다. 사용자가 현재 브랜치 작업을 고를 수 있게 묻되 default 는 워크트리. Epic 은 브랜치 자체가 없어 해당 없음.
+
 **라벨은 한 작업 한 개.** type 차원(`feat`/`fix`/`refactor`/`perf`/`chore`) 과 영역 차원(`docs`/`test`/`infra`) 이 한 라벨로 합쳐져 있다. "외부 가시적 변화" 가 본질이면 그 type, 특정 영역만 만지면 그 영역. multi-label 부여하지 않는다.
 
-**채팅 끊김을 최소화한다.** 자유 텍스트는 한 메시지로 일괄 받고, 옵션 결정은 `AskUserQuestion` 으로 묶어 받는다. 사용자 인터랙션은 보통 **3 라운드** (Epic 여부 → 자유 입력 → 검수) 안에 끝난다.
+**채팅 끊김을 최소화한다.** 자유 텍스트는 한 메시지로 일괄 받고, 옵션 결정은 `AskUserQuestion` 으로 묶어 받는다. 사용자 인터랙션은 보통 **3~4 라운드** (Epic 여부 → 자유 입력 → 검수 → [일반 이슈] 작업 위치) 안에 끝난다.
 
 ## 절차
 
@@ -226,9 +228,37 @@ gh api graphql \
   -F typeId={매핑된 type ID}
 ```
 
-### B-6. 브랜치 생성 + 매핑
+### B-6. 작업 위치 선택 + 브랜치/워크트리 생성
 
-브랜치명 슬러그는 분해된 제목에서 영문 kebab-case 로 생성 (한국어면 의미 보존하며 영문 의역).
+브랜치명 슬러그는 분해된 제목에서 영문 kebab-case 로 생성 (한국어면 의미 보존하며 영문 의역). 브랜치명은 `{prefix}/{이슈번호}-{slug}`, 워크트리 디렉토리명은 `{slug}` (prefix·번호 없이).
+
+브랜치를 어디서 작업할지 `AskUserQuestion` (single-select) 으로 묻는다. **워크트리를 추천(첫 번째)으로 둔다**:
+
+- `워크트리로 분리 (Recommended)` — 현재 체크아웃은 그대로 두고 `.claude/worktrees/{slug}` 에 격리된 작업 공간을 만든다.
+- `현재 브랜치에서 작업` — 현재 디렉토리를 새 브랜치로 전환한다 (기존 동작).
+
+#### 워크트리 선택 시
+
+1. **stale 워크트리 정리** (생성 직전 — CLAUDE.md "worktree 정리는 ... 이벤트에 얹는다"). `git worktree prune` 후 머지·삭제(gone)된 브랜치의 워크트리만 제거. **clean 한 것만, `--force` 금지** — dirty 면 작업 중일 수 있으므로 건드리지 않고 넘어간다.
+
+2. GitHub 브랜치 생성 + 이슈 연결. **`--checkout` 을 주지 않는다** — 현재 디렉토리를 끌고 가면 같은 브랜치를 워크트리에서 다시 체크아웃할 수 없어 충돌한다.
+   ```bash
+   gh issue develop {이슈번호} \
+     --repo depromeet/18th-team3-server \
+     --base dev \
+     --name "{prefix}/{이슈번호}-{slug}"
+   ```
+
+3. `gh` 가 만든 원격 브랜치를 가져와 워크트리로 분리한다 (로컬 브랜치는 워크트리에서 생성):
+   ```bash
+   git fetch origin "{prefix}/{이슈번호}-{slug}":"refs/remotes/origin/{prefix}/{이슈번호}-{slug}"
+   git worktree add ".claude/worktrees/{slug}" "{prefix}/{이슈번호}-{slug}"
+   ```
+   `git worktree add <path> <branch>` 는 로컬에 `{branch}` 가 없고 `origin/{branch}` 가 정확히 하나면 DWIM 으로 추적 브랜치를 만들어 붙인다. DWIM 이 안 되면 명시형으로 fallback: `git worktree add --track -b "{prefix}/{이슈번호}-{slug}" ".claude/worktrees/{slug}" "origin/{prefix}/{이슈번호}-{slug}"`.
+
+4. 세션을 워크트리로 진입시킨다 — `EnterWorktree` 도구를 **`path=".claude/worktrees/{slug}"`** 로 호출 (이미 만든 워크트리에 진입). `name=` 으로 새로 만들지 않는다 — 브랜치는 `gh issue develop` 이 base `dev` 로 이미 만들었고, `EnterWorktree(name=...)` 의 baseRef 기본값(`fresh`=origin/default-branch)은 이 레포에선 `main` 을 가리켜 CLAUDE.md(dev 분기) 와 어긋나기 때문. 이후 작업·커밋·`/pr` 은 이 워크트리에서 진행된다.
+
+#### 현재 브랜치 선택 시 (기존 동작)
 
 ```bash
 gh issue develop {이슈번호} \
@@ -249,7 +279,9 @@ gh project item-add 99 --owner depromeet --url {이슈 URL}
 ### B-8. 결과 출력
 
 - 이슈 URL
-- 브랜치명 + 현재 체크아웃된 브랜치 확인
+- 브랜치명
+- **워크트리 선택 시**: 워크트리 경로(`.claude/worktrees/{slug}`) + "세션이 워크트리로 전환됐고 현재 체크아웃(`dev` 등)은 그대로 유지됩니다" + "작업·커밋·`/pr` 은 이 워크트리에서 진행됩니다"
+- **현재 브랜치 선택 시**: 현재 체크아웃된 브랜치 확인
 - "우선순위 / 일정은 필요시 GitHub Project 보드에서 채우세요."
 - 다음 단계 안내 (작업 시작 → 커밋 → PR)
 
@@ -261,7 +293,9 @@ gh project item-add 99 --owner depromeet --url {이슈 URL}
 - **모델 분해 결과는 검수 필수.** 사용자가 거부하면 즉시 부분 수정 또는 원본 그대로.
 - 분류 자동 결정은 시그널이 명확할 때만. 모호하면 `chore` fallback (보수적).
 - 라벨이 레포에 없어 `gh issue create` 가 실패하면 에러 그대로 보고.
-- `gh issue develop` 은 `--name` (브랜치 이름 옵션) + `--checkout` 둘 다 명시 (인터랙티브 회피). `--branch-name` 은 존재하지 않는 옵션이니 주의.
+- `gh issue develop` 은 `--name` (브랜치 이름 옵션) 을 명시 (인터랙티브 회피). `--branch-name` 은 존재하지 않는 옵션이니 주의. `--checkout` 은 **현재 브랜치 작업을 고른 경우에만** 붙인다 — 워크트리 작업이면 현재 디렉토리가 끌려가 충돌하므로 빼고, 체크아웃은 `EnterWorktree` 가 대신한다.
+- **워크트리 진입은 `EnterWorktree(path=...)` 로만.** `git worktree add` 로 먼저 만든 뒤 `path` 로 진입한다. `EnterWorktree(name=...)` 는 새 브랜치를 자체 생성하며 baseRef 기본값이 이 레포의 git default branch(`main`)를 가리켜 `dev` 분기 정책과 어긋난다. `path` 로 진입한 워크트리는 `ExitWorktree` 가 제거하지 않으므로, 정리는 `/session-close` 나 다음 `/issue` 의 stale prune 에 맡긴다.
+- **워크트리 stale prune 안전 가드.** 생성 직전 정리는 clean(커밋 안 된 변경 없음) + 머지·삭제(gone)된 브랜치의 워크트리만 제거한다. `--force` 절대 금지, dirty 면 그냥 둔다.
 - `gh project item-add` 권한 부족 시 사용자에게 `gh auth refresh -h github.com -s project` 안내 (인터랙티브 디바이스 인증, 일회성).
 - 본문에 `#{epic 번호}` 가 들어가면 GitHub 가 자동 cross-reference 링크 — 별도 sub-issue API 불필요.
 - 중복 이슈 검사 false positive 가능성 인지. 사용자가 "다른 이슈" 라 답하면 그대로 진행.

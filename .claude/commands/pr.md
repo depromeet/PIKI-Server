@@ -6,7 +6,34 @@
 
 ## 절차
 
-### 0단계: 모드 결정 + base branch 자동 감지
+### 0단계: 작업 위치 가드 + 모드 결정 + base branch 자동 감지
+
+**0-A. 작업 위치 가드 (워크트리 감지)** — `/pr` 의 모든 git/gh 명령은 현재 작업 디렉토리(cwd) 기준으로 돈다. 세션이 워크트리 안에 있으면 git worktree 특성상 자동으로 그 워크트리 브랜치를 바라보므로 별도 처리가 필요 없다. 문제는 cwd 가 작업 브랜치와 어긋난 경우 — 워크트리에서 작업해놓고 메인 체크아웃(base 브랜치)에서 `/pr` 을 부르면 조용히 틀린 PR(또는 "변경 없음")이 만들어진다. 이를 먼저 거른다.
+
+```bash
+CURRENT_BRANCH=$(git branch --show-current)
+# base 후보 (아래 0-B 의 $BASE 결정과 동일 우선순위: origin/dev → 레포 default → main)
+if git rev-parse --verify origin/dev >/dev/null 2>&1; then
+  BASE_GUESS=dev
+else
+  BASE_GUESS=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null || echo main)
+fi
+```
+
+`$CURRENT_BRANCH` 가 `$BASE_GUESS` 와 **다르면** 정상(작업 브랜치) — 가드를 통과해 0-B 로 넘어간다.
+
+`$CURRENT_BRANCH` 가 `$BASE_GUESS` 와 **같으면** PR 을 올릴 작업 브랜치가 아니다. 작업은 다른 워크트리에 있을 가능성이 크다:
+
+```bash
+git worktree list --porcelain   # base 가 아닌 브랜치를 가진 워크트리 = 작업 후보
+```
+
+- **작업 후보 워크트리가 있으면** `AskUserQuestion` (single-select) 으로 "그 워크트리로 진입해 `/pr` 을 이어갈까요?" 를 묻는다 (**진입 = Recommended, 첫 번째**). 후보가 여럿이면 각 워크트리(경로 + 브랜치)를 옵션으로 나열한다.
+  - **진입 동의** → `EnterWorktree` 도구를 `path={선택한 워크트리 경로}` 로 호출해 세션을 옮긴 뒤, **0단계를 처음부터 다시 시작**한다 (이제 cwd 가 워크트리라 `CURRENT_BRANCH` 가 feature 브랜치 → 가드 통과).
+  - **거부** → 멈춘다. "작업 워크트리에서 직접 `/pr` 을 불러주세요" 안내.
+- **작업 후보 워크트리가 없으면** (다른 워크트리도 전부 base 이거나 워크트리가 메인뿐) — base 브랜치에서 `/pr` 을 부른 셈이라 올릴 작업 브랜치가 안 보인다. 그 사실을 알리고 멈춘다 (`$ARGUMENTS` 로 다른 base 를 명시한 의도적 dev→main 류 PR 이면 사용자가 다시 알려준다).
+
+**0-B. 모드 결정 + $BASE 자동 감지**
 
 **현재 브랜치의 PR 존재 여부 확인** — update 모드 vs create 모드 결정:
 
@@ -19,15 +46,7 @@ gh pr view --json url,number,body,baseRefName 2>/dev/null
 
 **`$BASE` 결정**:
 
-- **create 모드** — 우선순위로 자동 감지:
-  ```bash
-  # 우선순위: origin/dev → 레포 default branch → main
-  if git rev-parse --verify origin/dev >/dev/null 2>&1; then
-    BASE=dev
-  else
-    BASE=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null || echo main)
-  fi
-  ```
+- **create 모드** — 0-A 에서 계산한 `$BASE_GUESS` 를 그대로 쓴다 (`BASE=$BASE_GUESS`). 우선순위: origin/dev → 레포 default branch → main.
 - **update 모드** — 기존 PR 의 base 사용:
   ```bash
   BASE=$(gh pr view --json baseRefName --jq '.baseRefName')
