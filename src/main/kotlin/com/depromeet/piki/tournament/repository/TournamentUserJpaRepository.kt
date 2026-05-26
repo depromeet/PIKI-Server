@@ -17,5 +17,7 @@ interface TournamentUserJpaRepository : JpaRepository<TournamentUser, Long> {
         @Param("userId") userId: UUID,
     ): List<Long>
 
+    fun findByTournamentId(tournamentId: Long): List<TournamentUser>
+
     fun findByTournamentIdIn(tournamentIds: Collection<Long>): List<TournamentUser>
 }

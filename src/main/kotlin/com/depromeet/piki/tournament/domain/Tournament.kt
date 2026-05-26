@@ -45,6 +45,6 @@ class Tournament(
     fun isInProgress(): Boolean = status == TournamentStatus.IN_PROGRESS
 
     companion object {
-        private const val FINAL_ROUND_SIZE = 2
+        internal const val FINAL_ROUND_SIZE = 2
     }
 }
