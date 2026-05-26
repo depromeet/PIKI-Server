@@ -3,6 +3,7 @@ package com.depromeet.piki.tournament.service
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemRepository
+import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentRepository
@@ -32,6 +33,18 @@ class TournamentItemPersistenceService(
         tournamentItemRepository.saveAll(
             savedItems.map { TournamentItem(tournamentId = tournamentId, itemId = it.getId(), userId = userId) },
         )
+    }
+
+    @Transactional
+    fun persistLinkItem(
+        userId: UUID,
+        tournamentId: Long,
+        link: ProductLink,
+    ): Long {
+        validateAndCheckCapacity(userId, tournamentId, 1)
+        val item = itemRepository.save(Item.processing(link))
+        tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId = tournamentId, itemId = item.getId(), userId = userId)))
+        return item.getId()
     }
 
     @Transactional

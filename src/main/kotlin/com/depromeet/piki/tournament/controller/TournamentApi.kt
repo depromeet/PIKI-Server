@@ -2,6 +2,7 @@ package com.depromeet.piki.tournament.controller
 
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkRequest
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
@@ -63,7 +64,9 @@ interface TournamentApi {
 
     @Operation(
         summary = "URL 링크로 토너먼트 아이템 추가",
-        description = "PENDING 상태의 토너먼트에 URL 링크를 파싱해 아이템을 추가한다. 토너먼트 참여자만 추가할 수 있다.",
+        description = "PENDING 상태의 토너먼트에 URL 링크를 통해 아이템을 추가한다. 아이템이 PROCESSING 상태로 즉시 생성되어 itemId가 반환된다. " +
+            "파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다. " +
+            "클라이언트는 itemId로 상태를 폴링한다. 토너먼트 참여자만 추가할 수 있다.",
     )
     @ApiResponse(
         responseCode = "200",
@@ -79,7 +82,7 @@ interface TournamentApi {
         userId: UUID,
         tournamentId: Long,
         request: AddTournamentItemFromLinkRequest,
-    ): ApiResponseBody<Unit>
+    ): ApiResponseBody<AddTournamentItemFromLinkResponse>
 
     @Operation(
         summary = "이미지로 토너먼트 아이템 추가",

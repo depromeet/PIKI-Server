@@ -1,12 +1,10 @@
 package com.depromeet.piki.tournament.service
 
-import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.service.ImageParsingWorker
 import com.depromeet.piki.item.service.ItemParsingService
+import com.depromeet.piki.item.service.ItemParsingWorker
 import com.depromeet.piki.ocr.domain.OcrImage
 import com.depromeet.piki.product.domain.ProductLink
-import com.depromeet.piki.product.service.ProductLinkExtractor
-import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import org.slf4j.LoggerFactory
@@ -19,7 +17,7 @@ import java.util.UUID
 class TournamentItemService(
     private val tournamentRepository: TournamentRepository,
     private val tournamentUserRepository: TournamentUserRepository,
-    private val productLinkExtractor: ProductLinkExtractor,
+    private val itemParsingWorker: ItemParsingWorker,
     private val imageParsingWorker: ImageParsingWorker,
     private val itemParsingService: ItemParsingService,
     private val tournamentItemPersistenceService: TournamentItemPersistenceService,
@@ -30,11 +28,16 @@ class TournamentItemService(
         userId: UUID,
         tournamentId: Long,
         url: String,
-    ) {
-        validateTournamentAccess(userId, tournamentId)
+    ): Long {
         val link = ProductLink.parse(url)
-        val snapshot = extractWithLatencyLog(link)
-        tournamentItemPersistenceService.persistItems(userId, tournamentId, listOf(Item.from(snapshot)))
+        validateTournamentAccess(userId, tournamentId)
+        val itemId = tournamentItemPersistenceService.persistLinkItem(userId, tournamentId, link)
+        runCatching { itemParsingWorker.parse(itemId, link) }
+            .onFailure { e ->
+                log.warn("item {} async 디스패치 거부 → FAILED 처리", itemId, e)
+                runCatching { itemParsingService.markFailed(itemId) }
+            }
+        return itemId
     }
 
     fun addItemsFromImages(
@@ -56,14 +59,6 @@ class TournamentItemService(
             }
         }
         return itemIds
-    }
-
-    private fun extractWithLatencyLog(link: ProductLink): ProductSnapshot {
-        val started = System.nanoTime()
-        val snapshot = productLinkExtractor.extract(link)
-        val elapsedMs = (System.nanoTime() - started) / 1_000_000
-        log.info("extract latency: total={}ms url={}", elapsedMs, link.safeLogString())
-        return snapshot
     }
 
     private fun validateTournamentAccess(

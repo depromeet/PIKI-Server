@@ -2,6 +2,7 @@ package com.depromeet.piki.tournament.controller
 
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkRequest
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
@@ -60,9 +61,9 @@ class TournamentController(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
         @Valid @RequestBody request: AddTournamentItemFromLinkRequest,
-    ): ApiResponseBody<Unit> {
-        tournamentItemService.addItemFromLink(userId, tournamentId, request.url)
-        return ApiResponseBody.ok()
+    ): ApiResponseBody<AddTournamentItemFromLinkResponse> {
+        val itemId = tournamentItemService.addItemFromLink(userId, tournamentId, request.url)
+        return ApiResponseBody.ok(AddTournamentItemFromLinkResponse(itemId))
     }
 
     @PostMapping("/{tournamentId}/items/images", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])

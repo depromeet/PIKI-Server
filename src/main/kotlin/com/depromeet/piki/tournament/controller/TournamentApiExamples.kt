@@ -4,6 +4,7 @@ import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentBracketResponse
@@ -82,7 +83,7 @@ class TournamentApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "링크 아이템 추가 성공",
-                            payload = ApiResponseBody.ok<Unit>(),
+                            payload = ApiResponseBody.ok(AddTournamentItemFromLinkResponse(itemId = 1L)),
                         )
                     }
 
