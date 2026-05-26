@@ -1,17 +1,16 @@
 package com.depromeet.piki.tournament.service
 
-import com.depromeet.piki.common.storage.ImageStorage
 import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.service.ImageParsingWorker
+import com.depromeet.piki.item.service.ItemParsingService
 import com.depromeet.piki.ocr.domain.OcrImage
-import com.depromeet.piki.ocr.service.ImageCropper
-import com.depromeet.piki.ocr.service.ProductImageExtractor
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductLinkExtractor
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.tournament.repository.TournamentRepository
-import com.depromeet.piki.tournament.service.dto.AddTournamentItemsFromImagesResult
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import org.slf4j.LoggerFactory
+import org.springframework.core.task.TaskRejectedException
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
@@ -21,9 +20,8 @@ class TournamentItemService(
     private val tournamentRepository: TournamentRepository,
     private val tournamentUserRepository: TournamentUserRepository,
     private val productLinkExtractor: ProductLinkExtractor,
-    private val productImageExtractor: ProductImageExtractor,
-    private val imageCropper: ImageCropper,
-    private val imageStorage: ImageStorage,
+    private val imageParsingWorker: ImageParsingWorker,
+    private val itemParsingService: ItemParsingService,
     private val tournamentItemPersistenceService: TournamentItemPersistenceService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -43,42 +41,21 @@ class TournamentItemService(
         userId: UUID,
         tournamentId: Long,
         images: List<MultipartFile>,
-    ): AddTournamentItemsFromImagesResult {
+    ): List<Long> {
         if (images.size !in MIN_IMAGE_COUNT..MAX_IMAGE_COUNT) throw TournamentException.invalidImageCount()
         validateTournamentAccess(userId, tournamentId)
-
-        val failedIndices = mutableListOf<Int>()
-        val successfulItems = mutableListOf<Item>()
-
-        images.forEachIndexed { index, image ->
-            runCatching {
-                val ocrImage = OcrImage.of(image.bytes, image.contentType)
-                val extraction = productImageExtractor.extract(ocrImage)
-                val imageUrl =
-                    extraction.boundingBox
-                        ?.let { imageCropper.crop(ocrImage.bytes, it) }
-                        ?.let { cropped ->
-                            runCatching {
-                                imageStorage.upload(cropped, "items/${UUID.randomUUID()}.png", "image/png")
-                            }.getOrElse { e ->
-                                log.warn("크롭 이미지 S3 업로드 실패, imageUrl 없이 등록 진행: {}", e.message)
-                                null
-                            }
-                        }
-                Item.from(extraction.snapshot.copy(imageUrl = imageUrl))
-            }.onSuccess { item ->
-                successfulItems.add(item)
-            }.onFailure { e ->
-                log.warn("이미지[{}] 처리 실패, 해당 이미지 건너뜀: {}", index, e.message)
-                failedIndices.add(index)
+        // 형식 검증(빈 바이트·미지원 MIME) — 실패 시 즉시 400. 유효한 이미지만 PROCESSING 으로 등록한다.
+        val ocrImages = images.map { OcrImage.of(it.bytes, it.contentType) }
+        val itemIds = tournamentItemPersistenceService.persistProcessingItems(userId, tournamentId, ocrImages.size)
+        itemIds.zip(ocrImages).forEach { (itemId, ocrImage) ->
+            try {
+                imageParsingWorker.parse(itemId, ocrImage)
+            } catch (e: TaskRejectedException) {
+                log.warn("item {} async 디스패치 거부 → FAILED 처리", itemId)
+                runCatching { itemParsingService.markFailed(itemId) }
             }
         }
-
-        if (successfulItems.isNotEmpty()) {
-            tournamentItemPersistenceService.persistItems(userId, tournamentId, successfulItems)
-        }
-
-        return AddTournamentItemsFromImagesResult(failedIndices = failedIndices)
+        return itemIds
     }
 
     private fun extractWithLatencyLog(link: ProductLink): ProductSnapshot {

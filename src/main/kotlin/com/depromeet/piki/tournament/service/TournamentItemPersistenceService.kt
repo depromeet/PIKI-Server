@@ -1,6 +1,7 @@
 package com.depromeet.piki.tournament.service
 
 import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
@@ -26,6 +27,32 @@ class TournamentItemPersistenceService(
         tournamentId: Long,
         items: List<Item>,
     ) {
+        validateAndCheckCapacity(userId, tournamentId, items.size)
+        val savedItems = itemRepository.saveAll(items)
+        tournamentItemRepository.saveAll(
+            savedItems.map { TournamentItem(tournamentId = tournamentId, itemId = it.getId(), userId = userId) },
+        )
+    }
+
+    @Transactional
+    fun persistProcessingItems(
+        userId: UUID,
+        tournamentId: Long,
+        count: Int,
+    ): List<Long> {
+        validateAndCheckCapacity(userId, tournamentId, count)
+        val items = itemRepository.saveAll(List(count) { Item(status = ItemStatus.PROCESSING) })
+        tournamentItemRepository.saveAll(
+            items.map { TournamentItem(tournamentId = tournamentId, itemId = it.getId(), userId = userId) },
+        )
+        return items.map { it.getId() }
+    }
+
+    private fun validateAndCheckCapacity(
+        userId: UUID,
+        tournamentId: Long,
+        incomingCount: Int,
+    ) {
         val tournament =
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
@@ -33,11 +60,6 @@ class TournamentItemPersistenceService(
         tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
         val existing = tournamentItemRepository.findAllByTournamentId(tournamentId)
-        if (existing.size + items.size > TOURNAMENT_MAX_ITEM_COUNT) throw TournamentException.tooManyTournamentItems()
-
-        val savedItems = itemRepository.saveAll(items)
-        tournamentItemRepository.saveAll(
-            savedItems.map { TournamentItem(tournamentId = tournamentId, itemId = it.getId(), userId = userId) },
-        )
+        if (existing.size + incomingCount > TOURNAMENT_MAX_ITEM_COUNT) throw TournamentException.tooManyTournamentItems()
     }
 }

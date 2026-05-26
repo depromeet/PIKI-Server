@@ -20,7 +20,8 @@ class AsyncConfig {
             setThreadNamePrefix("item-parsing-")
             // 포화 시 기본 AbortPolicy 로 거부한다. 호출 스레드(톰캣)에서 동기 실행하는 CallerRunsPolicy 는
             // 외부 LLM 호출(최대 60s)로 톰캣 워커 풀을 고갈시켜 무관한 API 까지 번지므로 쓰지 않는다.
-            // 거부는 WishlistService.register 가 잡아 해당 item 을 즉시 FAILED 로 떨어뜨린다(PROCESSING 방치 금지).
+            // 거부는 호출부(WishlistService.register, TournamentItemService.addItemsFromImages 등)가 잡아
+            // 해당 item 을 즉시 FAILED 로 떨어뜨린다(PROCESSING 방치 금지).
             initialize()
         }
 

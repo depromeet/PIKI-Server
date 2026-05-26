@@ -4,6 +4,7 @@ import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentBracketResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentHistoryInfoResponse
@@ -89,21 +90,10 @@ class TournamentApiExamples(
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.OK,
-                            name = "이미지 아이템 추가 성공 (일부 실패 없음)",
+                            name = "이미지 아이템 추가 성공",
                             payload = ApiResponseBody.ok(
-                                com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse(
-                                    failedCount = 0,
-                                    failedIndices = emptyList(),
-                                ),
-                            ),
-                        )
-                        add(
-                            status = HttpStatus.OK,
-                            name = "이미지 아이템 추가 성공 (일부 실패)",
-                            payload = ApiResponseBody.ok(
-                                com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse(
-                                    failedCount = 1,
-                                    failedIndices = listOf(2),
+                                AddTournamentItemsFromImagesResponse(
+                                    itemIds = listOf(1L, 2L, 3L),
                                 ),
                             ),
                         )

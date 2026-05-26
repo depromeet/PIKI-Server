@@ -71,8 +71,8 @@ class TournamentController(
         @PathVariable tournamentId: Long,
         @RequestParam("images") images: List<MultipartFile>,
     ): ApiResponseBody<AddTournamentItemsFromImagesResponse> {
-        val result = tournamentItemService.addItemsFromImages(userId, tournamentId, images)
-        return ApiResponseBody.ok(AddTournamentItemsFromImagesResponse.from(result))
+        val itemIds = tournamentItemService.addItemsFromImages(userId, tournamentId, images)
+        return ApiResponseBody.ok(AddTournamentItemsFromImagesResponse(itemIds))
     }
 
     @DeleteMapping("/{tournamentId}/items/{tournamentItemId}")
