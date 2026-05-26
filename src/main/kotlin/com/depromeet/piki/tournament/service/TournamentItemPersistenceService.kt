@@ -54,7 +54,7 @@ class TournamentItemPersistenceService(
         incomingCount: Int,
     ) {
         val tournament =
-            tournamentRepository.findTournamentById(tournamentId)
+            tournamentRepository.findTournamentByIdForUpdate(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
         tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
