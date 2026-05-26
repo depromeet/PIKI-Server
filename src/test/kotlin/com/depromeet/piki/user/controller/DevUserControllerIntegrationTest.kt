@@ -3,6 +3,7 @@ package com.depromeet.piki.user.controller
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.uuidToBytes
 import com.depromeet.piki.user.domain.IdentityType
+import org.hamcrest.Matchers.notNullValue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
@@ -63,7 +64,7 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `존재하는 userId 로 단건 조회 시 200 과 전체 user 정보가 반환된다`() {
+    fun `존재하는 userId 로 단건 조회 시 200 과 AT·RT·user 정보가 반환된다`() {
         val userId = UUID.randomUUID()
         insertUser(userId, "단건유저", IdentityType.MEMBER)
 
@@ -71,10 +72,11 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
             .perform(get("/api/v1/dev/users/$userId"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.data.id").value(userId.toString()))
-            .andExpect(jsonPath("$.data.nickname").value("단건유저"))
-            .andExpect(jsonPath("$.data.profileImage").exists())
-            .andExpect(jsonPath("$.data.identityType").value("MEMBER"))
+            .andExpect(jsonPath("$.data.accessToken", notNullValue()))
+            .andExpect(jsonPath("$.data.refreshToken", notNullValue()))
+            .andExpect(jsonPath("$.data.user.id").value(userId.toString()))
+            .andExpect(jsonPath("$.data.user.nickname").value("단건유저"))
+            .andExpect(jsonPath("$.data.user.identityType").value("MEMBER"))
     }
 
     @Test
