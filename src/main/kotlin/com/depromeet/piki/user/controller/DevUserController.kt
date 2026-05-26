@@ -1,11 +1,11 @@
 package com.depromeet.piki.user.controller
 
+import com.depromeet.piki.auth.controller.dto.GuestCreateResponse
+import com.depromeet.piki.auth.service.AuthService
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.common.response.PageResponse
 import com.depromeet.piki.user.controller.dto.DevUserSummaryResponse
-import com.depromeet.piki.user.controller.dto.UserResponse
 import com.depromeet.piki.user.repository.UserJpaRepository
-import com.depromeet.piki.user.service.UserService
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.web.bind.annotation.GetMapping
@@ -22,7 +22,7 @@ import java.util.UUID
 @RequestMapping("/api/v1/dev/users")
 class DevUserController(
     private val userJpaRepository: UserJpaRepository,
-    private val userService: UserService,
+    private val authService: AuthService,
 ) : DevUserApi {
     @GetMapping
     override fun listUsers(
@@ -46,6 +46,8 @@ class DevUserController(
     @GetMapping("/{userId}")
     override fun getUser(
         @PathVariable userId: UUID,
-    ): ApiResponseBody<UserResponse> =
-        ApiResponseBody.ok(UserResponse.from(userService.findById(userId)))
+    ): ApiResponseBody<GuestCreateResponse> {
+        val result = authService.issueTokenForExistingUser(userId)
+        return ApiResponseBody.ok(GuestCreateResponse.from(result.tokenPair, result.user))
+    }
 }

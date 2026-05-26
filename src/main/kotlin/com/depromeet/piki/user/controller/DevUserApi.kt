@@ -1,8 +1,8 @@
 package com.depromeet.piki.user.controller
 
+import com.depromeet.piki.auth.controller.dto.GuestCreateResponse
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.user.controller.dto.DevUserSummaryResponse
-import com.depromeet.piki.user.controller.dto.UserResponse
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
@@ -36,13 +36,13 @@ interface DevUserApi {
 
     @Operation(
         summary = "단건 유저 조회",
-        description = "userId 로 유저 전체 정보를 반환한다. 개발 편의용.",
+        description = "userId 로 유저 정보와 AT·RT 를 발급해 반환한다. 개발 편의용.",
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "유저 정보 반환",
+                description = "유저 정보 및 AT·RT 반환",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -62,5 +62,5 @@ interface DevUserApi {
             ),
         ],
     )
-    fun getUser(userId: UUID): ApiResponseBody<UserResponse>
+    fun getUser(userId: UUID): ApiResponseBody<GuestCreateResponse>
 }
