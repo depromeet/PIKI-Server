@@ -9,7 +9,7 @@ import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.RecordMatchRequest
 import com.depromeet.piki.tournament.controller.dto.TournamentBracketResponse
-import com.depromeet.piki.tournament.controller.dto.TournamentInfoResponse
+import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.service.TournamentItemService
@@ -118,8 +118,8 @@ class TournamentController(
     override fun getTournamentById(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
-    ): ApiResponseBody<TournamentInfoResponse> {
-        val tournamentInfo = tournamentService.getTournamentById(tournamentId, userId)
-        return ApiResponseBody.ok(TournamentInfoResponse.from(tournamentInfo))
+    ): ApiResponseBody<TournamentDetailResponse> {
+        val detail = tournamentService.getTournamentById(tournamentId, userId)
+        return ApiResponseBody.ok(TournamentDetailResponse.from(detail))
     }
 }

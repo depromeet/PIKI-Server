@@ -119,5 +119,12 @@ class TournamentException private constructor(
                 ErrorCategory.FORBIDDEN,
                 HttpStatus.FORBIDDEN,
             )
+
+        fun invalidCurrentRound(): TournamentException =
+            TournamentException(
+                "현재 진행할 수 없는 라운드입니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
     }
 }
