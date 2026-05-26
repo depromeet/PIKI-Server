@@ -60,6 +60,16 @@ interface DevUserApi {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "409",
+                description = "탈퇴(soft delete) 된 유저 — 토큰 발급 거부",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
         ],
     )
     fun getUser(userId: UUID): ApiResponseBody<GuestCreateResponse>

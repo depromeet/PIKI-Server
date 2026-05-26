@@ -35,7 +35,17 @@ interface UserApi {
             ),
             ApiResponse(
                 responseCode = "401",
-                description = "인증 필요",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "유저를 찾을 수 없음 (JWT 유효하지만 DB에서 유저가 삭제된 경우)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -79,7 +89,17 @@ interface UserApi {
             ),
             ApiResponse(
                 responseCode = "401",
-                description = "인증 필요",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "유저를 찾을 수 없음 (JWT 유효하지만 DB에서 유저가 삭제된 경우)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -89,7 +109,7 @@ interface UserApi {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "닉네임 중복",
+                description = "상태 충돌 (닉네임 중복 · 탈퇴한 유저)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -134,7 +154,7 @@ interface UserApi {
             ),
             ApiResponse(
                 responseCode = "401",
-                description = "인증 필요",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
