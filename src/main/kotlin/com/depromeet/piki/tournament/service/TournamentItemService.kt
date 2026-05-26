@@ -5,8 +5,6 @@ import com.depromeet.piki.item.service.ItemParsingService
 import com.depromeet.piki.item.service.ItemParsingWorker
 import com.depromeet.piki.ocr.domain.OcrImage
 import com.depromeet.piki.product.domain.ProductLink
-import com.depromeet.piki.tournament.repository.TournamentRepository
-import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.core.task.TaskRejectedException
 import org.springframework.stereotype.Service
@@ -15,8 +13,6 @@ import java.util.UUID
 
 @Service
 class TournamentItemService(
-    private val tournamentRepository: TournamentRepository,
-    private val tournamentUserRepository: TournamentUserRepository,
     private val itemParsingWorker: ItemParsingWorker,
     private val imageParsingWorker: ImageParsingWorker,
     private val itemParsingService: ItemParsingService,
@@ -30,7 +26,6 @@ class TournamentItemService(
         url: String,
     ): Long {
         val link = ProductLink.parse(url)
-        validateTournamentAccess(userId, tournamentId)
         val itemId = tournamentItemPersistenceService.persistLinkItem(userId, tournamentId, link)
         try {
             itemParsingWorker.parse(itemId, link)
@@ -48,7 +43,6 @@ class TournamentItemService(
         images: List<MultipartFile>,
     ): List<Long> {
         if (images.size !in MIN_IMAGE_COUNT..MAX_IMAGE_COUNT) throw TournamentException.invalidImageCount()
-        validateTournamentAccess(userId, tournamentId)
         // 형식 검증(빈 바이트·미지원 MIME) — 실패 시 즉시 400. 유효한 이미지만 PROCESSING 으로 등록한다.
         val ocrImages = images.map { OcrImage.of(it.bytes, it.contentType) }
         val itemIds = tournamentItemPersistenceService.persistProcessingItems(userId, tournamentId, ocrImages.size)
@@ -62,18 +56,6 @@ class TournamentItemService(
             }
         }
         return itemIds
-    }
-
-    private fun validateTournamentAccess(
-        userId: UUID,
-        tournamentId: Long,
-    ) {
-        val tournament =
-            tournamentRepository.findTournamentById(tournamentId)
-                ?: throw TournamentException.notFoundTournament()
-        if (!tournament.isPending()) throw TournamentException.notPendingTournament()
-        tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
-            ?: throw TournamentException.forbiddenTournament()
     }
 
     companion object {
