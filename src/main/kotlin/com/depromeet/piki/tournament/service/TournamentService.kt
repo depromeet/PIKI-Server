@@ -139,14 +139,13 @@ class TournamentService(
         tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
 
-        val tournamentItems = tournamentItemRepository.findAllByTournamentId(tournamentId)
-        val itemById =
-            itemRepository
-                .findByIds(tournamentItems.map { it.itemId })
-                .associate { it.getId() to it }
-
         return when (tournament.status) {
             TournamentStatus.PENDING -> {
+                val tournamentItems = tournamentItemRepository.findAllByTournamentId(tournamentId)
+                val itemById =
+                    itemRepository
+                        .findByIds(tournamentItems.map { it.itemId })
+                        .associate { it.getId() to it }
                 val tournamentUsers = tournamentUserRepository.findByTournamentId(tournamentId)
                 val userById = userRepository.findByIds(tournamentUsers.map { it.userId }.toSet()).associateBy { it.id }
                 TournamentDetail.Pending(
@@ -316,49 +315,4 @@ class TournamentService(
         error("recordMatch: 모든 라운드가 완료됐는데 IN_PROGRESS 상태임 tournamentId=${histories.firstOrNull()?.tournamentId}")
     }
 
-    private fun computeRankings(
-        tournamentItems: List<TournamentItem>,
-        histories: List<TournamentHistory>,
-        itemById: Map<Long, Item>,
-    ): List<TournamentDetail.RankedItem> {
-        val finalHistory =
-            histories.firstOrNull { it.currentRound == Tournament.FINAL_ROUND_SIZE }
-                ?: error("COMPLETED 토너먼트에 결승(currentRound=${Tournament.FINAL_ROUND_SIZE}) 기록이 없음")
-        val winnerId = finalHistory.selectedTournamentItemId
-
-        val eliminatedInRound =
-            histories.associate { history ->
-                val loserId =
-                    if (history.firstTournamentItemId == history.selectedTournamentItemId) {
-                        history.secondTournamentItemId
-                    } else {
-                        history.firstTournamentItemId
-                    }
-                loserId to history.currentRound
-            }
-
-        return tournamentItems
-            .map { tournamentItem ->
-                val tid = tournamentItem.getId()
-                val item = itemById[tournamentItem.itemId]
-                val rank =
-                    if (tid == winnerId) {
-                        1
-                    } else {
-                        // round / 2 + 1: 결승(2)→2위, 준결승(4)→3위, 8강(8)→5위
-                        // 한 번도 경기하지 않은 아이템(leftover)은 최하위
-                        eliminatedInRound[tid]?.let { it / 2 + 1 } ?: tournamentItems.size
-                    }
-                TournamentDetail.RankedItem(
-                    rank = rank,
-                    tournamentItemId = tid,
-                    itemId = tournamentItem.itemId,
-                    name = item?.name,
-                    price = item?.currentPrice,
-                    currency = item?.currency,
-                    imageUrl = item?.imageUrl,
-                )
-            }.filter { it.rank <= TOP_RANK_COUNT }
-            .sortedBy { it.rank }
-    }
 }
