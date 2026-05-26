@@ -32,7 +32,7 @@ interface DevUserApi {
             ),
         ],
     )
-    fun listUsers(): ApiResponseBody<List<DevUserSummaryResponse>>
+    fun listUsers(size: Int, cursor: String?): ApiResponseBody<List<DevUserSummaryResponse>>
 
     @Operation(
         summary = "단건 유저 조회",

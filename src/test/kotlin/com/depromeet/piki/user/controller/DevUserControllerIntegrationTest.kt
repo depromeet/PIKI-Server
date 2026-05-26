@@ -36,6 +36,7 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data").isArray)
             .andExpect(jsonPath("$.data[?(@.userId == '${userId}')].nickname").value("테스트유저"))
+            .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
     }
 
     @Test
@@ -46,6 +47,19 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data").isArray)
             .andExpect(jsonPath("$.data").isEmpty)
+            .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
+    }
+
+    @Test
+    fun `size 초과 유저가 있으면 hasNext 가 true 이고 nextCursor 가 반환된다`() {
+        repeat(3) { insertUser(UUID.randomUUID(), "유저$it", IdentityType.MEMBER) }
+
+        buildMockMvc()
+            .perform(get("/api/v1/dev/users").param("size", "2"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(2))
+            .andExpect(jsonPath("$.pageResponse.hasNext").value(true))
+            .andExpect(jsonPath("$.pageResponse.nextCursor").value("1"))
     }
 
     @Test
