@@ -361,6 +361,17 @@ class TournamentServiceTest {
     }
 
     @Test
+    fun `start 에서 FAILED 아이템이 있으면 409 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        testWishRepository.addWish(userId, 1L, 2L)
+        service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
+        testItemRepository.statusOverrides[1L] = ItemStatus.FAILED
+
+        val ex = assertFailsWith<TournamentException> { service.start(userId, tournamentId) }
+        assertEquals(HttpStatus.CONFLICT, ex.httpStatus)
+    }
+
+    @Test
     fun `start 에서 아이템이 없으면 예외가 발생한다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트"))
 
