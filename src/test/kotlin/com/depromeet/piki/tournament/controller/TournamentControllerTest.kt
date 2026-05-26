@@ -37,6 +37,7 @@ import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 @Transactional
 class TournamentControllerTest : IntegrationTestSupport() {
@@ -278,6 +279,23 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `POST tournaments-id-matches 에서 currentRound 가 예상 라운드와 다르면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, item1Id, item2Id) = startTournamentWith2Items(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/matches")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"currentRound":4,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}""",
+                    ),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+    }
+
+    @Test
     fun `POST tournaments-id-matches 에서 참가자가 아니면 403 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val (tournamentId, item1Id, item2Id) = startTournamentWith2Items(mockMvc)
@@ -383,30 +401,44 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .andExpect(status().isUnauthorized)
     }
 
-    @Test
-    fun `GET tournaments-id 는 토너먼트 정보와 히스토리를 반환한다`() {
-        val mockMvc = buildMockMvc()
-        val (tournamentId, item1Id, item2Id) = startTournamentWith2Items(mockMvc)
+    // TODO: COMPLETED 조회 구현 후 테스트 추가
 
-        mockMvc.perform(
-            post("/api/v1/tournaments/$tournamentId/matches")
-                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    """{"currentRound":2,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}""",
-                ),
-        )
+    // TODO: IN_PROGRESS 조회 구현 후 테스트 추가
+
+    @Test
+    fun `GET tournaments-id 는 PENDING 토너먼트의 아이템 목록을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem(), saveWishItem())
 
         mockMvc
             .perform(
                 get("/api/v1/tournaments/$tournamentId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.data.tournamentId").value(tournamentId))
-            .andExpect(jsonPath("$.data.startRound").value(2))
-            .andExpect(jsonPath("$.data.items.length()").value(2))
-            .andExpect(jsonPath("$.data.history[0].selectedTournamentItemId").value(item1Id))
+            .andExpect(jsonPath("$.data.status").value("PENDING"))
+            .andExpect(jsonPath("$.data.pending.items.length()").value(2))
+            .andExpect(jsonPath("$.data.inProgress").doesNotExist())
+            .andExpect(jsonPath("$.data.completed").doesNotExist())
+    }
+
+    @Test
+    fun `GET tournaments-id 는 PENDING 토너먼트 응답에 참여자 정보를 포함한다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(userId, userProfileImage)
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.status").value("PENDING"))
+            .andExpect(jsonPath("$.data.pending.participants").isArray)
+            .andExpect(jsonPath("$.data.pending.participants.length()").value(1))
+            .andExpect(jsonPath("$.data.pending.participants[0].userId").isString)
+            .andExpect(jsonPath("$.data.pending.participants[0].nickname").isString)
+            .andExpect(jsonPath("$.data.pending.participants[0].profileImage").value(userProfileImage))
     }
 
     @Test
@@ -450,7 +482,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         val remaining = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
         assertEquals(1, remaining.size)
-        assert(remaining.none { it.getId() == itemId })
+        assertTrue(remaining.none { it.getId() == itemId })
     }
 
     @Test
@@ -496,7 +528,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
 
-        assert(
+        assertTrue(
             tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).none { it.getId() == itemId },
         )
     }

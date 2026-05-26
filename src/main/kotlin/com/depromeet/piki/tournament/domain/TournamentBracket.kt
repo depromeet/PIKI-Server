@@ -21,7 +21,7 @@ data class TournamentBracket(val matches: List<Match>) {
                 .sortedBy { it.second }
                 .map { it.first }
 
-            val noPriceIds = noPrice.map { it.first }.shuffled()
+            val noPriceIds = noPrice.map { it.first }
 
             val matches = mutableListOf<Match>()
             var leftover: Long? = null
@@ -40,7 +40,7 @@ data class TournamentBracket(val matches: List<Match>) {
                 if (pool.isNotEmpty()) leftover = pool.first()
             }
 
-            return TournamentBracket(matches.shuffled())
+            return TournamentBracket(matches)
         }
     }
 }

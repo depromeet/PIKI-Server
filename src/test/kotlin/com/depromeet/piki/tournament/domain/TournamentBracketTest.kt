@@ -95,4 +95,11 @@ class TournamentBracketTest {
         val allIds = bracket.allItemIds()
         assertEquals(allIds.size, allIds.toSet().size)
     }
+
+    @Test
+    fun `동일 입력으로 두 번 생성하면 항상 같은 대진표가 반환된다`() {
+        val items = (1L..8L).map { it to (it * 10_000).toInt() }
+
+        assertEquals(TournamentBracket.generate(items), TournamentBracket.generate(items))
+    }
 }

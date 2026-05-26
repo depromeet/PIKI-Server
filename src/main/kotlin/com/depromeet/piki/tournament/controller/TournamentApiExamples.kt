@@ -8,12 +8,11 @@ import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkRes
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentBracketResponse
-import com.depromeet.piki.tournament.controller.dto.TournamentHistoryInfoResponse
-import com.depromeet.piki.tournament.controller.dto.TournamentInfoResponse
-import com.depromeet.piki.tournament.controller.dto.TournamentItemInfoResponse
+import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import java.time.LocalDateTime
+import java.util.UUID
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -159,25 +158,152 @@ class TournamentApiExamples(
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.OK,
-                            name = "조회 성공",
+                            name = "PENDING - 아이템 담는 중",
                             payload =
                                 ApiResponseBody.ok(
-                                    TournamentInfoResponse(
+                                    TournamentDetailResponse(
                                         tournamentId = 1,
-                                        startRound = 2,
-                                        items =
-                                            listOf(
-                                                TournamentItemInfoResponse(tournamentItemId = 1, itemId = 10),
-                                                TournamentItemInfoResponse(tournamentItemId = 2, itemId = 20),
+                                        name = "내 토너먼트",
+                                        status = TournamentStatus.PENDING,
+                                        pending =
+                                            TournamentDetailResponse.PendingData(
+                                                items =
+                                                    listOf(
+                                                        TournamentDetailResponse.ItemDetailResponse(
+                                                            tournamentItemId = 1,
+                                                            itemId = 10,
+                                                            name = "나이키 에어맥스",
+                                                            price = 129_000,
+                                                            currency = "KRW",
+                                                            imageUrl = "https://cdn.example.com/items/1.jpg",
+                                                        ),
+                                                        TournamentDetailResponse.ItemDetailResponse(
+                                                            tournamentItemId = 2,
+                                                            itemId = 20,
+                                                            name = "아디다스 울트라부스트",
+                                                            price = 189_000,
+                                                            currency = "KRW",
+                                                            imageUrl = "https://cdn.example.com/items/2.jpg",
+                                                        ),
+                                                    ),
+                                                participants =
+                                                    listOf(
+                                                        TournamentDetailResponse.ParticipantResponse(
+                                                            userId = UUID.fromString("11111111-2222-3333-4444-555555555555"),
+                                                            nickname = "참여자1",
+                                                            profileImage = "https://cdn.example.com/profiles/user1.jpg",
+                                                        ),
+                                                    ),
                                             ),
-                                        history =
-                                            listOf(
-                                                TournamentHistoryInfoResponse(
-                                                    currentRound = 2,
-                                                    firstTournamentItemId = 1,
-                                                    secondTournamentItemId = 2,
-                                                    selectedTournamentItemId = 1,
-                                                ),
+                                        inProgress = null,
+                                        completed = null,
+                                    ),
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.OK,
+                            name = "IN_PROGRESS - 진행 중 복원",
+                            payload =
+                                ApiResponseBody.ok(
+                                    TournamentDetailResponse(
+                                        tournamentId = 1,
+                                        name = "내 토너먼트",
+                                        status = TournamentStatus.IN_PROGRESS,
+                                        pending = null,
+                                        inProgress =
+                                            TournamentDetailResponse.InProgressData(
+                                                startRound = 4,
+                                                bracket =
+                                                    listOf(
+                                                        TournamentDetailResponse.BracketMatchResponse(
+                                                            firstItem =
+                                                                TournamentDetailResponse.ItemDetailResponse(
+                                                                    tournamentItemId = 1,
+                                                                    itemId = 10,
+                                                                    name = "나이키 에어맥스",
+                                                                    price = 129_000,
+                                                                    currency = "KRW",
+                                                                    imageUrl = "https://cdn.example.com/items/1.jpg",
+                                                                ),
+                                                            secondItem =
+                                                                TournamentDetailResponse.ItemDetailResponse(
+                                                                    tournamentItemId = 2,
+                                                                    itemId = 20,
+                                                                    name = "아디다스 울트라부스트",
+                                                                    price = 189_000,
+                                                                    currency = "KRW",
+                                                                    imageUrl = "https://cdn.example.com/items/2.jpg",
+                                                                ),
+                                                        ),
+                                                        TournamentDetailResponse.BracketMatchResponse(
+                                                            firstItem =
+                                                                TournamentDetailResponse.ItemDetailResponse(
+                                                                    tournamentItemId = 3,
+                                                                    itemId = 30,
+                                                                    name = "뉴발란스 993",
+                                                                    price = 259_000,
+                                                                    currency = "KRW",
+                                                                    imageUrl = "https://cdn.example.com/items/3.jpg",
+                                                                ),
+                                                            secondItem =
+                                                                TournamentDetailResponse.ItemDetailResponse(
+                                                                    tournamentItemId = 4,
+                                                                    itemId = 40,
+                                                                    name = "살로몬 XT-6",
+                                                                    price = 279_000,
+                                                                    currency = "KRW",
+                                                                    imageUrl = null,
+                                                                ),
+                                                        ),
+                                                    ),
+                                                history =
+                                                    listOf(
+                                                        TournamentDetailResponse.HistoryResponse(
+                                                            currentRound = 4,
+                                                            firstTournamentItemId = 1,
+                                                            secondTournamentItemId = 2,
+                                                            selectedTournamentItemId = 1,
+                                                        ),
+                                                    ),
+                                            ),
+                                        completed = null,
+                                    ),
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.OK,
+                            name = "COMPLETED - 최종 결과",
+                            payload =
+                                ApiResponseBody.ok(
+                                    TournamentDetailResponse(
+                                        tournamentId = 1,
+                                        name = "내 토너먼트",
+                                        status = TournamentStatus.COMPLETED,
+                                        pending = null,
+                                        inProgress = null,
+                                        completed =
+                                            TournamentDetailResponse.CompletedData(
+                                                result =
+                                                    listOf(
+                                                        TournamentDetailResponse.RankedItemResponse(
+                                                            rank = 1,
+                                                            tournamentItemId = 1,
+                                                            itemId = 10,
+                                                            name = "나이키 에어맥스",
+                                                            price = 129_000,
+                                                            currency = "KRW",
+                                                            imageUrl = "https://cdn.example.com/items/1.jpg",
+                                                        ),
+                                                        TournamentDetailResponse.RankedItemResponse(
+                                                            rank = 2,
+                                                            tournamentItemId = 2,
+                                                            itemId = 20,
+                                                            name = "아디다스 울트라부스트",
+                                                            price = 189_000,
+                                                            currency = "KRW",
+                                                            imageUrl = "https://cdn.example.com/items/2.jpg",
+                                                        ),
+                                                    ),
                                             ),
                                     ),
                                 ),

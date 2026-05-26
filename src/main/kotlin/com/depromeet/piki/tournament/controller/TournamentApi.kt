@@ -9,13 +9,15 @@ import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.RecordMatchRequest
 import com.depromeet.piki.tournament.controller.dto.TournamentBracketResponse
-import com.depromeet.piki.tournament.controller.dto.TournamentInfoResponse
+import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.http.MediaType
 import org.springframework.web.multipart.MultipartFile
@@ -27,83 +29,87 @@ interface TournamentApi {
         summary = "토너먼트 생성",
         description = "이름으로 PENDING 상태의 토너먼트를 생성한다.",
     )
-    @ApiResponse(
-        responseCode = "201",
-        description = "토너먼트 생성 성공",
-        content = [
-            Content(
-                mediaType = MediaType.APPLICATION_JSON_VALUE,
-                schema = Schema(implementation = ApiResponseBody::class),
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "201",
+                description = "토너먼트 생성 성공",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
         ],
     )
     fun create(
-        userId: UUID,
+        @Parameter(hidden = true) userId: UUID,
         request: CreateTournamentRequest,
     ): ApiResponseBody<CreateTournamentResponse>
 
     @Operation(
         summary = "위시에서 토너먼트 아이템 추가",
-        description = "PENDING 상태의 토너먼트에 이미 저장된 아이템을 위시 목록에서 추가한다. 토너먼트 참여자만 추가할 수 있다.",
+        description = """
+            PENDING 상태의 토너먼트에 위시리스트에 있는 아이템을 추가한다. 토너먼트 참여자만 추가할 수 있다.
+            itemIds 중 하나라도 조건에 맞지 않으면 요청 전체가 실패한다(부분 성공 없음).
+        """,
     )
-    @ApiResponse(
-        responseCode = "200",
-        description = "아이템 추가 성공",
-        content = [
-            Content(
-                mediaType = MediaType.APPLICATION_JSON_VALUE,
-                schema = Schema(implementation = ApiResponseBody::class),
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "아이템 추가 성공",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
         ],
     )
     fun addItemsFromWish(
-        userId: UUID,
-        tournamentId: Long,
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
         request: AddTournamentItemsRequest,
     ): ApiResponseBody<Unit>
 
     @Operation(
         summary = "URL 링크로 토너먼트 아이템 추가",
-        description = "PENDING 상태의 토너먼트에 URL 링크를 통해 아이템을 추가한다. 아이템이 PROCESSING 상태로 즉시 생성되어 itemId가 반환된다. " +
-            "파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다. " +
-            "클라이언트는 itemId로 상태를 폴링한다. 토너먼트 참여자만 추가할 수 있다.",
+        description = """
+            PENDING 상태의 토너먼트에 URL 링크를 통해 아이템을 추가한다.
+            아이템이 PROCESSING 상태로 즉시 생성되어 itemId 가 반환된다.
+            파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다.
+            클라이언트는 itemId 로 상태를 폴링한다. 토너먼트 참여자만 추가할 수 있다.
+        """,
     )
-    @ApiResponse(
-        responseCode = "200",
-        description = "아이템 추가 성공",
-        content = [
-            Content(
-                mediaType = MediaType.APPLICATION_JSON_VALUE,
-                schema = Schema(implementation = ApiResponseBody::class),
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "아이템 추가 성공 (item.status=PROCESSING, 파싱은 백그라운드)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
         ],
     )
     fun addItemFromLink(
-        userId: UUID,
-        tournamentId: Long,
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
         request: AddTournamentItemFromLinkRequest,
     ): ApiResponseBody<AddTournamentItemFromLinkResponse>
 
     @Operation(
         summary = "이미지로 토너먼트 아이템 추가",
-        description = "PENDING 상태의 토너먼트에 이미지 OCR을 통해 아이템을 추가한다. 이미지 1~5장을 전달하면 아이템이 PROCESSING 상태로 즉시 생성되어 itemIds가 반환된다. " +
-            "OCR 파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다. " +
-            "클라이언트는 아이템 상태를 실시간으로 반영하기 위해 itemId로 상태를 폴링한다(친구가 담은 아이템도 동일하게 폴링으로 실시간 반영). " +
-            "토너먼트 참여자만 추가할 수 있다.",
+        description = """
+            PENDING 상태의 토너먼트에 이미지 OCR 을 통해 아이템을 추가한다.
+            이미지 1~5장을 전달하면 아이템이 PROCESSING 상태로 즉시 생성되어 itemIds 가 반환된다.
+            OCR 파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다.
+            클라이언트는 itemId 로 상태를 폴링한다. 토너먼트 참여자만 추가할 수 있다.
+        """,
     )
-    @ApiResponse(
-        responseCode = "200",
-        description = "아이템 추가 성공",
-        content = [
-            Content(
-                mediaType = MediaType.APPLICATION_JSON_VALUE,
-                schema = Schema(implementation = ApiResponseBody::class),
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "아이템 추가 성공 (item.status=PROCESSING, 파싱은 백그라운드)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
         ],
     )
     fun addItemsFromImages(
-        userId: UUID,
-        tournamentId: Long,
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
         images: List<MultipartFile>,
     ): ApiResponseBody<AddTournamentItemsFromImagesResponse>
 
@@ -111,99 +117,111 @@ interface TournamentApi {
         summary = "토너먼트 아이템 삭제",
         description = "PENDING 상태의 토너먼트에서 아이템을 제거한다. 아이템을 추가한 본인 또는 토너먼트 소유자만 삭제할 수 있다.",
     )
-    @ApiResponse(
-        responseCode = "200",
-        description = "아이템 삭제 성공",
-        content = [
-            Content(
-                mediaType = MediaType.APPLICATION_JSON_VALUE,
-                schema = Schema(implementation = ApiResponseBody::class),
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "아이템 삭제 성공",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
         ],
     )
     fun deleteItem(
-        userId: UUID,
-        tournamentId: Long,
-        tournamentItemId: Long,
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
+        @Parameter(description = "토너먼트 아이템 ID", example = "10") tournamentItemId: Long,
     ): ApiResponseBody<Unit>
 
     @Operation(
         summary = "토너먼트 시작",
-        description = "PENDING 상태의 토너먼트를 IN_PROGRESS 상태로 전환한다.",
+        description = """
+            PENDING 상태의 토너먼트를 IN_PROGRESS 상태로 전환하고 첫 라운드 대진표를 반환한다.
+            토너먼트 소유자만 시작할 수 있으며, 아이템은 최소 2개·최대 32개여야 한다.
+            PROCESSING·FAILED 상태 아이템이 포함되어 있으면 시작할 수 없다.
+        """,
     )
-    @ApiResponse(
-        responseCode = "200",
-        description = "토너먼트 시작 성공",
-        content = [
-            Content(
-                mediaType = MediaType.APPLICATION_JSON_VALUE,
-                schema = Schema(implementation = ApiResponseBody::class),
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "토너먼트 시작 성공 (첫 라운드 대진표 반환)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
         ],
     )
     fun start(
-        userId: UUID,
-        tournamentId: Long,
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
     ): ApiResponseBody<TournamentBracketResponse>
 
     @Operation(
         summary = "매치 결과 기록",
-        description = "IN_PROGRESS 상태의 토너먼트에서 한 라운드 매치 결과(승자)를 기록한다.",
+        description = """
+            IN_PROGRESS 상태의 토너먼트에서 한 매치의 결과(승자)를 기록한다.
+            currentRound 는 해당 시점에 서버가 기대하는 라운드와 일치해야 한다.
+            결승(currentRound=2) 결과 기록 시 토너먼트가 COMPLETED 로 자동 전환된다.
+        """,
     )
-    @ApiResponse(
-        responseCode = "200",
-        description = "매치 결과 기록 성공",
-        content = [
-            Content(
-                mediaType = MediaType.APPLICATION_JSON_VALUE,
-                schema = Schema(implementation = ApiResponseBody::class),
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "매치 결과 기록 성공",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
         ],
     )
     fun recordMatch(
-        userId: UUID,
-        tournamentId: Long,
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
         request: RecordMatchRequest,
     ): ApiResponseBody<Unit>
 
     @Operation(
         summary = "토너먼트 목록 조회",
-        description =
-            "내 토너먼트 목록을 최근 생성 순으로 조회한다. status 파라미터로 상태 필터링 가능하며 " +
-                "여러 값을 중복 전달할 수 있다(예: ?status=PENDING&status=IN_PROGRESS). 생략 시 전체 반환. " +
-                "status 값은 대문자(PENDING/IN_PROGRESS/COMPLETED)로 전달해야 한다.",
+        description = """
+            내 토너먼트 목록을 최근 생성 순으로 조회한다.
+            status 파라미터로 상태 필터링 가능하며 여러 값을 중복 전달할 수 있다(예: ?status=PENDING&status=IN_PROGRESS).
+            생략 시 전체 반환. status 값은 대문자(PENDING/IN_PROGRESS/COMPLETED)로 전달해야 한다.
+        """,
     )
-    @ApiResponse(
-        responseCode = "200",
-        description = "목록 조회 성공",
-        content = [
-            Content(
-                mediaType = MediaType.APPLICATION_JSON_VALUE,
-                schema = Schema(implementation = ApiResponseBody::class),
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "목록 조회 성공 (참여 토너먼트 없으면 빈 배열 반환)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
         ],
     )
     fun getTournaments(
-        userId: UUID,
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "상태 필터 (복수 전달 가능, 생략 시 전체)", example = "PENDING")
         status: List<TournamentStatus>?,
     ): ApiResponseBody<List<TournamentSummaryResponse>>
 
     @Operation(
-        summary = "토너먼트 조회",
-        description = "토너먼트 ID로 토너먼트 정보와 매치 기록을 조회한다.",
+        summary = "토너먼트 단건 조회",
+        description = """
+            토너먼트 ID로 상태에 따른 상세 정보를 조회한다.
+            응답의 status 필드에 따라 포함되는 데이터가 달라진다.
+            - PENDING: pending 필드 (아이템 목록, 참여자 목록)
+            - IN_PROGRESS: inProgress 필드 (시작 라운드, 대진표, 히스토리)
+            - COMPLETED: completed 필드 (1~4위 결과)
+            나머지 필드는 응답에 포함되지 않는다.
+        """,
     )
-    @ApiResponse(
-        responseCode = "200",
-        description = "토너먼트 조회 성공",
-        content = [
-            Content(
-                mediaType = MediaType.APPLICATION_JSON_VALUE,
-                schema = Schema(implementation = ApiResponseBody::class),
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "조회 성공",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
         ],
     )
     fun getTournamentById(
-        userId: UUID,
-        tournamentId: Long,
-    ): ApiResponseBody<TournamentInfoResponse>
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
+    ): ApiResponseBody<TournamentDetailResponse>
 }
