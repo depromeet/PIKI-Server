@@ -10,6 +10,8 @@ class TournamentItemRepositoryImpl(
 ) : TournamentItemRepository {
     override fun saveAll(items: List<TournamentItem>): List<TournamentItem> = tournamentItemJpaRepository.saveAll(items)
 
+    override fun countByTournamentId(tournamentId: Long): Int = tournamentItemJpaRepository.countByTournamentId(tournamentId)
+
     override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
         tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
 

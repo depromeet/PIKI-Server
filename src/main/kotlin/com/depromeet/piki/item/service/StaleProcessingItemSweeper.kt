@@ -23,18 +23,31 @@ class StaleProcessingItemSweeper(
         if (staleIds.isEmpty()) return
         // sweep 이 조회한 직후 워커가 막 READY/FAILED 로 전이했을 수 있다(레이스).
         // 그 경우 markFailed 의 전이 불변식(check)이 깨지므로 잡아 무시한다 — 이미 정상 종료된 것이다.
-        // 정리/스킵 건수를 분리해 로그하므로 부분 실패가 전체 성공으로 가려지지 않는다.
-        val skipped =
-            staleIds.count { itemId ->
-                runCatching { itemParsingService.markFailed(itemId) }
-                    .onFailure { e -> log.info("item {} 는 이미 전이됨, stale 정리 생략: {}", itemId, e.message) }
-                    .isFailure
-            }
+        // 레이스(이미 전이됨)와 실제 전이 실패를 분리 집계해 요약 로그에서 오판을 막는다.
+        var alreadyTransitioned = 0
+        var transitionFailed = 0
+        for (itemId in staleIds) {
+            runCatching { itemParsingService.markFailed(itemId) }
+                .onFailure { e ->
+                    when (e) {
+                        is IllegalStateException -> {
+                            alreadyTransitioned++
+                            log.info("item {} 는 이미 전이됨, stale 정리 생략: {}", itemId, e.message)
+                        }
+                        else -> {
+                            transitionFailed++
+                            log.error("item {} stale FAILED 전이 실패", itemId, e)
+                        }
+                    }
+                }
+        }
+        val succeeded = staleIds.size - alreadyTransitioned - transitionFailed
         log.warn(
-            "stale PROCESSING {}건 중 {}건 FAILED 정리, {}건은 이미 전이됨(레이스)",
+            "stale PROCESSING {}건 — FAILED 정리 {}건, 이미 전이됨(레이스) {}건, 전이 실패 {}건",
             staleIds.size,
-            staleIds.size - skipped,
-            skipped,
+            succeeded,
+            alreadyTransitioned,
+            transitionFailed,
         )
     }
 

@@ -4,6 +4,8 @@ import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkResponse
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentBracketResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentHistoryInfoResponse
@@ -67,12 +69,34 @@ class TournamentApiExamples(
                         )
                     }
 
-                handlerMethod.binds(TournamentController::addItems) ->
+                handlerMethod.binds(TournamentController::addItemsFromWish) ->
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.OK,
-                            name = "아이템 추가 성공",
+                            name = "위시 아이템 추가 성공",
                             payload = ApiResponseBody.ok<Unit>(),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::addItemFromLink) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "링크 아이템 추가 성공",
+                            payload = ApiResponseBody.ok(AddTournamentItemFromLinkResponse(itemId = 1L)),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::addItemsFromImages) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "이미지 아이템 추가 성공",
+                            payload = ApiResponseBody.ok(
+                                AddTournamentItemsFromImagesResponse(
+                                    itemIds = listOf(1L, 2L, 3L),
+                                ),
+                            ),
                         )
                     }
 

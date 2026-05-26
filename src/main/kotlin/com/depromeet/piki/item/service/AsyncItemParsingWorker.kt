@@ -68,6 +68,11 @@ class AsyncItemParsingWorker(
     // FAILED 전이도 sweeper 와의 레이스로 실패할 수 있어(이미 전이됨) 잡아 흡수한다.
     private fun markFailedQuietly(itemId: Long) {
         runCatching { itemParsingService.markFailed(itemId) }
-            .onFailure { e -> log.info("item {} 는 이미 전이됨, FAILED 처리 생략: {}", itemId, e.message) }
+            .onFailure { e ->
+                when (e) {
+                    is IllegalStateException -> log.info("item {} 는 이미 전이됨, FAILED 처리 생략: {}", itemId, e.message)
+                    else -> log.error("item {} FAILED 전이 실패, PROCESSING 방치 위험", itemId, e)
+                }
+            }
     }
 }

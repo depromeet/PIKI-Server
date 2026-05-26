@@ -10,13 +10,14 @@ import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
-import com.depromeet.piki.tournament.service.dto.AddTournamentItems
+import com.depromeet.piki.tournament.service.dto.AddTournamentItemsFromWish
 import com.depromeet.piki.tournament.service.dto.CreateTournament
 import com.depromeet.piki.tournament.service.dto.RecordMatch
 import com.depromeet.piki.tournament.service.dto.TournamentBracketResult
 import com.depromeet.piki.tournament.service.dto.TournamentInfo
 import com.depromeet.piki.tournament.service.dto.TournamentSummary
 import com.depromeet.piki.user.repository.UserRepository
+import com.depromeet.piki.wishlist.repository.WishRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -28,6 +29,7 @@ class TournamentService(
     private val tournamentItemRepository: TournamentItemRepository,
     private val userRepository: UserRepository,
     private val itemRepository: ItemRepository,
+    private val wishRepository: WishRepository,
 ) {
     @Transactional
     fun create(
@@ -47,9 +49,9 @@ class TournamentService(
     }
 
     @Transactional
-    fun addItems(
+    fun addItemsFromWish(
         userId: UUID,
-        command: AddTournamentItems,
+        command: AddTournamentItemsFromWish,
     ) {
         val tournament =
             tournamentRepository.findTournamentById(command.tournamentId)
@@ -62,10 +64,12 @@ class TournamentService(
                 .findAllByTournamentId(command.tournamentId)
                 .map { it.itemId }
                 .toSet()
-        val hasDuplicate =
-            command.itemIds.toSet().size != command.itemIds.size || command.itemIds.any { it in existingItemIds }
-        if (hasDuplicate) throw TournamentException.duplicateTournamentItem()
-        if (existingItemIds.size + command.itemIds.size > MAX_ITEM_COUNT) {
+        // 요청 내 중복 확인 — wishCount 는 unique itemId 기준이라 먼저 걸러야 정확하다
+        if (command.itemIds.toSet().size != command.itemIds.size) throw TournamentException.duplicateTournamentItem()
+        val wishCount = wishRepository.countByItemIdsAndUserId(command.itemIds, userId)
+        if (wishCount < command.itemIds.size) throw TournamentException.itemNotInWishlist()
+        if (command.itemIds.any { it in existingItemIds }) throw TournamentException.duplicateTournamentItem()
+        if (existingItemIds.size + command.itemIds.size > TOURNAMENT_MAX_ITEM_COUNT) {
             throw TournamentException.tooManyTournamentItems()
         }
         val foundItems = itemRepository.findByIds(command.itemIds)
@@ -94,11 +98,12 @@ class TournamentService(
                 ?: throw TournamentException.forbiddenTournament()
         if (owner.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
         val tournamentItems = tournamentItemRepository.findAllByTournamentId(tournamentId)
-        if (tournamentItems.size !in MIN_ITEM_COUNT..MAX_ITEM_COUNT) throw TournamentException.invalidItemCount()
+        if (tournamentItems.size !in TOURNAMENT_MIN_ITEM_COUNT..TOURNAMENT_MAX_ITEM_COUNT) throw TournamentException.invalidItemCount()
         val itemById = itemRepository
             .findByIds(tournamentItems.map { it.itemId })
             .associate { it.getId() to it }
         if (tournamentItems.any { it.itemId !in itemById }) throw TournamentException.notFoundItems()
+        if (itemById.values.any { !it.isReady() }) throw TournamentException.itemNotReadyToStart()
         val itemsWithPrice = tournamentItems.map { it.getId() to itemById[it.itemId]?.currentPrice }
         val bracket = TournamentBracket.generate(itemsWithPrice)
 
@@ -227,8 +232,4 @@ class TournamentService(
         if (deleted == 0) throw TournamentException.notPendingTournament()
     }
 
-    companion object {
-        private const val MIN_ITEM_COUNT = 2
-        private const val MAX_ITEM_COUNT = 32
-    }
 }

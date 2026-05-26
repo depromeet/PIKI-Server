@@ -89,13 +89,35 @@ class TournamentException private constructor(
                 HttpStatus.NOT_FOUND,
             )
 
-        // 비동기 파싱이 끝나지 않은(PROCESSING) 또는 실패한(FAILED) 상품을 토너먼트에 추가하려 한 경우.
+        // 비동기 파싱이 끝나지 않은(PROCESSING) 또는 실패한(FAILED) 상품을 위시에서 토너먼트에 추가하려 한 경우.
         // 곧 READY 가 되거나 영구 실패라 현재 상태와 충돌 → 409.
         fun itemNotReady(): TournamentException =
             TournamentException(
                 "아직 준비되지 않은 상품은 토너먼트에 추가할 수 없습니다.",
                 ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
+            )
+
+        // 토너먼트 시작 시 PROCESSING·FAILED 아이템이 포함된 경우.
+        fun itemNotReadyToStart(): TournamentException =
+            TournamentException(
+                "아직 준비되지 않은 상품이 포함되어 있어 토너먼트를 시작할 수 없습니다.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
+
+        fun invalidImageCount(): TournamentException =
+            TournamentException(
+                "이미지는 최소 1개, 최대 5개까지 전송할 수 있습니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
+
+        fun itemNotInWishlist(): TournamentException =
+            TournamentException(
+                "위시리스트에 없는 아이템은 토너먼트에 추가할 수 없습니다.",
+                ErrorCategory.FORBIDDEN,
+                HttpStatus.FORBIDDEN,
             )
     }
 }

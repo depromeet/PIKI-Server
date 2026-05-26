@@ -1,6 +1,9 @@
 package com.depromeet.piki.tournament.controller
 
 import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkRequest
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkResponse
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
@@ -15,6 +18,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.http.MediaType
+import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
 @Tag(name = "Tournament", description = "토너먼트 API")
@@ -39,10 +43,8 @@ interface TournamentApi {
     ): ApiResponseBody<CreateTournamentResponse>
 
     @Operation(
-        summary = "토너먼트 아이템 추가",
-        description =
-            "PENDING 상태의 토너먼트에 아이템을 추가한다. 토너먼트 참여자만 추가할 수 있다. " +
-                "파싱이 끝난 READY 아이템만 추가할 수 있으며, 아직 파싱 중(PROCESSING)이거나 실패(FAILED)한 아이템은 409 로 거부된다.",
+        summary = "위시에서 토너먼트 아이템 추가",
+        description = "PENDING 상태의 토너먼트에 이미 저장된 아이템을 위시 목록에서 추가한다. 토너먼트 참여자만 추가할 수 있다.",
     )
     @ApiResponse(
         responseCode = "200",
@@ -54,11 +56,56 @@ interface TournamentApi {
             ),
         ],
     )
-    fun addItems(
+    fun addItemsFromWish(
         userId: UUID,
         tournamentId: Long,
         request: AddTournamentItemsRequest,
     ): ApiResponseBody<Unit>
+
+    @Operation(
+        summary = "URL 링크로 토너먼트 아이템 추가",
+        description = "PENDING 상태의 토너먼트에 URL 링크를 통해 아이템을 추가한다. 아이템이 PROCESSING 상태로 즉시 생성되어 itemId가 반환된다. " +
+            "파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다. " +
+            "클라이언트는 itemId로 상태를 폴링한다. 토너먼트 참여자만 추가할 수 있다.",
+    )
+    @ApiResponse(
+        responseCode = "200",
+        description = "아이템 추가 성공",
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = Schema(implementation = ApiResponseBody::class),
+            ),
+        ],
+    )
+    fun addItemFromLink(
+        userId: UUID,
+        tournamentId: Long,
+        request: AddTournamentItemFromLinkRequest,
+    ): ApiResponseBody<AddTournamentItemFromLinkResponse>
+
+    @Operation(
+        summary = "이미지로 토너먼트 아이템 추가",
+        description = "PENDING 상태의 토너먼트에 이미지 OCR을 통해 아이템을 추가한다. 이미지 1~5장을 전달하면 아이템이 PROCESSING 상태로 즉시 생성되어 itemIds가 반환된다. " +
+            "OCR 파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다. " +
+            "클라이언트는 아이템 상태를 실시간으로 반영하기 위해 itemId로 상태를 폴링한다(친구가 담은 아이템도 동일하게 폴링으로 실시간 반영). " +
+            "토너먼트 참여자만 추가할 수 있다.",
+    )
+    @ApiResponse(
+        responseCode = "200",
+        description = "아이템 추가 성공",
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = Schema(implementation = ApiResponseBody::class),
+            ),
+        ],
+    )
+    fun addItemsFromImages(
+        userId: UUID,
+        tournamentId: Long,
+        images: List<MultipartFile>,
+    ): ApiResponseBody<AddTournamentItemsFromImagesResponse>
 
     @Operation(
         summary = "토너먼트 아이템 삭제",

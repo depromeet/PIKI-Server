@@ -12,6 +12,11 @@ interface WishRepository {
         userId: UUID,
     ): Long
 
+    fun countByItemIdsAndUserId(
+        itemIds: List<Long>,
+        userId: UUID,
+    ): Long
+
     // id desc 정렬로 최대 limit 건. cursor 가 있으면 그 id 미만만(다음 페이지). 삭제된 행은 제외.
     fun findPage(
         userId: UUID,
