@@ -58,8 +58,18 @@ interface AuthApi {
                 ],
             ),
             ApiResponse(
+                responseCode = "400",
+                description = "refreshToken 미입력",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
                 responseCode = "401",
-                description = "유효하지 않은 리프레시 토큰",
+                description = "유효하지 않은 리프레시 토큰 (파싱 불가 · 만료 · Redis 값 불일치 · 탈퇴 유저)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -89,7 +99,7 @@ interface AuthApi {
             ),
             ApiResponse(
                 responseCode = "401",
-                description = "인증 필요",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
