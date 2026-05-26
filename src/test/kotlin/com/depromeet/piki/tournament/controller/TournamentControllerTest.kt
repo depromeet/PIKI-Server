@@ -4,11 +4,8 @@ import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemJpaRepository
-import com.depromeet.piki.ocr.domain.OcrImage
-import com.depromeet.piki.ocr.service.OcrExtraction
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.support.IntegrationTestSupport
-import com.depromeet.piki.support.StubProductImageExtractor
 import com.depromeet.piki.support.StubProductLinkExtractor
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
@@ -17,6 +14,9 @@ import com.depromeet.piki.tournament.repository.TournamentUserJpaRepository
 import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.user.domain.User
 import com.depromeet.piki.user.repository.UserJpaRepository
+import com.depromeet.piki.wishlist.domain.Wish
+import com.depromeet.piki.wishlist.repository.WishJpaRepository
+import com.depromeet.piki.wishlist.service.WishPersistenceService
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
@@ -56,7 +56,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
     @Autowired private lateinit var stubProductLinkExtractor: StubProductLinkExtractor
 
-    @Autowired private lateinit var stubProductImageExtractor: StubProductImageExtractor
+    @Autowired private lateinit var wishPersistenceService: WishPersistenceService
+
+    @Autowired private lateinit var wishJpaRepository: WishJpaRepository
 
     private val userId: UUID = UUID.fromString("11111111-2222-3333-4444-555555555555")
     private val otherUserId: UUID = UUID.fromString("99999999-8888-7777-6666-555555555555")
@@ -85,8 +87,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `POST tournaments-id-items 는 참여자이면 200 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        val item1Id = saveItem()
-        val item2Id = saveItem()
+        val item1Id = saveWishItem()
+        val item2Id = saveWishItem()
 
         mockMvc
             .perform(
@@ -102,7 +104,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `POST tournaments-id-items 는 아이템 1개도 추가할 수 있다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        val itemId = saveItem()
+        val itemId = saveWishItem()
 
         mockMvc
             .perform(
@@ -118,6 +120,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `POST tournaments-id-items 에서 존재하지 않는 아이템 ID 이면 404 를 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
+        // 위시에는 등록되어 있지만 item 테이블에는 없는 ID — wish 확인 통과 후 item 존재 확인에서 404
+        wishJpaRepository.save(Wish(userId = userId, itemId = 999999L))
 
         mockMvc
             .perform(
@@ -134,10 +138,12 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         val processingItemId = itemJpaRepository.save(Item(status = ItemStatus.PROCESSING)).getId()
+        // 위시에도 등록 — wish 확인 통과 후 READY 상태 확인에서 409
+        wishJpaRepository.save(Wish(userId = userId, itemId = processingItemId))
 
         mockMvc
             .perform(
-                post("/api/v1/tournaments/$tournamentId/items")
+                post("/api/v1/tournaments/$tournamentId/items/wish")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":[$processingItemId]}"""),
@@ -179,9 +185,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `POST tournaments-id-start 는 아이템이 있는 PENDING 토너먼트를 시작하고 아이템 상세가 포함된 대진표를 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        val item1 = itemJpaRepository.save(Item(name = "나이키 에어맥스", currentPrice = 129_000, currency = "KRW"))
-        val item2 = itemJpaRepository.save(Item(name = "아디다스 울트라부스트", currentPrice = 189_000, currency = "KRW"))
-        addItemsToTournament(mockMvc, tournamentId, userId, item1.getId(), item2.getId())
+        val item1Id = wishPersistenceService.persist(userId, Item(name = "나이키 에어맥스", currentPrice = 129_000, currency = "KRW")).item.getId()
+        val item2Id = wishPersistenceService.persist(userId, Item(name = "아디다스 울트라부스트", currentPrice = 189_000, currency = "KRW")).item.getId()
+        addItemsToTournament(mockMvc, tournamentId, userId, item1Id, item2Id)
 
         mockMvc
             .perform(
@@ -315,7 +321,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         saveUser(userId, userProfileImage)
         val pendingId = createTournament(mockMvc, "대기중")
         val startedId = createTournament(mockMvc, "진행중")
-        addItemsToTournament(mockMvc, startedId, userId, saveItem(), saveItem())
+        addItemsToTournament(mockMvc, startedId, userId, saveWishItem(), saveWishItem())
         mockMvc.perform(
             post("/api/v1/tournaments/$startedId/start")
                 .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
@@ -337,7 +343,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val pendingId = createTournament(mockMvc, "대기중")
         val startedId = createTournament(mockMvc, "진행중")
-        addItemsToTournament(mockMvc, startedId, userId, saveItem(), saveItem())
+        addItemsToTournament(mockMvc, startedId, userId, saveWishItem(), saveWishItem())
         mockMvc.perform(
             post("/api/v1/tournaments/$startedId/start")
                 .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
@@ -430,7 +436,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `DELETE tournaments-id-items-itemId 는 PENDING 토너먼트에서 아이템을 삭제하고 200 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        addItemsToTournament(mockMvc, tournamentId, userId, saveItem(), saveItem())
+        addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem(), saveWishItem())
         val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
 
         mockMvc
@@ -462,7 +468,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `DELETE tournaments-id-items-itemId 에서 아이템 추가자가 아니고 소유자도 아니면 403 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        addItemsToTournament(mockMvc, tournamentId, userId, saveItem(), saveItem())
+        addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem(), saveWishItem())
         val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
 
         mockMvc
@@ -478,7 +484,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         tournamentUserJpaRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
-        addItemsToTournament(mockMvc, tournamentId, otherUserId, saveItem(), saveItem())
+        addItemsToTournament(mockMvc, tournamentId, otherUserId, saveWishItem(otherUserId), saveWishItem(otherUserId))
         val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
 
         mockMvc
@@ -590,43 +596,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `POST tournaments-id-items-images 는 참여자이면 이미지를 추가하고 200 과 failedCount 0 을 반환한다`() {
+    fun `POST tournaments-id-items-images 는 참여자이면 PROCESSING 아이템을 생성하고 itemIds 를 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        stubProductImageExtractor.build = { _ ->
-            OcrExtraction(
-                snapshot = ProductSnapshot(name = "이미지 상품", currentPrice = 50_000, currency = "KRW"),
-                boundingBox = null,
-            )
-        }
-        val image = MockMultipartFile("images", "test.jpg", "image/jpeg", ByteArray(100) { 1 })
-
-        mockMvc
-            .perform(
-                multipart("/api/v1/tournaments/$tournamentId/items/images")
-                    .file(image)
-                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
-            ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.data.failedCount").value(0))
-            .andExpect(jsonPath("$.data.failedIndices").isEmpty)
-
-        assertEquals(1, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
-    }
-
-    @Test
-    fun `POST tournaments-id-items-images 에서 일부 이미지 처리 실패 시 성공한 이미지는 저장되고 failedIndices 를 반환한다`() {
-        val mockMvc = buildMockMvc()
-        val tournamentId = createTournament(mockMvc)
-        var callCount = 0
-        stubProductImageExtractor.build = { _ ->
-            val current = ++callCount
-            if (current == 2) error("OCR 실패 시뮬레이션")
-            OcrExtraction(
-                snapshot = ProductSnapshot(name = "이미지 상품 $current", currentPrice = 10_000 * current, currency = "KRW"),
-                boundingBox = null,
-            )
-        }
         val image1 = MockMultipartFile("images", "img1.jpg", "image/jpeg", ByteArray(100) { 1 })
         val image2 = MockMultipartFile("images", "img2.jpg", "image/jpeg", ByteArray(100) { 2 })
 
@@ -638,10 +610,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.data.failedCount").value(1))
-            .andExpect(jsonPath("$.data.failedIndices[0]").value(1))
+            .andExpect(jsonPath("$.data.itemIds").isArray)
+            .andExpect(jsonPath("$.data.itemIds.length()").value(2))
 
-        assertEquals(1, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
+        assertEquals(2, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
     }
 
     @Test
@@ -672,6 +644,60 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(request)
             .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+    }
+
+    @Test
+    fun `POST tournaments-id-items 에서 위시리스트에 없는 아이템이면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        // saveItem 은 위시 없이 아이템만 저장 — wish 소유 확인에서 실패해야 한다
+        val itemId = saveItem()
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/items/wish")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"itemIds":[$itemId]}"""),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
+    }
+
+    @Test
+    fun `POST tournaments-id-items-link 에서 32개 초과 시 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val full32 = (1..32).map { saveWishItem() }.toLongArray()
+        addItemsToTournament(mockMvc, tournamentId, userId, *full32)
+        stubProductLinkExtractor.build = { _ ->
+            ProductSnapshot(name = "상품", currentPrice = 1_000, currency = "KRW")
+        }
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/items/link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"url":"https://example.com/product"}"""),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+    }
+
+    @Test
+    fun `POST tournaments-id-items-images 에서 32개 초과 시 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val full32 = (1..32).map { saveWishItem() }.toLongArray()
+        addItemsToTournament(mockMvc, tournamentId, userId, *full32)
+        val image = MockMultipartFile("images", "img.jpg", "image/jpeg", ByteArray(100) { 1 })
+
+        mockMvc
+            .perform(
+                multipart("/api/v1/tournaments/$tournamentId/items/images")
+                    .file(image)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.status").value(400))
     }
 
@@ -728,9 +754,13 @@ class TournamentControllerTest : IntegrationTestSupport() {
     private fun saveItem(name: String = "테스트 아이템"): Long =
         itemJpaRepository.save(Item(name = name)).getId()
 
+    // 위시리스트에도 등록된 READY 아이템 생성 — /items/wish 엔드포인트용
+    private fun saveWishItem(owner: UUID = userId, name: String = "테스트 아이템"): Long =
+        wishPersistenceService.persist(owner, Item(name = name)).item.getId()
+
     private fun startTournamentWith2Items(mockMvc: MockMvc): TournamentStart {
         val tournamentId = createTournament(mockMvc)
-        addItemsToTournament(mockMvc, tournamentId, userId, saveItem("아이템1"), saveItem("아이템2"))
+        addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem(name = "아이템1"), saveWishItem(name = "아이템2"))
         mockMvc.perform(
             post("/api/v1/tournaments/$tournamentId/start")
                 .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
