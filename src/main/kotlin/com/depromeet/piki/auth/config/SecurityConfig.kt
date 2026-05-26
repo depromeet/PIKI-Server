@@ -43,6 +43,8 @@ class SecurityConfig(
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout")
                     .authenticated()
+                    .requestMatchers(HttpMethod.GET, "/api/v1/dev/users", "/api/v1/dev/users/*")
+                    .permitAll()
                     .requestMatchers("/api/v1/dev/**")
                     .hasAuthority(IdentityType.GUEST.name)
                     // API 문서: Stoplight Elements UI (/docs/**, static resource) + OpenAPI spec
