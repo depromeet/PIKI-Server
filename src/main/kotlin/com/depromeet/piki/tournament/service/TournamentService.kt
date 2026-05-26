@@ -17,6 +17,7 @@ import com.depromeet.piki.tournament.service.dto.TournamentBracketResult
 import com.depromeet.piki.tournament.service.dto.TournamentInfo
 import com.depromeet.piki.tournament.service.dto.TournamentSummary
 import com.depromeet.piki.user.repository.UserRepository
+import com.depromeet.piki.wishlist.repository.WishRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -28,6 +29,7 @@ class TournamentService(
     private val tournamentItemRepository: TournamentItemRepository,
     private val userRepository: UserRepository,
     private val itemRepository: ItemRepository,
+    private val wishRepository: WishRepository,
 ) {
     @Transactional
     fun create(
@@ -65,6 +67,8 @@ class TournamentService(
         val hasDuplicate =
             command.itemIds.toSet().size != command.itemIds.size || command.itemIds.any { it in existingItemIds }
         if (hasDuplicate) throw TournamentException.duplicateTournamentItem()
+        val wishCount = wishRepository.countByItemIdsAndUserId(command.itemIds, userId)
+        if (wishCount < command.itemIds.size) throw TournamentException.itemNotInWishlist()
         if (existingItemIds.size + command.itemIds.size > TOURNAMENT_MAX_ITEM_COUNT) {
             throw TournamentException.tooManyTournamentItems()
         }
@@ -99,6 +103,7 @@ class TournamentService(
             .findByIds(tournamentItems.map { it.itemId })
             .associate { it.getId() to it }
         if (tournamentItems.any { it.itemId !in itemById }) throw TournamentException.notFoundItems()
+        if (itemById.values.any { !it.isReady() }) throw TournamentException.itemNotReadyToStart()
         val itemsWithPrice = tournamentItems.map { it.getId() to itemById[it.itemId]?.currentPrice }
         val bracket = TournamentBracket.generate(itemsWithPrice)
 

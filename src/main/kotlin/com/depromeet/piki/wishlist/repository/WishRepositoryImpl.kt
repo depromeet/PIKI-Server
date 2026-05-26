@@ -17,6 +17,11 @@ class WishRepositoryImpl(
         userId: UUID,
     ): Long = wishJpaRepository.countByIdInAndUserId(ids, userId)
 
+    override fun countByItemIdsAndUserId(
+        itemIds: List<Long>,
+        userId: UUID,
+    ): Long = wishJpaRepository.countByItemIdInAndUserIdAndDeletedAtIsNull(itemIds, userId)
+
     override fun findPage(
         userId: UUID,
         cursor: WishCursor?,

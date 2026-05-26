@@ -11,6 +11,11 @@ interface WishJpaRepository : JpaRepository<Wish, Long> {
         userId: UUID,
     ): Long
 
+    fun countByItemIdInAndUserIdAndDeletedAtIsNull(
+        itemIds: Collection<Long>,
+        userId: UUID,
+    ): Long
+
     fun findByUserIdAndDeletedAtIsNullOrderByIdDesc(
         userId: UUID,
         limit: Limit,
