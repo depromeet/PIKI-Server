@@ -72,6 +72,35 @@ class WishlistApiExamples(
                     )
                 }
             }
+            if (handlerMethod.binds(WishlistController::getWish)) {
+                operation.examples(openApiObjectMapper.delegate) {
+                    add(
+                        status = HttpStatus.OK,
+                        name = "조회 성공",
+                        payload = ApiResponseBody.ok(sampleEntry),
+                    )
+                    add(
+                        status = HttpStatus.FORBIDDEN,
+                        name = "본인 위시 아님",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.FORBIDDEN,
+                                status = HttpStatus.FORBIDDEN,
+                                detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.NOT_FOUND,
+                        name = "존재하지 않는 위시 항목",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.NOT_FOUND,
+                                status = HttpStatus.NOT_FOUND,
+                                detail = "존재하지 않는 위시리스트 항목입니다.",
+                            ),
+                    )
+                }
+            }
             if (handlerMethod.binds(WishlistController::updateWish)) {
                 operation.examples(openApiObjectMapper.delegate) {
                     add(

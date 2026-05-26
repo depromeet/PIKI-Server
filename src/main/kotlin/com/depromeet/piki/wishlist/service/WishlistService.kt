@@ -104,6 +104,20 @@ class WishlistService(
         return WishlistPage(entries = entries, nextCursor = nextCursor, hasNext = hasNext)
     }
 
+    // wishId 로 단건 조회. 본인 위시만 볼 수 있고, 권한 검증은 도메인(verifyOwnedBy)에 맡긴다.
+    // findById 가 deletedAt IS NULL 만 보므로 삭제된 위시는 notFound(404)로 떨어진다.
+    @Transactional(readOnly = true)
+    fun getWish(
+        userId: UUID,
+        wishId: Long,
+    ): WishWithItem {
+        val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
+        wish.verifyOwnedBy(userId)
+        // wish 가 가리키는 item 은 반드시 존재한다. 없으면 영속화 경로가 깨진 코드 버그다.
+        val item = itemRepository.findById(wish.itemId) ?: error("wish ${wish.getId()} 의 item ${wish.itemId} 가 없다")
+        return WishWithItem(wish = wish, item = item)
+    }
+
     // item 의 name·currentPrice 를 수정한다. 변경은 @Transactional 커밋 시 dirty checking 으로 반영.
     @Transactional
     fun updateWish(
