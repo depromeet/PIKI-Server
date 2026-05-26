@@ -540,17 +540,21 @@ class TournamentControllerTest : IntegrationTestSupport() {
             val mockMvc = buildMockMvc()
             val tournamentId = createTournament(mockMvc)
 
-            mockMvc
-                .perform(
-                    post("/api/v1/tournaments/$tournamentId/items/link")
-                        .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""{"url":"https://example.com/product"}"""),
-                ).andExpect(status().isOk)
-                .andExpect(jsonPath("$.status").value(200))
-                .andExpect(jsonPath("$.data.itemId").isNumber)
+            val result =
+                mockMvc
+                    .perform(
+                        post("/api/v1/tournaments/$tournamentId/items/link")
+                            .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""{"url":"https://example.com/product"}"""),
+                    ).andExpect(status().isOk)
+                    .andExpect(jsonPath("$.status").value(200))
+                    .andExpect(jsonPath("$.data.itemId").isNumber)
+                    .andReturn()
 
+            val itemId = objectMapper.readTree(result.response.contentAsString)["data"]["itemId"].asLong()
             assertEquals(1, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
+            assertEquals(ItemStatus.PROCESSING, itemJpaRepository.findById(itemId).orElseThrow().status)
         } finally {
             stubItemParsingWorker.enabled = true
         }

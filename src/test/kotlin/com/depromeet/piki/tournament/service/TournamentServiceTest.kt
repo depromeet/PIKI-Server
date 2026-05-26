@@ -176,6 +176,8 @@ class TournamentServiceTest {
 
         override fun findTournamentById(tournamentId: Long): Tournament? = tournaments[tournamentId]
 
+        override fun findTournamentByIdForUpdate(tournamentId: Long): Tournament? = tournaments[tournamentId]
+
         override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
             histories.filter { it.tournamentId == tournamentId }
 
