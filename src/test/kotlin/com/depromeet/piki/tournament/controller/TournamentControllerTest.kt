@@ -37,6 +37,7 @@ import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 @Transactional
 class TournamentControllerTest : IntegrationTestSupport() {
@@ -481,7 +482,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         val remaining = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
         assertEquals(1, remaining.size)
-        assert(remaining.none { it.getId() == itemId })
+        assertTrue(remaining.none { it.getId() == itemId })
     }
 
     @Test
@@ -527,7 +528,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
 
-        assert(
+        assertTrue(
             tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).none { it.getId() == itemId },
         )
     }
