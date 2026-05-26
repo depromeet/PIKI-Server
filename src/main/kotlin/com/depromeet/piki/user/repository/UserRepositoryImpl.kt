@@ -21,4 +21,6 @@ class UserRepositoryImpl(
         nickname: String,
         excludeUserId: UUID,
     ): Boolean = userJpaRepository.existsByNicknameAndIdNot(nickname, excludeUserId)
+
+    override fun findAll(): List<User> = userJpaRepository.findAll()
 }

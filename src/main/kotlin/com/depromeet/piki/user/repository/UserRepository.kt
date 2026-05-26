@@ -10,6 +10,8 @@ interface UserRepository {
 
     fun findByIds(ids: Collection<UUID>): List<User>
 
+    fun findAll(): List<User>
+
     fun existsByNickname(nickname: String): Boolean
 
     // 본인 user 를 제외한 중복 검사. 닉네임 유지·자기 닉네임으로 다시 변경하는 흐름에서
