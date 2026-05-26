@@ -29,6 +29,7 @@ data class TournamentDetailResponse(
         }
     }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class BracketMatchResponse(
         val firstItem: ItemDetailResponse,
         val secondItem: ItemDetailResponse,
@@ -39,6 +40,7 @@ data class TournamentDetailResponse(
         }
     }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class HistoryResponse(
         val currentRound: Int,
         val firstTournamentItemId: Long,
@@ -51,6 +53,7 @@ data class TournamentDetailResponse(
         }
     }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class ParticipantResponse(
         val userId: UUID,
         val nickname: String,
@@ -62,11 +65,13 @@ data class TournamentDetailResponse(
         }
     }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class PendingData(
         val items: List<ItemDetailResponse>,
         val participants: List<ParticipantResponse>,
     )
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class InProgressData(
         val startRound: Int,
         val bracket: List<BracketMatchResponse>,
@@ -89,6 +94,7 @@ data class TournamentDetailResponse(
         }
     }
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class CompletedData(val result: List<RankedItemResponse>)
 
     companion object {

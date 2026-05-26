@@ -166,10 +166,10 @@ class TournamentService(
             }
 
             // TODO: IN_PROGRESS 조회 구현
-            TournamentStatus.IN_PROGRESS -> error("IN_PROGRESS 조회 미구현")
+            TournamentStatus.IN_PROGRESS -> throw TournamentException.statusNotSupported()
 
             // TODO: COMPLETED 조회 구현
-            TournamentStatus.COMPLETED -> error("COMPLETED 조회 미구현")
+            TournamentStatus.COMPLETED -> throw TournamentException.statusNotSupported()
         }
     }
 
@@ -210,7 +210,7 @@ class TournamentService(
         command: RecordMatch,
     ) {
         val tournament =
-            tournamentRepository.findTournamentById(command.tournamentId)
+            tournamentRepository.findTournamentByIdForUpdate(command.tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isInProgress()) throw TournamentException.notInProgressTournament()
         tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)

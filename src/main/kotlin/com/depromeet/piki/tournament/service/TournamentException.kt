@@ -126,5 +126,12 @@ class TournamentException private constructor(
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
+
+        fun statusNotSupported(): TournamentException =
+            TournamentException(
+                "해당 상태의 토너먼트 조회는 아직 지원되지 않습니다.",
+                ErrorCategory.SERVER_ERROR,
+                HttpStatus.NOT_IMPLEMENTED,
+            )
     }
 }
