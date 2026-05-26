@@ -32,11 +32,13 @@ class TournamentItemService(
         val link = ProductLink.parse(url)
         validateTournamentAccess(userId, tournamentId)
         val itemId = tournamentItemPersistenceService.persistLinkItem(userId, tournamentId, link)
-        runCatching { itemParsingWorker.parse(itemId, link) }
-            .onFailure { e ->
-                log.warn("item {} async 디스패치 거부 → FAILED 처리", itemId, e)
-                runCatching { itemParsingService.markFailed(itemId) }
-            }
+        try {
+            itemParsingWorker.parse(itemId, link)
+        } catch (e: TaskRejectedException) {
+            log.warn("item {} async 디스패치 거부 → FAILED 처리", itemId, e)
+            runCatching { itemParsingService.markFailed(itemId) }
+                .onFailure { ex -> log.error("item {} FAILED 전이 실패, PROCESSING 방치 위험", itemId, ex) }
+        }
         return itemId
     }
 
@@ -54,8 +56,9 @@ class TournamentItemService(
             try {
                 imageParsingWorker.parse(itemId, ocrImage)
             } catch (e: TaskRejectedException) {
-                log.warn("item {} async 디스패치 거부 → FAILED 처리", itemId)
+                log.warn("item {} async 디스패치 거부 → FAILED 처리", itemId, e)
                 runCatching { itemParsingService.markFailed(itemId) }
+                    .onFailure { ex -> log.error("item {} FAILED 전이 실패, PROCESSING 방치 위험", itemId, ex) }
             }
         }
         return itemIds

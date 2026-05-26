@@ -23,19 +23,6 @@ class TournamentItemPersistenceService(
     private val itemRepository: ItemRepository,
 ) {
     @Transactional
-    fun persistItems(
-        userId: UUID,
-        tournamentId: Long,
-        items: List<Item>,
-    ) {
-        validateAndCheckCapacity(userId, tournamentId, items.size)
-        val savedItems = itemRepository.saveAll(items)
-        tournamentItemRepository.saveAll(
-            savedItems.map { TournamentItem(tournamentId = tournamentId, itemId = it.getId(), userId = userId) },
-        )
-    }
-
-    @Transactional
     fun persistLinkItem(
         userId: UUID,
         tournamentId: Long,

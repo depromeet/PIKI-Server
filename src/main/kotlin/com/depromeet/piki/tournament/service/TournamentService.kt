@@ -64,11 +64,11 @@ class TournamentService(
                 .findAllByTournamentId(command.tournamentId)
                 .map { it.itemId }
                 .toSet()
-        val hasDuplicate =
-            command.itemIds.toSet().size != command.itemIds.size || command.itemIds.any { it in existingItemIds }
-        if (hasDuplicate) throw TournamentException.duplicateTournamentItem()
+        // 요청 내 중복 확인 — wishCount 는 unique itemId 기준이라 먼저 걸러야 정확하다
+        if (command.itemIds.toSet().size != command.itemIds.size) throw TournamentException.duplicateTournamentItem()
         val wishCount = wishRepository.countByItemIdsAndUserId(command.itemIds, userId)
         if (wishCount < command.itemIds.size) throw TournamentException.itemNotInWishlist()
+        if (command.itemIds.any { it in existingItemIds }) throw TournamentException.duplicateTournamentItem()
         if (existingItemIds.size + command.itemIds.size > TOURNAMENT_MAX_ITEM_COUNT) {
             throw TournamentException.tooManyTournamentItems()
         }
