@@ -127,6 +127,9 @@ class TournamentServiceTest {
                 item
             }
 
+        override fun countByTournamentId(tournamentId: Long): Int =
+            items.count { it.tournamentId == tournamentId }
+
         override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
             items.filter { it.tournamentId == tournamentId }
 

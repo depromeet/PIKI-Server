@@ -5,6 +5,8 @@ import com.depromeet.piki.tournament.domain.TournamentItem
 interface TournamentItemRepository {
     fun saveAll(items: List<TournamentItem>): List<TournamentItem>
 
+    fun countByTournamentId(tournamentId: Long): Int
+
     fun findAllByTournamentId(tournamentId: Long): List<TournamentItem>
 
     fun findById(id: Long): TournamentItem?

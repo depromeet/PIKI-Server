@@ -59,7 +59,7 @@ class TournamentItemPersistenceService(
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
         tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
-        val existing = tournamentItemRepository.findAllByTournamentId(tournamentId)
-        if (existing.size + incomingCount > TOURNAMENT_MAX_ITEM_COUNT) throw TournamentException.tooManyTournamentItems()
+        val existingCount = tournamentItemRepository.countByTournamentId(tournamentId)
+        if (existingCount + incomingCount > TOURNAMENT_MAX_ITEM_COUNT) throw TournamentException.tooManyTournamentItems()
     }
 }

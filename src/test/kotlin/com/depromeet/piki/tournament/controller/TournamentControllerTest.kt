@@ -5,6 +5,8 @@ import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemJpaRepository
 import com.depromeet.piki.support.IntegrationTestSupport
+import com.depromeet.piki.support.StubImageParsingWorker
+import com.depromeet.piki.support.StubItemParsingWorker
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.repository.TournamentItemJpaRepository
@@ -55,6 +57,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
     @Autowired private lateinit var wishPersistenceService: WishPersistenceService
 
     @Autowired private lateinit var wishJpaRepository: WishJpaRepository
+
+    @Autowired private lateinit var stubItemParsingWorker: StubItemParsingWorker
+
+    @Autowired private lateinit var stubImageParsingWorker: StubImageParsingWorker
 
     private val userId: UUID = UUID.fromString("11111111-2222-3333-4444-555555555555")
     private val otherUserId: UUID = UUID.fromString("99999999-8888-7777-6666-555555555555")
@@ -529,20 +535,25 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
     @Test
     fun `POST tournaments-id-items-link 는 참여자이면 PROCESSING 아이템을 생성하고 itemId 를 반환한다`() {
-        val mockMvc = buildMockMvc()
-        val tournamentId = createTournament(mockMvc)
+        stubItemParsingWorker.enabled = false
+        try {
+            val mockMvc = buildMockMvc()
+            val tournamentId = createTournament(mockMvc)
 
-        mockMvc
-            .perform(
-                post("/api/v1/tournaments/$tournamentId/items/link")
-                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"url":"https://example.com/product"}"""),
-            ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.data.itemId").isNumber)
+            mockMvc
+                .perform(
+                    post("/api/v1/tournaments/$tournamentId/items/link")
+                        .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"url":"https://example.com/product"}"""),
+                ).andExpect(status().isOk)
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data.itemId").isNumber)
 
-        assertEquals(1, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
+            assertEquals(1, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
+        } finally {
+            stubItemParsingWorker.enabled = true
+        }
     }
 
     @Test
@@ -591,23 +602,28 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
     @Test
     fun `POST tournaments-id-items-images 는 참여자이면 PROCESSING 아이템을 생성하고 itemIds 를 반환한다`() {
-        val mockMvc = buildMockMvc()
-        val tournamentId = createTournament(mockMvc)
-        val image1 = MockMultipartFile("images", "img1.jpg", "image/jpeg", ByteArray(100) { 1 })
-        val image2 = MockMultipartFile("images", "img2.jpg", "image/jpeg", ByteArray(100) { 2 })
+        stubImageParsingWorker.enabled = false
+        try {
+            val mockMvc = buildMockMvc()
+            val tournamentId = createTournament(mockMvc)
+            val image1 = MockMultipartFile("images", "img1.jpg", "image/jpeg", ByteArray(100) { 1 })
+            val image2 = MockMultipartFile("images", "img2.jpg", "image/jpeg", ByteArray(100) { 2 })
 
-        mockMvc
-            .perform(
-                multipart("/api/v1/tournaments/$tournamentId/items/images")
-                    .file(image1)
-                    .file(image2)
-                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
-            ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.data.itemIds").isArray)
-            .andExpect(jsonPath("$.data.itemIds.length()").value(2))
+            mockMvc
+                .perform(
+                    multipart("/api/v1/tournaments/$tournamentId/items/images")
+                        .file(image1)
+                        .file(image2)
+                        .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+                ).andExpect(status().isOk)
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.data.itemIds").isArray)
+                .andExpect(jsonPath("$.data.itemIds.length()").value(2))
 
-        assertEquals(2, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
+            assertEquals(2, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
+        } finally {
+            stubImageParsingWorker.enabled = true
+        }
     }
 
     @Test
