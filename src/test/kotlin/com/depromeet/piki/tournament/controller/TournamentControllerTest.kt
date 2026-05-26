@@ -4,9 +4,7 @@ import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemJpaRepository
-import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.support.IntegrationTestSupport
-import com.depromeet.piki.support.StubProductLinkExtractor
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.repository.TournamentItemJpaRepository
@@ -53,8 +51,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
     @Autowired private lateinit var itemJpaRepository: ItemJpaRepository
 
     @Autowired private lateinit var jwtProvider: JwtProvider
-
-    @Autowired private lateinit var stubProductLinkExtractor: StubProductLinkExtractor
 
     @Autowired private lateinit var wishPersistenceService: WishPersistenceService
 
@@ -532,12 +528,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `POST tournaments-id-items-link 는 참여자이면 아이템을 추가하고 200 을 반환한다`() {
+    fun `POST tournaments-id-items-link 는 참여자이면 PROCESSING 아이템을 생성하고 itemId 를 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        stubProductLinkExtractor.build = { _ ->
-            ProductSnapshot(name = "테스트 상품", currentPrice = 10_000, currency = "KRW")
-        }
 
         mockMvc
             .perform(
@@ -547,6 +540,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .content("""{"url":"https://example.com/product"}"""),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.itemId").isNumber)
 
         assertEquals(1, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
     }
@@ -670,9 +664,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val tournamentId = createTournament(mockMvc)
         val full32 = (1..32).map { saveWishItem() }.toLongArray()
         addItemsToTournament(mockMvc, tournamentId, userId, *full32)
-        stubProductLinkExtractor.build = { _ ->
-            ProductSnapshot(name = "상품", currentPrice = 1_000, currency = "KRW")
-        }
 
         mockMvc
             .perform(
