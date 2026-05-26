@@ -223,6 +223,89 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `위시를 단건 조회하면 200 과 wish·item 이 함께 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val wishId =
+            seedReadyWish(
+                userId,
+                "https://shop.example.com/products/1",
+                name = "에어 조던 1 미드",
+                currentPrice = 119_000,
+                currency = "KRW",
+                imageUrl = "https://cdn.example.com/p/1.jpg",
+            )
+
+        mockMvc
+            .perform(
+                get("/api/v1/wishlists/$wishId")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.code").value("OK"))
+            .andExpect(jsonPath("$.data.wish.id").value(wishId))
+            .andExpect(jsonPath("$.data.item.name").value("에어 조던 1 미드"))
+            .andExpect(jsonPath("$.data.item.currentPrice").value(119_000))
+            .andExpect(jsonPath("$.data.item.currency").value("KRW"))
+            .andExpect(jsonPath("$.data.item.imageUrl").value("https://cdn.example.com/p/1.jpg"))
+            .andExpect(jsonPath("$.data.item.status").value("READY"))
+    }
+
+    @Test
+    fun `남의 위시를 단건 조회하면 403 이 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val ownerId = UUID.randomUUID()
+        val otherId = UUID.randomUUID()
+        insertMember(ownerId)
+        insertMember(otherId)
+        val wishId = seedReadyWish(ownerId, "https://shop.example.com/products/1", "내 상품")
+
+        mockMvc
+            .perform(
+                get("/api/v1/wishlists/$wishId")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(otherId)}"),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+    }
+
+    @Test
+    fun `존재하지 않는 위시를 단건 조회하면 404 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+
+        mockMvc
+            .perform(
+                get("/api/v1/wishlists/99999999")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+    }
+
+    @Test
+    fun `삭제된 위시를 단건 조회하면 404 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "지울 상품")
+
+        mockMvc
+            .perform(delete("/api/v1/wishlists/$wishId").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+
+        // soft delete 된 위시는 findById(deletedAt IS NULL)에서 제외되어 단건 조회 시 404.
+        mockMvc
+            .perform(get("/api/v1/wishlists/$wishId").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+    }
+
+    @Test
     fun `위시 item 의 이름·가격·이미지·통화를 수정하면 200 과 갱신된 값이 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()

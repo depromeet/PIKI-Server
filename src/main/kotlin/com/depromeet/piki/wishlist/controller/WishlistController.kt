@@ -62,6 +62,15 @@ class WishlistController(
         )
     }
 
+    @GetMapping("/{wishId}")
+    override fun getWish(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable wishId: Long,
+    ): ApiResponseBody<WishItemResponse> {
+        val result = wishlistService.getWish(userId = userId, wishId = wishId)
+        return ApiResponseBody.ok(WishItemResponse.from(result.wish, result.item))
+    }
+
     @PatchMapping("/{wishId}")
     override fun updateWish(
         @AuthenticationPrincipal userId: UUID,

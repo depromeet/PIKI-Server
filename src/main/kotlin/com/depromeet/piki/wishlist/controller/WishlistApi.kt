@@ -89,6 +89,53 @@ interface WishlistApi {
     ): ApiResponseBody<List<WishItemResponse>>
 
     @Operation(
+        summary = "위시리스트 단건 조회",
+        description = """
+            wishId 로 위시 항목 하나를 조회한다. 응답 모양은 목록 조회 항목과 같은 WishItemResponse(wish + item).
+            본인 위시만 조회 가능하며, item 을 직접 노출하지 않고 위시 소유 단위로 권한을 검증한다.
+            item.status 로 파싱 상태(PROCESSING/READY/FAILED)를 구분한다 — 상세 화면 진입 시 단건 폴링에 쓸 수 있다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "조회 성공",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "본인 위시가 아님",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "존재하지 않는 위시 항목",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun getWish(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "위시 항목 ID", example = "1024") wishId: Long,
+    ): ApiResponseBody<WishItemResponse>
+
+    @Operation(
         summary = "위시리스트 수정",
         description = """
             위시 항목에 연결된 상품(item)의 이름·현재가·이미지·통화를 수정한다. 들어온 필드만 갱신한다.
