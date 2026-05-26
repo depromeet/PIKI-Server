@@ -27,7 +27,12 @@ class StaleProcessingItemSweeper(
         val skipped =
             staleIds.count { itemId ->
                 runCatching { itemParsingService.markFailed(itemId) }
-                    .onFailure { e -> log.info("item {} 는 이미 전이됨, stale 정리 생략: {}", itemId, e.message) }
+                    .onFailure { e ->
+                        when (e) {
+                            is IllegalStateException -> log.info("item {} 는 이미 전이됨, stale 정리 생략: {}", itemId, e.message)
+                            else -> log.error("item {} stale FAILED 전이 실패", itemId, e)
+                        }
+                    }
                     .isFailure
             }
         log.warn(
