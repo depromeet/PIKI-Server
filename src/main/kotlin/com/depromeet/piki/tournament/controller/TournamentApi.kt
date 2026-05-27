@@ -300,7 +300,7 @@ interface TournamentApi {
     fun addItemsFromImages(
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
-        images: List<MultipartFile>,
+        images: List<MultipartFile>?,
     ): ApiResponseBody<AddTournamentItemsFromImagesResponse>
 
     @Operation(

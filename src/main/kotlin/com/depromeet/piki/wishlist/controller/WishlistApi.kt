@@ -375,6 +375,6 @@ interface WishlistApi {
     )
     fun registerFromImages(
         @Parameter(hidden = true) userId: UUID,
-        images: List<MultipartFile>,
+        images: List<MultipartFile>?,
     ): ApiResponseBody<List<WishItemResponse>>
 }

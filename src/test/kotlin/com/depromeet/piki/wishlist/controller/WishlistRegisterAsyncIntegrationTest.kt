@@ -280,6 +280,9 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
                     .perform(request)
                     .andExpect(status().isCreated)
                     .andExpect(jsonPath("$.data.length()").value(5))
+                    // 등록 직후 응답은 모두 PROCESSING 이어야 한다 — 서버가 즉시 READY 를 내리는 회귀를 잡는다.
+                    .andExpect(jsonPath("$.data[0].item.status").value("PROCESSING"))
+                    .andExpect(jsonPath("$.data[4].item.status").value("PROCESSING"))
                     .andReturn()
                     .response
                     .getContentAsString(Charsets.UTF_8)
