@@ -1,11 +1,9 @@
 package com.depromeet.piki.wishlist.service
 
-import com.depromeet.piki.common.storage.ImageStorage
 import com.depromeet.piki.image.domain.ProductImage
-import com.depromeet.piki.image.service.ImageCropper
-import com.depromeet.piki.image.service.ProductImageExtractor
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.repository.ItemRepository
+import com.depromeet.piki.item.service.ImageParsingWorker
 import com.depromeet.piki.item.service.ItemParsingService
 import com.depromeet.piki.item.service.ItemParsingWorker
 import com.depromeet.piki.product.domain.ProductLink
@@ -16,6 +14,7 @@ import com.depromeet.piki.wishlist.repository.WishRepository
 import com.depromeet.piki.wishlist.service.dto.WishWithItem
 import com.depromeet.piki.wishlist.service.dto.WishlistPage
 import org.slf4j.LoggerFactory
+import org.springframework.core.task.TaskRejectedException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
@@ -23,10 +22,8 @@ import java.util.UUID
 
 @Service
 class WishlistService(
-    private val productImageExtractor: ProductImageExtractor,
-    private val imageCropper: ImageCropper,
-    private val imageStorage: ImageStorage,
     private val itemParsingWorker: ItemParsingWorker,
+    private val imageParsingWorker: ImageParsingWorker,
     private val itemParsingService: ItemParsingService,
     private val wishPersistenceService: WishPersistenceService,
     private val wishRepository: WishRepository,
@@ -53,30 +50,30 @@ class WishlistService(
         return result
     }
 
-    // 이미지 등록도 link 와 같은 흐름 — 입력이 이미지일 뿐. 외부 추출·크롭·S3 업로드는 트랜잭션 바깥, 영속화만 위임.
-    // 추출 결과는 link 추출과 동일한 ProductSnapshot 이라 Item.from 을 공유한다 (link 만 null).
-    // bbox 가 있으면 상품 영역을 크롭해 S3 에 올리고 그 URL 을 imageUrl 로 채운다.
-    // bbox 가 없거나(못 잡음) 크롭이 불가한 포맷(HEIC 등)이면 imageUrl 은 null 로 둔다.
+    // 이미지 등록은 register(link)와 같은 비동기 흐름 — 입력이 이미지(다건)일 뿐이다.
+    // 개수·형식을 동기로 검증(400)한 뒤 PROCESSING item·wish 를 배치 저장해 즉시 반환하고,
+    // 실제 추출(Gemini·크롭·S3)은 imageParsingWorker 가 백그라운드에서 각 이미지를 병렬 파싱해
+    // READY/FAILED 로 전이시킨다. 토너먼트 아이템 이미지 등록과 동일한 패턴이다.
     fun registerFromImages(
-        image: MultipartFile,
+        images: List<MultipartFile>,
         userId: UUID,
-    ): WishWithItem {
-        val productImage = ProductImage.of(image.bytes, image.contentType)
-        val extraction = productImageExtractor.extract(productImage)
-        // 크롭 이미지는 부가 정보다. S3 일시 장애·타임아웃이 이미지 등록 전체를 5xx 로 깨뜨리지 않도록,
-        // 업로드 실패는 imageUrl=null 로 degrade 한다 (imageUrl 없이도 등록 가능한 계약).
-        val imageUrl =
-            extraction.boundingBox
-                ?.let { imageCropper.crop(productImage.bytes, it) }
-                ?.let { cropped ->
-                    runCatching {
-                        imageStorage.upload(cropped, "items/${UUID.randomUUID()}.png", "image/png")
-                    }.getOrElse { e ->
-                        log.warn("크롭 이미지 S3 업로드 실패, imageUrl 없이 등록 진행: {}", e.message)
-                        null
-                    }
-                }
-        return wishPersistenceService.persist(userId, Item.from(extraction.snapshot.copy(imageUrl = imageUrl)))
+    ): List<WishWithItem> {
+        if (images.size !in MIN_IMAGE_COUNT..MAX_IMAGE_COUNT) throw WishException.invalidImageCount()
+        // 형식 검증(빈 바이트·미지원 MIME) — 실패 시 즉시 400. 유효한 이미지만 PROCESSING 으로 등록한다.
+        val productImages = images.map { ProductImage.of(it.bytes, it.contentType) }
+        val results = wishPersistenceService.persistProcessingImages(userId, productImages.size)
+        results.zip(productImages).forEach { (result, productImage) ->
+            val itemId = result.item.getId()
+            // 워커 디스패치가 큐 포화 등으로 거부되면 PROCESSING 으로 방치하지 않고 즉시 FAILED 로 떨어뜨린다.
+            try {
+                imageParsingWorker.parse(itemId, productImage)
+            } catch (e: TaskRejectedException) {
+                log.warn("파싱 워커 디스패치 거부, item {} 를 FAILED 처리: {}", itemId, e.message)
+                runCatching { itemParsingService.markFailed(itemId) }
+                    .onFailure { ex -> log.error("item {} FAILED 전이 실패, PROCESSING 방치 위험", itemId, ex) }
+            }
+        }
+        return results
     }
 
     @Transactional(readOnly = true)
@@ -149,5 +146,10 @@ class WishlistService(
         val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
         wish.verifyOwnedBy(userId)
         wish.delete()
+    }
+
+    companion object {
+        private const val MIN_IMAGE_COUNT = 1
+        private const val MAX_IMAGE_COUNT = 5
     }
 }

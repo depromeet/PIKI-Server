@@ -42,10 +42,10 @@ class WishlistController(
     @ResponseStatus(HttpStatus.CREATED)
     override fun registerFromImages(
         @AuthenticationPrincipal userId: UUID,
-        @RequestParam("image") image: MultipartFile,
-    ): ApiResponseBody<WishItemResponse> {
-        val result = wishlistService.registerFromImages(image = image, userId = userId)
-        return ApiResponseBody.created(WishItemResponse.from(result.wish, result.item))
+        @RequestParam("images") images: List<MultipartFile>,
+    ): ApiResponseBody<List<WishItemResponse>> {
+        val results = wishlistService.registerFromImages(images = images, userId = userId)
+        return ApiResponseBody.created(results.map { WishItemResponse.from(it.wish, it.item) })
     }
 
     @GetMapping

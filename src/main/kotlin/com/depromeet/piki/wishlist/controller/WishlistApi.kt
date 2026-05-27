@@ -319,18 +319,19 @@ interface WishlistApi {
     ): ApiResponseBody<Unit>
 
     @Operation(
-        summary = "위시리스트 이미지 등록",
+        summary = "위시리스트 이미지 등록 (다건)",
         description = """
-            상품 페이지를 캡처한 이미지를 받아 Gemini Vision 으로 상품명/가격을 추출한 뒤 유저의 위시리스트에 등록한다.
+            상품 페이지를 캡처한 이미지 1~5장을 받아, 각 이미지를 PROCESSING 상태의 위시 항목으로 즉시 등록하고 목록을 반환한다.
+            실제 상품 정보 추출(Gemini Vision)은 백그라운드에서 비동기로 진행되어 각 항목을 READY 또는 FAILED 로 전이시킨다.
             URL 등록과 결과 모양(WishItemResponse)이 같다. 이미지 등록 항목은 URL 이 없어 sourceUrl 이 null 이며,
-            추출이 부정확하면 수정 API 로 교정한다.
+            추출 결과는 조회로 폴링하거나 수정 API 로 교정한다.
         """,
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "201",
-                description = "이미지 등록 성공",
+                description = "이미지 등록 접수 — 각 항목이 PROCESSING 상태로 생성되고 비동기 파싱이 시작된다",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -340,7 +341,9 @@ interface WishlistApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (빈 이미지 · 이미지 타입 미지정 · 지원하지 않는 이미지 형식(png/jpeg/webp/heic/heif만 허용))",
+                description =
+                    "잘못된 요청 (이미지 개수 1~5 위반 · 빈 이미지 · 이미지 타입 미지정 · " +
+                        "지원하지 않는 이미지 형식(png/jpeg/webp/heic/heif만 허용))",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -368,20 +371,10 @@ interface WishlistApi {
                     ),
                 ],
             ),
-            ApiResponse(
-                responseCode = "502",
-                description = "Gemini 호출/응답 처리 실패",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
         ],
     )
     fun registerFromImages(
         @Parameter(hidden = true) userId: UUID,
-        image: MultipartFile,
-    ): ApiResponseBody<WishItemResponse>
+        images: List<MultipartFile>,
+    ): ApiResponseBody<List<WishItemResponse>>
 }
