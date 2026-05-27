@@ -128,6 +128,16 @@ interface WishlistApi {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "500",
+                description = "서버 오류 (위시 항목에 연결된 item이 DB에 없음 — 영속화 경로 버그)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
         ],
     )
     fun getWishlist(
@@ -181,6 +191,16 @@ interface WishlistApi {
             ApiResponse(
                 responseCode = "404",
                 description = "존재하지 않는 위시 항목 (삭제된 항목 포함)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "500",
+                description = "서버 오류 (위시 항목에 연결된 item이 DB에 없음 — 영속화 경로 버그)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -247,6 +267,16 @@ interface WishlistApi {
             ApiResponse(
                 responseCode = "404",
                 description = "존재하지 않는 위시 항목 (삭제된 항목 포함)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "500",
+                description = "서버 오류 (위시 항목에 연결된 item이 DB에 없음 — 영속화 경로 버그)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

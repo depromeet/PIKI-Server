@@ -510,6 +510,16 @@ interface TournamentApi {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "500",
+                description = "서버 오류 (모든 라운드가 완료됐는데 IN_PROGRESS 상태 — tournament.complete() 누락 버그)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
         ],
     )
     fun recordMatch(
@@ -605,6 +615,26 @@ interface TournamentApi {
             ApiResponse(
                 responseCode = "404",
                 description = "토너먼트를 찾을 수 없음",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "500",
+                description = "서버 오류 (IN_PROGRESS 토너먼트에서 모든 라운드가 완료됐는데 COMPLETED 전환 누락 — 버그)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "501",
+                description = "미구현 (COMPLETED 토너먼트 조회는 아직 지원되지 않음)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
