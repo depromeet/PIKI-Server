@@ -404,20 +404,33 @@ race · 동시성 · timeout 처럼 일반 통합 테스트 패턴(`@Transaction
 - example payload 는 실제 DTO 인스턴스를 만들어 `ApiResponseBody.ok/created/fail` 로 감싸 넘긴다. `@ExampleObject(value = "...JSON 평문...")` 형태 금지 — DTO 시그니처 변경이 컴파일로 추적되지 않는다.
 - 새 엔드포인트 추가 / 시그니처 변경 시 인터페이스 + example 빈을 함께 갱신한다. 한쪽만 바꾸면 OpenAPI 문서가 실제 응답과 어긋난다.
 
-### 실패 응답 코드 필수 문서화
+### 응답 전수 문서화 — 절대 규칙
 
-**`*Api.kt` 의 각 메서드는 실제로 발생 가능한 실패 응답 코드를 모두 `@ApiResponses` 에 포함해야 한다.** 성공 코드만 달고 실패를 생략하면 클라이언트가 docs 만 보고 에러 처리를 설계할 수 없다.
+**`*Api.kt` 의 각 메서드는 멀쩡한 클라이언트가 정상 요청으로 받을 수 있는 모든 응답을 빠짐없이 문서화한다 — 성공 응답과 모든 실패 응답 전부.** 위반을 허용하지 않는 절대 규칙이다. 성공 코드만 달거나 일부 실패를 생략하면 클라이언트가 docs 만 보고 에러 처리를 설계할 수 없다.
 
-조사 대상은 세 군데다.
+**판단 기준은 `## 도메인 예외 정책` 의 그 한 줄과 같다 — "멀쩡한 클라이언트가 정상 요청으로 여기 닿을 수 있나?"**
+- 닿는다 → 계약 응답 → **문서화 대상**. 성공 2xx · 계약 실패 4xx · 외부 의존성 실패 5xx 전부.
+- 못 닿는다 → 서버 버그·불변식 위반(`require` / `check` / `error`, 아래 `handleUnexpected` 의 일반 500) → **문서화 제외**.
 
-1. **Spring Security** (`SecurityConfig`) — 엔드포인트에 적용된 권한 설정을 확인한다.
+조사 대상은 다섯 군데다.
+
+1. **성공 응답** — 정상 흐름의 2xx (200 / 201 등). 컨트롤러의 `@ResponseStatus` 와 일치시킨다.
+
+2. **Spring Security** (`SecurityConfig`) — 엔드포인트에 적용된 권한 설정을 확인한다.
    - `permitAll()` 이 아닌 경우: **401** (미인증)
-   - `hasAuthority(...)` / `authenticated()` 가 아닌 특정 권한 요구: **403** (권한 없음)
+   - 특정 권한 요구: **403** (권한 없음)
 
-2. **도메인 예외** (`*Exception.kt`) — 서비스·도메인에서 throw 되는 커스텀 예외의 `httpStatus` 를 따른다.
-   - 400 / 403 / 404 / 409 등 예외마다 다르므로 실제 throw 지점을 추적한다.
+3. **도메인 예외** (`*Exception.kt`) — 서비스·도메인에서 throw 되는 `HttpMappable` 커스텀 예외의 `httpStatus` 를 따른다. 400 / 403 / 404 / 409 등 예외마다 다르므로 실제 throw 지점을 추적한다.
 
-3. **Bean Validation** — 요청 DTO 의 `@NotBlank` · `@Size` 등 위반은 `MethodArgumentNotValidException` → **400** 으로 매핑된다.
+4. **외부 의존성 실패 5xx** — 외부 호출 경계(LLM · HTTP fetch · 결제 등 우리 바깥 의존성)가 던지는 `HttpMappable` 예외. 클라이언트 요청이 정상이어도 우리 밖의 의존성 때문에 떨어지므로 도달 가능한 계약 응답이며, 클라이언트가 재시도 등으로 처리해야 한다. 예: `GeminiApiException` → **502 Bad Gateway** (Gemini 링크 추출 · OCR 실패).
+
+5. **Bean Validation** — 요청 DTO 의 `@NotBlank` · `@Size` 등 위반은 `MethodArgumentNotValidException` → **400** 으로 매핑된다.
+
+**제외 — 일반 500 은 문서화하지 않는다.** `handleUnexpected`(`@ExceptionHandler(Exception::class)`) 가 잡는 `500` 은 예상 못한 서버 버그·불변식 위반이라 정상 요청으로 도달할 수 없고, 모든 엔드포인트 공통이라 엔드포인트별 계약도 아니다. 외부 의존성 실패는 여기 해당하지 않는다 — `HttpMappable` 로 502 등 명시 status 를 던지므로 위 4번 대상이다.
+
+**어노테이션과 example 을 함께 박는다 — 한쪽만 있으면 위반이다.**
+- `*Api.kt`: 위 모든 응답을 `@ApiResponse(s)` 로 선언한다. responseCode + 구체적 description.
+- `*ApiExamples.kt`: 각 응답에 대응하는 example payload 를 `ApiResponseBody.ok / created / fail` 로 만들어 등록한다. 어노테이션만 있고 example 이 빠진 응답이 없어야 한다.
 
 description 은 구체적으로 쓴다. "오류 등" 같은 모호한 표현 대신 실제 원인을 나열한다.
 
@@ -429,7 +442,7 @@ ApiResponse(responseCode = "400", description = "잘못된 요청 (오류 등)")
 ApiResponse(responseCode = "400", description = "잘못된 요청 (URL 이 비어 있음 · 유효한 URL 형식이 아님 · https 외 스킴)")
 ```
 
-새 엔드포인트를 추가하거나 서비스 로직을 변경해 새 예외가 추가됐다면, `*Api.kt` 의 `@ApiResponses` 도 함께 갱신한다.
+새 엔드포인트를 추가하거나 서비스 로직을 변경해 새 예외(특히 새 외부 의존성)가 추가됐다면, `*Api.kt` 의 `@ApiResponses` 와 `*ApiExamples` 를 함께 갱신한다.
 
 ### 응답 포맷
 **모든 응답은 `ApiResponseBody` 래퍼로 감싼다.** 컨트롤러 메서드는 항상 `ApiResponseBody<T>` 를 반환하고, 직접 `ResponseEntity` / raw DTO 를 노출하지 않는다.
