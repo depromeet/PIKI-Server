@@ -177,16 +177,17 @@ class TournamentService(
                 val lastHistory = histories.maxByOrNull { it.getId() }?.let { TournamentDetail.HistoryEntry.from(it) }
                 val allTournamentItems = tournamentItemRepository.findAllByTournamentId(tournamentId)
                 val currentRound = computeExpectedRound(allTournamentItems.size, allTournamentItems.size / 2, histories)
-                // 패배 아이템 = 각 히스토리에서 selected 가 아닌 쪽
-                val eliminatedItemIds = histories.mapTo(mutableSetOf()) { h ->
-                    if (h.selectedTournamentItemId == h.firstTournamentItemId) h.secondTournamentItemId
-                    else h.firstTournamentItemId
-                }
-                // 현재 라운드에서 이미 대결한 아이템
-                val foughtInCurrentRoundIds = buildSet<Long> {
-                    histories.filter { it.currentRound == currentRound }.forEach {
-                        add(it.firstTournamentItemId)
-                        add(it.secondTournamentItemId)
+                // 단일 패스: 탈락 아이템 + 현재 라운드 대결 완료 아이템 동시 수집
+                val eliminatedItemIds = mutableSetOf<Long>()
+                val foughtInCurrentRoundIds = mutableSetOf<Long>()
+                for (h in histories) {
+                    eliminatedItemIds.add(
+                        if (h.selectedTournamentItemId == h.firstTournamentItemId) h.secondTournamentItemId
+                        else h.firstTournamentItemId,
+                    )
+                    if (h.currentRound == currentRound) {
+                        foughtInCurrentRoundIds.add(h.firstTournamentItemId)
+                        foughtInCurrentRoundIds.add(h.secondTournamentItemId)
                     }
                 }
                 // 생존 중(탈락 X) + 현재 라운드 미대결 아이템
