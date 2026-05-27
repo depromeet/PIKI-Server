@@ -70,6 +70,61 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/team3-server:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/team3-server:${{ github.event.workflow_run.head_sha || github.sha }}
 
+      - name: Upload nginx config
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "infra/nginx/api.depromeet18team3.cloud.conf"
+          target: "/tmp/team3-nginx"
+          strip_components: 2
+
+      - name: Apply nginx config
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            SRC=/tmp/team3-nginx/api.depromeet18team3.cloud.conf
+            DST=/etc/nginx/sites-available/api.depromeet18team3.cloud
+            # api conf 가 include 하는 team3-upstream.conf 가 없으면(새 인스턴스) nginx -t 가 깨진다.
+            # blue-green 전환 전이라도 include 대상이 존재하도록 기본값(8080)으로 초기화한다.
+            # 실제 active 포트 전환은 blue-green(Health check)이 담당하므로 이미 있으면 건드리지 않는다.
+            [ -f /etc/nginx/team3-upstream.conf ] || echo "server localhost:8080;" | sudo tee /etc/nginx/team3-upstream.conf
+            # 현재 설정 백업 후 교체. nginx -t 검증 실패 시 이전 설정으로 롤백하고 배포를 중단한다.
+            sudo cp "$DST" "${DST}.bak" 2>/dev/null || true
+            sudo cp "$SRC" "$DST"
+            if sudo nginx -t; then
+              sudo nginx -s reload
+              echo "nginx config 적용 + reload 완료"
+            else
+              echo "nginx -t 실패 — 이전 설정으로 롤백하고 중단"
+              sudo cp "${DST}.bak" "$DST" 2>/dev/null || true
+              exit 1
+            fi
+
+      - name: Upload provisioning script
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "infra/scripts/provision-runtime.sh"
+          target: "/tmp/team3-provision"
+          strip_components: 2
+
+      - name: Provision runtime (swap·redis·nginx default)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            chmod +x /tmp/team3-provision/provision-runtime.sh
+            /tmp/team3-provision/provision-runtime.sh
+
       - name: Deploy to EC2
         id: deploy
         uses: appleboy/ssh-action@v1
@@ -153,37 +208,6 @@ jobs:
               -e S3_BUCKET="$S3_BUCKET" \
               -e S3_PUBLIC_BASE_URL="$S3_PUBLIC_BASE_URL" \
               "$IMAGE"
-
-      - name: Upload nginx config
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "infra/nginx/api.depromeet18team3.cloud.conf"
-          target: "/tmp/team3-nginx"
-          strip_components: 2
-
-      - name: Apply nginx config
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            SRC=/tmp/team3-nginx/api.depromeet18team3.cloud.conf
-            DST=/etc/nginx/sites-available/api.depromeet18team3.cloud
-            # 현재 설정 백업 후 교체. nginx -t 검증 실패 시 이전 설정으로 롤백하고 배포를 중단한다.
-            sudo cp "$DST" "${DST}.bak" 2>/dev/null || true
-            sudo cp "$SRC" "$DST"
-            if sudo nginx -t; then
-              sudo nginx -s reload
-              echo "nginx config 적용 + reload 완료"
-            else
-              echo "nginx -t 실패 — 이전 설정으로 롤백하고 중단"
-              sudo cp "${DST}.bak" "$DST" 2>/dev/null || true
-              exit 1
-            fi
 
       - name: Health check and switch
         id: health
