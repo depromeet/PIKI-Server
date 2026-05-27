@@ -1,5 +1,6 @@
 package com.depromeet.piki.tournament.controller
 
+import com.depromeet.piki.common.exception.ErrorCategory
 import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
@@ -238,6 +239,16 @@ class TournamentApiExamples(
                                             ),
                                         completed = null,
                                     ),
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.NOT_IMPLEMENTED,
+                            name = "COMPLETED 상태 미구현",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.SERVER_ERROR,
+                                    status = HttpStatus.NOT_IMPLEMENTED,
+                                    detail = "해당 상태의 토너먼트 조회는 아직 지원되지 않습니다.",
                                 ),
                         )
                         add(
