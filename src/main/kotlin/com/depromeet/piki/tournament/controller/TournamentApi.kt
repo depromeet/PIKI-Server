@@ -375,7 +375,7 @@ interface TournamentApi {
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "토너먼트 시작 성공 (첫 라운드 대진표 반환)",
+                description = "토너먼트 시작 성공 (가격 오름차순 정렬 아이템 목록 반환)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -425,7 +425,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "상태 충돌 (PENDING이 아닌 토너먼트 · PROCESSING/FAILED 상품 포함)",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트 · PROCESSING/FAILED 상품 포함 · 가격 정보 없는 상품 포함)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -462,7 +462,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (승자가 대결 두 아이템 중 하나가 아님 · 해당 토너먼트에 속하지 않는 아이템)",
+                description = "잘못된 요청 (승자가 대결 두 아이템 중 하나가 아님 · 해당 토너먼트에 속하지 않는 아이템 · 현재 진행해야 할 라운드가 아님)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
