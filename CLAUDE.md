@@ -408,7 +408,7 @@ race · 동시성 · timeout 처럼 일반 통합 테스트 패턴(`@Transaction
 
 **`*Api.kt` 의 각 메서드는 실제로 발생 가능한 실패 응답 코드를 모두 `@ApiResponses` 에 포함해야 한다.** 성공 코드만 달고 실패를 생략하면 클라이언트가 docs 만 보고 에러 처리를 설계할 수 없다.
 
-조사 대상은 세 군데다.
+조사 대상은 네 군데다.
 
 1. **Spring Security** (`SecurityConfig`) — 엔드포인트에 적용된 권한 설정을 확인한다.
    - `permitAll()` 이 아닌 경우: **401** (미인증)
@@ -418,6 +418,12 @@ race · 동시성 · timeout 처럼 일반 통합 테스트 패턴(`@Transaction
    - 400 / 403 / 404 / 409 등 예외마다 다르므로 실제 throw 지점을 추적한다.
 
 3. **Bean Validation** — 요청 DTO 의 `@NotBlank` · `@Size` 등 위반은 `MethodArgumentNotValidException` → **400** 으로 매핑된다.
+
+4. **5xx (의도적 서버 오류)** — "멀쩡한 클라이언트가 정상 요청으로 닿을 수 없다"는 불변식 위반·외부 의존성 실패도 문서화한다. 단, "서버 내부 오류" 같은 모호한 표현은 금지. 실제로 발생하는 조건을 구체적으로 쓴다.
+   - **500** — `error()` / `require` 위반으로 발생하는 불변식 버그. 어떤 불변식이 깨졌는지 서술한다.
+   - **501** — 미구현 기능에 대한 접근 (`TournamentException.statusNotSupported()` 등).
+   - **502** — 외부 API(Gemini 등) 오류가 동기 경로로 전파될 때. 비동기(`@Async` + `runCatching`) 경로는 FAILED 상태 전이로 흡수되므로 문서화 대상이 아니다.
+   - 엔드포인트 경로에 5xx 가 실제로 없으면 추가하지 않는다. 없는 오류를 억지로 채우지 않는다.
 
 description 은 구체적으로 쓴다. "오류 등" 같은 모호한 표현 대신 실제 원인을 나열한다.
 
