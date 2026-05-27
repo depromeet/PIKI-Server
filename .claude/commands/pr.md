@@ -1,4 +1,4 @@
-브랜치에서 작업한 내용을 STAR 구조 PR로 정리하여 GitHub에 올립니다. 이미 PR이 있으면 본문을 덮어쓰지 않고 `## Updates` 섹션에 추가 변경 내역을 append 합니다. assignee(`@me`) · 라벨(연관 이슈에서 복사) · Project(99) 도 자동 설정합니다. 마지막에 `/notion-board` 로 Notion `프로젝트 일정 관리` 보드 반영도 자동 시도합니다 (내부 작업 라벨이거나 토큰 없으면 조용히 생략).
+브랜치에서 작업한 내용을 STAR 구조 PR로 정리하여 GitHub에 올립니다. 이미 PR이 있으면 본문을 덮어쓰지 않고 `## Updates` 섹션에 추가 변경 내역을 append 합니다. assignee(`@me`) · 라벨(연관 이슈에서 복사) · Project(99) 도 자동 설정합니다. 마지막에 항상 `/notion-board` 를 호출해 Notion `프로젝트 일정 관리` 보드 반영을 시도합니다 — 무엇을 거를지(스킵·확인)는 `/notion-board` 가 판단합니다 (토큰이 없을 때만 자동 생략).
 
 ## PR 본문 작성 원칙
 
@@ -244,12 +244,12 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
     ```
 11. PR URL 재출력 후, `### 4. Notion 보드 반영` 으로 이어진다.
 
-### 4. Notion 보드 반영 (자동)
+### 4. Notion 보드 반영 (항상 호출)
 
-**create / update 양 모드 완료 후 (PR URL 확정 후), 이어서 `/notion-board` 스킬을 실행한다.** 이번 PR을 Notion `프로젝트 일정 관리` 보드의 매칭 카드에 반영한다 (카드 본문 `개발 로그` 에 PR 링크 append + `계획중` 이면 `진행중` 으로). 사용자가 따로 호출하지 않아도 `/pr` 흐름의 일부로 돈다.
+**create / update 양 모드 완료 후 (PR URL 확정 후), 이어서 항상 `/notion-board` 스킬을 실행한다.** 이번 PR을 Notion `프로젝트 일정 관리` 보드의 매칭 카드에 반영한다 (카드 본문 `개발 로그` 에 PR 링크 append + `계획중` 이면 `진행중` 으로). 사용자가 따로 호출하지 않아도 `/pr` 흐름의 일부로 돈다.
 
-- 이번 PR 의 URL · 번호 · 브랜치명 · 연관 이슈 번호·제목 · `$ISSUE_LABELS` · 제목과 대화 맥락을 그대로 입력으로 넘긴다.
-- `chore` / `test` / `infra` / `docs` / `refactor` 라벨이거나 `$NOTION_TOKEN` 이 없으면 `/notion-board` 가 알아서 조용히 스킵한다.
+- 이번 PR 의 URL · 번호 · 브랜치명 · 연관 이슈 번호·제목 · `$ISSUE_LABELS` · 제목 · **이번 작업이 무엇인지 한 줄 설명** · 대화 맥락을 그대로 입력으로 넘긴다 (한 줄 설명은 `/notion-board` 가 확인 문구에 그대로 쓴다).
+- **`/pr` 은 라벨·토큰 유무로 미리 거르지 않는다 — `/notion-board` 를 무조건 호출한다.** 무엇을 보드에 올릴지(스킵·확인·진행)는 `/notion-board` 가 정하는 게 올바른 책임 분배다. `/notion-board` 는 `$NOTION_TOKEN` 이 없을 때만 자동 스킵하고, `chore` / `test` / `infra` / `docs` / `refactor` 같은 내부 작업 라벨은 그 사실을 확인 문구에 덧붙여 사용자가 결정하게 한다. (`$ISSUE_LABELS` 는 스킵 게이트가 아니라 `/notion-board` 가 참고하는 신호로 넘길 뿐이다.)
 - **best-effort** 다 — 보드 반영이 실패해도 PR 생성/갱신 결과를 되돌리지 않는다.
 
 ### PR 제목 규칙
