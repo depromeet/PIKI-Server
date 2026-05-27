@@ -30,17 +30,6 @@ data class TournamentDetailResponse(
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    data class BracketMatchResponse(
-        val firstItem: ItemDetailResponse,
-        val secondItem: ItemDetailResponse,
-    ) {
-        companion object {
-            fun from(m: TournamentDetail.BracketMatch): BracketMatchResponse =
-                BracketMatchResponse(ItemDetailResponse.from(m.firstItem), ItemDetailResponse.from(m.secondItem))
-        }
-    }
-
-    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class HistoryResponse(
         val currentRound: Int,
         val firstTournamentItemId: Long,
@@ -73,9 +62,9 @@ data class TournamentDetailResponse(
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     data class InProgressData(
-        val startRound: Int,
-        val bracket: List<BracketMatchResponse>,
-        val history: List<HistoryResponse>,
+        val currentRound: Int,
+        val lastHistory: HistoryResponse?,
+        val remainingItems: List<ItemDetailResponse>,
     )
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -122,9 +111,9 @@ data class TournamentDetailResponse(
                         pending = null,
                         inProgress =
                             InProgressData(
-                                startRound = detail.startRound,
-                                bracket = detail.bracket.map { BracketMatchResponse.from(it) },
-                                history = detail.history.map { HistoryResponse.from(it) },
+                                currentRound = detail.currentRound,
+                                lastHistory = detail.lastHistory?.let { HistoryResponse.from(it) },
+                                remainingItems = detail.remainingItems.map { ItemDetailResponse.from(it) },
                             ),
                         completed = null,
                     )

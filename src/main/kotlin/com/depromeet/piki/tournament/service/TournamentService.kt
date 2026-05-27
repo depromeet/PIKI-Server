@@ -171,11 +171,70 @@ class TournamentService(
                 )
             }
 
-            // TODO: IN_PROGRESS 조회 구현
-            TournamentStatus.IN_PROGRESS -> throw TournamentException.statusNotSupported()
+            TournamentStatus.IN_PROGRESS -> {
+                val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
+                // 히스토리는 currentRound ASC, id ASC 정렬이라 lastOrNull()은 라운드가 바뀌면 틀림 — ID 최대값이 가장 최근 매치
+                val lastHistory = histories.maxByOrNull { it.getId() }?.let { TournamentDetail.HistoryEntry.from(it) }
+                val allTournamentItems = tournamentItemRepository.findAllByTournamentId(tournamentId)
+                val currentRound = computeExpectedRound(allTournamentItems.size, allTournamentItems.size / 2, histories)
+                // 단일 패스: 탈락 아이템 + 현재 라운드 대결 완료 아이템 동시 수집
+                val eliminatedItemIds = mutableSetOf<Long>()
+                val foughtInCurrentRoundIds = mutableSetOf<Long>()
+                for (h in histories) {
+                    eliminatedItemIds.add(h.loser())
+                    if (h.currentRound == currentRound) {
+                        foughtInCurrentRoundIds.add(h.firstTournamentItemId)
+                        foughtInCurrentRoundIds.add(h.secondTournamentItemId)
+                    }
+                }
+                // 생존 중(탈락 X) + 현재 라운드 미대결 아이템
+                val remainingTournamentItems = allTournamentItems.filter { item ->
+                    item.getId() !in eliminatedItemIds && item.getId() !in foughtInCurrentRoundIds
+                }
+                val itemById = itemRepository
+                    .findByIds(remainingTournamentItems.map { it.itemId })
+                    .associate { it.getId() to it }
+                val remainingItems = remainingTournamentItems
+                    .map { toItemDetail(it, itemById) }
+                    .sortedWith(compareBy({ it.price }, { it.tournamentItemId }))
+                TournamentDetail.InProgress(
+                    tournamentId = tournament.getId(),
+                    name = tournament.name,
+                    currentRound = currentRound,
+                    lastHistory = lastHistory,
+                    remainingItems = remainingItems,
+                )
+            }
 
-            // TODO: COMPLETED 조회 구현
-            TournamentStatus.COMPLETED -> throw TournamentException.statusNotSupported()
+            TournamentStatus.COMPLETED -> {
+                val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
+                val rankedItems = computeRanking(histories)
+                val rankedTournamentItemIds = rankedItems.map { it.first }.toSet()
+                val tournamentItemById = tournamentItemRepository
+                    .findAllByTournamentId(tournamentId)
+                    .filter { it.getId() in rankedTournamentItemIds }
+                    .associateBy { it.getId() }
+                val itemById = itemRepository
+                    .findByIds(tournamentItemById.values.map { it.itemId })
+                    .associate { it.getId() to it }
+                TournamentDetail.Completed(
+                    tournamentId = tournament.getId(),
+                    name = tournament.name,
+                    result = rankedItems.map { (tournamentItemId, rank) ->
+                        val tournamentItem = tournamentItemById.getValue(tournamentItemId)
+                        val item = itemById[tournamentItem.itemId]
+                        TournamentDetail.RankedItem(
+                            rank = rank,
+                            tournamentItemId = tournamentItemId,
+                            itemId = tournamentItem.itemId,
+                            name = item?.name,
+                            price = item?.currentPrice,
+                            currency = item?.currency,
+                            imageUrl = item?.imageUrl,
+                        )
+                    },
+                )
+            }
         }
     }
 
@@ -298,6 +357,33 @@ class TournamentService(
         )
     }
 
+    private fun computeRanking(histories: List<TournamentHistory>): List<Pair<Long, Int>> {
+        val finalMatch = histories.find { it.currentRound == Tournament.FINAL_ROUND_SIZE }
+            ?: error("COMPLETED 상태인데 결승 기록 없음 — tournamentId=${histories.firstOrNull()?.tournamentId}")
+        val semiRound = histories
+            .filter { it.currentRound > Tournament.FINAL_ROUND_SIZE }
+            .minByOrNull { it.currentRound }?.currentRound
+        val semiLosers = semiRound
+            ?.let { round -> histories.filter { it.currentRound == round }.map { it.loser() }.sorted() }
+            ?: emptyList()
+        return buildList {
+            add(finalMatch.selectedTournamentItemId to 1)
+            add(finalMatch.loser() to 2)
+            semiLosers.forEachIndexed { i, id -> add(id to 3 + i) }
+        }
+    }
+
+    private fun TournamentHistory.loser(): Long =
+        when (selectedTournamentItemId) {
+            firstTournamentItemId -> secondTournamentItemId
+            secondTournamentItemId -> firstTournamentItemId
+            else -> error(
+                "잘못된 tournament history: selectedTournamentItemId=$selectedTournamentItemId, " +
+                    "firstTournamentItemId=$firstTournamentItemId, secondTournamentItemId=$secondTournamentItemId, " +
+                    "tournamentId=$tournamentId",
+            )
+        }
+
     // 완료된 라운드 수와 첫 라운드 매치 수를 기반으로 다음 진행해야 할 라운드를 계산한다.
     // currentPlayers = 해당 라운드 시작 시 남은 플레이어 수 = currentRound 값과 동일.
     // nextPlayers = currentPlayers - played: 승자 수 + 부전승(bye) 수로 홀수 아이템의 leftover 를 자연스럽게 흡수한다.
@@ -320,6 +406,6 @@ class TournamentService(
             currentPlayers = nextPlayers
         }
         // 모든 라운드가 완료됐는데 isInProgress() 인 상태 — tournament.complete() 누락 버그
-        error("recordMatch: 모든 라운드가 완료됐는데 IN_PROGRESS 상태임 tournamentId=${histories.firstOrNull()?.tournamentId}")
+        error("모든 라운드가 완료됐는데 IN_PROGRESS 상태임 tournamentId=${histories.firstOrNull()?.tournamentId}")
     }
 }
