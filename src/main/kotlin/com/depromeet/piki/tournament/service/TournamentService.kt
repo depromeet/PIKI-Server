@@ -111,6 +111,7 @@ class TournamentService(
                 .associate { it.getId() to it }
         if (tournamentItems.any { it.itemId !in itemById }) throw TournamentException.notFoundItems()
         if (itemById.values.any { !it.isReady() }) throw TournamentException.itemNotReadyToStart()
+        itemById.values.forEach { item -> item.currentPrice ?: throw TournamentException.itemPriceRequired() }
 
         tournament.start()
         return tournamentItems
@@ -124,7 +125,7 @@ class TournamentService(
                     imageUrl = item.imageUrl,
                 )
             }
-            .sortedBy { it.price }
+            .sortedWith(compareBy({ it.price }, { it.tournamentItemId }))
     }
 
     @Transactional(readOnly = true)
