@@ -54,6 +54,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
 
+    // 알림 템플릿 플레이스홀더 치환 (StringSubstitutor). Spring Boot BOM 미관리라 버전 명시 (Maven Central 최신 안정).
+    implementation("org.apache.commons:commons-text:1.15.0")
+
     // 크롭한 상품 이미지를 S3 에 업로드 (#144). 버전은 BOM 이 관리.
     implementation("software.amazon.awssdk:s3")
 
