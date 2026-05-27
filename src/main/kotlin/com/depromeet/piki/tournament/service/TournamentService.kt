@@ -374,8 +374,15 @@ class TournamentService(
     }
 
     private fun TournamentHistory.loser(): Long =
-        if (selectedTournamentItemId == firstTournamentItemId) secondTournamentItemId
-        else firstTournamentItemId
+        when (selectedTournamentItemId) {
+            firstTournamentItemId -> secondTournamentItemId
+            secondTournamentItemId -> firstTournamentItemId
+            else -> error(
+                "잘못된 tournament history: selectedTournamentItemId=$selectedTournamentItemId, " +
+                    "firstTournamentItemId=$firstTournamentItemId, secondTournamentItemId=$secondTournamentItemId, " +
+                    "tournamentId=$tournamentId",
+            )
+        }
 
     // 완료된 라운드 수와 첫 라운드 매치 수를 기반으로 다음 진행해야 할 라운드를 계산한다.
     // currentPlayers = 해당 라운드 시작 시 남은 플레이어 수 = currentRound 값과 동일.
