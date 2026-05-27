@@ -566,7 +566,7 @@ interface TournamentApi {
               - currentRound: 다음에 진행할 라운드 번호
               - lastHistory: 가장 최근에 기록된 매치 결과. 라운드 전환 직후에는 currentRound와 다른 라운드의 매치일 수 있음. 매치 기록이 없으면 null
               - remainingItems: 현재 라운드에서 아직 대결하지 않은 생존 아이템 목록, 가격 오름차순. 이 순서가 클라이언트의 매치 페어링 순서([0]vs[1], [2]vs[3] …)를 결정함
-            - COMPLETED: 미구현 (501 반환)
+            - COMPLETED: completed 필드 (result — 1위부터 최대 4위까지 순위 아이템 목록)
             나머지 필드는 응답에 포함되지 않는다.
         """,
     )
@@ -605,16 +605,6 @@ interface TournamentApi {
             ApiResponse(
                 responseCode = "404",
                 description = "토너먼트를 찾을 수 없음",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "501",
-                description = "미구현 (COMPLETED 토너먼트 조회는 아직 지원되지 않음)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

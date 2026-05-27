@@ -181,10 +181,7 @@ class TournamentService(
                 val eliminatedItemIds = mutableSetOf<Long>()
                 val foughtInCurrentRoundIds = mutableSetOf<Long>()
                 for (h in histories) {
-                    eliminatedItemIds.add(
-                        if (h.selectedTournamentItemId == h.firstTournamentItemId) h.secondTournamentItemId
-                        else h.firstTournamentItemId,
-                    )
+                    eliminatedItemIds.add(h.loser())
                     if (h.currentRound == currentRound) {
                         foughtInCurrentRoundIds.add(h.firstTournamentItemId)
                         foughtInCurrentRoundIds.add(h.secondTournamentItemId)
@@ -209,8 +206,35 @@ class TournamentService(
                 )
             }
 
-            // TODO: COMPLETED 조회 구현
-            TournamentStatus.COMPLETED -> throw TournamentException.statusNotSupported()
+            TournamentStatus.COMPLETED -> {
+                val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
+                val rankedItems = computeRanking(histories)
+                val rankedTournamentItemIds = rankedItems.map { it.first }.toSet()
+                val tournamentItemById = tournamentItemRepository
+                    .findAllByTournamentId(tournamentId)
+                    .filter { it.getId() in rankedTournamentItemIds }
+                    .associateBy { it.getId() }
+                val itemById = itemRepository
+                    .findByIds(tournamentItemById.values.map { it.itemId })
+                    .associate { it.getId() to it }
+                TournamentDetail.Completed(
+                    tournamentId = tournament.getId(),
+                    name = tournament.name,
+                    result = rankedItems.map { (tournamentItemId, rank) ->
+                        val tournamentItem = tournamentItemById.getValue(tournamentItemId)
+                        val item = itemById[tournamentItem.itemId]
+                        TournamentDetail.RankedItem(
+                            rank = rank,
+                            tournamentItemId = tournamentItemId,
+                            itemId = tournamentItem.itemId,
+                            name = item?.name,
+                            price = item?.currentPrice,
+                            currency = item?.currency,
+                            imageUrl = item?.imageUrl,
+                        )
+                    },
+                )
+            }
         }
     }
 
@@ -332,6 +356,26 @@ class TournamentService(
             imageUrl = item?.imageUrl,
         )
     }
+
+    private fun computeRanking(histories: List<TournamentHistory>): List<Pair<Long, Int>> {
+        val finalMatch = histories.find { it.currentRound == Tournament.FINAL_ROUND_SIZE }
+            ?: error("COMPLETED 상태인데 결승 기록 없음 — tournamentId=${histories.firstOrNull()?.tournamentId}")
+        val semiRound = histories
+            .filter { it.currentRound > Tournament.FINAL_ROUND_SIZE }
+            .minByOrNull { it.currentRound }?.currentRound
+        val semiLosers = semiRound
+            ?.let { round -> histories.filter { it.currentRound == round }.map { it.loser() }.sorted() }
+            ?: emptyList()
+        return buildList {
+            add(finalMatch.selectedTournamentItemId to 1)
+            add(finalMatch.loser() to 2)
+            semiLosers.forEachIndexed { i, id -> add(id to 3 + i) }
+        }
+    }
+
+    private fun TournamentHistory.loser(): Long =
+        if (selectedTournamentItemId == firstTournamentItemId) secondTournamentItemId
+        else firstTournamentItemId
 
     // 완료된 라운드 수와 첫 라운드 매치 수를 기반으로 다음 진행해야 할 라운드를 계산한다.
     // currentPlayers = 해당 라운드 시작 시 남은 플레이어 수 = currentRound 값과 동일.

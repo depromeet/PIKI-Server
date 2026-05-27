@@ -1,6 +1,5 @@
 package com.depromeet.piki.tournament.controller
 
-import com.depromeet.piki.common.exception.ErrorCategory
 import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
@@ -242,16 +241,6 @@ class TournamentApiExamples(
                                 ),
                         )
                         add(
-                            status = HttpStatus.NOT_IMPLEMENTED,
-                            name = "COMPLETED 상태 미구현",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.SERVER_ERROR,
-                                    status = HttpStatus.NOT_IMPLEMENTED,
-                                    detail = "해당 상태의 토너먼트 조회는 아직 지원되지 않습니다.",
-                                ),
-                        )
-                        add(
                             status = HttpStatus.OK,
                             name = "COMPLETED - 최종 결과",
                             payload =
@@ -283,6 +272,24 @@ class TournamentApiExamples(
                                                             price = 189_000,
                                                             currency = "KRW",
                                                             imageUrl = "https://cdn.example.com/items/2.jpg",
+                                                        ),
+                                                        TournamentDetailResponse.RankedItemResponse(
+                                                            rank = 3,
+                                                            tournamentItemId = 3,
+                                                            itemId = 30,
+                                                            name = "뉴발란스 993",
+                                                            price = 259_000,
+                                                            currency = "KRW",
+                                                            imageUrl = "https://cdn.example.com/items/3.jpg",
+                                                        ),
+                                                        TournamentDetailResponse.RankedItemResponse(
+                                                            rank = 4,
+                                                            tournamentItemId = 4,
+                                                            itemId = 40,
+                                                            name = "살로몬 XT-6",
+                                                            price = 279_000,
+                                                            currency = "KRW",
+                                                            imageUrl = null,
                                                         ),
                                                     ),
                                             ),

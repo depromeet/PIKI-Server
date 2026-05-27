@@ -402,7 +402,67 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .andExpect(status().isUnauthorized)
     }
 
-    // TODO: COMPLETED 조회 구현 후 테스트 추가
+    @Test
+    fun `GET tournaments-id 는 COMPLETED 토너먼트에서 1위부터 4위까지 순위 결과를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val item1Id = saveWishItem(name = "1위아이템", price = 10_000)
+        val item2Id = saveWishItem(name = "2위아이템", price = 20_000)
+        val item3Id = saveWishItem(name = "3위아이템", price = 30_000)
+        val item4Id = saveWishItem(name = "4위아이템", price = 40_000)
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, item1Id, item2Id, item3Id, item4Id)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+        // start 는 가격 오름차순 반환 → ti1~ti4 순 — 클라이언트 페어링: [0]vs[1], [2]vs[3]
+        val items = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
+        val ti1 = items[0].getId()
+        val ti2 = items[1].getId()
+        val ti3 = items[2].getId()
+        val ti4 = items[3].getId()
+
+        // round-4: ti1 vs ti2 → ti1 승, ti3 vs ti4 → ti3 승
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/matches")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"currentRound":4,"firstTournamentItemId":$ti1,"secondTournamentItemId":$ti2,"selectedTournamentItemId":$ti1}"""),
+        ).andExpect(status().isOk)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/matches")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"currentRound":4,"firstTournamentItemId":$ti3,"secondTournamentItemId":$ti4,"selectedTournamentItemId":$ti3}"""),
+        ).andExpect(status().isOk)
+        // round-2 결승: ti1 vs ti3 → ti1 승
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/matches")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"currentRound":2,"firstTournamentItemId":$ti1,"secondTournamentItemId":$ti3,"selectedTournamentItemId":$ti1}"""),
+        ).andExpect(status().isOk)
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+            .andExpect(jsonPath("$.data.completed.result.length()").value(4))
+            // 1위: ti1, 2위: ti3(결승 패배), 3위: ti2(준결승 패배, tiId 낮음), 4위: ti4
+            .andExpect(jsonPath("$.data.completed.result[0].rank").value(1))
+            .andExpect(jsonPath("$.data.completed.result[0].tournamentItemId").value(ti1))
+            .andExpect(jsonPath("$.data.completed.result[0].name").value("1위아이템"))
+            .andExpect(jsonPath("$.data.completed.result[1].rank").value(2))
+            .andExpect(jsonPath("$.data.completed.result[1].tournamentItemId").value(ti3))
+            .andExpect(jsonPath("$.data.completed.result[2].rank").value(3))
+            .andExpect(jsonPath("$.data.completed.result[2].tournamentItemId").value(ti2))
+            .andExpect(jsonPath("$.data.completed.result[3].rank").value(4))
+            .andExpect(jsonPath("$.data.completed.result[3].tournamentItemId").value(ti4))
+            .andExpect(jsonPath("$.data.pending").doesNotExist())
+            .andExpect(jsonPath("$.data.inProgress").doesNotExist())
+    }
 
     @Test
     fun `GET tournaments-id 는 32개 아이템 토너먼트에서 6번 선택 후 현재 라운드 미대결 생존 아이템 20개를 가격 오름차순으로 반환한다`() {
