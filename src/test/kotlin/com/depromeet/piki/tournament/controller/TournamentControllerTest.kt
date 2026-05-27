@@ -185,12 +185,13 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `POST tournaments-id-start 는 아이템이 있는 PENDING 토너먼트를 시작하고 아이템 상세가 포함된 대진표를 반환한다`() {
+    fun `POST tournaments-id-start 는 아이템이 있는 PENDING 토너먼트를 시작하고 가격 오름차순 정렬된 아이템 목록을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        val item1Id = wishPersistenceService.persist(userId, Item(name = "나이키 에어맥스", currentPrice = 129_000, currency = "KRW")).item.getId()
+        // 비싼 아이템을 먼저 추가 — DB 조회 순서(id ASC)와 가격 순서가 달라야 정렬이 실제로 검증된다
         val item2Id = wishPersistenceService.persist(userId, Item(name = "아디다스 울트라부스트", currentPrice = 189_000, currency = "KRW")).item.getId()
-        addItemsToTournament(mockMvc, tournamentId, userId, item1Id, item2Id)
+        val item1Id = wishPersistenceService.persist(userId, Item(name = "나이키 에어맥스", currentPrice = 129_000, currency = "KRW")).item.getId()
+        addItemsToTournament(mockMvc, tournamentId, userId, item2Id, item1Id)
 
         mockMvc
             .perform(
@@ -198,16 +199,16 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.data.matches").isArray)
-            .andExpect(jsonPath("$.data.matches.length()").value(1))
-            .andExpect(jsonPath("$.data.matches[0].firstItem.tournamentItemId").isNumber)
-            .andExpect(jsonPath("$.data.matches[0].firstItem.name").value("나이키 에어맥스"))
-            .andExpect(jsonPath("$.data.matches[0].firstItem.price").value(129_000))
-            .andExpect(jsonPath("$.data.matches[0].firstItem.currency").value("KRW"))
-            .andExpect(jsonPath("$.data.matches[0].secondItem.tournamentItemId").isNumber)
-            .andExpect(jsonPath("$.data.matches[0].secondItem.name").value("아디다스 울트라부스트"))
-            .andExpect(jsonPath("$.data.matches[0].secondItem.price").value(189_000))
-            .andExpect(jsonPath("$.data.matches[0].secondItem.currency").value("KRW"))
+            .andExpect(jsonPath("$.data.items").isArray)
+            .andExpect(jsonPath("$.data.items.length()").value(2))
+            .andExpect(jsonPath("$.data.items[0].tournamentItemId").isNumber)
+            .andExpect(jsonPath("$.data.items[0].name").value("나이키 에어맥스"))
+            .andExpect(jsonPath("$.data.items[0].price").value(129_000))
+            .andExpect(jsonPath("$.data.items[0].currency").value("KRW"))
+            .andExpect(jsonPath("$.data.items[1].tournamentItemId").isNumber)
+            .andExpect(jsonPath("$.data.items[1].name").value("아디다스 울트라부스트"))
+            .andExpect(jsonPath("$.data.items[1].price").value(189_000))
+            .andExpect(jsonPath("$.data.items[1].currency").value("KRW"))
     }
 
     @Test
