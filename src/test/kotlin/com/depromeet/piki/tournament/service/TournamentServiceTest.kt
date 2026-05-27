@@ -69,6 +69,8 @@ class TournamentServiceTest {
     private class TestItemRepository : ItemRepository {
         var validIds: Set<Long>? = null // null = 모든 ID 유효
         val statusOverrides: MutableMap<Long, ItemStatus> = mutableMapOf()
+        // null 가격 시나리오를 명시적으로 테스트할 때 키를 추가한다. 키 없으면 DEFAULT_PRICE 사용.
+        val priceOverrides: MutableMap<Long, Int?> = mutableMapOf()
 
         override fun save(item: Item): Item = item
 
@@ -79,7 +81,10 @@ class TournamentServiceTest {
         override fun findByIds(ids: List<Long>): List<Item> {
             val effective = validIds?.let { valid -> ids.filter { it in valid } } ?: ids
             return effective.map { id ->
-                Item(status = statusOverrides[id] ?: ItemStatus.READY).also { item ->
+                Item(
+                    status = statusOverrides[id] ?: ItemStatus.READY,
+                    currentPrice = if (id in priceOverrides) priceOverrides[id] else DEFAULT_PRICE,
+                ).also { item ->
                     val field = LongBaseEntity::class.java.getDeclaredField("id")
                     field.isAccessible = true
                     field.set(item, id)
@@ -88,6 +93,10 @@ class TournamentServiceTest {
         }
 
         override fun findStaleProcessingIds(cutoff: java.time.LocalDateTime): List<Long> = emptyList()
+
+        companion object {
+            const val DEFAULT_PRICE = 10_000
+        }
     }
 
     private class TestWishRepository : WishRepository {
@@ -404,6 +413,17 @@ class TournamentServiceTest {
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
         testItemRepository.statusOverrides[1L] = ItemStatus.FAILED
+
+        val ex = assertFailsWith<TournamentException> { service.start(userId, tournamentId) }
+        assertEquals(HttpStatus.CONFLICT, ex.httpStatus)
+    }
+
+    @Test
+    fun `start 에서 가격이 없는 아이템이 있으면 409 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        testWishRepository.addWish(userId, 1L, 2L)
+        service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
+        testItemRepository.priceOverrides[1L] = null
 
         val ex = assertFailsWith<TournamentException> { service.start(userId, tournamentId) }
         assertEquals(HttpStatus.CONFLICT, ex.httpStatus)

@@ -799,8 +799,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
         itemJpaRepository.save(Item(name = name)).getId()
 
     // 위시리스트에도 등록된 READY 아이템 생성 — /items/wish 엔드포인트용
-    private fun saveWishItem(owner: UUID = userId, name: String = "테스트 아이템"): Long =
-        wishPersistenceService.persist(owner, Item(name = name)).item.getId()
+    private fun saveWishItem(owner: UUID = userId, name: String = "테스트 아이템", price: Int = 10_000): Long =
+        wishPersistenceService.persist(owner, Item(name = name, currentPrice = price, currency = "KRW")).item.getId()
 
     private fun startTournamentWith2Items(mockMvc: MockMvc): TournamentStart {
         val tournamentId = createTournament(mockMvc)
