@@ -199,6 +199,7 @@ class TournamentServiceTest {
 
     private class TestTournamentRepository : TournamentRepository {
         private var tournamentIdSeq = 1L
+        private var historyIdSeq = 1L
         val tournaments = mutableMapOf<Long, Tournament>()
         val histories = mutableListOf<TournamentHistory>()
 
@@ -210,6 +211,7 @@ class TournamentServiceTest {
         }
 
         override fun saveHistory(history: TournamentHistory) {
+            setEntityId(history, historyIdSeq++)
             histories.add(history)
         }
 
@@ -625,7 +627,59 @@ class TournamentServiceTest {
         }
     }
 
-    // TODO: IN_PROGRESS 조회 구현 후 테스트 추가
+    @Test
+    fun `getTournamentById 는 IN_PROGRESS 토너먼트에서 마지막 히스토리와 미등장 아이템을 가격 오름차순으로 반환한다`() {
+        val tournamentId = createAndStart((1L..4L).toList())
+        val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
+        // ti[0](price=10000) vs ti[1](price=10000) — 기본가 동일하므로 tournamentItemId 정렬이 tie-break
+        service.recordMatch(userId, RecordMatch(tournamentId, 4, items[0].getId(), items[1].getId(), items[0].getId()))
+
+        val detail = assertIs<TournamentDetail.InProgress>(service.getTournamentById(tournamentId, userId))
+
+        assertEquals(tournamentId, detail.tournamentId)
+        assertEquals(4, detail.currentRound)
+        assertEquals(items[0].getId(), detail.lastHistory?.firstTournamentItemId)
+        assertEquals(items[1].getId(), detail.lastHistory?.secondTournamentItemId)
+        assertEquals(items[0].getId(), detail.lastHistory?.selectedTournamentItemId)
+        // ti[0] 은 이미 round-4 대결 → remaining = ti[2], ti[3]
+        assertEquals(2, detail.remainingItems.size)
+        assertEquals(items[2].getId(), detail.remainingItems[0].tournamentItemId)
+        assertEquals(items[3].getId(), detail.remainingItems[1].tournamentItemId)
+    }
+
+    @Test
+    fun `getTournamentById 는 IN_PROGRESS 토너먼트에서 아직 매치가 없으면 lastHistory 가 null 이고 전체 아이템을 반환한다`() {
+        val tournamentId = createAndStart((1L..4L).toList())
+
+        val detail = assertIs<TournamentDetail.InProgress>(service.getTournamentById(tournamentId, userId))
+
+        assertEquals(4, detail.currentRound)
+        assertEquals(null, detail.lastHistory)
+        assertEquals(4, detail.remainingItems.size)
+    }
+
+    @Test
+    fun `getTournamentById 는 IN_PROGRESS 토너먼트에서 다중 라운드 진행 후 마지막 히스토리가 가장 최근 매치를 가리킨다`() {
+        // 4개 아이템: round-4 매치 2개 후 round-2(결승) 직전 상태
+        val tournamentId = createAndStart((1L..4L).toList())
+        val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
+        service.recordMatch(userId, RecordMatch(tournamentId, 4, items[0].getId(), items[1].getId(), items[0].getId()))
+        service.recordMatch(userId, RecordMatch(tournamentId, 4, items[2].getId(), items[3].getId(), items[2].getId()))
+        // 여기까지 round-4 2경기 완료, 아직 round-2 결승 미진행 → IN_PROGRESS
+
+        val detail = assertIs<TournamentDetail.InProgress>(service.getTournamentById(tournamentId, userId))
+
+        // currentRound 는 round-2(결승)
+        assertEquals(2, detail.currentRound)
+        // lastHistory 는 두 번째로 기록된 round-4 매치 (가장 최근)
+        assertEquals(4, detail.lastHistory?.currentRound)
+        assertEquals(items[2].getId(), detail.lastHistory?.firstTournamentItemId)
+        assertEquals(items[3].getId(), detail.lastHistory?.secondTournamentItemId)
+        // round-4 승자 2명이 round-2 대결 대기 중
+        assertEquals(2, detail.remainingItems.size)
+        assertEquals(items[0].getId(), detail.remainingItems[0].tournamentItemId)
+        assertEquals(items[2].getId(), detail.remainingItems[1].tournamentItemId)
+    }
 
     @Test
     fun `getTournamentById 는 PENDING 토너먼트의 아이템 목록을 반환한다`() {

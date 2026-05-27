@@ -14,9 +14,9 @@ sealed class TournamentDetail {
     data class InProgress(
         val tournamentId: Long,
         val name: String,
-        val startRound: Int,
-        val bracket: List<BracketMatch>,
-        val history: List<HistoryEntry>,
+        val currentRound: Int,
+        val lastHistory: HistoryEntry?,
+        val remainingItems: List<ItemDetail>,
     ) : TournamentDetail()
 
     data class Completed(
@@ -32,11 +32,6 @@ sealed class TournamentDetail {
         val price: Int?,
         val currency: String?,
         val imageUrl: String?,
-    )
-
-    data class BracketMatch(
-        val firstItem: ItemDetail,
-        val secondItem: ItemDetail,
     )
 
     data class HistoryEntry(

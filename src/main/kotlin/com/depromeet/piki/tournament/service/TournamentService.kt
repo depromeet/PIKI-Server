@@ -171,8 +171,42 @@ class TournamentService(
                 )
             }
 
-            // TODO: IN_PROGRESS 조회 구현
-            TournamentStatus.IN_PROGRESS -> throw TournamentException.statusNotSupported()
+            TournamentStatus.IN_PROGRESS -> {
+                val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
+                // 히스토리는 currentRound ASC, id ASC 정렬이라 lastOrNull()은 라운드가 바뀌면 틀림 — ID 최대값이 가장 최근 매치
+                val lastHistory = histories.maxByOrNull { it.getId() }?.let { TournamentDetail.HistoryEntry.from(it) }
+                val allTournamentItems = tournamentItemRepository.findAllByTournamentId(tournamentId)
+                val currentRound = computeExpectedRound(allTournamentItems.size, allTournamentItems.size / 2, histories)
+                // 패배 아이템 = 각 히스토리에서 selected 가 아닌 쪽
+                val eliminatedItemIds = histories.mapTo(mutableSetOf()) { h ->
+                    if (h.selectedTournamentItemId == h.firstTournamentItemId) h.secondTournamentItemId
+                    else h.firstTournamentItemId
+                }
+                // 현재 라운드에서 이미 대결한 아이템
+                val foughtInCurrentRoundIds = buildSet<Long> {
+                    histories.filter { it.currentRound == currentRound }.forEach {
+                        add(it.firstTournamentItemId)
+                        add(it.secondTournamentItemId)
+                    }
+                }
+                // 생존 중(탈락 X) + 현재 라운드 미대결 아이템
+                val remainingTournamentItems = allTournamentItems.filter { item ->
+                    item.getId() !in eliminatedItemIds && item.getId() !in foughtInCurrentRoundIds
+                }
+                val itemById = itemRepository
+                    .findByIds(remainingTournamentItems.map { it.itemId })
+                    .associate { it.getId() to it }
+                val remainingItems = remainingTournamentItems
+                    .map { toItemDetail(it, itemById) }
+                    .sortedWith(compareBy({ it.price }, { it.tournamentItemId }))
+                TournamentDetail.InProgress(
+                    tournamentId = tournament.getId(),
+                    name = tournament.name,
+                    currentRound = currentRound,
+                    lastHistory = lastHistory,
+                    remainingItems = remainingItems,
+                )
+            }
 
             // TODO: COMPLETED 조회 구현
             TournamentStatus.COMPLETED -> throw TournamentException.statusNotSupported()

@@ -562,7 +562,7 @@ interface TournamentApi {
             토너먼트 ID로 상태에 따른 상세 정보를 조회한다.
             응답의 status 필드에 따라 포함되는 데이터가 달라진다.
             - PENDING: pending 필드 (아이템 목록, 참여자 목록)
-            - IN_PROGRESS: inProgress 필드 (시작 라운드, 대진표, 히스토리)
+            - IN_PROGRESS: inProgress 필드 (현재 라운드 번호, 마지막 히스토리, 현재 라운드에서 아직 대결하지 않은 생존 아이템 목록 가격 오름차순)
             - COMPLETED: completed 필드 (1~4위 결과)
             나머지 필드는 응답에 포함되지 않는다.
         """,

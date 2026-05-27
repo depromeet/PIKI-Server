@@ -208,57 +208,31 @@ class TournamentApiExamples(
                                         pending = null,
                                         inProgress =
                                             TournamentDetailResponse.InProgressData(
-                                                startRound = 4,
-                                                bracket =
-                                                    listOf(
-                                                        TournamentDetailResponse.BracketMatchResponse(
-                                                            firstItem =
-                                                                TournamentDetailResponse.ItemDetailResponse(
-                                                                    tournamentItemId = 1,
-                                                                    itemId = 10,
-                                                                    name = "나이키 에어맥스",
-                                                                    price = 129_000,
-                                                                    currency = "KRW",
-                                                                    imageUrl = "https://cdn.example.com/items/1.jpg",
-                                                                ),
-                                                            secondItem =
-                                                                TournamentDetailResponse.ItemDetailResponse(
-                                                                    tournamentItemId = 2,
-                                                                    itemId = 20,
-                                                                    name = "아디다스 울트라부스트",
-                                                                    price = 189_000,
-                                                                    currency = "KRW",
-                                                                    imageUrl = "https://cdn.example.com/items/2.jpg",
-                                                                ),
-                                                        ),
-                                                        TournamentDetailResponse.BracketMatchResponse(
-                                                            firstItem =
-                                                                TournamentDetailResponse.ItemDetailResponse(
-                                                                    tournamentItemId = 3,
-                                                                    itemId = 30,
-                                                                    name = "뉴발란스 993",
-                                                                    price = 259_000,
-                                                                    currency = "KRW",
-                                                                    imageUrl = "https://cdn.example.com/items/3.jpg",
-                                                                ),
-                                                            secondItem =
-                                                                TournamentDetailResponse.ItemDetailResponse(
-                                                                    tournamentItemId = 4,
-                                                                    itemId = 40,
-                                                                    name = "살로몬 XT-6",
-                                                                    price = 279_000,
-                                                                    currency = "KRW",
-                                                                    imageUrl = null,
-                                                                ),
-                                                        ),
+                                                currentRound = 4,
+                                                lastHistory =
+                                                    TournamentDetailResponse.HistoryResponse(
+                                                        currentRound = 4,
+                                                        firstTournamentItemId = 1,
+                                                        secondTournamentItemId = 2,
+                                                        selectedTournamentItemId = 1,
                                                     ),
-                                                history =
+                                                remainingItems =
                                                     listOf(
-                                                        TournamentDetailResponse.HistoryResponse(
-                                                            currentRound = 4,
-                                                            firstTournamentItemId = 1,
-                                                            secondTournamentItemId = 2,
-                                                            selectedTournamentItemId = 1,
+                                                        TournamentDetailResponse.ItemDetailResponse(
+                                                            tournamentItemId = 3,
+                                                            itemId = 30,
+                                                            name = "뉴발란스 993",
+                                                            price = 259_000,
+                                                            currency = "KRW",
+                                                            imageUrl = "https://cdn.example.com/items/3.jpg",
+                                                        ),
+                                                        TournamentDetailResponse.ItemDetailResponse(
+                                                            tournamentItemId = 4,
+                                                            itemId = 40,
+                                                            name = "살로몬 XT-6",
+                                                            price = 279_000,
+                                                            currency = "KRW",
+                                                            imageUrl = null,
                                                         ),
                                                     ),
                                             ),

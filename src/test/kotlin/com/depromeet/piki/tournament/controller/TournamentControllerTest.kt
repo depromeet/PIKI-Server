@@ -404,7 +404,118 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
     // TODO: COMPLETED 조회 구현 후 테스트 추가
 
-    // TODO: IN_PROGRESS 조회 구현 후 테스트 추가
+    @Test
+    fun `GET tournaments-id 는 32개 아이템 토너먼트에서 6번 선택 후 미등장 아이템 20개를 가격 오름차순으로 반환한다`() {
+        val mockMvc = buildMockMvc()
+        // 가격 1_000 ~ 32_000 순으로 32개 아이템 생성 (삽입 순서 = 가격 오름차순)
+        val itemIds = (1..32).map { i -> saveWishItem(name = "아이템$i", price = i * 1_000) }.toLongArray()
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, *itemIds)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+
+        val allItems = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
+        // 6번의 매치 기록 — 1라운드(currentRound=32), 각 2개씩 소진 → ti[0]~ti[11] 등장
+        repeat(6) { i ->
+            val first = allItems[i * 2].getId()
+            val second = allItems[i * 2 + 1].getId()
+            mockMvc.perform(
+                post("/api/v1/tournaments/$tournamentId/matches")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"currentRound":32,"firstTournamentItemId":$first,"secondTournamentItemId":$second,"selectedTournamentItemId":$first}"""),
+            ).andExpect(status().isOk)
+        }
+
+        val lastFirst = allItems[10].getId()
+        val lastSecond = allItems[11].getId()
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
+            .andExpect(jsonPath("$.data.inProgress.currentRound").value(32))
+            // 마지막 히스토리 = 6번째 매치
+            .andExpect(jsonPath("$.data.inProgress.lastHistory.currentRound").value(32))
+            .andExpect(jsonPath("$.data.inProgress.lastHistory.firstTournamentItemId").value(lastFirst))
+            .andExpect(jsonPath("$.data.inProgress.lastHistory.secondTournamentItemId").value(lastSecond))
+            .andExpect(jsonPath("$.data.inProgress.lastHistory.selectedTournamentItemId").value(lastFirst))
+            // round-32 미대결 생존 아이템 20개(ti[12]~ti[31]) 가격 오름차순
+            .andExpect(jsonPath("$.data.inProgress.remainingItems.length()").value(20))
+            .andExpect(jsonPath("$.data.inProgress.remainingItems[0].price").value(13_000))
+            .andExpect(jsonPath("$.data.inProgress.remainingItems[19].price").value(32_000))
+    }
+
+    @Test
+    fun `GET tournaments-id 는 IN_PROGRESS 토너먼트에서 마지막 히스토리와 미등장 아이템을 가격 오름차순으로 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val item1Id = saveWishItem(name = "아이템1", price = 10_000)
+        val item2Id = saveWishItem(name = "아이템2", price = 40_000)
+        val item3Id = saveWishItem(name = "아이템3", price = 20_000)
+        val item4Id = saveWishItem(name = "아이템4", price = 30_000)
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, item1Id, item2Id, item3Id, item4Id)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+        val items = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
+        val ti1 = items[0].getId()
+        val ti2 = items[1].getId()
+
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/matches")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"currentRound":4,"firstTournamentItemId":$ti1,"secondTournamentItemId":$ti2,"selectedTournamentItemId":$ti1}"""),
+        )
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
+            .andExpect(jsonPath("$.data.pending").doesNotExist())
+            .andExpect(jsonPath("$.data.inProgress.currentRound").value(4))
+            .andExpect(jsonPath("$.data.inProgress.lastHistory.currentRound").value(4))
+            .andExpect(jsonPath("$.data.inProgress.lastHistory.firstTournamentItemId").value(ti1))
+            .andExpect(jsonPath("$.data.inProgress.lastHistory.secondTournamentItemId").value(ti2))
+            .andExpect(jsonPath("$.data.inProgress.lastHistory.selectedTournamentItemId").value(ti1))
+            // round-4 미대결 생존 아이템 2개(item3, item4) 가격 오름차순
+            .andExpect(jsonPath("$.data.inProgress.remainingItems.length()").value(2))
+            .andExpect(jsonPath("$.data.inProgress.remainingItems[0].price").value(20_000))
+            .andExpect(jsonPath("$.data.inProgress.remainingItems[1].price").value(30_000))
+    }
+
+    @Test
+    fun `GET tournaments-id 는 IN_PROGRESS 토너먼트에서 매치 기록이 없으면 lastHistory 가 없고 전체 아이템을 가격 오름차순으로 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val item1Id = saveWishItem(name = "아이템1", price = 30_000)
+        val item2Id = saveWishItem(name = "아이템2", price = 10_000)
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, item1Id, item2Id)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
+            .andExpect(jsonPath("$.data.inProgress.currentRound").value(2))
+            .andExpect(jsonPath("$.data.inProgress.lastHistory").doesNotExist())
+            .andExpect(jsonPath("$.data.inProgress.remainingItems.length()").value(2))
+            .andExpect(jsonPath("$.data.inProgress.remainingItems[0].price").value(10_000))
+            .andExpect(jsonPath("$.data.inProgress.remainingItems[1].price").value(30_000))
+    }
 
     @Test
     fun `GET tournaments-id 는 PENDING 토너먼트의 아이템 목록을 반환한다`() {
