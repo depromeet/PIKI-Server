@@ -185,6 +185,26 @@ jobs:
               exit 1
             fi
 
+      - name: Upload provisioning script
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "infra/scripts/provision-runtime.sh"
+          target: "/tmp/team3-provision"
+          strip_components: 2
+
+      - name: Provision runtime (swap·redis·nginx default)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            chmod +x /tmp/team3-provision/provision-runtime.sh
+            /tmp/team3-provision/provision-runtime.sh
+
       - name: Health check and switch
         id: health
         uses: appleboy/ssh-action@v1
