@@ -404,6 +404,33 @@ race · 동시성 · timeout 처럼 일반 통합 테스트 패턴(`@Transaction
 - example payload 는 실제 DTO 인스턴스를 만들어 `ApiResponseBody.ok/created/fail` 로 감싸 넘긴다. `@ExampleObject(value = "...JSON 평문...")` 형태 금지 — DTO 시그니처 변경이 컴파일로 추적되지 않는다.
 - 새 엔드포인트 추가 / 시그니처 변경 시 인터페이스 + example 빈을 함께 갱신한다. 한쪽만 바꾸면 OpenAPI 문서가 실제 응답과 어긋난다.
 
+### 실패 응답 코드 필수 문서화
+
+**`*Api.kt` 의 각 메서드는 실제로 발생 가능한 실패 응답 코드를 모두 `@ApiResponses` 에 포함해야 한다.** 성공 코드만 달고 실패를 생략하면 클라이언트가 docs 만 보고 에러 처리를 설계할 수 없다.
+
+조사 대상은 세 군데다.
+
+1. **Spring Security** (`SecurityConfig`) — 엔드포인트에 적용된 권한 설정을 확인한다.
+   - `permitAll()` 이 아닌 경우: **401** (미인증)
+   - `hasAuthority(...)` / `authenticated()` 가 아닌 특정 권한 요구: **403** (권한 없음)
+
+2. **도메인 예외** (`*Exception.kt`) — 서비스·도메인에서 throw 되는 커스텀 예외의 `httpStatus` 를 따른다.
+   - 400 / 403 / 404 / 409 등 예외마다 다르므로 실제 throw 지점을 추적한다.
+
+3. **Bean Validation** — 요청 DTO 의 `@NotBlank` · `@Size` 등 위반은 `MethodArgumentNotValidException` → **400** 으로 매핑된다.
+
+description 은 구체적으로 쓴다. "오류 등" 같은 모호한 표현 대신 실제 원인을 나열한다.
+
+```kotlin
+// 나쁜 예
+ApiResponse(responseCode = "400", description = "잘못된 요청 (오류 등)")
+
+// 좋은 예
+ApiResponse(responseCode = "400", description = "잘못된 요청 (URL 이 비어 있음 · 유효한 URL 형식이 아님 · https 외 스킴)")
+```
+
+새 엔드포인트를 추가하거나 서비스 로직을 변경해 새 예외가 추가됐다면, `*Api.kt` 의 `@ApiResponses` 도 함께 갱신한다.
+
 ### 응답 포맷
 **모든 응답은 `ApiResponseBody` 래퍼로 감싼다.** 컨트롤러 메서드는 항상 `ApiResponseBody<T>` 를 반환하고, 직접 `ResponseEntity` / raw DTO 를 노출하지 않는다.
 
