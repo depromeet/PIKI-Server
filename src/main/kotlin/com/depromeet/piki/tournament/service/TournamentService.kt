@@ -3,7 +3,6 @@ package com.depromeet.piki.tournament.service
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.tournament.domain.Tournament
-import com.depromeet.piki.tournament.domain.TournamentBracket
 import com.depromeet.piki.tournament.domain.TournamentHistory
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentStatus
@@ -14,8 +13,8 @@ import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.tournament.service.dto.AddTournamentItemsFromWish
 import com.depromeet.piki.tournament.service.dto.CreateTournament
 import com.depromeet.piki.tournament.service.dto.RecordMatch
-import com.depromeet.piki.tournament.service.dto.TournamentBracketResult
 import com.depromeet.piki.tournament.service.dto.TournamentDetail
+import com.depromeet.piki.tournament.service.dto.TournamentStartResult
 import com.depromeet.piki.tournament.service.dto.TournamentSummary
 import com.depromeet.piki.user.repository.UserRepository
 import com.depromeet.piki.wishlist.repository.WishRepository
@@ -74,7 +73,9 @@ class TournamentService(
             throw TournamentException.tooManyTournamentItems()
         }
         val foundItems = itemRepository.findByIds(command.itemIds)
-        val foundItemIds = foundItems.map { it.getId() }.toSet()
+        val foundItemIds = foundItems
+            .map { it.getId() }
+            .toSet()
         if (command.itemIds.any { it !in foundItemIds }) throw TournamentException.notFoundItems()
         // 비동기 파싱 중(PROCESSING)이거나 실패(FAILED)한 상품은 이름·가격이 비어 출전에 부적합하다. READY 만 허용.
         if (foundItems.any { !it.isReady() }) throw TournamentException.itemNotReady()
@@ -89,7 +90,7 @@ class TournamentService(
     fun start(
         userId: UUID,
         tournamentId: Long,
-    ): TournamentBracketResult {
+    ): List<TournamentStartResult> {
         val tournament =
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
@@ -110,22 +111,21 @@ class TournamentService(
                 .associate { it.getId() to it }
         if (tournamentItems.any { it.itemId !in itemById }) throw TournamentException.notFoundItems()
         if (itemById.values.any { !it.isReady() }) throw TournamentException.itemNotReadyToStart()
-        val itemsWithPrice = tournamentItems.map { it.getId() to itemById[it.itemId]?.currentPrice }
-        val bracket = TournamentBracket.generate(itemsWithPrice)
+        itemById.values.forEach { item -> item.currentPrice ?: throw TournamentException.itemPriceRequired() }
 
-        val itemDetailsByTournamentItemId =
-            tournamentItems.associate { tournamentItem ->
-                val item = itemById[tournamentItem.itemId]
-                tournamentItem.getId() to
-                    TournamentBracketResult.ItemDetail(
-                        name = item?.name,
-                        price = item?.currentPrice,
-                        currency = item?.currency,
-                        imageUrl = item?.imageUrl,
-                    )
-            }
         tournament.start()
-        return TournamentBracketResult(bracket, itemDetailsByTournamentItemId)
+        return tournamentItems
+            .map { tournamentItem ->
+                val item = itemById.getValue(tournamentItem.itemId)
+                TournamentStartResult(
+                    tournamentItemId = tournamentItem.getId(),
+                    name = item.name,
+                    price = item.currentPrice,
+                    currency = item.currency,
+                    imageUrl = item.imageUrl,
+                )
+            }
+            .sortedWith(compareBy({ it.price }, { it.tournamentItemId }))
     }
 
     @Transactional(readOnly = true)
@@ -147,7 +147,13 @@ class TournamentService(
                         .findByIds(tournamentItems.map { it.itemId })
                         .associate { it.getId() to it }
                 val tournamentUsers = tournamentUserRepository.findByTournamentId(tournamentId)
-                val userById = userRepository.findByIds(tournamentUsers.map { it.userId }.toSet()).associateBy { it.id }
+                val userById = userRepository
+                    .findByIds(
+                        tournamentUsers
+                            .map { it.userId }
+                            .toSet(),
+                    )
+                    .associateBy { it.id }
                 TournamentDetail.Pending(
                     tournamentId = tournament.getId(),
                     name = tournament.name,
@@ -300,7 +306,9 @@ class TournamentService(
         firstRoundMatchCount: Int,
         histories: List<TournamentHistory>,
     ): Int {
-        val countByRound = histories.groupingBy { it.currentRound }.eachCount()
+        val countByRound = histories
+            .groupingBy { it.currentRound }
+            .eachCount()
         var currentPlayers = startRound
         var matchesExpected = firstRoundMatchCount
         while (currentPlayers >= Tournament.FINAL_ROUND_SIZE) {
@@ -314,5 +322,4 @@ class TournamentService(
         // 모든 라운드가 완료됐는데 isInProgress() 인 상태 — tournament.complete() 누락 버그
         error("recordMatch: 모든 라운드가 완료됐는데 IN_PROGRESS 상태임 tournamentId=${histories.firstOrNull()?.tournamentId}")
     }
-
 }

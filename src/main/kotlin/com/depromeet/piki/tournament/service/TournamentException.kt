@@ -106,6 +106,15 @@ class TournamentException private constructor(
                 HttpStatus.CONFLICT,
             )
 
+        // 토너먼트 시작 시 가격 정보가 없는 아이템이 포함된 경우.
+        // 가격 기준 정렬이 불가능하고 클라이언트가 아이템 추가 시점에 해당 상태를 유발할 수 있어 → 409.
+        fun itemPriceRequired(): TournamentException =
+            TournamentException(
+                "가격 정보가 없는 상품이 포함되어 있어 토너먼트를 시작할 수 없습니다.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
+
         fun invalidImageCount(): TournamentException =
             TournamentException(
                 "이미지는 최소 1개, 최대 5개까지 전송할 수 있습니다.",
