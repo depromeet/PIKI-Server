@@ -562,8 +562,11 @@ interface TournamentApi {
             토너먼트 ID로 상태에 따른 상세 정보를 조회한다.
             응답의 status 필드에 따라 포함되는 데이터가 달라진다.
             - PENDING: pending 필드 (아이템 목록, 참여자 목록)
-            - IN_PROGRESS: inProgress 필드 (현재 라운드 번호, 마지막 히스토리, 현재 라운드에서 아직 대결하지 않은 생존 아이템 목록 가격 오름차순)
-            - COMPLETED: completed 필드 (1~4위 결과)
+            - IN_PROGRESS: inProgress 필드
+              - currentRound: 다음에 진행할 라운드 번호
+              - lastHistory: 가장 최근에 기록된 매치 결과. 라운드 전환 직후에는 currentRound와 다른 라운드의 매치일 수 있음. 매치 기록이 없으면 null
+              - remainingItems: 현재 라운드에서 아직 대결하지 않은 생존 아이템 목록, 가격 오름차순. 이 순서가 클라이언트의 매치 페어링 순서([0]vs[1], [2]vs[3] …)를 결정함
+            - COMPLETED: 미구현 (501 반환)
             나머지 필드는 응답에 포함되지 않는다.
         """,
     )
