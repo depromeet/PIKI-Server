@@ -628,7 +628,7 @@ class TournamentServiceTest {
     }
 
     @Test
-    fun `getTournamentById 는 IN_PROGRESS 토너먼트에서 마지막 히스토리와 미등장 아이템을 가격 오름차순으로 반환한다`() {
+    fun `getTournamentById 는 IN_PROGRESS 토너먼트에서 마지막 히스토리와 현재 라운드 미대결 생존 아이템을 가격 오름차순으로 반환한다`() {
         val tournamentId = createAndStart((1L..4L).toList())
         val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
         // ti[0](price=10000) vs ti[1](price=10000) — 기본가 동일하므로 tournamentItemId 정렬이 tie-break
@@ -638,6 +638,7 @@ class TournamentServiceTest {
 
         assertEquals(tournamentId, detail.tournamentId)
         assertEquals(4, detail.currentRound)
+        assertEquals(4, detail.lastHistory?.currentRound)
         assertEquals(items[0].getId(), detail.lastHistory?.firstTournamentItemId)
         assertEquals(items[1].getId(), detail.lastHistory?.secondTournamentItemId)
         assertEquals(items[0].getId(), detail.lastHistory?.selectedTournamentItemId)

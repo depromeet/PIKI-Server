@@ -405,7 +405,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     // TODO: COMPLETED 조회 구현 후 테스트 추가
 
     @Test
-    fun `GET tournaments-id 는 32개 아이템 토너먼트에서 6번 선택 후 미등장 아이템 20개를 가격 오름차순으로 반환한다`() {
+    fun `GET tournaments-id 는 32개 아이템 토너먼트에서 6번 선택 후 현재 라운드 미대결 생존 아이템 20개를 가격 오름차순으로 반환한다`() {
         val mockMvc = buildMockMvc()
         // 가격 1_000 ~ 32_000 순으로 32개 아이템 생성 (삽입 순서 = 가격 오름차순)
         val itemIds = (1..32).map { i -> saveWishItem(name = "아이템$i", price = i * 1_000) }.toLongArray()
@@ -451,7 +451,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `GET tournaments-id 는 IN_PROGRESS 토너먼트에서 마지막 히스토리와 미등장 아이템을 가격 오름차순으로 반환한다`() {
+    fun `GET tournaments-id 는 IN_PROGRESS 토너먼트에서 마지막 히스토리와 현재 라운드 미대결 생존 아이템을 가격 오름차순으로 반환한다`() {
         val mockMvc = buildMockMvc()
         val item1Id = saveWishItem(name = "아이템1", price = 10_000)
         val item2Id = saveWishItem(name = "아이템2", price = 40_000)
