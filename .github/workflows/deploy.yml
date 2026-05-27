@@ -154,6 +154,37 @@ jobs:
               -e S3_PUBLIC_BASE_URL="$S3_PUBLIC_BASE_URL" \
               "$IMAGE"
 
+      - name: Upload nginx config
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "infra/nginx/api.depromeet18team3.cloud.conf"
+          target: "/tmp/team3-nginx"
+          strip_components: 2
+
+      - name: Apply nginx config
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            SRC=/tmp/team3-nginx/api.depromeet18team3.cloud.conf
+            DST=/etc/nginx/sites-available/api.depromeet18team3.cloud
+            # 현재 설정 백업 후 교체. nginx -t 검증 실패 시 이전 설정으로 롤백하고 배포를 중단한다.
+            sudo cp "$DST" "${DST}.bak" 2>/dev/null || true
+            sudo cp "$SRC" "$DST"
+            if sudo nginx -t; then
+              sudo nginx -s reload
+              echo "nginx config 적용 + reload 완료"
+            else
+              echo "nginx -t 실패 — 이전 설정으로 롤백하고 중단"
+              sudo cp "${DST}.bak" "$DST" 2>/dev/null || true
+              exit 1
+            fi
+
       - name: Health check and switch
         id: health
         uses: appleboy/ssh-action@v1
