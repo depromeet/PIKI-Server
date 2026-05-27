@@ -128,16 +128,6 @@ interface WishlistApi {
                     ),
                 ],
             ),
-            ApiResponse(
-                responseCode = "500",
-                description = "서버 오류 (위시 항목에 연결된 item이 DB에 없음 — 영속화 경로 버그)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
         ],
     )
     fun getWishlist(
@@ -191,16 +181,6 @@ interface WishlistApi {
             ApiResponse(
                 responseCode = "404",
                 description = "존재하지 않는 위시 항목 (삭제된 항목 포함)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "500",
-                description = "서버 오류 (위시 항목에 연결된 item이 DB에 없음 — 영속화 경로 버그)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -274,16 +254,6 @@ interface WishlistApi {
                     ),
                 ],
             ),
-            ApiResponse(
-                responseCode = "500",
-                description = "서버 오류 (위시 항목에 연결된 item이 DB에 없음 — 영속화 경로 버그)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
         ],
     )
     fun updateWish(
@@ -349,10 +319,10 @@ interface WishlistApi {
     ): ApiResponseBody<Unit>
 
     @Operation(
-        summary = "위시리스트 OCR 등록",
+        summary = "위시리스트 이미지 등록",
         description = """
             상품 페이지를 캡처한 이미지를 받아 Gemini Vision 으로 상품명/가격을 추출한 뒤 유저의 위시리스트에 등록한다.
-            URL 등록과 결과 모양(WishItemResponse)이 같다. OCR 항목은 URL 이 없어 sourceUrl 이 null 이며,
+            URL 등록과 결과 모양(WishItemResponse)이 같다. 이미지 등록 항목은 URL 이 없어 sourceUrl 이 null 이며,
             추출이 부정확하면 수정 API 로 교정한다.
         """,
     )
@@ -360,7 +330,7 @@ interface WishlistApi {
         value = [
             ApiResponse(
                 responseCode = "201",
-                description = "OCR 등록 성공",
+                description = "이미지 등록 성공",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -410,7 +380,7 @@ interface WishlistApi {
             ),
         ],
     )
-    fun registerFromOcr(
+    fun registerFromImages(
         @Parameter(hidden = true) userId: UUID,
         image: MultipartFile,
     ): ApiResponseBody<WishItemResponse>

@@ -1,7 +1,7 @@
-package com.depromeet.piki.ocr.service.gemini
+package com.depromeet.piki.image.service.gemini
 
-import com.depromeet.piki.ocr.domain.BoundingBox
-import com.depromeet.piki.ocr.service.OcrExtraction
+import com.depromeet.piki.image.domain.BoundingBox
+import com.depromeet.piki.image.service.ImageExtraction
 import com.depromeet.piki.product.domain.CurrencyCode
 import com.depromeet.piki.product.service.ProductSnapshot
 
@@ -10,7 +10,7 @@ import com.depromeet.piki.product.service.ProductSnapshot
  *
  * 단일 상품만 받도록 스키마(PRODUCT_SCHEMA)를 OBJECT 타입으로 정의했음.
  */
-data class GeminiOcrResult(
+data class GeminiImageResult(
     val name: String?,
     val price: Int?,
     val category: String?,
@@ -25,8 +25,8 @@ data class GeminiOcrResult(
         val xMax: Int? = null,
     )
 
-    fun toOcrExtraction(): OcrExtraction =
-        OcrExtraction(
+    fun toImageExtraction(): ImageExtraction =
+        ImageExtraction(
             snapshot = toProductSnapshot(),
             boundingBox =
                 boundingBox?.let {
@@ -34,13 +34,14 @@ data class GeminiOcrResult(
                 },
         )
 
-    // OCR 추출 결과를 URL 추출과 같은 ProductSnapshot 으로 옮긴다. URL 이 없어 link 는 null,
+    // 이미지 추출 결과를 URL 추출과 같은 ProductSnapshot 으로 옮긴다. URL 이 없어 link 는 null,
     // category 는 현재 item 모델에 없어 버린다. price → currentPrice 로 어휘를 통일한다.
     // currency 는 LLM 이 형식을 제각각 주므로 ISO 4217 로 정규화하고, 안 맞으면 null.
-    private fun toProductSnapshot() = ProductSnapshot(
-        link = null,
-        name = name,
-        currentPrice = price,
-        currency = CurrencyCode.normalizeOrNull(currency),
-    )
+    private fun toProductSnapshot() =
+        ProductSnapshot(
+            link = null,
+            name = name,
+            currentPrice = price,
+            currency = CurrencyCode.normalizeOrNull(currency),
+        )
 }

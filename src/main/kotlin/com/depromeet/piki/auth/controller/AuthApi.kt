@@ -35,16 +35,6 @@ interface AuthApi {
                     ),
                 ],
             ),
-            ApiResponse(
-                responseCode = "500",
-                description = "서버 오류 (닉네임 자동 생성 10회 시도 후 전부 중복 — 매우 드문 경우)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
         ],
     )
     fun createGuest(): ApiResponseBody<GuestCreateResponse>

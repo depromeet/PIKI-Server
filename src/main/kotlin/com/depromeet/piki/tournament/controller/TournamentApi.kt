@@ -227,9 +227,9 @@ interface TournamentApi {
     @Operation(
         summary = "이미지로 토너먼트 아이템 추가",
         description = """
-            PENDING 상태의 토너먼트에 이미지 OCR 을 통해 아이템을 추가한다.
+            PENDING 상태의 토너먼트에 이미지 추출을 통해 아이템을 추가한다.
             이미지 1~5장을 전달하면 아이템이 PROCESSING 상태로 즉시 생성되어 itemIds 가 반환된다.
-            OCR 파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다.
+            이미지 파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다.
             클라이언트는 itemId 로 상태를 폴링한다. 토너먼트 참여자만 추가할 수 있다.
         """,
     )
@@ -510,16 +510,6 @@ interface TournamentApi {
                     ),
                 ],
             ),
-            ApiResponse(
-                responseCode = "500",
-                description = "서버 오류 (모든 라운드가 완료됐는데 IN_PROGRESS 상태 — tournament.complete() 누락 버그)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
         ],
     )
     fun recordMatch(
@@ -615,16 +605,6 @@ interface TournamentApi {
             ApiResponse(
                 responseCode = "404",
                 description = "토너먼트를 찾을 수 없음",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "500",
-                description = "서버 오류 (IN_PROGRESS 토너먼트에서 모든 라운드가 완료됐는데 COMPLETED 전환 누락 — 버그)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

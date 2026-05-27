@@ -1,6 +1,6 @@
-package com.depromeet.piki.ocr.service
+package com.depromeet.piki.image.service
 
-import com.depromeet.piki.ocr.domain.BoundingBox
+import com.depromeet.piki.image.domain.BoundingBox
 import org.junit.jupiter.api.Test
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream

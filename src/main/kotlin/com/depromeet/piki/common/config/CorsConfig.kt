@@ -18,6 +18,8 @@ class CorsConfig {
             CorsConfiguration().apply {
                 allowedOrigins =
                     listOf(
+                        "https://depromeet18team3.cloud",
+                        "https://www.depromeet18team3.cloud",
                         "https://depromeet.vercel.app",
                         // 우리 서버 자체 origin — Stoplight UI (/docs/index.html) 의 try-it 이
                         // 브라우저 fetch(mode=cors) 로 호출 시 same-origin 이어도 Origin 헤더가 박혀
