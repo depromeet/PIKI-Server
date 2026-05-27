@@ -1,6 +1,5 @@
 package com.depromeet.piki.tournament.service.dto
 
-import com.depromeet.piki.tournament.domain.TournamentBracket
 import com.depromeet.piki.tournament.domain.TournamentHistory
 import java.util.UUID
 
@@ -38,20 +37,7 @@ sealed class TournamentDetail {
     data class BracketMatch(
         val firstItem: ItemDetail,
         val secondItem: ItemDetail,
-    ) {
-        companion object {
-            fun from(
-                match: TournamentBracket.Match,
-                itemDetailById: Map<Long, ItemDetail>,
-            ): BracketMatch =
-                BracketMatch(
-                    firstItem = itemDetailById[match.firstTournamentItemId]
-                        ?: error("BracketMatch 구성 불가: tournamentItemId=${match.firstTournamentItemId}"),
-                    secondItem = itemDetailById[match.secondTournamentItemId]
-                        ?: error("BracketMatch 구성 불가: tournamentItemId=${match.secondTournamentItemId}"),
-                )
-        }
-    }
+    )
 
     data class HistoryEntry(
         val currentRound: Int,

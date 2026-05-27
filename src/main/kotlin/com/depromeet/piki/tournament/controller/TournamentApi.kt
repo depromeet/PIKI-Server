@@ -8,9 +8,7 @@ import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.RecordMatchRequest
-import com.depromeet.piki.tournament.controller.dto.TournamentBracketResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
-import com.depromeet.piki.tournament.controller.dto.TournamentInfoResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
@@ -372,11 +370,6 @@ interface TournamentApi {
     @Operation(
         summary = "토너먼트 시작",
         description = "PENDING 상태의 토너먼트를 IN_PROGRESS 상태로 전환하고, 참여 아이템 목록을 가격 오름차순으로 정렬해 반환한다.",
-        description = """
-            PENDING 상태의 토너먼트를 IN_PROGRESS 상태로 전환하고 첫 라운드 대진표를 반환한다.
-            토너먼트 소유자만 시작할 수 있으며, 아이템은 최소 2개·최대 32개여야 한다.
-            PROCESSING·FAILED 상태 아이템이 포함되어 있으면 시작할 수 없다.
-        """,
     )
     @ApiResponses(
         value = [
@@ -443,12 +436,9 @@ interface TournamentApi {
         ],
     )
     fun start(
-        userId: UUID,
-        tournamentId: Long,
-    ): ApiResponseBody<TournamentStartResponse>
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
-    ): ApiResponseBody<TournamentBracketResponse>
+    ): ApiResponseBody<TournamentStartResponse>
 
     @Operation(
         summary = "매치 결과 기록",

@@ -7,12 +7,8 @@ import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
-import com.depromeet.piki.tournament.controller.dto.TournamentBracketResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
-import com.depromeet.piki.tournament.controller.dto.TournamentHistoryInfoResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
-import com.depromeet.piki.tournament.controller.dto.TournamentInfoResponse
-import com.depromeet.piki.tournament.controller.dto.TournamentItemInfoResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import java.time.LocalDateTime
