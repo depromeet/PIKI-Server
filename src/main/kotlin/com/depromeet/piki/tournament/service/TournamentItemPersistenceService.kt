@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
-// TournamentItemService 의 외부 호출(링크 추출·OCR)이 트랜잭션 밖에 있도록
+// TournamentItemService 의 외부 호출(링크 추출·이미지 추출)이 트랜잭션 밖에 있도록
 // 아이템 저장과 토너먼트 아이템 등록만 별도 빈으로 분리한다.
 // 같은 빈에서 @Transactional 메서드를 직접 호출하면 Spring AOP proxy 를 거치지 않아 트랜잭션이 무력화된다.
 @Service
@@ -30,7 +30,9 @@ class TournamentItemPersistenceService(
     ): Long {
         validateAndCheckCapacity(userId, tournamentId, 1)
         val item = itemRepository.save(Item.processing(link))
-        tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId = tournamentId, itemId = item.getId(), userId = userId)))
+        tournamentItemRepository.saveAll(
+            listOf(TournamentItem(tournamentId = tournamentId, itemId = item.getId(), userId = userId)),
+        )
         return item.getId()
     }
 
@@ -60,6 +62,10 @@ class TournamentItemPersistenceService(
         tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
         val existingCount = tournamentItemRepository.countByTournamentId(tournamentId)
-        if (existingCount + incomingCount > TOURNAMENT_MAX_ITEM_COUNT) throw TournamentException.tooManyTournamentItems()
+        if (existingCount + incomingCount >
+            TOURNAMENT_MAX_ITEM_COUNT
+        ) {
+            throw TournamentException.tooManyTournamentItems()
+        }
     }
 }

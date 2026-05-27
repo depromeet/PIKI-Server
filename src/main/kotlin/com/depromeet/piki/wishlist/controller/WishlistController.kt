@@ -38,13 +38,13 @@ class WishlistController(
         return ApiResponseBody.created(WishItemResponse.from(result.wish, result.item))
     }
 
-    @PostMapping("/ocr", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    @PostMapping("/images", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     @ResponseStatus(HttpStatus.CREATED)
-    override fun registerFromOcr(
+    override fun registerFromImages(
         @AuthenticationPrincipal userId: UUID,
         @RequestParam("image") image: MultipartFile,
     ): ApiResponseBody<WishItemResponse> {
-        val result = wishlistService.registerFromOcr(image = image, userId = userId)
+        val result = wishlistService.registerFromImages(image = image, userId = userId)
         return ApiResponseBody.created(WishItemResponse.from(result.wish, result.item))
     }
 

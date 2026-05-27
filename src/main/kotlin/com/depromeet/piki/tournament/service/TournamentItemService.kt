@@ -1,9 +1,9 @@
 package com.depromeet.piki.tournament.service
 
+import com.depromeet.piki.image.domain.ProductImage
 import com.depromeet.piki.item.service.ImageParsingWorker
 import com.depromeet.piki.item.service.ItemParsingService
 import com.depromeet.piki.item.service.ItemParsingWorker
-import com.depromeet.piki.ocr.domain.OcrImage
 import com.depromeet.piki.product.domain.ProductLink
 import org.slf4j.LoggerFactory
 import org.springframework.core.task.TaskRejectedException
@@ -44,11 +44,11 @@ class TournamentItemService(
     ): List<Long> {
         if (images.size !in MIN_IMAGE_COUNT..MAX_IMAGE_COUNT) throw TournamentException.invalidImageCount()
         // 형식 검증(빈 바이트·미지원 MIME) — 실패 시 즉시 400. 유효한 이미지만 PROCESSING 으로 등록한다.
-        val ocrImages = images.map { OcrImage.of(it.bytes, it.contentType) }
-        val itemIds = tournamentItemPersistenceService.persistProcessingItems(userId, tournamentId, ocrImages.size)
-        itemIds.zip(ocrImages).forEach { (itemId, ocrImage) ->
+        val productImages = images.map { ProductImage.of(it.bytes, it.contentType) }
+        val itemIds = tournamentItemPersistenceService.persistProcessingItems(userId, tournamentId, productImages.size)
+        itemIds.zip(productImages).forEach { (itemId, productImage) ->
             try {
-                imageParsingWorker.parse(itemId, ocrImage)
+                imageParsingWorker.parse(itemId, productImage)
             } catch (e: TaskRejectedException) {
                 log.warn("item {} async 디스패치 거부 → FAILED 처리", itemId, e)
                 runCatching { itemParsingService.markFailed(itemId) }

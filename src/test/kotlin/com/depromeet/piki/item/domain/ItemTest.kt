@@ -148,7 +148,7 @@ class ItemTest {
     }
 
     @Test
-    fun `link 가 null 인 ProductSnapshot(OCR 경로)도 Item 으로 매핑된다`() {
+    fun `link 가 null 인 ProductSnapshot(이미지 경로)도 Item 으로 매핑된다`() {
         val snapshot = ProductSnapshot(link = null, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW")
 
         val item = Item.from(snapshot)

@@ -1,11 +1,11 @@
-package com.depromeet.piki.ocr.service.gemini
+package com.depromeet.piki.image.service.gemini
 
 import com.fasterxml.jackson.annotation.JsonInclude
 
 // Gemini JSON Schema 파서는 `"properties": null` 같은 잉여 null 필드를 스키마 위반으로 취급한다.
 // (GeminiExtractionRequest 와 동일 정책) 직렬화 단계에서 null 필드를 전부 생략한다.
 @JsonInclude(JsonInclude.Include.NON_NULL)
-data class GeminiOcrRequest(
+data class GeminiImageRequest(
     val generationConfig: GenerationConfig,
     val contents: List<Content>,
 ) {
@@ -13,8 +13,8 @@ data class GeminiOcrRequest(
         val responseMimeType: String,
         val responseSchema: Schema,
         // gemini-3.1-flash-lite 는 thinkingLevel 을 명시하지 않으면 dynamic thinking 이 붙어
-        // OCR 같은 단순 추출에도 응답이 간헐적으로 ~20s 까지 튄다 (read-timeout 초과 → 호출 실패).
-        // OCR 은 이미지에서 직접 읽는 작업이라 깊은 추론이 불필요하므로 minimal 로 고정해 ~3s 로 안정화한다.
+        // 이미지 추출처럼 단순한 작업에도 응답이 간헐적으로 ~20s 까지 튄다 (read-timeout 초과 → 호출 실패).
+        // 이미지에서 직접 읽는 작업이라 깊은 추론이 불필요하므로 minimal 로 고정해 ~3s 로 안정화한다.
         val thinkingConfig: ThinkingConfig,
     )
 
@@ -27,8 +27,13 @@ data class GeminiOcrRequest(
     )
 
     sealed interface Part {
-        data class Text(val text: String) : Part
-        data class Image(val inlineData: InlineData) : Part
+        data class Text(
+            val text: String,
+        ) : Part
+
+        data class Image(
+            val inlineData: InlineData,
+        ) : Part
     }
 
     data class InlineData(
@@ -53,10 +58,11 @@ data class GeminiOcrRequest(
     }
 
     companion object {
-        // OCR 은 이미지에서 직접 정보를 읽는 작업이라 깊은 추론이 불필요하다. dynamic thinking 비활성.
+        // 이미지에서 직접 정보를 읽는 작업이라 깊은 추론이 불필요하다. dynamic thinking 비활성.
         private const val MINIMAL_THINKING = "minimal"
 
-        private val SYSTEM_PROMPT = """
+        private val SYSTEM_PROMPT =
+            """
             You are a product information extractor. The user captured a product page to identify the product they are interested in.
 
             **Intent inference**: The user wants information about the MAIN product on the page. Ignore related products, recommended items, ads, and sidebar content. Focus on the primary product that occupies the central area of the page.
@@ -71,43 +77,53 @@ data class GeminiOcrRequest(
 
             Return information for the single main product only. Do NOT include related/recommended/ad products.
             Handle any language (Korean, Japanese, English, etc.).
-        """.trimIndent()
+            """.trimIndent()
 
-        private val PRODUCT_SCHEMA = Schema(
-            type = SchemaType.OBJECT,
-            properties = mapOf(
-                "name" to Schema(type = SchemaType.STRING, nullable = true),
-                "price" to Schema(type = SchemaType.INTEGER, nullable = true),
-                "category" to Schema(type = SchemaType.STRING, nullable = true),
-                "currency" to Schema(type = SchemaType.STRING, nullable = true),
-                "boundingBox" to Schema(
-                    type = SchemaType.OBJECT,
-                    nullable = true,
-                    properties = mapOf(
-                        "yMin" to Schema(type = SchemaType.INTEGER, nullable = true),
-                        "xMin" to Schema(type = SchemaType.INTEGER, nullable = true),
-                        "yMax" to Schema(type = SchemaType.INTEGER, nullable = true),
-                        "xMax" to Schema(type = SchemaType.INTEGER, nullable = true),
+        private val PRODUCT_SCHEMA =
+            Schema(
+                type = SchemaType.OBJECT,
+                properties =
+                    mapOf(
+                        "name" to Schema(type = SchemaType.STRING, nullable = true),
+                        "price" to Schema(type = SchemaType.INTEGER, nullable = true),
+                        "category" to Schema(type = SchemaType.STRING, nullable = true),
+                        "currency" to Schema(type = SchemaType.STRING, nullable = true),
+                        "boundingBox" to
+                            Schema(
+                                type = SchemaType.OBJECT,
+                                nullable = true,
+                                properties =
+                                    mapOf(
+                                        "yMin" to Schema(type = SchemaType.INTEGER, nullable = true),
+                                        "xMin" to Schema(type = SchemaType.INTEGER, nullable = true),
+                                        "yMax" to Schema(type = SchemaType.INTEGER, nullable = true),
+                                        "xMax" to Schema(type = SchemaType.INTEGER, nullable = true),
+                                    ),
+                            ),
                     ),
-                ),
-            ),
-        )
+            )
 
-        fun forImageAnalysis(base64Image: String, mimeType: String): GeminiOcrRequest =
-            GeminiOcrRequest(
-                generationConfig = GenerationConfig(
-                    responseMimeType = "application/json",
-                    responseSchema = PRODUCT_SCHEMA,
-                    thinkingConfig = ThinkingConfig(thinkingLevel = MINIMAL_THINKING),
-                ),
-                contents = listOf(
-                    Content(
-                        parts = listOf(
-                            Part.Text(SYSTEM_PROMPT),
-                            Part.Image(InlineData(mimeType = mimeType, data = base64Image)),
+        fun forImageAnalysis(
+            base64Image: String,
+            mimeType: String,
+        ): GeminiImageRequest =
+            GeminiImageRequest(
+                generationConfig =
+                    GenerationConfig(
+                        responseMimeType = "application/json",
+                        responseSchema = PRODUCT_SCHEMA,
+                        thinkingConfig = ThinkingConfig(thinkingLevel = MINIMAL_THINKING),
+                    ),
+                contents =
+                    listOf(
+                        Content(
+                            parts =
+                                listOf(
+                                    Part.Text(SYSTEM_PROMPT),
+                                    Part.Image(InlineData(mimeType = mimeType, data = base64Image)),
+                                ),
                         ),
                     ),
-                ),
             )
     }
 }

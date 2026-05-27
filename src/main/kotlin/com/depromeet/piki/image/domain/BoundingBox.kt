@@ -1,4 +1,4 @@
-package com.depromeet.piki.ocr.domain
+package com.depromeet.piki.image.domain
 
 // Gemini 가 반환하는 상품 영역 박스. 좌표는 0~1000 normalized (Gemini 표준 [ymin, xmin, ymax, xmax]).
 // 실제 픽셀 환산·크롭은 ImageCropper 가 원본 이미지 크기에 맞춰 수행한다.

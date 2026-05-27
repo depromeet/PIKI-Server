@@ -1,13 +1,13 @@
 package com.depromeet.piki.wishlist.service
 
 import com.depromeet.piki.common.storage.ImageStorage
+import com.depromeet.piki.image.domain.ProductImage
+import com.depromeet.piki.image.service.ImageCropper
+import com.depromeet.piki.image.service.ProductImageExtractor
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.item.service.ItemParsingService
 import com.depromeet.piki.item.service.ItemParsingWorker
-import com.depromeet.piki.ocr.domain.OcrImage
-import com.depromeet.piki.ocr.service.ImageCropper
-import com.depromeet.piki.ocr.service.ProductImageExtractor
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.wishlist.domain.WishCursor
 import com.depromeet.piki.wishlist.domain.WishException
@@ -53,21 +53,21 @@ class WishlistService(
         return result
     }
 
-    // OCR 등록도 link 와 같은 흐름 — 입력이 이미지일 뿐. 외부 추출·크롭·S3 업로드는 트랜잭션 바깥, 영속화만 위임.
+    // 이미지 등록도 link 와 같은 흐름 — 입력이 이미지일 뿐. 외부 추출·크롭·S3 업로드는 트랜잭션 바깥, 영속화만 위임.
     // 추출 결과는 link 추출과 동일한 ProductSnapshot 이라 Item.from 을 공유한다 (link 만 null).
     // bbox 가 있으면 상품 영역을 크롭해 S3 에 올리고 그 URL 을 imageUrl 로 채운다.
     // bbox 가 없거나(못 잡음) 크롭이 불가한 포맷(HEIC 등)이면 imageUrl 은 null 로 둔다.
-    fun registerFromOcr(
+    fun registerFromImages(
         image: MultipartFile,
         userId: UUID,
     ): WishWithItem {
-        val ocrImage = OcrImage.of(image.bytes, image.contentType)
-        val extraction = productImageExtractor.extract(ocrImage)
-        // 크롭 이미지는 부가 정보다. S3 일시 장애·타임아웃이 OCR 등록 전체를 5xx 로 깨뜨리지 않도록,
+        val productImage = ProductImage.of(image.bytes, image.contentType)
+        val extraction = productImageExtractor.extract(productImage)
+        // 크롭 이미지는 부가 정보다. S3 일시 장애·타임아웃이 이미지 등록 전체를 5xx 로 깨뜨리지 않도록,
         // 업로드 실패는 imageUrl=null 로 degrade 한다 (imageUrl 없이도 등록 가능한 계약).
         val imageUrl =
             extraction.boundingBox
-                ?.let { imageCropper.crop(ocrImage.bytes, it) }
+                ?.let { imageCropper.crop(productImage.bytes, it) }
                 ?.let { cropped ->
                     runCatching {
                         imageStorage.upload(cropped, "items/${UUID.randomUUID()}.png", "image/png")
@@ -100,7 +100,12 @@ class WishlistService(
                 WishWithItem(wish = wish, item = item)
             }
 
-        val nextCursor = pageWishes.lastOrNull()?.getId()?.toString().takeIf { hasNext }
+        val nextCursor =
+            pageWishes
+                .lastOrNull()
+                ?.getId()
+                ?.toString()
+                .takeIf { hasNext }
         return WishlistPage(entries = entries, nextCursor = nextCursor, hasNext = hasNext)
     }
 

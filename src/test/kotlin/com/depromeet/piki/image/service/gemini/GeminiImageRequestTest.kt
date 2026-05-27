@@ -1,4 +1,4 @@
-package com.depromeet.piki.ocr.service.gemini
+package com.depromeet.piki.image.service.gemini
 
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.ObjectMapper
@@ -6,7 +6,7 @@ import tools.jackson.module.kotlin.jacksonObjectMapper
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class GeminiOcrRequestTest {
+class GeminiImageRequestTest {
     private val objectMapper: ObjectMapper = jacksonObjectMapper()
 
     @Test
@@ -14,7 +14,7 @@ class GeminiOcrRequestTest {
         // 명시하지 않으면 gemini-3.1-flash-lite 에 dynamic thinking 이 붙어 응답이 ~20s 까지 튄다.
         val json =
             objectMapper.writeValueAsString(
-                GeminiOcrRequest.forImageAnalysis(base64Image = "AAAA", mimeType = "image/png"),
+                GeminiImageRequest.forImageAnalysis(base64Image = "AAAA", mimeType = "image/png"),
             )
 
         assertTrue(
@@ -28,7 +28,7 @@ class GeminiOcrRequestTest {
         // Gemini JSON Schema 파서는 STRING 타입에 붙은 "items":null 같은 잉여 null 을 스키마 위반으로 취급한다.
         val json =
             objectMapper.writeValueAsString(
-                GeminiOcrRequest.forImageAnalysis(base64Image = "AAAA", mimeType = "image/png"),
+                GeminiImageRequest.forImageAnalysis(base64Image = "AAAA", mimeType = "image/png"),
             )
 
         assertFalse(
@@ -42,7 +42,7 @@ class GeminiOcrRequestTest {
         // null 값 생략(NON_NULL)과 별개로, 의도적으로 박은 nullable=true 는 보존되어야 한다.
         val json =
             objectMapper.writeValueAsString(
-                GeminiOcrRequest.forImageAnalysis(base64Image = "AAAA", mimeType = "image/png"),
+                GeminiImageRequest.forImageAnalysis(base64Image = "AAAA", mimeType = "image/png"),
             )
 
         assertTrue(
@@ -55,7 +55,7 @@ class GeminiOcrRequestTest {
     fun `이미지 part 는 inlineData 의 mimeType·data 를 그대로 싣는다`() {
         val json =
             objectMapper.writeValueAsString(
-                GeminiOcrRequest.forImageAnalysis(base64Image = "BASE64DATA", mimeType = "image/jpeg"),
+                GeminiImageRequest.forImageAnalysis(base64Image = "BASE64DATA", mimeType = "image/jpeg"),
             )
 
         assertTrue(
