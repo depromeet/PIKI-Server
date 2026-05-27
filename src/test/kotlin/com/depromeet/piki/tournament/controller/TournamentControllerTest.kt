@@ -465,6 +465,33 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `GET tournaments-id 는 2개 아이템 COMPLETED 토너먼트에서 준결승 없이 1위와 2위만 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, ti1, ti2) = startTournamentWith2Items(mockMvc)
+        // 결승만 치름 — 준결승 히스토리 없음
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/matches")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"currentRound":2,"firstTournamentItemId":$ti1,"secondTournamentItemId":$ti2,"selectedTournamentItemId":$ti1}"""),
+        ).andExpect(status().isOk)
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+            .andExpect(jsonPath("$.data.completed.result.length()").value(2))
+            .andExpect(jsonPath("$.data.completed.result[0].rank").value(1))
+            .andExpect(jsonPath("$.data.completed.result[0].tournamentItemId").value(ti1))
+            .andExpect(jsonPath("$.data.completed.result[1].rank").value(2))
+            .andExpect(jsonPath("$.data.completed.result[1].tournamentItemId").value(ti2))
+            .andExpect(jsonPath("$.data.pending").doesNotExist())
+            .andExpect(jsonPath("$.data.inProgress").doesNotExist())
+    }
+
+    @Test
     fun `GET tournaments-id 는 32개 아이템 토너먼트에서 6번 선택 후 현재 라운드 미대결 생존 아이템 20개를 가격 오름차순으로 반환한다`() {
         val mockMvc = buildMockMvc()
         // 가격 1_000 ~ 32_000 순으로 32개 아이템 생성 (삽입 순서 = 가격 오름차순)
