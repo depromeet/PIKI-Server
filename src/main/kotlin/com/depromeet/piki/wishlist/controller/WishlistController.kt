@@ -42,10 +42,12 @@ class WishlistController(
     @ResponseStatus(HttpStatus.CREATED)
     override fun registerFromImages(
         @AuthenticationPrincipal userId: UUID,
-        @RequestParam("image") image: MultipartFile,
-    ): ApiResponseBody<WishItemResponse> {
-        val result = wishlistService.registerFromImages(image = image, userId = userId)
-        return ApiResponseBody.created(WishItemResponse.from(result.wish, result.item))
+        @RequestParam("images", required = false) images: List<MultipartFile>?,
+    ): ApiResponseBody<List<WishItemResponse>> {
+        // images 파트를 아예 안 보내면(0장) Spring 이 컨트롤러 진입 전 MissingServletRequestPartException 으로
+        // 끊어 캐치올(500)로 떨어진다. required=false + orEmpty 로 항상 서비스 검증(invalidImageCount, 400)에 닿게 한다.
+        val results = wishlistService.registerFromImages(images = images.orEmpty(), userId = userId)
+        return ApiResponseBody.created(results.map { WishItemResponse.from(it.wish, it.item) })
     }
 
     @GetMapping

@@ -1,20 +1,14 @@
 package com.depromeet.piki.wishlist.controller
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
-import com.depromeet.piki.image.domain.BoundingBox
-import com.depromeet.piki.image.service.ImageExtraction
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductSnapshot
-import com.depromeet.piki.product.service.gemini.GeminiApiException
 import com.depromeet.piki.support.IntegrationTestSupport
-import com.depromeet.piki.support.StubImageStorage
-import com.depromeet.piki.support.StubProductImageExtractor
 import com.depromeet.piki.support.uuidToBytes
 import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.wishlist.service.WishPersistenceService
 import org.hamcrest.Matchers.nullValue
-import org.hamcrest.Matchers.startsWith
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
@@ -35,10 +29,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
-import java.awt.image.BufferedImage
-import java.io.ByteArrayOutputStream
 import java.util.UUID
-import javax.imageio.ImageIO
 
 // 조회·수정·삭제 contract 검증. 이 시나리오들의 본질은 "완성된 위시가 있을 때의 동작"이라
 // 등록(비동기) 경로를 거치지 않고 seedReadyWish 로 READY 상태를 시딩한다.
@@ -50,9 +41,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
     @Autowired
     private lateinit var objectMapper: ObjectMapper
-
-    @Autowired
-    private lateinit var stubProductImageExtractor: StubProductImageExtractor
 
     @Autowired
     private lateinit var wishPersistenceService: WishPersistenceService
@@ -485,97 +473,72 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `이미지로 등록하면 201 과 함께 item·wish 가 저장되고 sourceUrl 은 null 이다`() {
+    fun `다건 이미지로 등록하면 201 과 함께 PROCESSING 항목이 개수만큼 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
-        stubProductImageExtractor.build = {
-            ImageExtraction(
-                snapshot = ProductSnapshot(link = null, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW"),
-                boundingBox = null,
-            )
-        }
-        val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
+        val image1 = MockMultipartFile("images", "p1.png", "image/png", byteArrayOf(1, 2, 3))
+        val image2 = MockMultipartFile("images", "p2.png", "image/png", byteArrayOf(4, 5, 6))
 
         mockMvc
             .perform(
                 multipart("/api/v1/wishlists/images")
-                    .file(image)
+                    .file(image1)
+                    .file(image2)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isCreated)
             .andExpect(jsonPath("$.status").value(201))
-            .andExpect(jsonPath("$.data.wish.id").isNumber)
-            .andExpect(jsonPath("$.data.item.name").value("나이키 에어포스"))
-            .andExpect(jsonPath("$.data.item.currentPrice").value(99_000))
-            .andExpect(jsonPath("$.data.item.currency").value("KRW"))
-            // 이미지 추출은 동기 완성이라 status 는 READY.
-            .andExpect(jsonPath("$.data.item.status").value("READY"))
-            // bbox 가 없으면 크롭을 건너뛰어 imageUrl 은 null. sourceUrl 도 이미지 등록이라 null.
-            .andExpect(jsonPath("$.data.item.sourceUrl").value(nullValue()))
-            .andExpect(jsonPath("$.data.item.imageUrl").value(nullValue()))
+            .andExpect(jsonPath("$.code").value("CREATED"))
+            .andExpect(jsonPath("$.data.length()").value(2))
+            // 등록 직후라 두 항목 모두 PROCESSING — 추출 결과는 비어 있고 sourceUrl 도 null(이미지 등록).
+            // 실제 파싱 완료(READY/FAILED)·크롭 imageUrl 은 WishlistRegisterAsyncIntegrationTest 가 검증한다.
+            .andExpect(jsonPath("$.data[0].item.status").value("PROCESSING"))
+            .andExpect(jsonPath("$.data[0].item.name").value(nullValue()))
+            .andExpect(jsonPath("$.data[0].item.sourceUrl").value(nullValue()))
+            .andExpect(jsonPath("$.data[0].wish.id").isNumber)
+            .andExpect(jsonPath("$.data[1].item.status").value("PROCESSING"))
     }
 
     @Test
-    fun `이미지에 bbox 가 있으면 크롭 이미지를 업로드해 imageUrl 이 채워진다`() {
+    fun `이미지를 6개 등록하면 400 BAD_REQUEST 가 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
-        stubProductImageExtractor.build = {
-            ImageExtraction(
-                snapshot = ProductSnapshot(link = null, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW"),
-                boundingBox = BoundingBox(yMin = 100, xMin = 100, yMax = 500, xMax = 500),
-            )
+        val request = multipart("/api/v1/wishlists/images")
+        (1..6).forEach { i ->
+            request.file(MockMultipartFile("images", "p$i.png", "image/png", byteArrayOf(1, 2, 3)))
         }
-        // 크롭이 동작하려면 실제 디코딩 가능한 PNG 여야 한다 (ImageCropper 는 실제 빈, 업로드만 stub).
-        val pngBytes =
-            ByteArrayOutputStream().use { out ->
-                ImageIO.write(BufferedImage(800, 800, BufferedImage.TYPE_INT_RGB), "png", out)
-                out.toByteArray()
-            }
-        val image = MockMultipartFile("image", "product.png", "image/png", pngBytes)
+        request.header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}")
 
+        mockMvc
+            .perform(request)
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+    }
+
+    @Test
+    fun `이미지 파트를 보내지 않으면 400 BAD_REQUEST 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+
+        // .file(...) 없이 images 파트를 아예 생략 — required=false + orEmpty 로 서비스 검증(개수 0)에 닿아 400.
         mockMvc
             .perform(
                 multipart("/api/v1/wishlists/images")
-                    .file(image)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
-            ).andExpect(status().isCreated)
-            .andExpect(jsonPath("$.data.item.imageUrl").value(startsWith(StubImageStorage.BASE_URL)))
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test
-    fun `이미지 등록 후 조회하면 해당 항목이 sourceUrl null 로 함께 반환된다`() {
+    fun `빈 이미지로 등록하면 400 BAD_REQUEST 가 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
-        val authHeader = "Bearer ${memberToken(userId)}"
-        stubProductImageExtractor.build = {
-            ImageExtraction(
-                snapshot = ProductSnapshot(link = null, name = "에어 조던", currentPrice = 119_000),
-                boundingBox = null,
-            )
-        }
-        val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
-
-        mockMvc
-            .perform(
-                multipart("/api/v1/wishlists/images").file(image).header(HttpHeaders.AUTHORIZATION, authHeader),
-            ).andExpect(status().isCreated)
-
-        mockMvc
-            .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, authHeader))
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.length()").value(1))
-            .andExpect(jsonPath("$.data[0].item.name").value("에어 조던"))
-            .andExpect(jsonPath("$.data[0].item.sourceUrl").value(nullValue()))
-    }
-
-    @Test
-    fun `빈 이미지로 이미지 등록하면 400 BAD_REQUEST 가 반환된다`() {
-        val mockMvc = buildMockMvc()
-        val userId = UUID.randomUUID()
-        insertMember(userId)
-        val emptyImage = MockMultipartFile("image", "empty.png", "image/png", ByteArray(0))
+        val emptyImage = MockMultipartFile("images", "empty.png", "image/png", ByteArray(0))
 
         mockMvc
             .perform(
@@ -588,11 +551,11 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `지원하지 않는 이미지 형식으로 이미지 등록하면 400 BAD_REQUEST 가 반환된다`() {
+    fun `지원하지 않는 이미지 형식으로 등록하면 400 BAD_REQUEST 가 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
-        val gif = MockMultipartFile("image", "product.gif", "image/gif", byteArrayOf(1, 2, 3))
+        val gif = MockMultipartFile("images", "product.gif", "image/gif", byteArrayOf(1, 2, 3))
 
         mockMvc
             .perform(
@@ -602,24 +565,5 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             ).andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.status").value(400))
             .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
-    }
-
-    @Test
-    fun `이미지 등록 중 Gemini 호출이 실패하면 502 BAD_GATEWAY 가 반환된다`() {
-        val mockMvc = buildMockMvc()
-        val userId = UUID.randomUUID()
-        insertMember(userId)
-        stubProductImageExtractor.build =
-            { throw GeminiApiException.upstreamError(RuntimeException("connection timeout")) }
-        val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
-
-        mockMvc
-            .perform(
-                multipart("/api/v1/wishlists/images")
-                    .file(image)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
-            ).andExpect(status().isBadGateway)
-            .andExpect(jsonPath("$.status").value(502))
-            .andExpect(jsonPath("$.code").value("BAD_GATEWAY"))
     }
 }

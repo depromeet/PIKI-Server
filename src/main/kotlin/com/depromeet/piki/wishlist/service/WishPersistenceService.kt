@@ -1,6 +1,7 @@
 package com.depromeet.piki.wishlist.service
 
 import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.wishlist.domain.Wish
 import com.depromeet.piki.wishlist.repository.WishRepository
@@ -27,5 +28,19 @@ class WishPersistenceService(
         val saved = itemRepository.save(item)
         val wish = wishRepository.save(Wish(userId = userId, itemId = saved.getId()))
         return WishWithItem(wish = wish, item = saved)
+    }
+
+    // 이미지 다건 등록용 — link 없는 PROCESSING item 을 count 만큼 배치 저장하고, 각각에 wish 를 건다.
+    // 추출은 호출부가 비동기 워커에 위임하므로 여기선 PROCESSING 상태만 영속화한다.
+    @Transactional
+    fun persistProcessingImages(
+        userId: UUID,
+        count: Int,
+    ): List<WishWithItem> {
+        val items = itemRepository.saveAll(List(count) { Item(status = ItemStatus.PROCESSING) })
+        return items.map { item ->
+            val wish = wishRepository.save(Wish(userId = userId, itemId = item.getId()))
+            WishWithItem(wish = wish, item = item)
+        }
     }
 }

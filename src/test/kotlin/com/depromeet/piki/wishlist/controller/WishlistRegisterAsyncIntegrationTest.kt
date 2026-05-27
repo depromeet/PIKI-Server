@@ -1,11 +1,16 @@
 package com.depromeet.piki.wishlist.controller
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.piki.image.domain.BoundingBox
+import com.depromeet.piki.image.service.ImageExtraction
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.product.service.ProductSnapshotException
+import com.depromeet.piki.product.service.gemini.GeminiApiException
 import com.depromeet.piki.support.IntegrationTestSupport
+import com.depromeet.piki.support.StubImageStorage
+import com.depromeet.piki.support.StubProductImageExtractor
 import com.depromeet.piki.support.StubProductLinkExtractor
 import com.depromeet.piki.support.uuidToBytes
 import com.depromeet.piki.user.domain.IdentityType
@@ -16,8 +21,10 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.mock.web.MockMultipartFile
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -25,8 +32,11 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
 import java.time.Duration
 import java.util.UUID
+import javax.imageio.ImageIO
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
@@ -42,6 +52,9 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
 
     @Autowired
     private lateinit var stubProductLinkExtractor: StubProductLinkExtractor
+
+    @Autowired
+    private lateinit var stubProductImageExtractor: StubProductImageExtractor
 
     @Autowired
     private lateinit var itemRepository: ItemRepository
@@ -162,6 +175,135 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
         }
     }
 
+    @Test
+    fun `이미지로 등록하면 PROCESSING 으로 201 즉시 반환 후 파싱 성공 시 READY 로 전이한다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            stubProductImageExtractor.build = {
+                ImageExtraction(
+                    snapshot = ProductSnapshot(link = null, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW"),
+                    boundingBox = null,
+                )
+            }
+            val image = MockMultipartFile("images", "p.png", "image/png", byteArrayOf(1, 2, 3))
+            val itemId = registerImageAndGetItemId(mockMvc, userId, image)
+
+            await().atMost(Duration.ofSeconds(5)).until {
+                itemRepository.findById(itemId)?.status == ItemStatus.READY
+            }
+            val item = itemRepository.findById(itemId) ?: error("item $itemId 가 없다")
+            assertEquals("나이키 에어포스", item.name)
+            assertEquals(99_000, item.currentPrice)
+            assertEquals("KRW", item.currency)
+            // 이미지 등록은 link(원본 URL)가 없다.
+            assertNull(item.link)
+        } finally {
+            cleanup(userId)
+        }
+    }
+
+    @Test
+    fun `이미지에 bbox 가 있으면 비동기 파싱이 크롭 이미지를 올려 imageUrl 이 채워진다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            stubProductImageExtractor.build = {
+                ImageExtraction(
+                    snapshot = ProductSnapshot(link = null, name = "나이키 에어포스", currentPrice = 99_000),
+                    boundingBox = BoundingBox(yMin = 100, xMin = 100, yMax = 500, xMax = 500),
+                )
+            }
+            // 크롭이 동작하려면 실제 디코딩 가능한 PNG 여야 한다 (ImageCropper 는 실제 빈, 업로드만 stub).
+            val pngBytes =
+                ByteArrayOutputStream().use { out ->
+                    ImageIO.write(BufferedImage(800, 800, BufferedImage.TYPE_INT_RGB), "png", out)
+                    out.toByteArray()
+                }
+            val image = MockMultipartFile("images", "p.png", "image/png", pngBytes)
+            val itemId = registerImageAndGetItemId(mockMvc, userId, image)
+
+            await().atMost(Duration.ofSeconds(5)).until {
+                itemRepository.findById(itemId)?.status == ItemStatus.READY
+            }
+            val item = itemRepository.findById(itemId) ?: error("item $itemId 가 없다")
+            assertEquals(true, item.imageUrl?.startsWith(StubImageStorage.BASE_URL))
+        } finally {
+            cleanup(userId)
+        }
+    }
+
+    @Test
+    fun `이미지 파싱이 실패하면 item 이 FAILED 로 전이한다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            stubProductImageExtractor.build = {
+                throw GeminiApiException.upstreamError(RuntimeException("connection timeout"))
+            }
+            val image = MockMultipartFile("images", "p.png", "image/png", byteArrayOf(1, 2, 3))
+            val itemId = registerImageAndGetItemId(mockMvc, userId, image)
+
+            await().atMost(Duration.ofSeconds(5)).until {
+                itemRepository.findById(itemId)?.status == ItemStatus.FAILED
+            }
+            val item = itemRepository.findById(itemId) ?: error("item $itemId 가 없다")
+            assertEquals(ItemStatus.FAILED, item.status)
+            assertNull(item.name)
+        } finally {
+            cleanup(userId)
+        }
+    }
+
+    @Test
+    fun `이미지 5개를 등록하면 모두 PROCESSING 으로 반환되고 각각 READY 로 전이한다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            stubProductImageExtractor.build = {
+                ImageExtraction(
+                    snapshot = ProductSnapshot(link = null, name = "상품", currentPrice = 1_000),
+                    boundingBox = null,
+                )
+            }
+            val request = multipart("/api/v1/wishlists/images")
+            (1..5).forEach { i ->
+                request.file(MockMultipartFile("images", "p$i.png", "image/png", byteArrayOf(i.toByte())))
+            }
+            request.header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}")
+            val response =
+                mockMvc
+                    .perform(request)
+                    .andExpect(status().isCreated)
+                    .andExpect(jsonPath("$.data.length()").value(5))
+                    // 등록 직후 응답은 모두 PROCESSING 이어야 한다 — 서버가 즉시 READY 를 내리는 회귀를 잡는다.
+                    .andExpect(jsonPath("$.data[0].item.status").value("PROCESSING"))
+                    .andExpect(jsonPath("$.data[4].item.status").value("PROCESSING"))
+                    .andReturn()
+                    .response
+                    .getContentAsString(Charsets.UTF_8)
+            val dataNode = objectMapper.readTree(response).path("data")
+            val itemIds =
+                (0 until dataNode.size()).map { i ->
+                    dataNode
+                        .path(i)
+                        .path("item")
+                        .path("id")
+                        .asLong()
+                }
+
+            await().atMost(Duration.ofSeconds(5)).until {
+                itemIds.all { itemRepository.findById(it)?.status == ItemStatus.READY }
+            }
+        } finally {
+            cleanup(userId)
+        }
+    }
+
     private fun registerAndGetItemId(
         mockMvc: MockMvc,
         userId: UUID,
@@ -179,7 +321,36 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
                 .andReturn()
                 .response
                 .getContentAsString(Charsets.UTF_8)
-        return objectMapper.readTree(response).path("data").path("item").path("id").asLong()
+        return objectMapper
+            .readTree(response)
+            .path("data")
+            .path("item")
+            .path("id")
+            .asLong()
+    }
+
+    private fun registerImageAndGetItemId(
+        mockMvc: MockMvc,
+        userId: UUID,
+        image: MockMultipartFile,
+    ): Long {
+        val response =
+            mockMvc
+                .perform(
+                    multipart("/api/v1/wishlists/images")
+                        .file(image)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+                ).andExpect(status().isCreated)
+                .andReturn()
+                .response
+                .getContentAsString(Charsets.UTF_8)
+        return objectMapper
+            .readTree(response)
+            .path("data")
+            .path(0)
+            .path("item")
+            .path("id")
+            .asLong()
     }
 
     private fun buildMockMvc(): MockMvc =

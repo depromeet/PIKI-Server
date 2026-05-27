@@ -173,8 +173,18 @@ class WishlistApiExamples(
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.CREATED,
-                        name = "이미지 등록 성공 (URL 없음)",
-                        payload = ApiResponseBody.created(imageSampleEntry),
+                        name = "이미지 등록 접수 (PROCESSING, 다건)",
+                        payload = ApiResponseBody.created(imageProcessingEntries),
+                    )
+                    add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "이미지 개수 위반 (1~5개 아님)",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.INVALID_INPUT,
+                                status = HttpStatus.BAD_REQUEST,
+                                detail = "이미지는 최소 1개, 최대 5개까지 전송할 수 있습니다.",
+                            ),
                     )
                     add(
                         status = HttpStatus.BAD_REQUEST,
@@ -184,16 +194,6 @@ class WishlistApiExamples(
                                 category = ErrorCategory.INVALID_INPUT,
                                 status = HttpStatus.BAD_REQUEST,
                                 detail = ProductImage.unsupportedMimeTypeMessage("image/gif"),
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.BAD_GATEWAY,
-                        name = "Gemini 호출 실패",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.RETRYABLE,
-                                status = HttpStatus.BAD_GATEWAY,
-                                detail = "Gemini 호출 실패",
                             ),
                     )
                 }
@@ -241,23 +241,42 @@ class WishlistApiExamples(
                 ),
         )
 
-    // 이미지 등록 항목 — URL·이미지·통화가 없어 해당 필드가 null 이다. 동기 완성이라 READY.
-    private val imageSampleEntry =
-        WishItemResponse(
-            wish =
-                WishItemResponse.WishView(
-                    id = 1025,
-                    createdAt = LocalDateTime.of(2026, 5, 21, 10, 5, 0),
-                ),
-            item =
-                WishItemResponse.ItemView(
-                    id = 513,
-                    status = ItemStatus.READY,
-                    name = "에어 조던 1 미드",
-                    currentPrice = 119_000,
-                    currency = null,
-                    imageUrl = null,
-                    sourceUrl = null,
-                ),
+    // 이미지 등록 직후 항목들 — link 도 없는 PROCESSING(sourceUrl=null). 비동기 추출이 끝나면 name·가격·이미지가 채워진다.
+    private val imageProcessingEntries =
+        listOf(
+            WishItemResponse(
+                wish =
+                    WishItemResponse.WishView(
+                        id = 1025,
+                        createdAt = LocalDateTime.of(2026, 5, 21, 10, 5, 0),
+                    ),
+                item =
+                    WishItemResponse.ItemView(
+                        id = 513,
+                        status = ItemStatus.PROCESSING,
+                        name = null,
+                        currentPrice = null,
+                        currency = null,
+                        imageUrl = null,
+                        sourceUrl = null,
+                    ),
+            ),
+            WishItemResponse(
+                wish =
+                    WishItemResponse.WishView(
+                        id = 1027,
+                        createdAt = LocalDateTime.of(2026, 5, 21, 10, 5, 0),
+                    ),
+                item =
+                    WishItemResponse.ItemView(
+                        id = 515,
+                        status = ItemStatus.PROCESSING,
+                        name = null,
+                        currentPrice = null,
+                        currency = null,
+                        imageUrl = null,
+                        sourceUrl = null,
+                    ),
+            ),
         )
 }
