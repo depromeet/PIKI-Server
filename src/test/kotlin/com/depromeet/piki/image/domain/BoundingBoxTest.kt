@@ -1,4 +1,4 @@
-package com.depromeet.piki.ocr.domain
+package com.depromeet.piki.image.domain
 
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals

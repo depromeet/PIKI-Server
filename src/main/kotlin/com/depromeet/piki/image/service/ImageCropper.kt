@@ -1,6 +1,6 @@
-package com.depromeet.piki.ocr.service
+package com.depromeet.piki.image.service
 
-import com.depromeet.piki.ocr.domain.BoundingBox
+import com.depromeet.piki.image.domain.BoundingBox
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import java.io.ByteArrayInputStream
@@ -23,8 +23,14 @@ class ImageCropper {
         val cropX = scale(boundingBox.xMin, source.width)
         val cropY = scale(boundingBox.yMin, source.height)
         // 끝 좌표는 올림이 아니라 폭/높이로 환산하고, 원본 경계를 넘지 않게 클램핑한다.
-        val cropWidth = (scale(boundingBox.xMax, source.width) - cropX).coerceAtLeast(1).coerceAtMost(source.width - cropX)
-        val cropHeight = (scale(boundingBox.yMax, source.height) - cropY).coerceAtLeast(1).coerceAtMost(source.height - cropY)
+        val cropWidth =
+            (scale(boundingBox.xMax, source.width) - cropX).coerceAtLeast(1).coerceAtMost(
+                source.width - cropX,
+            )
+        val cropHeight =
+            (scale(boundingBox.yMax, source.height) - cropY).coerceAtLeast(1).coerceAtMost(
+                source.height - cropY,
+            )
 
         return runCatching {
             val cropped = source.getSubimage(cropX, cropY, cropWidth, cropHeight)

@@ -62,7 +62,7 @@ data class WishItemResponse(
         )
         val imageUrl: String?,
         @field:Schema(
-            description = "원본 상품 페이지 URL (OCR 등록 항목은 URL 이 없어 null)",
+            description = "원본 상품 페이지 URL (이미지 등록 항목은 URL 이 없어 null)",
             example = "https://www.example-shop.com/products/12345",
             nullable = true,
         )

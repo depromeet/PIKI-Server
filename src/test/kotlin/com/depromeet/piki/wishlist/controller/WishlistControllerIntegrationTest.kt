@@ -1,9 +1,9 @@
 package com.depromeet.piki.wishlist.controller
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.piki.image.domain.BoundingBox
+import com.depromeet.piki.image.service.ImageExtraction
 import com.depromeet.piki.item.domain.Item
-import com.depromeet.piki.ocr.domain.BoundingBox
-import com.depromeet.piki.ocr.service.OcrExtraction
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.product.service.gemini.GeminiApiException
@@ -15,9 +15,6 @@ import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.wishlist.service.WishPersistenceService
 import org.hamcrest.Matchers.nullValue
 import org.hamcrest.Matchers.startsWith
-import java.awt.image.BufferedImage
-import java.io.ByteArrayOutputStream
-import javax.imageio.ImageIO
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
@@ -38,7 +35,10 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
 import java.util.UUID
+import javax.imageio.ImageIO
 
 // 조회·수정·삭제 contract 검증. 이 시나리오들의 본질은 "완성된 위시가 있을 때의 동작"이라
 // 등록(비동기) 경로를 거치지 않고 seedReadyWish 로 READY 상태를 시딩한다.
@@ -485,12 +485,12 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `OCR 이미지로 등록하면 201 과 함께 item·wish 가 저장되고 sourceUrl 은 null 이다`() {
+    fun `이미지로 등록하면 201 과 함께 item·wish 가 저장되고 sourceUrl 은 null 이다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
         stubProductImageExtractor.build = {
-            OcrExtraction(
+            ImageExtraction(
                 snapshot = ProductSnapshot(link = null, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW"),
                 boundingBox = null,
             )
@@ -499,7 +499,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                multipart("/api/v1/wishlists/ocr")
+                multipart("/api/v1/wishlists/images")
                     .file(image)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isCreated)
@@ -508,20 +508,20 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.item.name").value("나이키 에어포스"))
             .andExpect(jsonPath("$.data.item.currentPrice").value(99_000))
             .andExpect(jsonPath("$.data.item.currency").value("KRW"))
-            // OCR 은 동기 완성이라 status 는 READY.
+            // 이미지 추출은 동기 완성이라 status 는 READY.
             .andExpect(jsonPath("$.data.item.status").value("READY"))
-            // bbox 가 없으면 크롭을 건너뛰어 imageUrl 은 null. sourceUrl 도 OCR 이라 null.
+            // bbox 가 없으면 크롭을 건너뛰어 imageUrl 은 null. sourceUrl 도 이미지 등록이라 null.
             .andExpect(jsonPath("$.data.item.sourceUrl").value(nullValue()))
             .andExpect(jsonPath("$.data.item.imageUrl").value(nullValue()))
     }
 
     @Test
-    fun `OCR 이미지에 bbox 가 있으면 크롭 이미지를 업로드해 imageUrl 이 채워진다`() {
+    fun `이미지에 bbox 가 있으면 크롭 이미지를 업로드해 imageUrl 이 채워진다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
         stubProductImageExtractor.build = {
-            OcrExtraction(
+            ImageExtraction(
                 snapshot = ProductSnapshot(link = null, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW"),
                 boundingBox = BoundingBox(yMin = 100, xMin = 100, yMax = 500, xMax = 500),
             )
@@ -536,7 +536,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                multipart("/api/v1/wishlists/ocr")
+                multipart("/api/v1/wishlists/images")
                     .file(image)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isCreated)
@@ -544,13 +544,13 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `OCR 등록 후 조회하면 해당 항목이 sourceUrl null 로 함께 반환된다`() {
+    fun `이미지 등록 후 조회하면 해당 항목이 sourceUrl null 로 함께 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
         stubProductImageExtractor.build = {
-            OcrExtraction(
+            ImageExtraction(
                 snapshot = ProductSnapshot(link = null, name = "에어 조던", currentPrice = 119_000),
                 boundingBox = null,
             )
@@ -559,7 +559,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                multipart("/api/v1/wishlists/ocr").file(image).header(HttpHeaders.AUTHORIZATION, authHeader),
+                multipart("/api/v1/wishlists/images").file(image).header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isCreated)
 
         mockMvc
@@ -571,7 +571,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `빈 이미지로 OCR 등록하면 400 BAD_REQUEST 가 반환된다`() {
+    fun `빈 이미지로 이미지 등록하면 400 BAD_REQUEST 가 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
@@ -579,7 +579,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                multipart("/api/v1/wishlists/ocr")
+                multipart("/api/v1/wishlists/images")
                     .file(emptyImage)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isBadRequest)
@@ -588,7 +588,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `지원하지 않는 이미지 형식으로 OCR 등록하면 400 BAD_REQUEST 가 반환된다`() {
+    fun `지원하지 않는 이미지 형식으로 이미지 등록하면 400 BAD_REQUEST 가 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
@@ -596,7 +596,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                multipart("/api/v1/wishlists/ocr")
+                multipart("/api/v1/wishlists/images")
                     .file(gif)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isBadRequest)
@@ -605,16 +605,17 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `OCR 등록 중 Gemini 호출이 실패하면 502 BAD_GATEWAY 가 반환된다`() {
+    fun `이미지 등록 중 Gemini 호출이 실패하면 502 BAD_GATEWAY 가 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
-        stubProductImageExtractor.build = { throw GeminiApiException.upstreamError(RuntimeException("connection timeout")) }
+        stubProductImageExtractor.build =
+            { throw GeminiApiException.upstreamError(RuntimeException("connection timeout")) }
         val image = MockMultipartFile("image", "product.png", "image/png", byteArrayOf(1, 2, 3))
 
         mockMvc
             .perform(
-                multipart("/api/v1/wishlists/ocr")
+                multipart("/api/v1/wishlists/images")
                     .file(image)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isBadGateway)

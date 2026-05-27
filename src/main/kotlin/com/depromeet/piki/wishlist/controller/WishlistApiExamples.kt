@@ -6,8 +6,8 @@ import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.common.response.PageResponse
+import com.depromeet.piki.image.domain.ProductImage
 import com.depromeet.piki.item.domain.ItemStatus
-import com.depromeet.piki.ocr.domain.OcrImage
 import com.depromeet.piki.wishlist.controller.dto.WishItemResponse
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
@@ -169,12 +169,12 @@ class WishlistApiExamples(
                     )
                 }
             }
-            if (handlerMethod.binds(WishlistController::registerFromOcr)) {
+            if (handlerMethod.binds(WishlistController::registerFromImages)) {
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.CREATED,
-                        name = "OCR 등록 성공 (URL 없음)",
-                        payload = ApiResponseBody.created(ocrSampleEntry),
+                        name = "이미지 등록 성공 (URL 없음)",
+                        payload = ApiResponseBody.created(imageSampleEntry),
                     )
                     add(
                         status = HttpStatus.BAD_REQUEST,
@@ -183,7 +183,7 @@ class WishlistApiExamples(
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
                                 status = HttpStatus.BAD_REQUEST,
-                                detail = OcrImage.unsupportedMimeTypeMessage("image/gif"),
+                                detail = ProductImage.unsupportedMimeTypeMessage("image/gif"),
                             ),
                     )
                     add(
@@ -241,8 +241,8 @@ class WishlistApiExamples(
                 ),
         )
 
-    // OCR 등록 항목 — URL·이미지·통화가 없어 해당 필드가 null 이다. 동기 완성이라 READY.
-    private val ocrSampleEntry =
+    // 이미지 등록 항목 — URL·이미지·통화가 없어 해당 필드가 null 이다. 동기 완성이라 READY.
+    private val imageSampleEntry =
         WishItemResponse(
             wish =
                 WishItemResponse.WishView(
