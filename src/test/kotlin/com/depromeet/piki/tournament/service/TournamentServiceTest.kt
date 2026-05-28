@@ -15,6 +15,7 @@ import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.tournament.service.dto.AddTournamentItemsFromWish
 import com.depromeet.piki.tournament.service.dto.CreateTournament
 import com.depromeet.piki.tournament.service.dto.RecordMatch
+import com.depromeet.piki.tournament.service.dto.RecordMatchResult
 import com.depromeet.piki.tournament.service.dto.TournamentDetail
 import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.user.domain.User
@@ -460,6 +461,112 @@ class TournamentServiceTest {
         service.start(userId, tournamentId)
 
         assertEquals(TournamentStatus.IN_PROGRESS, repository.tournaments[tournamentId]!!.status)
+    }
+
+    @Test
+    fun `recordMatch 에서 결승이 아닌 라운드면 null 을 반환한다`() {
+        val tournamentId = createAndStart((1L..4L).toList())
+        val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
+
+        val result = service.recordMatch(
+            userId,
+            RecordMatch(
+                tournamentId = tournamentId,
+                currentRound = 4,
+                firstTournamentItemId = items[0].getId(),
+                secondTournamentItemId = items[1].getId(),
+                selectedTournamentItemId = items[0].getId(),
+            ),
+        )
+
+        assertEquals(null, result)
+    }
+
+    @Test
+    fun `recordMatch 에서 2개 아이템 결승 라운드면 1위와 2위 순위 결과를 반환한다`() {
+        val tournamentId = createAndStart(listOf(10L, 20L))
+        val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
+        val winner = items.find { it.itemId == 10L }!!
+        val loser = items.find { it.itemId == 20L }!!
+
+        val result = service.recordMatch(
+            userId,
+            RecordMatch(
+                tournamentId = tournamentId,
+                currentRound = 2,
+                firstTournamentItemId = winner.getId(),
+                secondTournamentItemId = loser.getId(),
+                selectedTournamentItemId = winner.getId(),
+            ),
+        )
+
+        val ranked = assertIs<RecordMatchResult>(result)
+        assertEquals(2, ranked.rankedItems.size)
+        assertEquals(1, ranked.rankedItems[0].rank)
+        assertEquals(winner.getId(), ranked.rankedItems[0].tournamentItemId)
+        assertEquals(10L, ranked.rankedItems[0].itemId)
+        assertEquals(2, ranked.rankedItems[1].rank)
+        assertEquals(loser.getId(), ranked.rankedItems[1].tournamentItemId)
+        assertEquals(20L, ranked.rankedItems[1].itemId)
+    }
+
+    @Test
+    fun `recordMatch 에서 4개 아이템 결승 라운드면 1위부터 4위 순위 결과를 반환한다`() {
+        val tournamentId = createAndStart((1L..4L).toList())
+        val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
+        // round 4: items[0] vs items[1] → items[0] 승, items[2] vs items[3] → items[2] 승
+        service.recordMatch(userId, RecordMatch(tournamentId, 4, items[0].getId(), items[1].getId(), items[0].getId()))
+        service.recordMatch(userId, RecordMatch(tournamentId, 4, items[2].getId(), items[3].getId(), items[2].getId()))
+
+        val result = service.recordMatch(
+            userId,
+            RecordMatch(
+                tournamentId = tournamentId,
+                currentRound = 2,
+                firstTournamentItemId = items[0].getId(),
+                secondTournamentItemId = items[2].getId(),
+                selectedTournamentItemId = items[0].getId(),
+            ),
+        )
+
+        val ranked = assertIs<RecordMatchResult>(result)
+        assertEquals(4, ranked.rankedItems.size)
+        assertEquals(1, ranked.rankedItems[0].rank)
+        assertEquals(items[0].getId(), ranked.rankedItems[0].tournamentItemId)
+        assertEquals(2, ranked.rankedItems[1].rank)
+        assertEquals(items[2].getId(), ranked.rankedItems[1].tournamentItemId)
+        assertEquals(3, ranked.rankedItems[2].rank)
+        assertEquals(items[1].getId(), ranked.rankedItems[2].tournamentItemId)
+        assertEquals(4, ranked.rankedItems[3].rank)
+        assertEquals(items[3].getId(), ranked.rankedItems[3].tournamentItemId)
+    }
+
+    @Test
+    fun `recordMatch 에서 3개 아이템 결승 라운드면 1위부터 3위 순위 결과를 반환한다`() {
+        val tournamentId = createAndStart(listOf(1L, 2L, 3L))
+        val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
+        // round 3: items[0] vs items[1] → items[0] 승, items[2] 부전승
+        service.recordMatch(userId, RecordMatch(tournamentId, 3, items[0].getId(), items[1].getId(), items[0].getId()))
+
+        val result = service.recordMatch(
+            userId,
+            RecordMatch(
+                tournamentId = tournamentId,
+                currentRound = 2,
+                firstTournamentItemId = items[0].getId(),
+                secondTournamentItemId = items[2].getId(),
+                selectedTournamentItemId = items[0].getId(),
+            ),
+        )
+
+        val ranked = assertIs<RecordMatchResult>(result)
+        assertEquals(3, ranked.rankedItems.size)
+        assertEquals(1, ranked.rankedItems[0].rank)
+        assertEquals(items[0].getId(), ranked.rankedItems[0].tournamentItemId)
+        assertEquals(2, ranked.rankedItems[1].rank)
+        assertEquals(items[2].getId(), ranked.rankedItems[1].tournamentItemId) // 부전승 후 결승 패배
+        assertEquals(3, ranked.rankedItems[2].rank)
+        assertEquals(items[1].getId(), ranked.rankedItems[2].tournamentItemId) // 준결승 패배
     }
 
     @Test
