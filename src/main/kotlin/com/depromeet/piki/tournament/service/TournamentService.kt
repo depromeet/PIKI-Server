@@ -210,20 +210,7 @@ class TournamentService(
 
             TournamentStatus.COMPLETED -> {
                 val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
-                val rankedPairs = computeRanking(histories)
-                val rankedTournamentItemIds = rankedPairs.map { it.first }.toSet()
-                val tournamentItemById = tournamentItemRepository
-                    .findAllByTournamentId(tournamentId)
-                    .filter { it.getId() in rankedTournamentItemIds }
-                    .associateBy { it.getId() }
-                val itemById = itemRepository
-                    .findByIds(tournamentItemById.values.map { it.itemId })
-                    .associate { it.getId() to it }
-                TournamentDetail.Completed(
-                    tournamentId = tournament.getId(),
-                    name = tournament.name,
-                    result = buildRankedItems(rankedPairs, tournamentItemById, itemById),
-                )
+                buildCompleted(tournament, histories, tournamentItemRepository.findAllByTournamentId(tournamentId))
             }
         }
     }
@@ -325,17 +312,17 @@ class TournamentService(
         if (!tournament.isFinalRound(command.currentRound)) return null
 
         tournament.complete()
-        return buildFinalResult(tournament, histories + newHistory, allTournamentItems)
+        return buildCompleted(tournament, histories + newHistory, allTournamentItems)
     }
 
-    private fun buildFinalResult(
+    private fun buildCompleted(
         tournament: Tournament,
         histories: List<TournamentHistory>,
-        allTournamentItems: List<TournamentItem>,
+        tournamentItems: List<TournamentItem>,
     ): TournamentDetail.Completed {
         val rankedPairs = computeRanking(histories)
         val rankedTournamentItemIds = rankedPairs.map { it.first }.toSet()
-        val tournamentItemById = allTournamentItems
+        val tournamentItemById = tournamentItems
             .filter { it.getId() in rankedTournamentItemIds }
             .associateBy { it.getId() }
         val itemById = itemRepository
@@ -344,25 +331,19 @@ class TournamentService(
         return TournamentDetail.Completed(
             tournamentId = tournament.getId(),
             name = tournament.name,
-            result = buildRankedItems(rankedPairs, tournamentItemById, itemById),
-        )
-    }
-
-    private fun buildRankedItems(
-        rankedPairs: List<Pair<Long, Int>>,
-        tournamentItemById: Map<Long, TournamentItem>,
-        itemById: Map<Long, Item>,
-    ): List<RankedItem> = rankedPairs.map { (tournamentItemId, rank) ->
-        val tournamentItem = tournamentItemById.getValue(tournamentItemId)
-        val item = itemById[tournamentItem.itemId]
-        RankedItem(
-            rank = rank,
-            tournamentItemId = tournamentItemId,
-            itemId = tournamentItem.itemId,
-            name = item?.name,
-            price = item?.currentPrice,
-            currency = item?.currency,
-            imageUrl = item?.imageUrl,
+            result = rankedPairs.map { (tournamentItemId, rank) ->
+                val tournamentItem = tournamentItemById.getValue(tournamentItemId)
+                val item = itemById[tournamentItem.itemId]
+                RankedItem(
+                    rank = rank,
+                    tournamentItemId = tournamentItemId,
+                    itemId = tournamentItem.itemId,
+                    name = item?.name,
+                    price = item?.currentPrice,
+                    currency = item?.currency,
+                    imageUrl = item?.imageUrl,
+                )
+            },
         )
     }
 
