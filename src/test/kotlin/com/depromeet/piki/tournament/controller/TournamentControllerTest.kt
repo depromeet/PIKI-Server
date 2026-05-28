@@ -87,7 +87,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `POST tournaments-id-items 는 참여자이면 200 을 반환한다`() {
+    fun `POST tournaments-id-items 는 참여자이면 200 과 함께 tournamentItemIds 를 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         val item1Id = saveWishItem()
@@ -101,6 +101,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .content("""{"itemIds":[$item1Id,$item2Id]}"""),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.tournamentItemIds").isArray)
+            .andExpect(jsonPath("$.data.tournamentItemIds.length()").value(2))
     }
 
     @Test
@@ -1018,7 +1020,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         wishPersistenceService.persist(owner, Item(name = name, currentPrice = price, currency = "KRW")).item.getId()
 
     @Test
-    fun `GET tournaments-id-items-itemId 는 READY 아이템의 이름·가격·이미지·status 를 반환한다`() {
+    fun `GET tournaments-id-items-tournamentItemId 는 READY 아이템의 이름·가격·이미지·status 를 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         val itemId = saveWishItem(name = "나이키 에어맥스", price = 129_000)
@@ -1040,7 +1042,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `GET tournaments-id-items-itemId 는 PROCESSING 아이템이면 name·price·imageUrl 이 응답에 없고 status 가 PROCESSING 이다`() {
+    fun `GET tournaments-id-items-tournamentItemId 는 PROCESSING 아이템이면 name·price·imageUrl 이 응답에 없고 status 가 PROCESSING 이다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         val processingItemId = itemJpaRepository.save(Item(status = ItemStatus.PROCESSING)).getId()
@@ -1059,7 +1061,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `GET tournaments-id-items-itemId 에서 토너먼트 참여자가 아니면 403 을 반환한다`() {
+    fun `GET tournaments-id-items-tournamentItemId 에서 토너먼트 참여자가 아니면 403 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem())
@@ -1074,7 +1076,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `GET tournaments-id-items-itemId 에서 존재하지 않는 tournamentId 이면 404 를 반환한다`() {
+    fun `GET tournaments-id-items-tournamentItemId 에서 존재하지 않는 tournamentId 이면 404 를 반환한다`() {
         val mockMvc = buildMockMvc()
 
         mockMvc
@@ -1086,7 +1088,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `GET tournaments-id-items-itemId 에서 존재하지 않는 tournamentItemId 이면 404 를 반환한다`() {
+    fun `GET tournaments-id-items-tournamentItemId 에서 존재하지 않는 tournamentItemId 이면 404 를 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
 
@@ -1099,7 +1101,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `GET tournaments-id-items-itemId 에서 다른 토너먼트 소속 아이템이면 404 를 반환한다`() {
+    fun `GET tournaments-id-items-tournamentItemId 에서 다른 토너먼트 소속 아이템이면 404 를 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId1 = createTournament(mockMvc, "토너먼트1")
         val tournamentId2 = createTournament(mockMvc, "토너먼트2")
