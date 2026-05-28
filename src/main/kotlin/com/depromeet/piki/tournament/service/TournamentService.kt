@@ -300,6 +300,10 @@ class TournamentService(
         }
 
         val histories = tournamentRepository.findTournamentHistoriesByTournamentId(command.tournamentId)
+        val eliminatedItemIds = histories.map { it.loser() }.toSet()
+        if (command.firstTournamentItemId in eliminatedItemIds || command.secondTournamentItemId in eliminatedItemIds) {
+            throw TournamentException.eliminatedTournamentItem()
+        }
         val firstRoundMatchCount = tournamentItemIds.size / 2
         val expectedRound = computeExpectedRound(tournamentItemIds.size, firstRoundMatchCount, histories)
         if (command.currentRound != expectedRound) throw TournamentException.invalidCurrentRound()

@@ -129,6 +129,13 @@ class TournamentException private constructor(
                 HttpStatus.FORBIDDEN,
             )
 
+        fun eliminatedTournamentItem(): TournamentException =
+            TournamentException(
+                "이미 탈락한 아이템은 매치에 참가할 수 없습니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
+
         fun invalidCurrentRound(): TournamentException =
             TournamentException(
                 "현재 진행할 수 없는 라운드입니다.",
