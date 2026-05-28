@@ -63,8 +63,8 @@ class TournamentController(
         @PathVariable tournamentId: Long,
         @Valid @RequestBody request: AddTournamentItemFromLinkRequest,
     ): ApiResponseBody<AddTournamentItemFromLinkResponse> {
-        val itemId = tournamentItemService.addItemFromLink(userId, tournamentId, request.url)
-        return ApiResponseBody.ok(AddTournamentItemFromLinkResponse(itemId))
+        val tournamentItemId = tournamentItemService.addItemFromLink(userId, tournamentId, request.url)
+        return ApiResponseBody.ok(AddTournamentItemFromLinkResponse(tournamentItemId))
     }
 
     @PostMapping("/{tournamentId}/items/images", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
@@ -75,8 +75,8 @@ class TournamentController(
     ): ApiResponseBody<AddTournamentItemsFromImagesResponse> {
         // images 파트 미첨부(0장)는 Spring 이 진입 전 예외로 끊어 캐치올(500)로 가므로,
         // required=false + orEmpty 로 항상 서비스 검증(invalidImageCount, 400)에 닿게 한다.
-        val itemIds = tournamentItemService.addItemsFromImages(userId, tournamentId, images.orEmpty())
-        return ApiResponseBody.ok(AddTournamentItemsFromImagesResponse(itemIds))
+        val tournamentItemIds = tournamentItemService.addItemsFromImages(userId, tournamentId, images.orEmpty())
+        return ApiResponseBody.ok(AddTournamentItemsFromImagesResponse(tournamentItemIds))
     }
 
     @DeleteMapping("/{tournamentId}/items/{tournamentItemId}")

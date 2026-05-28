@@ -150,9 +150,9 @@ interface TournamentApi {
         summary = "URL 링크로 토너먼트 아이템 추가",
         description = """
             PENDING 상태의 토너먼트에 URL 링크를 통해 아이템을 추가한다.
-            아이템이 PROCESSING 상태로 즉시 생성되어 itemId 가 반환된다.
+            아이템이 PROCESSING 상태로 즉시 생성되어 tournamentItemId 가 반환된다.
             파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다.
-            클라이언트는 itemId 로 상태를 폴링한다. 토너먼트 참여자만 추가할 수 있다.
+            클라이언트는 tournamentItemId 로 GET /tournaments/{id}/items/{tournamentItemId} 를 폴링한다. 토너먼트 참여자만 추가할 수 있다.
         """,
     )
     @ApiResponses(
@@ -229,9 +229,9 @@ interface TournamentApi {
         summary = "이미지로 토너먼트 아이템 추가",
         description = """
             PENDING 상태의 토너먼트에 이미지 추출을 통해 아이템을 추가한다.
-            이미지 1~5장을 전달하면 아이템이 PROCESSING 상태로 즉시 생성되어 itemIds 가 반환된다.
+            이미지 1~5장을 전달하면 아이템이 PROCESSING 상태로 즉시 생성되어 tournamentItemIds 가 반환된다.
             이미지 파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다.
-            클라이언트는 itemId 로 상태를 폴링한다. 토너먼트 참여자만 추가할 수 있다.
+            클라이언트는 tournamentItemId 로 GET /tournaments/{id}/items/{tournamentItemId} 를 폴링한다. 토너먼트 참여자만 추가할 수 있다.
         """,
     )
     @ApiResponses(

@@ -84,7 +84,7 @@ class TournamentApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "링크 아이템 추가 성공",
-                            payload = ApiResponseBody.ok(AddTournamentItemFromLinkResponse(itemId = 1L)),
+                            payload = ApiResponseBody.ok(AddTournamentItemFromLinkResponse(tournamentItemId = 1L)),
                         )
                     }
 
@@ -95,7 +95,7 @@ class TournamentApiExamples(
                             name = "이미지 아이템 추가 성공",
                             payload = ApiResponseBody.ok(
                                 AddTournamentItemsFromImagesResponse(
-                                    itemIds = listOf(1L, 2L, 3L),
+                                    tournamentItemIds = listOf(1L, 2L, 3L),
                                 ),
                             ),
                         )

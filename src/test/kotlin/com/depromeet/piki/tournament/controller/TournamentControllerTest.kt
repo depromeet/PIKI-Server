@@ -765,7 +765,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `POST tournaments-id-items-link 는 참여자이면 PROCESSING 아이템을 생성하고 itemId 를 반환한다`() {
+    fun `POST tournaments-id-items-link 는 참여자이면 PROCESSING 아이템을 생성하고 tournamentItemId 를 반환한다`() {
         stubItemParsingWorker.enabled = false
         try {
             val mockMvc = buildMockMvc()
@@ -780,12 +780,15 @@ class TournamentControllerTest : IntegrationTestSupport() {
                             .content("""{"url":"https://example.com/product"}"""),
                     ).andExpect(status().isOk)
                     .andExpect(jsonPath("$.status").value(200))
-                    .andExpect(jsonPath("$.data.itemId").isNumber)
+                    .andExpect(jsonPath("$.data.tournamentItemId").isNumber)
                     .andReturn()
 
-            val itemId = objectMapper.readTree(result.response.contentAsString)["data"]["itemId"].asLong()
-            assertEquals(1, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
-            assertEquals(ItemStatus.PROCESSING, itemJpaRepository.findById(itemId).orElseThrow().status)
+            val tournamentItemId = objectMapper.readTree(result.response.contentAsString)["data"]["tournamentItemId"].asLong()
+            val tournamentItem = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).also {
+                assertEquals(1, it.size)
+            }.first()
+            assertEquals(tournamentItemId, tournamentItem.getId())
+            assertEquals(ItemStatus.PROCESSING, itemJpaRepository.findById(tournamentItem.itemId).orElseThrow().status)
         } finally {
             stubItemParsingWorker.enabled = true
         }
@@ -836,7 +839,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `POST tournaments-id-items-images 는 참여자이면 PROCESSING 아이템을 생성하고 itemIds 를 반환한다`() {
+    fun `POST tournaments-id-items-images 는 참여자이면 PROCESSING 아이템을 생성하고 tournamentItemIds 를 반환한다`() {
         stubImageParsingWorker.enabled = false
         try {
             val mockMvc = buildMockMvc()
@@ -852,8 +855,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
                         .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
                 ).andExpect(status().isOk)
                 .andExpect(jsonPath("$.status").value(200))
-                .andExpect(jsonPath("$.data.itemIds").isArray)
-                .andExpect(jsonPath("$.data.itemIds.length()").value(2))
+                .andExpect(jsonPath("$.data.tournamentItemIds").isArray)
+                .andExpect(jsonPath("$.data.tournamentItemIds.length()").value(2))
 
             assertEquals(2, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
         } finally {
