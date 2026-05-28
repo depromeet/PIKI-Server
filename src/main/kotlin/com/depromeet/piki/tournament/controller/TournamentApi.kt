@@ -9,6 +9,7 @@ import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.RecordMatchRequest
+import com.depromeet.piki.tournament.controller.dto.RecordMatchResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentItemDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
@@ -448,14 +449,16 @@ interface TournamentApi {
         description = """
             IN_PROGRESS 상태의 토너먼트에서 한 매치의 결과(승자)를 기록한다.
             currentRound 는 해당 시점에 서버가 기대하는 라운드와 일치해야 한다.
-            결승(currentRound=2) 결과 기록 시 토너먼트가 COMPLETED 로 자동 전환된다.
+            결승(currentRound=2) 결과 기록 시 토너먼트가 COMPLETED 로 자동 전환되고,
+            응답 data 에 1위~최대 4위의 순위 결과(이름·가격·이미지)가 포함된다.
+            결승이 아닌 라운드는 data=null 을 반환한다.
         """,
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "매치 결과 기록 성공",
+                description = "매치 결과 기록 성공 (결승이 아닌 라운드: data=null · 결승 라운드: data.result에 순위 아이템 목록)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -519,7 +522,7 @@ interface TournamentApi {
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
         request: RecordMatchRequest,
-    ): ApiResponseBody<Unit>
+    ): ApiResponseBody<RecordMatchResponse?>
 
     @Operation(
         summary = "토너먼트 목록 조회",

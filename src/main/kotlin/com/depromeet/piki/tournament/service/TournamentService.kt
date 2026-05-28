@@ -12,7 +12,9 @@ import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.tournament.service.dto.AddTournamentItemsFromWish
 import com.depromeet.piki.tournament.service.dto.CreateTournament
+import com.depromeet.piki.tournament.service.dto.RankedItem
 import com.depromeet.piki.tournament.service.dto.RecordMatch
+import com.depromeet.piki.tournament.service.dto.RecordMatchResult
 import com.depromeet.piki.tournament.service.dto.TournamentDetail
 import com.depromeet.piki.tournament.service.dto.TournamentItemDetail
 import com.depromeet.piki.tournament.service.dto.TournamentStartResult
@@ -224,7 +226,7 @@ class TournamentService(
                     result = rankedItems.map { (tournamentItemId, rank) ->
                         val tournamentItem = tournamentItemById.getValue(tournamentItemId)
                         val item = itemById[tournamentItem.itemId]
-                        TournamentDetail.RankedItem(
+                        RankedItem(
                             rank = rank,
                             tournamentItemId = tournamentItemId,
                             itemId = tournamentItem.itemId,
@@ -300,7 +302,7 @@ class TournamentService(
     fun recordMatch(
         userId: UUID,
         command: RecordMatch,
-    ) {
+    ): RecordMatchResult? {
         val tournament =
             tournamentRepository.findTournamentByIdForUpdate(command.tournamentId)
                 ?: throw TournamentException.notFoundTournament()
@@ -311,10 +313,8 @@ class TournamentService(
             throw TournamentException.invalidWinner()
         }
 
-        val tournamentItemIds =
-            tournamentItemRepository
-                .findAllByTournamentId(command.tournamentId)
-                .mapTo(mutableSetOf()) { it.getId() }
+        val allTournamentItems = tournamentItemRepository.findAllByTournamentId(command.tournamentId)
+        val tournamentItemIds = allTournamentItems.mapTo(mutableSetOf()) { it.getId() }
         if (command.firstTournamentItemId !in tournamentItemIds ||
             command.secondTournamentItemId !in tournamentItemIds
         ) {
@@ -326,19 +326,45 @@ class TournamentService(
         val expectedRound = computeExpectedRound(tournamentItemIds.size, firstRoundMatchCount, histories)
         if (command.currentRound != expectedRound) throw TournamentException.invalidCurrentRound()
 
-        tournamentRepository.saveHistory(
-            TournamentHistory(
-                tournamentId = command.tournamentId,
-                currentRound = command.currentRound,
-                firstTournamentItemId = command.firstTournamentItemId,
-                secondTournamentItemId = command.secondTournamentItemId,
-                selectedTournamentItemId = command.selectedTournamentItemId,
-            ),
+        val newHistory = TournamentHistory(
+            tournamentId = command.tournamentId,
+            currentRound = command.currentRound,
+            firstTournamentItemId = command.firstTournamentItemId,
+            secondTournamentItemId = command.secondTournamentItemId,
+            selectedTournamentItemId = command.selectedTournamentItemId,
         )
+        tournamentRepository.saveHistory(newHistory)
 
-        if (tournament.isFinalRound(command.currentRound)) {
-            tournament.complete()
-        }
+        if (!tournament.isFinalRound(command.currentRound)) return null
+
+        tournament.complete()
+        return buildFinalResult(histories + newHistory, allTournamentItems)
+    }
+
+    private fun buildFinalResult(
+        histories: List<TournamentHistory>,
+        allTournamentItems: List<TournamentItem>,
+    ): RecordMatchResult {
+        val rankedPairs = computeRanking(histories)
+        val tournamentItemById = allTournamentItems.associateBy { it.getId() }
+        val itemById = itemRepository
+            .findByIds(rankedPairs.map { (tid, _) -> tournamentItemById.getValue(tid).itemId })
+            .associate { it.getId() to it }
+        return RecordMatchResult(
+            rankedItems = rankedPairs.map { (tournamentItemId, rank) ->
+                val tournamentItem = tournamentItemById.getValue(tournamentItemId)
+                val item = itemById[tournamentItem.itemId]
+                RankedItem(
+                    rank = rank,
+                    tournamentItemId = tournamentItemId,
+                    itemId = tournamentItem.itemId,
+                    name = item?.name,
+                    price = item?.currentPrice,
+                    currency = item?.currency,
+                    imageUrl = item?.imageUrl,
+                )
+            },
+        )
     }
 
     @Transactional

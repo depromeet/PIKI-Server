@@ -56,14 +56,4 @@ sealed class TournamentDetail {
         val nickname: String,
         val profileImage: String,
     )
-
-    data class RankedItem(
-        val rank: Int,
-        val tournamentItemId: Long,
-        val itemId: Long,
-        val name: String?,
-        val price: Int?,
-        val currency: String?,
-        val imageUrl: String?,
-    )
 }

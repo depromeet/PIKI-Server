@@ -9,6 +9,8 @@ import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkRes
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromWishResponse
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
+import com.depromeet.piki.tournament.controller.dto.RankedItemResponse
+import com.depromeet.piki.tournament.controller.dto.RecordMatchResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentItemDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
@@ -150,8 +152,54 @@ class TournamentApiExamples(
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.OK,
-                            name = "기록 성공",
-                            payload = ApiResponseBody.ok<Unit>(),
+                            name = "기록 성공 (결승 아닌 라운드) — data=null",
+                            payload = ApiResponseBody.ok<RecordMatchResponse?>(),
+                        )
+                        add(
+                            status = HttpStatus.OK,
+                            name = "기록 성공 (결승 라운드) — 순위 결과 포함",
+                            payload = ApiResponseBody.ok(
+                                RecordMatchResponse(
+                                    result = listOf(
+                                        RankedItemResponse(
+                                            rank = 1,
+                                            tournamentItemId = 1,
+                                            itemId = 10,
+                                            name = "나이키 에어맥스",
+                                            price = 129_000,
+                                            currency = "KRW",
+                                            imageUrl = "https://cdn.example.com/items/1.jpg",
+                                        ),
+                                        RankedItemResponse(
+                                            rank = 2,
+                                            tournamentItemId = 2,
+                                            itemId = 20,
+                                            name = "아디다스 울트라부스트",
+                                            price = 189_000,
+                                            currency = "KRW",
+                                            imageUrl = "https://cdn.example.com/items/2.jpg",
+                                        ),
+                                        RankedItemResponse(
+                                            rank = 3,
+                                            tournamentItemId = 3,
+                                            itemId = 30,
+                                            name = "뉴발란스 993",
+                                            price = 259_000,
+                                            currency = "KRW",
+                                            imageUrl = "https://cdn.example.com/items/3.jpg",
+                                        ),
+                                        RankedItemResponse(
+                                            rank = 4,
+                                            tournamentItemId = 4,
+                                            itemId = 40,
+                                            name = "살로몬 XT-6",
+                                            price = 279_000,
+                                            currency = "USD",
+                                            imageUrl = null,
+                                        ),
+                                    ),
+                                ),
+                            ),
                         )
                     }
 
@@ -260,7 +308,7 @@ class TournamentApiExamples(
                                             TournamentDetailResponse.CompletedData(
                                                 result =
                                                     listOf(
-                                                        TournamentDetailResponse.RankedItemResponse(
+                                                        RankedItemResponse(
                                                             rank = 1,
                                                             tournamentItemId = 1,
                                                             itemId = 10,
@@ -269,7 +317,7 @@ class TournamentApiExamples(
                                                             currency = "KRW",
                                                             imageUrl = "https://cdn.example.com/items/1.jpg",
                                                         ),
-                                                        TournamentDetailResponse.RankedItemResponse(
+                                                        RankedItemResponse(
                                                             rank = 2,
                                                             tournamentItemId = 2,
                                                             itemId = 20,
@@ -278,7 +326,7 @@ class TournamentApiExamples(
                                                             currency = "KRW",
                                                             imageUrl = "https://cdn.example.com/items/2.jpg",
                                                         ),
-                                                        TournamentDetailResponse.RankedItemResponse(
+                                                        RankedItemResponse(
                                                             rank = 3,
                                                             tournamentItemId = 3,
                                                             itemId = 30,
@@ -287,7 +335,7 @@ class TournamentApiExamples(
                                                             currency = "KRW",
                                                             imageUrl = "https://cdn.example.com/items/3.jpg",
                                                         ),
-                                                        TournamentDetailResponse.RankedItemResponse(
+                                                        RankedItemResponse(
                                                             rank = 4,
                                                             tournamentItemId = 4,
                                                             itemId = 40,

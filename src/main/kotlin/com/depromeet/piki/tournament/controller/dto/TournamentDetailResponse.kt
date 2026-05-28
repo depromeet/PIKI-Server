@@ -68,22 +68,6 @@ data class TournamentDetailResponse(
     )
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    data class RankedItemResponse(
-        val rank: Int,
-        val tournamentItemId: Long,
-        val itemId: Long,
-        val name: String?,
-        val price: Int?,
-        val currency: String?,
-        val imageUrl: String?,
-    ) {
-        companion object {
-            fun from(r: TournamentDetail.RankedItem): RankedItemResponse =
-                RankedItemResponse(r.rank, r.tournamentItemId, r.itemId, r.name, r.price, r.currency, r.imageUrl)
-        }
-    }
-
-    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class CompletedData(val result: List<RankedItemResponse>)
 
     companion object {
