@@ -4,10 +4,13 @@ import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromWishResponse
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
+import com.depromeet.piki.tournament.controller.dto.TournamentItemDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
@@ -73,7 +76,9 @@ class TournamentApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "위시 아이템 추가 성공",
-                            payload = ApiResponseBody.ok<Unit>(),
+                            payload = ApiResponseBody.ok(
+                                AddTournamentItemsFromWishResponse(tournamentItemIds = listOf(10L, 11L)),
+                            ),
                         )
                     }
 
@@ -82,7 +87,7 @@ class TournamentApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "링크 아이템 추가 성공",
-                            payload = ApiResponseBody.ok(AddTournamentItemFromLinkResponse(itemId = 1L)),
+                            payload = ApiResponseBody.ok(AddTournamentItemFromLinkResponse(tournamentItemId = 1L)),
                         )
                     }
 
@@ -93,7 +98,7 @@ class TournamentApiExamples(
                             name = "이미지 아이템 추가 성공",
                             payload = ApiResponseBody.ok(
                                 AddTournamentItemsFromImagesResponse(
-                                    itemIds = listOf(1L, 2L, 3L),
+                                    tournamentItemIds = listOf(1L, 2L, 3L),
                                 ),
                             ),
                         )
@@ -295,6 +300,54 @@ class TournamentApiExamples(
                                             ),
                                     ),
                                 ),
+                        )
+                    }
+                handlerMethod.binds(TournamentController::getTournamentItem) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "READY - 파싱 완료",
+                            payload = ApiResponseBody.ok(
+                                TournamentItemDetailResponse(
+                                    tournamentItemId = 10,
+                                    itemId = 100,
+                                    name = "나이키 에어맥스",
+                                    imageUrl = "https://cdn.example.com/items/1.jpg",
+                                    price = 129_000,
+                                    currency = "KRW",
+                                    status = ItemStatus.READY,
+                                ),
+                            ),
+                        )
+                        add(
+                            status = HttpStatus.OK,
+                            name = "PROCESSING - 파싱 진행 중",
+                            payload = ApiResponseBody.ok(
+                                TournamentItemDetailResponse(
+                                    tournamentItemId = 10,
+                                    itemId = 100,
+                                    name = null,
+                                    imageUrl = null,
+                                    price = null,
+                                    currency = null,
+                                    status = ItemStatus.PROCESSING,
+                                ),
+                            ),
+                        )
+                        add(
+                            status = HttpStatus.OK,
+                            name = "FAILED - 파싱 실패",
+                            payload = ApiResponseBody.ok(
+                                TournamentItemDetailResponse(
+                                    tournamentItemId = 10,
+                                    itemId = 100,
+                                    name = null,
+                                    imageUrl = null,
+                                    price = null,
+                                    currency = null,
+                                    status = ItemStatus.FAILED,
+                                ),
+                            ),
                         )
                     }
             }

@@ -14,6 +14,7 @@ import com.depromeet.piki.tournament.service.dto.AddTournamentItemsFromWish
 import com.depromeet.piki.tournament.service.dto.CreateTournament
 import com.depromeet.piki.tournament.service.dto.RecordMatch
 import com.depromeet.piki.tournament.service.dto.TournamentDetail
+import com.depromeet.piki.tournament.service.dto.TournamentItemDetail
 import com.depromeet.piki.tournament.service.dto.TournamentStartResult
 import com.depromeet.piki.tournament.service.dto.TournamentSummary
 import com.depromeet.piki.user.repository.UserRepository
@@ -52,7 +53,7 @@ class TournamentService(
     fun addItemsFromWish(
         userId: UUID,
         command: AddTournamentItemsFromWish,
-    ) {
+    ): List<Long> {
         val tournament =
             tournamentRepository.findTournamentById(command.tournamentId)
                 ?: throw TournamentException.notFoundTournament()
@@ -79,11 +80,11 @@ class TournamentService(
         if (command.itemIds.any { it !in foundItemIds }) throw TournamentException.notFoundItems()
         // 비동기 파싱 중(PROCESSING)이거나 실패(FAILED)한 상품은 이름·가격이 비어 출전에 부적합하다. READY 만 허용.
         if (foundItems.any { !it.isReady() }) throw TournamentException.itemNotReady()
-        tournamentItemRepository.saveAll(
+        return tournamentItemRepository.saveAll(
             command.itemIds.map { itemId ->
                 TournamentItem(tournamentId = command.tournamentId, itemId = itemId, userId = userId)
             },
-        )
+        ).map { it.getId() }
     }
 
     @Transactional
@@ -236,6 +237,32 @@ class TournamentService(
                 )
             }
         }
+    }
+
+    @Transactional(readOnly = true)
+    fun getTournamentItem(
+        userId: UUID,
+        tournamentId: Long,
+        tournamentItemId: Long,
+    ): TournamentItemDetail {
+        tournamentRepository.findTournamentById(tournamentId)
+            ?: throw TournamentException.notFoundTournament()
+        tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+            ?: throw TournamentException.forbiddenTournament()
+        val tournamentItem = tournamentItemRepository.findById(tournamentItemId)
+            ?: throw TournamentException.notFoundTournamentItem()
+        if (tournamentItem.tournamentId != tournamentId) throw TournamentException.notFoundTournamentItem()
+        val item = itemRepository.findById(tournamentItem.itemId)
+            ?: throw TournamentException.notFoundTournamentItem()
+        return TournamentItemDetail(
+            tournamentItemId = tournamentItem.getId(),
+            itemId = item.getId(),
+            name = item.name,
+            imageUrl = item.imageUrl,
+            price = item.currentPrice,
+            currency = item.currency,
+            status = item.status,
+        )
     }
 
     @Transactional(readOnly = true)

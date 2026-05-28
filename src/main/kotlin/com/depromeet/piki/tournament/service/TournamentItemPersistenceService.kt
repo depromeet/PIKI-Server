@@ -30,10 +30,10 @@ class TournamentItemPersistenceService(
     ): Long {
         validateAndCheckCapacity(userId, tournamentId, 1)
         val item = itemRepository.save(Item.processing(link))
-        tournamentItemRepository.saveAll(
+        val tournamentItem = tournamentItemRepository.saveAll(
             listOf(TournamentItem(tournamentId = tournamentId, itemId = item.getId(), userId = userId)),
-        )
-        return item.getId()
+        ).first()
+        return tournamentItem.getId()
     }
 
     @Transactional
@@ -44,10 +44,9 @@ class TournamentItemPersistenceService(
     ): List<Long> {
         validateAndCheckCapacity(userId, tournamentId, count)
         val items = itemRepository.saveAll(List(count) { Item(status = ItemStatus.PROCESSING) })
-        tournamentItemRepository.saveAll(
+        return tournamentItemRepository.saveAll(
             items.map { TournamentItem(tournamentId = tournamentId, itemId = it.getId(), userId = userId) },
-        )
-        return items.map { it.getId() }
+        ).map { it.getId() }
     }
 
     private fun validateAndCheckCapacity(
