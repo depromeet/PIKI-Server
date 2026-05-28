@@ -11,6 +11,8 @@ interface TournamentItemRepository {
 
     fun findAllByTournamentId(tournamentId: Long): List<TournamentItem>
 
+    fun findByIds(ids: List<Long>): List<TournamentItem>
+
     fun findById(id: Long): TournamentItem?
 
     fun delete(tournamentItem: TournamentItem)

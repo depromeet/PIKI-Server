@@ -176,6 +176,9 @@ class TournamentServiceTest {
         override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
             items.filter { it.tournamentId == tournamentId }
 
+        override fun findByIds(ids: List<Long>): List<TournamentItem> =
+            items.filter { it.getId() in ids }
+
         override fun findById(id: Long): TournamentItem? = items.find { it.getId() == id }
 
         override fun delete(tournamentItem: TournamentItem) {
