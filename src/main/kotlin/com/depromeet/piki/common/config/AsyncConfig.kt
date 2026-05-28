@@ -25,7 +25,21 @@ class AsyncConfig {
             initialize()
         }
 
+    // 알림 디스패치(AFTER_COMMIT 리스너)를 발행 트랜잭션·톰캣 워커와 분리하기 위한 executor.
+    // 알림 작업은 DB 저장 + 채널 전달이라 item 파싱(외부 LLM 60s)보다 가벼워 풀을 작게 둔다.
+    // 포화 시 기본 AbortPolicy 로 거부한다 — 알림은 best-effort 이고 원본은 이미 DB 에 영속화되므로 유실돼도 복원 가능.
+    @Bean(NOTIFICATION_EXECUTOR)
+    fun notificationExecutor(): Executor =
+        ThreadPoolTaskExecutor().apply {
+            corePoolSize = 2
+            maxPoolSize = 4
+            queueCapacity = 200
+            setThreadNamePrefix("notification-")
+            initialize()
+        }
+
     companion object {
         const val ITEM_PARSING_EXECUTOR = "itemParsingExecutor"
+        const val NOTIFICATION_EXECUTOR = "notificationExecutor"
     }
 }
