@@ -4,6 +4,7 @@ import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkRequest
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromWishResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
@@ -52,9 +53,9 @@ class TournamentController(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
         @Valid @RequestBody request: AddTournamentItemsRequest,
-    ): ApiResponseBody<Unit> {
-        tournamentService.addItemsFromWish(userId, request.toAddTournamentItemsFromWish(tournamentId))
-        return ApiResponseBody.ok()
+    ): ApiResponseBody<AddTournamentItemsFromWishResponse> {
+        val tournamentItemIds = tournamentService.addItemsFromWish(userId, request.toAddTournamentItemsFromWish(tournamentId))
+        return ApiResponseBody.ok(AddTournamentItemsFromWishResponse(tournamentItemIds))
     }
 
     @PostMapping("/{tournamentId}/items/link")

@@ -4,6 +4,7 @@ import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkRequest
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromWishResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
@@ -74,13 +75,14 @@ interface TournamentApi {
         description = """
             PENDING 상태의 토너먼트에 위시리스트에 있는 아이템을 추가한다. 토너먼트 참여자만 추가할 수 있다.
             itemIds 중 하나라도 조건에 맞지 않으면 요청 전체가 실패한다(부분 성공 없음).
+            응답의 tournamentItemIds 는 요청 itemIds 와 동일한 순서로 대응된다.
         """,
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "아이템 추가 성공",
+                description = "아이템 추가 성공 (tournamentItemIds: 요청 itemIds 순서와 동일하게 대응)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -144,7 +146,7 @@ interface TournamentApi {
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
         request: AddTournamentItemsRequest,
-    ): ApiResponseBody<Unit>
+    ): ApiResponseBody<AddTournamentItemsFromWishResponse>
 
     @Operation(
         summary = "URL 링크로 토너먼트 아이템 추가",

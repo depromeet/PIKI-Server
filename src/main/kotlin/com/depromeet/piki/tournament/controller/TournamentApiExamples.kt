@@ -7,6 +7,7 @@ import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromWishResponse
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentItemDetailResponse
@@ -75,7 +76,9 @@ class TournamentApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "위시 아이템 추가 성공",
-                            payload = ApiResponseBody.ok<Unit>(),
+                            payload = ApiResponseBody.ok(
+                                AddTournamentItemsFromWishResponse(tournamentItemIds = listOf(10L, 11L)),
+                            ),
                         )
                     }
 

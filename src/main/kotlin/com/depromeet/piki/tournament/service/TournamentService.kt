@@ -53,7 +53,7 @@ class TournamentService(
     fun addItemsFromWish(
         userId: UUID,
         command: AddTournamentItemsFromWish,
-    ) {
+    ): List<Long> {
         val tournament =
             tournamentRepository.findTournamentById(command.tournamentId)
                 ?: throw TournamentException.notFoundTournament()
@@ -80,11 +80,11 @@ class TournamentService(
         if (command.itemIds.any { it !in foundItemIds }) throw TournamentException.notFoundItems()
         // 비동기 파싱 중(PROCESSING)이거나 실패(FAILED)한 상품은 이름·가격이 비어 출전에 부적합하다. READY 만 허용.
         if (foundItems.any { !it.isReady() }) throw TournamentException.itemNotReady()
-        tournamentItemRepository.saveAll(
+        return tournamentItemRepository.saveAll(
             command.itemIds.map { itemId ->
                 TournamentItem(tournamentId = command.tournamentId, itemId = itemId, userId = userId)
             },
-        )
+        ).map { it.getId() }
     }
 
     @Transactional
