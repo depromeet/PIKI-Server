@@ -9,7 +9,6 @@ import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.RecordMatchRequest
-import com.depromeet.piki.tournament.controller.dto.RecordMatchResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentItemDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
@@ -522,7 +521,7 @@ interface TournamentApi {
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
         request: RecordMatchRequest,
-    ): ApiResponseBody<RecordMatchResponse?>
+    ): ApiResponseBody<TournamentDetailResponse.CompletedData?>
 
     @Operation(
         summary = "토너먼트 목록 조회",

@@ -14,7 +14,6 @@ import com.depromeet.piki.tournament.service.dto.AddTournamentItemsFromWish
 import com.depromeet.piki.tournament.service.dto.CreateTournament
 import com.depromeet.piki.tournament.service.dto.RankedItem
 import com.depromeet.piki.tournament.service.dto.RecordMatch
-import com.depromeet.piki.tournament.service.dto.RecordMatchResult
 import com.depromeet.piki.tournament.service.dto.TournamentDetail
 import com.depromeet.piki.tournament.service.dto.TournamentItemDetail
 import com.depromeet.piki.tournament.service.dto.TournamentStartResult
@@ -211,8 +210,8 @@ class TournamentService(
 
             TournamentStatus.COMPLETED -> {
                 val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
-                val rankedItems = computeRanking(histories)
-                val rankedTournamentItemIds = rankedItems.map { it.first }.toSet()
+                val rankedPairs = computeRanking(histories)
+                val rankedTournamentItemIds = rankedPairs.map { it.first }.toSet()
                 val tournamentItemById = tournamentItemRepository
                     .findAllByTournamentId(tournamentId)
                     .filter { it.getId() in rankedTournamentItemIds }
@@ -223,19 +222,7 @@ class TournamentService(
                 TournamentDetail.Completed(
                     tournamentId = tournament.getId(),
                     name = tournament.name,
-                    result = rankedItems.map { (tournamentItemId, rank) ->
-                        val tournamentItem = tournamentItemById.getValue(tournamentItemId)
-                        val item = itemById[tournamentItem.itemId]
-                        RankedItem(
-                            rank = rank,
-                            tournamentItemId = tournamentItemId,
-                            itemId = tournamentItem.itemId,
-                            name = item?.name,
-                            price = item?.currentPrice,
-                            currency = item?.currency,
-                            imageUrl = item?.imageUrl,
-                        )
-                    },
+                    result = buildRankedItems(rankedPairs, tournamentItemById, itemById),
                 )
             }
         }
@@ -302,7 +289,7 @@ class TournamentService(
     fun recordMatch(
         userId: UUID,
         command: RecordMatch,
-    ): RecordMatchResult? {
+    ): TournamentDetail.Completed? {
         val tournament =
             tournamentRepository.findTournamentByIdForUpdate(command.tournamentId)
                 ?: throw TournamentException.notFoundTournament()
@@ -338,32 +325,44 @@ class TournamentService(
         if (!tournament.isFinalRound(command.currentRound)) return null
 
         tournament.complete()
-        return buildFinalResult(histories + newHistory, allTournamentItems)
+        return buildFinalResult(tournament, histories + newHistory, allTournamentItems)
     }
 
     private fun buildFinalResult(
+        tournament: Tournament,
         histories: List<TournamentHistory>,
         allTournamentItems: List<TournamentItem>,
-    ): RecordMatchResult {
+    ): TournamentDetail.Completed {
         val rankedPairs = computeRanking(histories)
-        val tournamentItemById = allTournamentItems.associateBy { it.getId() }
+        val rankedTournamentItemIds = rankedPairs.map { it.first }.toSet()
+        val tournamentItemById = allTournamentItems
+            .filter { it.getId() in rankedTournamentItemIds }
+            .associateBy { it.getId() }
         val itemById = itemRepository
-            .findByIds(rankedPairs.map { (tid, _) -> tournamentItemById.getValue(tid).itemId })
+            .findByIds(tournamentItemById.values.map { it.itemId })
             .associate { it.getId() to it }
-        return RecordMatchResult(
-            rankedItems = rankedPairs.map { (tournamentItemId, rank) ->
-                val tournamentItem = tournamentItemById.getValue(tournamentItemId)
-                val item = itemById[tournamentItem.itemId]
-                RankedItem(
-                    rank = rank,
-                    tournamentItemId = tournamentItemId,
-                    itemId = tournamentItem.itemId,
-                    name = item?.name,
-                    price = item?.currentPrice,
-                    currency = item?.currency,
-                    imageUrl = item?.imageUrl,
-                )
-            },
+        return TournamentDetail.Completed(
+            tournamentId = tournament.getId(),
+            name = tournament.name,
+            result = buildRankedItems(rankedPairs, tournamentItemById, itemById),
+        )
+    }
+
+    private fun buildRankedItems(
+        rankedPairs: List<Pair<Long, Int>>,
+        tournamentItemById: Map<Long, TournamentItem>,
+        itemById: Map<Long, Item>,
+    ): List<RankedItem> = rankedPairs.map { (tournamentItemId, rank) ->
+        val tournamentItem = tournamentItemById.getValue(tournamentItemId)
+        val item = itemById[tournamentItem.itemId]
+        RankedItem(
+            rank = rank,
+            tournamentItemId = tournamentItemId,
+            itemId = tournamentItem.itemId,
+            name = item?.name,
+            price = item?.currentPrice,
+            currency = item?.currency,
+            imageUrl = item?.imageUrl,
         )
     }
 

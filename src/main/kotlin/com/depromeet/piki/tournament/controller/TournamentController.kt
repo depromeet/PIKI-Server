@@ -9,7 +9,6 @@ import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.RecordMatchRequest
-import com.depromeet.piki.tournament.controller.dto.RecordMatchResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentItemDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
@@ -105,9 +104,9 @@ class TournamentController(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
         @Valid @RequestBody request: RecordMatchRequest,
-    ): ApiResponseBody<RecordMatchResponse?> {
+    ): ApiResponseBody<TournamentDetailResponse.CompletedData?> {
         val result = tournamentService.recordMatch(userId, request.toRecordMatch(tournamentId))
-        return ApiResponseBody.ok(result?.let { RecordMatchResponse.from(it) })
+        return ApiResponseBody.ok(result?.let { TournamentDetailResponse.CompletedData.from(it) })
     }
 
     @GetMapping

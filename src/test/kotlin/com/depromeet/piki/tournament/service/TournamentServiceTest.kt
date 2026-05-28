@@ -15,7 +15,6 @@ import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.tournament.service.dto.AddTournamentItemsFromWish
 import com.depromeet.piki.tournament.service.dto.CreateTournament
 import com.depromeet.piki.tournament.service.dto.RecordMatch
-import com.depromeet.piki.tournament.service.dto.RecordMatchResult
 import com.depromeet.piki.tournament.service.dto.TournamentDetail
 import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.user.domain.User
@@ -29,6 +28,7 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TournamentServiceTest {
@@ -479,7 +479,7 @@ class TournamentServiceTest {
             ),
         )
 
-        assertEquals(null, result)
+        assertNull(result)
     }
 
     @Test
@@ -500,14 +500,14 @@ class TournamentServiceTest {
             ),
         )
 
-        val ranked = assertIs<RecordMatchResult>(result)
-        assertEquals(2, ranked.rankedItems.size)
-        assertEquals(1, ranked.rankedItems[0].rank)
-        assertEquals(winner.getId(), ranked.rankedItems[0].tournamentItemId)
-        assertEquals(10L, ranked.rankedItems[0].itemId)
-        assertEquals(2, ranked.rankedItems[1].rank)
-        assertEquals(loser.getId(), ranked.rankedItems[1].tournamentItemId)
-        assertEquals(20L, ranked.rankedItems[1].itemId)
+        val ranked = assertIs<TournamentDetail.Completed>(result)
+        assertEquals(2, ranked.result.size)
+        assertEquals(1, ranked.result[0].rank)
+        assertEquals(winner.getId(), ranked.result[0].tournamentItemId)
+        assertEquals(10L, ranked.result[0].itemId)
+        assertEquals(2, ranked.result[1].rank)
+        assertEquals(loser.getId(), ranked.result[1].tournamentItemId)
+        assertEquals(20L, ranked.result[1].itemId)
     }
 
     @Test
@@ -529,16 +529,16 @@ class TournamentServiceTest {
             ),
         )
 
-        val ranked = assertIs<RecordMatchResult>(result)
-        assertEquals(4, ranked.rankedItems.size)
-        assertEquals(1, ranked.rankedItems[0].rank)
-        assertEquals(items[0].getId(), ranked.rankedItems[0].tournamentItemId)
-        assertEquals(2, ranked.rankedItems[1].rank)
-        assertEquals(items[2].getId(), ranked.rankedItems[1].tournamentItemId)
-        assertEquals(3, ranked.rankedItems[2].rank)
-        assertEquals(items[1].getId(), ranked.rankedItems[2].tournamentItemId)
-        assertEquals(4, ranked.rankedItems[3].rank)
-        assertEquals(items[3].getId(), ranked.rankedItems[3].tournamentItemId)
+        val ranked = assertIs<TournamentDetail.Completed>(result)
+        assertEquals(4, ranked.result.size)
+        assertEquals(1, ranked.result[0].rank)
+        assertEquals(items[0].getId(), ranked.result[0].tournamentItemId)
+        assertEquals(2, ranked.result[1].rank)
+        assertEquals(items[2].getId(), ranked.result[1].tournamentItemId)
+        assertEquals(3, ranked.result[2].rank)
+        assertEquals(items[1].getId(), ranked.result[2].tournamentItemId)
+        assertEquals(4, ranked.result[3].rank)
+        assertEquals(items[3].getId(), ranked.result[3].tournamentItemId)
     }
 
     @Test
@@ -559,14 +559,14 @@ class TournamentServiceTest {
             ),
         )
 
-        val ranked = assertIs<RecordMatchResult>(result)
-        assertEquals(3, ranked.rankedItems.size)
-        assertEquals(1, ranked.rankedItems[0].rank)
-        assertEquals(items[0].getId(), ranked.rankedItems[0].tournamentItemId)
-        assertEquals(2, ranked.rankedItems[1].rank)
-        assertEquals(items[2].getId(), ranked.rankedItems[1].tournamentItemId) // 부전승 후 결승 패배
-        assertEquals(3, ranked.rankedItems[2].rank)
-        assertEquals(items[1].getId(), ranked.rankedItems[2].tournamentItemId) // 준결승 패배
+        val ranked = assertIs<TournamentDetail.Completed>(result)
+        assertEquals(3, ranked.result.size)
+        assertEquals(1, ranked.result[0].rank)
+        assertEquals(items[0].getId(), ranked.result[0].tournamentItemId)
+        assertEquals(2, ranked.result[1].rank)
+        assertEquals(items[2].getId(), ranked.result[1].tournamentItemId) // 부전승 후 결승 패배
+        assertEquals(3, ranked.result[2].rank)
+        assertEquals(items[1].getId(), ranked.result[2].tournamentItemId) // 준결승 패배
     }
 
     @Test

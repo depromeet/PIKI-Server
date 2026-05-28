@@ -68,7 +68,12 @@ data class TournamentDetailResponse(
     )
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    data class CompletedData(val result: List<RankedItemResponse>)
+    data class CompletedData(val result: List<RankedItemResponse>) {
+        companion object {
+            fun from(completed: TournamentDetail.Completed): CompletedData =
+                CompletedData(completed.result.map { RankedItemResponse.from(it) })
+        }
+    }
 
     companion object {
         fun from(detail: TournamentDetail): TournamentDetailResponse =

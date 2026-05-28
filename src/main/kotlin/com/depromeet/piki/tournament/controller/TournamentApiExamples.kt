@@ -10,7 +10,6 @@ import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImages
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromWishResponse
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.RankedItemResponse
-import com.depromeet.piki.tournament.controller.dto.RecordMatchResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentItemDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
@@ -153,13 +152,13 @@ class TournamentApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "기록 성공 (결승 아닌 라운드) — data=null",
-                            payload = ApiResponseBody.ok<RecordMatchResponse?>(),
+                            payload = ApiResponseBody.ok<TournamentDetailResponse.CompletedData?>(),
                         )
                         add(
                             status = HttpStatus.OK,
                             name = "기록 성공 (결승 라운드) — 순위 결과 포함",
                             payload = ApiResponseBody.ok(
-                                RecordMatchResponse(
+                                TournamentDetailResponse.CompletedData(
                                     result = listOf(
                                         RankedItemResponse(
                                             rank = 1,
