@@ -1014,6 +1014,103 @@ class TournamentControllerTest : IntegrationTestSupport() {
     private fun saveWishItem(owner: UUID = userId, name: String = "테스트 아이템", price: Int = 10_000): Long =
         wishPersistenceService.persist(owner, Item(name = name, currentPrice = price, currency = "KRW")).item.getId()
 
+    @Test
+    fun `GET tournaments-id-items-itemId 는 READY 아이템의 이름·가격·이미지·status 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val itemId = saveWishItem(name = "나이키 에어맥스", price = 129_000)
+        addItemsToTournament(mockMvc, tournamentId, userId, itemId)
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.tournamentItemId").value(tournamentItemId))
+            .andExpect(jsonPath("$.data.itemId").value(itemId))
+            .andExpect(jsonPath("$.data.name").value("나이키 에어맥스"))
+            .andExpect(jsonPath("$.data.price").value(129_000))
+            .andExpect(jsonPath("$.data.currency").value("KRW"))
+            .andExpect(jsonPath("$.data.status").value("READY"))
+    }
+
+    @Test
+    fun `GET tournaments-id-items-itemId 는 PROCESSING 아이템이면 name·price·imageUrl 이 응답에 없고 status 가 PROCESSING 이다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val processingItemId = itemJpaRepository.save(Item(status = ItemStatus.PROCESSING)).getId()
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = processingItemId, userId = userId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.status").value("PROCESSING"))
+            .andExpect(jsonPath("$.data.name").doesNotExist())
+            .andExpect(jsonPath("$.data.price").doesNotExist())
+            .andExpect(jsonPath("$.data.imageUrl").doesNotExist())
+    }
+
+    @Test
+    fun `GET tournaments-id-items-itemId 에서 토너먼트 참여자가 아니면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem())
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
+    }
+
+    @Test
+    fun `GET tournaments-id-items-itemId 에서 존재하지 않는 tournamentId 이면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/999999/items/1")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+    }
+
+    @Test
+    fun `GET tournaments-id-items-itemId 에서 존재하지 않는 tournamentItemId 이면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId/items/999999")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+    }
+
+    @Test
+    fun `GET tournaments-id-items-itemId 에서 다른 토너먼트 소속 아이템이면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId1 = createTournament(mockMvc, "토너먼트1")
+        val tournamentId2 = createTournament(mockMvc, "토너먼트2")
+        addItemsToTournament(mockMvc, tournamentId2, userId, saveWishItem())
+        val itemOfTournament2 = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId2).first().getId()
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId1/items/$itemOfTournament2")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+    }
+
     private fun startTournamentWith2Items(mockMvc: MockMvc): TournamentStart {
         val tournamentId = createTournament(mockMvc)
         addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem(name = "아이템1"), saveWishItem(name = "아이템2"))
