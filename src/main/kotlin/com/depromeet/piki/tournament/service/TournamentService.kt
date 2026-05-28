@@ -287,8 +287,7 @@ class TournamentService(
             throw TournamentException.invalidWinner()
         }
 
-        val allTournamentItems = tournamentItemRepository.findAllByTournamentId(command.tournamentId)
-        val tournamentItemIds = allTournamentItems.mapTo(mutableSetOf()) { it.getId() }
+        val tournamentItemIds = tournamentItemRepository.findIdsByTournamentId(command.tournamentId).toSet()
         if (command.firstTournamentItemId !in tournamentItemIds ||
             command.secondTournamentItemId !in tournamentItemIds
         ) {
@@ -312,7 +311,7 @@ class TournamentService(
         if (!tournament.isFinalRound(command.currentRound)) return null
 
         tournament.complete()
-        return buildCompleted(tournament, histories + newHistory, allTournamentItems)
+        return buildCompleted(tournament, histories + newHistory, tournamentItemRepository.findAllByTournamentId(command.tournamentId))
     }
 
     private fun buildCompleted(

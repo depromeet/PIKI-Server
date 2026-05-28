@@ -170,6 +170,9 @@ class TournamentServiceTest {
 
         override fun countByTournamentId(tournamentId: Long): Int = items.count { it.tournamentId == tournamentId }
 
+        override fun findIdsByTournamentId(tournamentId: Long): List<Long> =
+            items.filter { it.tournamentId == tournamentId }.map { it.getId() }
+
         override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
             items.filter { it.tournamentId == tournamentId }
 
