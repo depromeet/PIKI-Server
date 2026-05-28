@@ -253,7 +253,7 @@ class TournamentService(
             ?: throw TournamentException.notFoundTournamentItem()
         if (tournamentItem.tournamentId != tournamentId) throw TournamentException.notFoundTournamentItem()
         val item = itemRepository.findById(tournamentItem.itemId)
-            ?: error("item 이 존재하지 않음 — tournamentItemId=$tournamentItemId, itemId=${tournamentItem.itemId}")
+            ?: throw TournamentException.notFoundTournamentItem()
         return TournamentItemDetail(
             tournamentItemId = tournamentItem.getId(),
             itemId = item.getId(),

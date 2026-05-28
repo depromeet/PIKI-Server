@@ -132,7 +132,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 이미 등록된 아이템 · PROCESSING/FAILED 상품 포함)",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 이미 등록된 아이템 · 요청 내 중복 아이템 · PROCESSING/FAILED 상품 포함)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -408,7 +408,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "403",
-                description = "권한 없음 (토너먼트 소유자가 아님)",
+                description = "권한 없음 (토너먼트 참여자가 아님 · 토너먼트 소유자가 아님)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
