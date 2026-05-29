@@ -7,10 +7,8 @@ import java.util.UUID
 
 // 아이템 파싱 완료 알림. itemId 역조회로 수신자를 정한다.
 @Component
-class ItemParsingCompletedHandler : NotificationEventHandler<ItemParsingCompleted> {
-    override val eventType = ItemParsingCompleted::class
-    override val notificationType = NotificationType.ITEM_PARSING_COMPLETED
-
+class ItemParsingCompletedHandler :
+    NotificationEventHandler<ItemParsingCompleted>(NotificationType.ITEM_PARSING_COMPLETED) {
     override fun resolveRefId(event: ItemParsingCompleted): Long = event.itemId
 
     // TODO(#236 수신자 정책 합의): itemId 역조회로 수신자 결정 후 구현.
@@ -18,5 +16,5 @@ class ItemParsingCompletedHandler : NotificationEventHandler<ItemParsingComplete
     // 정책 미확정이라 현재는 빈 리스트 — 발행돼도 Dispatcher 가 빈 결과면 조용히 종료해 알림이 생기지 않는다.
     override fun resolveRecipients(event: ItemParsingCompleted): List<UUID> = emptyList()
 
-    override fun resolveVariables(event: ItemParsingCompleted): Map<String, String> = emptyMap()
+    // 변수 없는 알림 — resolveVariables 는 베이스 기본값(emptyMap)을 그대로 쓴다.
 }
