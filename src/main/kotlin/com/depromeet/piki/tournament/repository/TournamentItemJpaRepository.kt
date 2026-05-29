@@ -12,7 +12,7 @@ interface TournamentItemJpaRepository : JpaRepository<TournamentItem, Long> {
 
     fun findAllByTournamentIdOrderByIdAsc(tournamentId: Long): List<TournamentItem>
 
-    @Query("SELECT t.id FROM TournamentItem t WHERE t.tournamentId = :tournamentId")
+    @Query("SELECT t.id FROM TournamentItem t WHERE t.tournamentId = :tournamentId ORDER BY t.id ASC")
     fun findIdsByTournamentId(@Param("tournamentId") tournamentId: Long): List<Long>
 
     @Modifying
