@@ -132,8 +132,8 @@ class TournamentException private constructor(
         fun eliminatedTournamentItem(): TournamentException =
             TournamentException(
                 "이미 탈락한 아이템은 매치에 참가할 수 없습니다.",
-                ErrorCategory.INVALID_INPUT,
-                HttpStatus.BAD_REQUEST,
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
             )
 
         fun invalidCurrentRound(): TournamentException =

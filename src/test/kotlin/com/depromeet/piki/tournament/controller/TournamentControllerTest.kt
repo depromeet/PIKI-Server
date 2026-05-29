@@ -282,6 +282,44 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `POST tournaments-id-matches 에서 이미 탈락한 아이템으로 매치를 시도하면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val item1Id = saveWishItem(name = "아이템1", price = 10_000)
+        val item2Id = saveWishItem(name = "아이템2", price = 20_000)
+        val item3Id = saveWishItem(name = "아이템3", price = 30_000)
+        val item4Id = saveWishItem(name = "아이템4", price = 40_000)
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, item1Id, item2Id, item3Id, item4Id)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+        val items = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
+        val ti1 = items[0].getId()
+        val ti2 = items[1].getId()
+        val ti3 = items[2].getId()
+        val ti4 = items[3].getId()
+
+        // round-4 첫 번째 매치: ti1 승, ti2 탈락
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/matches")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"currentRound":4,"firstTournamentItemId":$ti1,"secondTournamentItemId":$ti2,"selectedTournamentItemId":$ti1}"""),
+        ).andExpect(status().isOk)
+
+        // 탈락한 ti2 로 다시 매치 시도 → 409
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/matches")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"currentRound":4,"firstTournamentItemId":$ti2,"secondTournamentItemId":$ti3,"selectedTournamentItemId":$ti3}"""),
+            ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.status").value(409))
+    }
+
+    @Test
     fun `POST tournaments-id-matches 에서 currentRound 가 예상 라운드와 다르면 400 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val (tournamentId, item1Id, item2Id) = startTournamentWith2Items(mockMvc)
