@@ -1,5 +1,6 @@
 package com.depromeet.piki.tournament.controller.dto
 
+import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.service.dto.TournamentDetail
 import com.fasterxml.jackson.annotation.JsonInclude
@@ -22,10 +23,11 @@ data class TournamentDetailResponse(
         val price: Int?,
         val currency: String?,
         val imageUrl: String?,
+        val status: ItemStatus,
     ) {
         companion object {
             fun from(d: TournamentDetail.ItemDetail): ItemDetailResponse =
-                ItemDetailResponse(d.tournamentItemId, d.itemId, d.name, d.price, d.currency, d.imageUrl)
+                ItemDetailResponse(d.tournamentItemId, d.itemId, d.name, d.price, d.currency, d.imageUrl, d.status)
         }
     }
 

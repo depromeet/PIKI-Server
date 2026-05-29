@@ -340,14 +340,15 @@ class TournamentService(
             result = rankedPairs.map { (tournamentItemId, rank) ->
                 val tournamentItem = tournamentItemById.getValue(tournamentItemId)
                 val item = itemById[tournamentItem.itemId]
+                    ?: error("item 없음 — tournamentItemId=$tournamentItemId, itemId=${tournamentItem.itemId}")
                 RankedItem(
                     rank = rank,
                     tournamentItemId = tournamentItemId,
                     itemId = tournamentItem.itemId,
-                    name = item?.name,
-                    price = item?.currentPrice,
-                    currency = item?.currency,
-                    imageUrl = item?.imageUrl,
+                    name = item.name,
+                    price = item.currentPrice,
+                    currency = item.currency,
+                    imageUrl = item.imageUrl,
                 )
             },
         )
@@ -386,13 +387,15 @@ class TournamentService(
         itemById: Map<Long, Item>,
     ): TournamentDetail.ItemDetail {
         val item = itemById[tournamentItem.itemId]
+            ?: error("item 없음 — tournamentItemId=${tournamentItem.getId()}, itemId=${tournamentItem.itemId}")
         return TournamentDetail.ItemDetail(
             tournamentItemId = tournamentItem.getId(),
             itemId = tournamentItem.itemId,
-            name = item?.name,
-            price = item?.currentPrice,
-            currency = item?.currency,
-            imageUrl = item?.imageUrl,
+            name = item.name,
+            price = item.currentPrice,
+            currency = item.currency,
+            imageUrl = item.imageUrl,
+            status = item.status,
         )
     }
 

@@ -624,6 +624,69 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `GET tournaments-id 는 PENDING 상태에서 READY 아이템의 status 가 READY 로 내려온다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val itemId = saveWishItem(name = "나이키 에어맥스", price = 99_000)
+        addItemsToTournament(mockMvc, tournamentId, userId, itemId)
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.pending.items[0].status").value("READY"))
+            .andExpect(jsonPath("$.data.pending.items[0].name").value("나이키 에어맥스"))
+            .andExpect(jsonPath("$.data.pending.items[0].price").value(99_000))
+            .andExpect(jsonPath("$.data.pending.items[0].tournamentItemId").isNumber)
+            .andExpect(jsonPath("$.data.pending.items[0].itemId").value(itemId))
+    }
+
+    @Test
+    fun `GET tournaments-id 는 PENDING 상태에서 PROCESSING 아이템이 status=PROCESSING 으로 목록에 포함되고 name·price·imageUrl 은 없다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val processingItemId = itemJpaRepository.save(Item(status = ItemStatus.PROCESSING)).getId()
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = processingItemId, userId = userId))
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.status").value("PENDING"))
+            .andExpect(jsonPath("$.data.pending.items.length()").value(1))
+            .andExpect(jsonPath("$.data.pending.items[0].status").value("PROCESSING"))
+            .andExpect(jsonPath("$.data.pending.items[0].itemId").value(processingItemId))
+            .andExpect(jsonPath("$.data.pending.items[0].name").doesNotExist())
+            .andExpect(jsonPath("$.data.pending.items[0].price").doesNotExist())
+            .andExpect(jsonPath("$.data.pending.items[0].imageUrl").doesNotExist())
+    }
+
+    @Test
+    fun `GET tournaments-id 는 IN_PROGRESS 상태에서 remainingItems 의 각 아이템에 status 가 포함된다`() {
+        val mockMvc = buildMockMvc()
+        val item1Id = saveWishItem(name = "아이템1", price = 10_000)
+        val item2Id = saveWishItem(name = "아이템2", price = 20_000)
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, item1Id, item2Id)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
+            .andExpect(jsonPath("$.data.inProgress.remainingItems.length()").value(2))
+            .andExpect(jsonPath("$.data.inProgress.remainingItems[0].status").value("READY"))
+            .andExpect(jsonPath("$.data.inProgress.remainingItems[1].status").value("READY"))
+    }
+
+    @Test
     fun `GET tournaments-id 는 PENDING 토너먼트 응답에 참여자 정보를 포함한다`() {
         val mockMvc = buildMockMvc()
         saveUser(userId, userProfileImage)

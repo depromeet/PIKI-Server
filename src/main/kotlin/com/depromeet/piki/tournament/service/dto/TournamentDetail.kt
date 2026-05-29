@@ -1,5 +1,6 @@
 package com.depromeet.piki.tournament.service.dto
 
+import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.tournament.domain.TournamentHistory
 import java.util.UUID
 
@@ -32,6 +33,7 @@ sealed class TournamentDetail {
         val price: Int?,
         val currency: String?,
         val imageUrl: String?,
+        val status: ItemStatus,
     )
 
     data class HistoryEntry(

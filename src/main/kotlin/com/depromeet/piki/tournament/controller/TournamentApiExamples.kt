@@ -224,6 +224,7 @@ class TournamentApiExamples(
                                                             price = 129_000,
                                                             currency = "KRW",
                                                             imageUrl = "https://cdn.example.com/items/1.jpg",
+                                                            status = ItemStatus.READY,
                                                         ),
                                                         TournamentDetailResponse.ItemDetailResponse(
                                                             tournamentItemId = 2,
@@ -232,6 +233,7 @@ class TournamentApiExamples(
                                                             price = 189_000,
                                                             currency = "KRW",
                                                             imageUrl = "https://cdn.example.com/items/2.jpg",
+                                                            status = ItemStatus.READY,
                                                         ),
                                                     ),
                                                 participants =
@@ -277,6 +279,7 @@ class TournamentApiExamples(
                                                             price = 259_000,
                                                             currency = "KRW",
                                                             imageUrl = "https://cdn.example.com/items/3.jpg",
+                                                            status = ItemStatus.READY,
                                                         ),
                                                         TournamentDetailResponse.ItemDetailResponse(
                                                             tournamentItemId = 4,
@@ -285,6 +288,7 @@ class TournamentApiExamples(
                                                             price = 279_000,
                                                             currency = "KRW",
                                                             imageUrl = null,
+                                                            status = ItemStatus.READY,
                                                         ),
                                                     ),
                                             ),
