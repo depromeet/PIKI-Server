@@ -66,3 +66,17 @@ springdoc:
   api-docs:
     path: /v3/api-docs
   default-produces-media-type: application/json
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 최소 노출: health(상태), info(빌드 정보), prometheus(메트릭 scrape).
+        # metrics 등 나머지 actuator 엔드포인트는 노출하지 않는다.
+        # 외부(nginx 443) 는 /actuator/ 를 차단하고, EC2 내부의 Grafana Alloy 만
+        # localhost 로 /actuator/prometheus 를 scrape 한다 (별도 PR).
+        include: health, info, prometheus
+  metrics:
+    tags:
+      # Grafana Cloud 에서 서비스 단위로 메트릭을 구분하는 공통 라벨.
+      application: ${spring.application.name}
