@@ -391,6 +391,28 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `이름 없이 FAILED 위시 item 을 복구하려 하면 400 BAD_REQUEST 가 반환된다`() {
+        // 이름 없는 보정은 쓸 수 없는 상품을 READY 로 승격시키므로 막는다 (READY ⟹ name 불변식).
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedFailedWish(userId, "https://shop.example.com/products/1")
+        val body = objectMapper.writeValueAsString(mapOf("currentPrice" to 50_000))
+
+        mockMvc
+            .perform(
+                patch("/api/v1/wishlists/$wishId")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader)
+                    .content(body),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.detail").value("상품명을 입력해야 합니다."))
+    }
+
+    @Test
     fun `남의 위시를 수정하면 403 이 반환된다`() {
         val mockMvc = buildMockMvc()
         val ownerId = UUID.randomUUID()

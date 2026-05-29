@@ -54,9 +54,11 @@ class Item(
     var status: ItemStatus = status
         protected set
 
-    // 엔티티 불변식 — 최후의 보루. 정상 흐름에선 입력 경계(요청 DTO 검증 등)가 먼저
-    // 거르므로 여기 닿지 않는다. 닿으면 어떤 경계가 검증을 빠뜨린 코드 버그다.
-    // (kotlin-noarg 가 합성하는 JPA 생성자는 이 init 을 우회하므로 DB 로딩 행은 검증 대상이 아니다.)
+    // 엔티티 불변식 — 최후의 보루. 정상 흐름에선 입력 경계(요청 DTO 검증 등)가 먼저 거르므로 여기 닿지 않는다.
+    // validate 는 범위·길이만 보고 null 은 통과시킨다 — kotlin("plugin.jpa") 가 합성하는 no-arg 생성자가
+    // Hibernate 인스턴스화 시점에 이 init 을 실제로 실행하기 때문이다(필드는 그 뒤에 주입되므로 이 순간엔 전부 null).
+    // 그래서 "READY ⟹ name" 같은 상태-의존 불변식은 init 에 두지 않는다 — 두면 READY 행 하이드레이션이 깨진다.
+    // 그 불변식은 READY 가 되는 명시 경로(from·markReady)와 클라이언트 입력 경계(recover)에서 검사한다.
     init {
         validate(this.name, this.currentPrice, this.imageUrl, this.currency)
     }
@@ -109,6 +111,8 @@ class Item(
             ItemStatus.PROCESSING -> throw ItemException.stillProcessing()
             ItemStatus.FAILED -> {
                 apply(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
+                // 입력 경계 계약 — 보정 후에도 이름이 없으면 쓸 수 없는 상품이 READY 로 새어 들어간다(409 아닌 400).
+                if (this.name.isNullOrBlank()) throw ItemException.nameRequiredForReady()
                 status = ItemStatus.READY
                 log.info("item {} 사용자 직접 보정으로 FAILED → READY 복구", getIdOrNull())
             }
@@ -125,6 +129,8 @@ class Item(
             imageUrl = snapshot.imageUrl,
             currency = snapshot.currency,
         )
+        // 추출이 이름을 못 얻었으면 READY 부적격 — 워커가 이 예외를 받아 FAILED 로 흡수한다(PROCESSING 방치 방지).
+        requireReadyInvariant()
         status = ItemStatus.READY
     }
 
@@ -138,6 +144,14 @@ class Item(
     // 파싱이 끝나 추출 결과가 채워진 상태인지. 토너먼트 출전처럼 "완성된 상품만" 을 요구하는 곳에서 쓴다.
     // PROCESSING(파싱 중)·FAILED(실패)는 false — 이름·가격이 비어 있어 출전에 부적합하다.
     fun isReady(): Boolean = status == ItemStatus.READY
+
+    // READY 불변식 — "쓸 수 있는 상품"은 최소한 이름이 있어야 한다. isReady() 게이트(목록 노출·토너먼트 출전)가
+    // 미완성 item 을 정상 상품으로 취급하지 않도록, READY 가 되는 명시 경로(from·markReady)에서 검사한다.
+    // 엔티티 최후의 보루이므로 require(불변식)다 — 정상 흐름에선 입력 경계(recover 의 nameRequiredForReady,
+    // 추출 워커의 FAILED 흡수)가 먼저 거른다. price·image·currency 는 추출이 정당하게 못 얻을 수 있어 필수로 두지 않는다.
+    private fun requireReadyInvariant() {
+        require(!name.isNullOrBlank()) { "READY item 은 최소한 name 이 있어야 한다 (status=$status)" }
+    }
 
     private fun validate(
         name: String?,
@@ -167,7 +181,7 @@ class Item(
                 currentPrice = snapshot.currentPrice,
                 currency = snapshot.currency,
                 status = ItemStatus.READY,
-            )
+            ).also { it.requireReadyInvariant() }
 
         // 비동기 등록 시작점 — link 만 가진 PROCESSING item. 파싱이 끝나면 markReady/markFailed 로 전이한다.
         fun processing(link: ProductLink): Item = Item(link = link, status = ItemStatus.PROCESSING)

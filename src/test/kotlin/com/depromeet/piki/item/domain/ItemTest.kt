@@ -34,14 +34,20 @@ class ItemTest {
     }
 
     @Test
-    fun `link 만 있는 ProductSnapshot 도 Item 으로 매핑되며 나머지는 null 로 보존된다`() {
-        val item = Item.from(ProductSnapshot(link = link))
+    fun `name 만 있는 ProductSnapshot 은 나머지 optional 필드를 null 로 보존한다`() {
+        val item = Item.from(ProductSnapshot(link = link, name = "최소 상품"))
 
         assertEquals(link, item.link)
-        assertNull(item.name)
+        assertEquals("최소 상품", item.name)
         assertNull(item.imageUrl)
         assertNull(item.currentPrice)
         assertNull(item.currency)
+    }
+
+    @Test
+    fun `name 없는 snapshot 은 from 으로 READY item 이 될 수 없다`() {
+        // READY 불변식 — 이름 없는 상품은 목록·토너먼트에서 쓸 수 없어 READY 로 만들지 않는다.
+        assertFailsWith<IllegalArgumentException> { Item.from(ProductSnapshot(link = link, currentPrice = 1_000)) }
     }
 
     @Test
@@ -127,14 +133,14 @@ class ItemTest {
     }
 
     @Test
-    fun `recover 인자가 모두 null 이면 기존 값이 유지된 채 READY 로 복구된다`() {
-        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000, status = ItemStatus.FAILED)
+    fun `이름 없는 FAILED item 을 보정값 없이 recover 하면 nameRequiredForReady(400)로 거부된다`() {
+        // 실제 FAILED item 은 추출이 안 돼 이름이 비어 있다. 이름 없이 보정하면 쓸 수 없는 상품이 READY 로 새어 들어가므로 400.
+        val item = Item.processing(link).apply { markFailed() }
 
-        item.recover(name = null, currentPrice = null)
-
-        assertEquals(ItemStatus.READY, item.status)
-        assertEquals("원래 이름", item.name)
-        assertEquals(10_000, item.currentPrice)
+        val ex = assertFailsWith<ItemException> { item.recover(currentPrice = 50_000) }
+        assertEquals(HttpStatus.BAD_REQUEST, ex.httpStatus)
+        // 거부됐으므로 FAILED 그대로다.
+        assertEquals(ItemStatus.FAILED, item.status)
     }
 
     @Test
@@ -202,6 +208,18 @@ class ItemTest {
         assertEquals(99_000, item.currentPrice)
         assertEquals("KRW", item.currency)
         assertEquals("https://cdn.example.com/p/42.jpg", item.imageUrl)
+    }
+
+    @Test
+    fun `markReady 에 이름 없는 snapshot 이면 READY 불변식 위반으로 거부된다`() {
+        // 추출 성공이라도 이름을 못 얻으면 READY 부적격. 워커는 이 예외를 받아 FAILED 로 흡수한다.
+        val item = Item.processing(link)
+
+        assertFailsWith<IllegalArgumentException> {
+            item.markReady(ProductSnapshot(link = link, currentPrice = 99_000))
+        }
+        // 전이가 거부됐으므로 PROCESSING 그대로다 (워커가 이후 FAILED 로 떨어뜨린다).
+        assertEquals(ItemStatus.PROCESSING, item.status)
     }
 
     @Test

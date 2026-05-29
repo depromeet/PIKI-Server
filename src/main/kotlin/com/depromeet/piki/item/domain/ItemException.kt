@@ -31,5 +31,14 @@ class ItemException private constructor(
                 ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )
+
+        // FAILED 항목 복구의 입력 경계 계약 — 이름 없이 보정하면 "쓸 수 있는 상품"(READY)이 될 수 없다.
+        // 엔티티 불변식(requireReadyInvariant)이 최후의 보루라면, 이건 그 전에 클라이언트에게 400 으로 돌려주는 경계다.
+        fun nameRequiredForReady(): ItemException =
+            ItemException(
+                "상품명을 입력해야 합니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
     }
 }

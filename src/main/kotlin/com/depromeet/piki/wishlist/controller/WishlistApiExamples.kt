@@ -119,6 +119,16 @@ class WishlistApiExamples(
                             ),
                     )
                     add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "상품명 없이 복구 시도",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.INVALID_INPUT,
+                                status = HttpStatus.BAD_REQUEST,
+                                detail = "상품명을 입력해야 합니다.",
+                            ),
+                    )
+                    add(
                         status = HttpStatus.FORBIDDEN,
                         name = "본인 위시 아님",
                         payload =

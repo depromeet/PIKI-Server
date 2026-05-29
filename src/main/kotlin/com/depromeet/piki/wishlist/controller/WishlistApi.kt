@@ -219,7 +219,7 @@ interface WishlistApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (currentPrice 음수 · name/imageUrl/currency 길이 초과)",
+                description = "잘못된 요청 (보정 후에도 상품명 없음 · currentPrice 음수 · name/imageUrl/currency 길이 초과)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

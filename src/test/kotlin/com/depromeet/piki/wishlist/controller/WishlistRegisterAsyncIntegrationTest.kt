@@ -142,6 +142,29 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `추출은 됐으나 이름이 비어 있으면 READY 부적격으로 item 이 FAILED 로 전이한다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            // isProductPage=true 라도 이름을 못 뽑으면 name 이 비어 온다. READY 불변식(name 필수)에 걸려
+            // markReady 가 거부하고, 워커가 이를 받아 PROCESSING 방치 대신 FAILED 로 떨어뜨린다.
+            stubProductLinkExtractor.build = { ProductSnapshot(link = it, currentPrice = 99_000) }
+            val itemId = registerAndGetItemId(mockMvc, userId, "https://shop.example.com/products/no-name")
+
+            await().atMost(Duration.ofSeconds(5)).until {
+                itemRepository.findById(itemId)?.status == ItemStatus.FAILED
+            }
+
+            val item = itemRepository.findById(itemId) ?: error("item $itemId 가 없다")
+            assertEquals(ItemStatus.FAILED, item.status)
+            assertNull(item.name)
+        } finally {
+            cleanup(userId)
+        }
+    }
+
+    @Test
     fun `같은 URL 을 두 번 등록해도 dedup 없이 둘 다 201 PROCESSING 으로 별개 등록된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
