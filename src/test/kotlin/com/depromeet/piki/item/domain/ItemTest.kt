@@ -3,6 +3,7 @@ package com.depromeet.piki.item.domain
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductSnapshot
 import org.junit.jupiter.api.Test
+import org.springframework.http.HttpStatus
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -58,7 +59,7 @@ class ItemTest {
     }
 
     @Test
-    fun `update 로 name·currentPrice·imageUrl·currency 를 모두 교체한다`() {
+    fun `recover 로 FAILED item 의 name·currentPrice·imageUrl·currency 를 모두 채우면 READY 로 복구된다`() {
         val item =
             Item(
                 link = link,
@@ -66,15 +67,17 @@ class ItemTest {
                 imageUrl = "https://cdn.example.com/old.jpg",
                 currentPrice = 10_000,
                 currency = "USD",
+                status = ItemStatus.FAILED,
             )
 
-        item.update(
+        item.recover(
             name = "새 이름",
             currentPrice = 20_000,
             imageUrl = "https://cdn.example.com/new.jpg",
             currency = "KRW",
         )
 
+        assertEquals(ItemStatus.READY, item.status)
         assertEquals("새 이름", item.name)
         assertEquals(20_000, item.currentPrice)
         assertEquals("https://cdn.example.com/new.jpg", item.imageUrl)
@@ -82,10 +85,10 @@ class ItemTest {
     }
 
     @Test
-    fun `update 에 currency 만 주면 나머지는 유지된다`() {
-        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000, currency = "USD")
+    fun `recover 에 currency 만 주면 나머지 기존 값은 유지된다`() {
+        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000, currency = "USD", status = ItemStatus.FAILED)
 
-        item.update(currency = "KRW")
+        item.recover(currency = "KRW")
 
         assertEquals("원래 이름", item.name)
         assertEquals(10_000, item.currentPrice)
@@ -93,17 +96,17 @@ class ItemTest {
     }
 
     @Test
-    fun `currency 를 8자 초과로 update 하면 불변식 위반으로 거부된다`() {
-        val item = Item(link = link, currency = "KRW")
+    fun `recover 로 currency 를 8자 초과로 주면 불변식 위반으로 거부된다`() {
+        val item = Item(link = link, currency = "KRW", status = ItemStatus.FAILED)
 
-        assertFailsWith<IllegalArgumentException> { item.update(currency = "a".repeat(9)) }
+        assertFailsWith<IllegalArgumentException> { item.recover(currency = "a".repeat(9)) }
     }
 
     @Test
-    fun `imageUrl 을 2048자 초과로 update 하면 불변식 위반으로 거부된다`() {
-        val item = Item(link = link, imageUrl = "https://example.com/img.jpg")
+    fun `recover 로 imageUrl 을 2048자 초과로 주면 불변식 위반으로 거부된다`() {
+        val item = Item(link = link, imageUrl = "https://example.com/img.jpg", status = ItemStatus.FAILED)
 
-        assertFailsWith<IllegalArgumentException> { item.update(imageUrl = "a".repeat(2049)) }
+        assertFailsWith<IllegalArgumentException> { item.recover(imageUrl = "a".repeat(2049)) }
     }
 
     @Test
@@ -114,37 +117,38 @@ class ItemTest {
     }
 
     @Test
-    fun `update 에 name 만 주면 currentPrice 는 유지된다`() {
-        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000)
+    fun `recover 에 name 만 주면 기존 currentPrice 는 유지된다`() {
+        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000, status = ItemStatus.FAILED)
 
-        item.update(name = "새 이름", currentPrice = null)
+        item.recover(name = "새 이름", currentPrice = null)
 
         assertEquals("새 이름", item.name)
         assertEquals(10_000, item.currentPrice)
     }
 
     @Test
-    fun `update 인자가 모두 null 이면 기존 값이 유지된다`() {
-        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000)
+    fun `recover 인자가 모두 null 이면 기존 값이 유지된 채 READY 로 복구된다`() {
+        val item = Item(link = link, name = "원래 이름", currentPrice = 10_000, status = ItemStatus.FAILED)
 
-        item.update(name = null, currentPrice = null)
+        item.recover(name = null, currentPrice = null)
 
+        assertEquals(ItemStatus.READY, item.status)
         assertEquals("원래 이름", item.name)
         assertEquals(10_000, item.currentPrice)
     }
 
     @Test
-    fun `currentPrice 를 음수로 update 하면 불변식 위반으로 거부된다`() {
-        val item = Item(link = link, currentPrice = 10_000)
+    fun `recover 로 currentPrice 를 음수로 주면 불변식 위반으로 거부된다`() {
+        val item = Item(link = link, currentPrice = 10_000, status = ItemStatus.FAILED)
 
-        assertFailsWith<IllegalArgumentException> { item.update(currentPrice = -1) }
+        assertFailsWith<IllegalArgumentException> { item.recover(currentPrice = -1) }
     }
 
     @Test
-    fun `name 을 512자 초과로 update 하면 불변식 위반으로 거부된다`() {
-        val item = Item(link = link, name = "원래 이름")
+    fun `recover 로 name 을 512자 초과로 주면 불변식 위반으로 거부된다`() {
+        val item = Item(link = link, name = "원래 이름", status = ItemStatus.FAILED)
 
-        assertFailsWith<IllegalArgumentException> { item.update(name = "가".repeat(513)) }
+        assertFailsWith<IllegalArgumentException> { item.recover(name = "가".repeat(513)) }
     }
 
     @Test
@@ -238,10 +242,10 @@ class ItemTest {
     }
 
     @Test
-    fun `FAILED item 을 update 로 직접 보정하면 READY 로 복구되며 보정값이 반영된다`() {
+    fun `FAILED item 을 recover 로 직접 보정하면 READY 로 복구되며 보정값이 반영된다`() {
         val item = Item.processing(link).apply { markFailed() }
 
-        item.update(name = "직접 입력한 이름", currentPrice = 50_000)
+        item.recover(name = "직접 입력한 이름", currentPrice = 50_000)
 
         assertEquals(ItemStatus.READY, item.status)
         assertEquals("직접 입력한 이름", item.name)
@@ -249,23 +253,23 @@ class ItemTest {
     }
 
     @Test
-    fun `READY item 을 update 해도 READY 를 유지한다`() {
+    fun `READY item 을 recover 하면 등록 완료 상태라 alreadyReady(409)로 거부된다`() {
         val item = Item.from(ProductSnapshot(link = link, name = "나이키"))
 
-        item.update(name = "수정된 이름")
-
+        val ex = assertFailsWith<ItemException> { item.recover(name = "수정 시도") }
+        assertEquals(HttpStatus.CONFLICT, ex.httpStatus)
+        // 거부됐으므로 기존 값·상태는 그대로다.
         assertEquals(ItemStatus.READY, item.status)
+        assertEquals("나이키", item.name)
     }
 
     @Test
-    fun `PROCESSING item 을 update 해도 PROCESSING 을 유지한다`() {
-        // 파싱 중 항목의 status 전이는 백그라운드 워커(markReady/markFailed)가 책임지므로,
-        // 사용자 update 는 정보만 바꾸고 PROCESSING 은 건드리지 않는다.
+    fun `PROCESSING item 을 recover 하면 워커 소관이라 stillProcessing(409)로 거부된다`() {
+        // 파싱 중 항목의 status 전이는 백그라운드 워커(markReady/markFailed)가 책임지므로 클라이언트가 끼어들 수 없다.
         val item = Item.processing(link)
 
-        item.update(name = "끼어든 수정")
-
+        val ex = assertFailsWith<ItemException> { item.recover(name = "끼어든 수정") }
+        assertEquals(HttpStatus.CONFLICT, ex.httpStatus)
         assertEquals(ItemStatus.PROCESSING, item.status)
-        assertEquals("끼어든 수정", item.name)
     }
 }

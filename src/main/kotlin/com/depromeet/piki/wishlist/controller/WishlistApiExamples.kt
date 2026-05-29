@@ -101,11 +101,11 @@ class WishlistApiExamples(
                     )
                 }
             }
-            if (handlerMethod.binds(WishlistController::updateWish)) {
+            if (handlerMethod.binds(WishlistController::recoverWishItem)) {
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.OK,
-                        name = "수정 성공",
+                        name = "FAILED 보정 성공 (READY 로 복구)",
                         payload = ApiResponseBody.ok(sampleEntry),
                     )
                     add(
@@ -136,6 +136,26 @@ class WishlistApiExamples(
                                 category = ErrorCategory.NOT_FOUND,
                                 status = HttpStatus.NOT_FOUND,
                                 detail = "존재하지 않는 위시리스트 항목입니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.CONFLICT,
+                        name = "이미 등록 완료(READY) 항목 — 수정 불가",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.CONFLICT,
+                                status = HttpStatus.CONFLICT,
+                                detail = "이미 등록 완료된 상품은 수정할 수 없습니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.CONFLICT,
+                        name = "아직 처리 중(PROCESSING) 항목 — 수정 불가",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.CONFLICT,
+                                status = HttpStatus.CONFLICT,
+                                detail = "아직 처리 중인 상품은 수정할 수 없습니다.",
                             ),
                     )
                 }
