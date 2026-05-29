@@ -49,10 +49,4 @@ class IntegrationStubs {
 
     @Bean
     fun googleOAuthClient(): StubOAuthClient = StubOAuthClient(OAuthProvider.GOOGLE)
-
-    // admin 챗봇의 Gemini function calling 외부 호출 stub. 운영 HttpAdminGeminiClient 와 타입이 같아
-    // @Primary 로 우선시킨다. test 컨텍스트는 admin.enabled=true 라 운영 빈도 함께 뜨므로 @Primary 가 필요하다.
-    @Bean
-    @Primary
-    fun adminGeminiClient(): StubAdminGeminiClient = StubAdminGeminiClient()
 }
