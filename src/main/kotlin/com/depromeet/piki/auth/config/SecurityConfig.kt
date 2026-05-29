@@ -37,6 +37,12 @@ class SecurityConfig(
                     // 신규 컨테이너 롤백 → 배포 차단으로 이어진다.
                     .requestMatchers(HttpMethod.GET, "/health")
                     .permitAll()
+                    // actuator health/prometheus 는 EC2 내부의 Grafana Alloy 가 localhost 로
+                    // 직접 scrape 한다 (nginx 미경유). 외부 도달은 nginx 가 /actuator/ 를 403 으로
+                    // 차단(infra/nginx/...conf)하므로, 앱 레벨 permitAll + 네트워크 레벨 차단의 2층 구조다.
+                    // metrics·env 등 나머지 actuator 엔드포인트는 application.yml 에서 애초에 노출하지 않는다.
+                    .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/prometheus")
+                    .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/guest")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/token/refresh")
