@@ -26,3 +26,10 @@ s3:
   bucket: test-bucket
   region: ap-northeast-2
   public-base-url: https://test-bucket.s3.ap-northeast-2.amazonaws.com
+
+# admin 챗봇을 모든 통합 테스트가 공유하는 단일 컨텍스트에서 항상 켠다(전역 1회 — @ActiveProfiles 분기 금지).
+# Gemini 호출은 StubAdminGeminiClient 로 격리되므로 자격증명은 부팅 통과용 더미.
+admin:
+  enabled: true
+  username: admin
+  password: admin-test-pw

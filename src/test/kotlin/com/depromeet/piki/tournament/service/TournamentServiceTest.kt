@@ -94,6 +94,8 @@ class TournamentServiceTest {
 
         override fun findStaleProcessingIds(cutoff: java.time.LocalDateTime): List<Long> = emptyList()
 
+        override fun findRecent(limit: Int): List<Item> = emptyList()
+
         companion object {
             const val DEFAULT_PRICE = 10_000
         }
