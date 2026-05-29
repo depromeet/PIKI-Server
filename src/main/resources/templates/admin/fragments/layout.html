@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<!--
+  PIKI 백오피스 공통 레이아웃 fragment.
+  head(pageTitle): 메타·CSS·CSRF 토큰(meta) — 채팅 화면의 fetch 가 CSRF 헤더로 사용한다.
+  sidebar(active): 좌측 네비. active 인자로 현재 메뉴를 강조한다. 기능이 늘면 nav 에 항목을 추가한다.
+-->
+<head th:fragment="head(pageTitle)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${pageTitle}">PIKI 백오피스</title>
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
+    <link rel="stylesheet" th:href="@{/admin-assets/backoffice.css}">
+</head>
+<body>
+<aside th:fragment="sidebar(active)" class="bo-sidebar">
+    <div class="bo-brand">PIKI 백오피스</div>
+    <nav class="bo-nav">
+        <a th:href="@{/admin}" th:classappend="${active == 'home'} ? ' active' : ''">대시보드</a>
+        <a th:href="@{/admin/chat}" th:classappend="${active == 'chat'} ? ' active' : ''">AI 어시스턴트</a>
+    </nav>
+    <form th:action="@{/admin/logout}" method="post" class="bo-logout">
+        <button type="submit">로그아웃</button>
+    </form>
+</aside>
+</body>
+</html>
