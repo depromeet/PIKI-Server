@@ -248,7 +248,7 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
 
 **create / update 양 모드 완료 후 (PR URL 확정 후), 이어서 항상 `/notion-board` 스킬을 실행한다.** 이번 PR을 Notion `프로젝트 일정 관리` 보드의 매칭 카드에 반영한다 (카드 본문 `개발 로그` 에 PR 링크 append + `계획중` 이면 `진행중` 으로). 사용자가 따로 호출하지 않아도 `/pr` 흐름의 일부로 돈다.
 
-- 이번 PR 의 URL · 번호 · 브랜치명 · 연관 이슈 번호·제목 · `$ISSUE_LABELS` · 제목 · **이번 작업이 무엇인지 한 줄 설명** · 대화 맥락을 그대로 입력으로 넘긴다 (한 줄 설명은 `/notion-board` 가 확인 문구에 그대로 쓴다).
+- `mode=pr`, 그리고 이번 PR 의 URL · 번호 · 브랜치명 · 연관 이슈 번호·제목 · `$ISSUE_LABELS` · 제목 · **이번 작업이 무엇인지 한 줄 설명** · 대화 맥락을 그대로 입력으로 넘긴다 (한 줄 설명은 `/notion-board` 가 확인 문구에 그대로 쓴다).
 - **`/pr` 은 라벨·토큰 유무로 미리 거르지 않는다 — `/notion-board` 를 무조건 호출한다.** 무엇을 보드에 올릴지(스킵·확인·진행)는 `/notion-board` 가 정하는 게 올바른 책임 분배다. `/notion-board` 는 `$NOTION_TOKEN` 이 없을 때만 자동 스킵하고, `chore` / `test` / `infra` / `docs` / `refactor` 같은 내부 작업 라벨은 그 사실을 확인 문구에 덧붙여 사용자가 결정하게 한다. (`$ISSUE_LABELS` 는 스킵 게이트가 아니라 `/notion-board` 가 참고하는 신호로 넘길 뿐이다.)
 - **best-effort** 다 — 보드 반영이 실패해도 PR 생성/갱신 결과를 되돌리지 않는다.
 

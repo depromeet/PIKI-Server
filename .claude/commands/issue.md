@@ -14,7 +14,7 @@
 
 **라벨은 한 작업 한 개.** type 차원(`feat`/`fix`/`refactor`/`perf`/`chore`) 과 영역 차원(`docs`/`test`/`infra`) 이 한 라벨로 합쳐져 있다. "외부 가시적 변화" 가 본질이면 그 type, 특정 영역만 만지면 그 영역. multi-label 부여하지 않는다.
 
-**채팅 끊김을 최소화한다.** 자유 텍스트는 한 메시지로 일괄 받고, 옵션 결정은 `AskUserQuestion` 으로 묶어 받는다. 사용자 인터랙션은 보통 **3~4 라운드** (Epic 여부 → 자유 입력 → 검수 → [일반 이슈] 작업 위치) 안에 끝난다.
+**채팅 끊김을 최소화한다.** 자유 텍스트는 한 메시지로 일괄 받고, 옵션 결정은 `AskUserQuestion` 으로 묶어 받는다. 사용자 인터랙션은 보통 **3~4 라운드** (Epic 여부 → 자유 입력 → 검수 → [일반 이슈] 작업 위치) 안에 끝난다. `$NOTION_TOKEN` 이 설정돼 있으면 마지막에 Notion 보드 카드 확인이 1라운드 더 붙는다 (`/notion-board` 가 매칭 카드 기록 / 신규 카드 생성을 묻는다).
 
 ## 절차
 
@@ -118,11 +118,27 @@ gh api graphql \
 gh project item-add 99 --owner depromeet --url {이슈 URL}
 ```
 
-### A-7. 결과 출력
+### A-7. Notion 보드 반영
+
+이슈를 `/notion-board` 에 `mode=issue` 로 넘겨 보드에 반영한다. **라벨과 무관하게 항상 호출한다** — 보드 비대상 여부는 `/notion-board` 가 사용자에게 묻고 사용자가 정한다. `$NOTION_TOKEN` 이 없으면 `/notion-board` 가 조용히 스킵하므로 이슈 생성 흐름은 영향받지 않는다.
+
+`/notion-board` 스킬에 다음 맥락을 전달한다:
+
+- `mode=issue`
+- 이번 이슈 번호·URL·제목
+- Epic 여부 (A 흐름=Epic / B 흐름=일반)
+- `$ISSUE_LABELS` (이슈에 붙은 분류 라벨 — Epic 은 `epic`)
+- 이번 작업이 무엇인지 한 줄 설명 (분해된 "무엇을" 에서 뽑은, 사람이 읽는 핵심)
+- 이번 대화 맥락
+
+`/notion-board` 는 매칭되는 기능 카드가 있으면 그 카드의 `개발 로그` 에 `이슈 #N` 한 줄을 남기고(상태는 건드리지 않음), 없으면 사용자 확인을 받아 `계획중` 카드를 새로 만든다. 결과(어느 카드에 기록/생성)는 결과 출력 단계에 함께 보고한다.
+
+### A-8. 결과 출력
 
 - 이슈 URL
 - "Epic 은 브랜치를 만들지 않습니다. 하위 작업은 `/issue` 로 일반 이슈를 만들고 그 단계에서 이 epic 이 자동 추천됩니다."
 - "우선순위 / 일정 등 메타 정보는 GitHub Project 보드에서 직접 채우세요."
+- Notion 보드 반영 결과 (어느 카드에 `이슈 #N` 기록 / 새 `계획중` 카드 생성 / 토큰 없어 생략)
 
 ---
 
@@ -276,13 +292,29 @@ gh issue develop {이슈번호} \
 gh project item-add 99 --owner depromeet --url {이슈 URL}
 ```
 
-### B-8. 결과 출력
+### B-8. Notion 보드 반영
+
+이슈를 `/notion-board` 에 `mode=issue` 로 넘겨 보드에 반영한다. **라벨과 무관하게 항상 호출한다** — 보드 비대상 여부는 `/notion-board` 가 사용자에게 묻고 사용자가 정한다. `$NOTION_TOKEN` 이 없으면 `/notion-board` 가 조용히 스킵하므로 이슈 생성 흐름은 영향받지 않는다.
+
+`/notion-board` 스킬에 다음 맥락을 전달한다:
+
+- `mode=issue`
+- 이번 이슈 번호·URL·제목
+- Epic 여부 (A 흐름=Epic / B 흐름=일반)
+- `$ISSUE_LABELS` (이슈에 붙은 분류 라벨)
+- 이번 작업이 무엇인지 한 줄 설명 (분해된 "무엇을" 에서 뽑은, 사람이 읽는 핵심)
+- 이번 대화 맥락
+
+`/notion-board` 는 매칭되는 기능 카드가 있으면 그 카드의 `개발 로그` 에 `이슈 #N` 한 줄을 남기고(상태는 건드리지 않음), 없으면 사용자 확인을 받아 `계획중` 카드를 새로 만든다. 결과(어느 카드에 기록/생성)는 결과 출력 단계에 함께 보고한다.
+
+### B-9. 결과 출력
 
 - 이슈 URL
 - 브랜치명
 - **워크트리 선택 시**: 워크트리 경로(`.claude/worktrees/{slug}`) + "세션이 워크트리로 전환됐고 현재 체크아웃(`dev` 등)은 그대로 유지됩니다" + "작업·커밋·`/pr` 은 이 워크트리에서 진행됩니다"
 - **현재 브랜치 선택 시**: 현재 체크아웃된 브랜치 확인
 - "우선순위 / 일정은 필요시 GitHub Project 보드에서 채우세요."
+- Notion 보드 반영 결과 (어느 카드에 `이슈 #N` 기록 / 새 `계획중` 카드 생성 / 토큰 없어 생략)
 - 다음 단계 안내 (작업 시작 → 커밋 → PR)
 
 ---
@@ -302,5 +334,6 @@ gh project item-add 99 --owner depromeet --url {이슈 URL}
 - 이슈 템플릿(`.github/ISSUE_TEMPLATE/`)이 우선순위·일정을 required 로 정의해도 본문 자유 양식이라 강제받지 않는다. 이 스킬은 본질("왜/무엇을")만 받는 정책을 따른다.
 - **Assignee 는 `@me` 고정**. 이슈 만든 사람이 작업자라는 가정. 다른 사람에게 할당하려면 GitHub UI 에서 변경.
 - **Issue Type 은 GraphQL 별도 호출.** `gh issue create` 가 `--type` 미지원이라 `updateIssueIssueType` mutation 사용. depromeet org 의 type 은 Task / Bug / Feature 3종 — 우리 9개 라벨과 1:1 매핑이 안 되는 부분은 가장 가까운 type 으로 (refactor·perf·chore·docs·test·infra → Task, epic → Feature). org 가 type 을 추가/제거하면 본문의 type ID 도 갱신 필요.
+- **Notion 보드 반영은 `/notion-board` 에 위임**한다 (`mode=issue`). `$NOTION_TOKEN` 없으면 조용히 스킵하므로 이슈 생성은 영향 없다. 카드 매칭·신규 생성 확인은 `/notion-board` 가 사용자에게 직접 묻는다 — `/issue` 는 맥락만 넘기고, 보드 카드 입자(기능 단위)는 `/notion-board` 가 책임진다.
 
 $ARGUMENTS
