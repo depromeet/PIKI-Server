@@ -185,10 +185,15 @@ jobs:
             docker stop "team3-$INACTIVE" || true
             docker rm "team3-$INACTIVE" || true
 
-            # 새 버전 비활성 포트에 기동
+            # 새 버전 비활성 포트에 기동.
+            # -p 를 127.0.0.1 에 바인딩해 호스트 공인 IP(EIP)로의 직접 접근을 막는다. nginx(호스트 프로세스)와
+            # health check 는 localhost 로 접근하므로 영향 없고, actuator/prometheus 가 SG ingress 설정과 무관하게
+            # 외부에서 직접 scrape 되는 우회 경로를 구조적으로 차단한다 (nginx /actuator 차단의 보강).
+            # 주의: 별도 PR 의 Grafana Alloy 는 같은 호스트의 컨테이너이므로 --network host 로 띄워 localhost 를 scrape 해야 한다
+            #       (redis 가 쓰는 172.17.0.1 bridge 바인딩 방식으로는 127.0.0.1 바인딩 포트에 닿지 못한다).
             docker run -d \
               --name "team3-$INACTIVE" \
-              -p "$INACTIVE_PORT:8080" \
+              -p "127.0.0.1:$INACTIVE_PORT:8080" \
               -e JAVA_TOOL_OPTIONS="-Xmx256m -Xms64m" \
               -e GEMINI_API_KEY="$GEMINI_API_KEY" \
               -e DB_HOST="$DB_HOST" \
