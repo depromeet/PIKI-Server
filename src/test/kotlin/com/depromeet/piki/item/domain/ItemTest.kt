@@ -236,4 +236,36 @@ class ItemTest {
         assertFalse(Item.processing(link).isReady())
         assertFalse(Item.processing(link).apply { markFailed() }.isReady())
     }
+
+    @Test
+    fun `FAILED item 을 update 로 직접 보정하면 READY 로 복구되며 보정값이 반영된다`() {
+        val item = Item.processing(link).apply { markFailed() }
+
+        item.update(name = "직접 입력한 이름", currentPrice = 50_000)
+
+        assertEquals(ItemStatus.READY, item.status)
+        assertEquals("직접 입력한 이름", item.name)
+        assertEquals(50_000, item.currentPrice)
+    }
+
+    @Test
+    fun `READY item 을 update 해도 READY 를 유지한다`() {
+        val item = Item.from(ProductSnapshot(link = link, name = "나이키"))
+
+        item.update(name = "수정된 이름")
+
+        assertEquals(ItemStatus.READY, item.status)
+    }
+
+    @Test
+    fun `PROCESSING item 을 update 해도 PROCESSING 을 유지한다`() {
+        // 파싱 중 항목의 status 전이는 백그라운드 워커(markReady/markFailed)가 책임지므로,
+        // 사용자 update 는 정보만 바꾸고 PROCESSING 은 건드리지 않는다.
+        val item = Item.processing(link)
+
+        item.update(name = "끼어든 수정")
+
+        assertEquals(ItemStatus.PROCESSING, item.status)
+        assertEquals("끼어든 수정", item.name)
+    }
 }
