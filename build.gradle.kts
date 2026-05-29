@@ -41,6 +41,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    // 개발 서버 전용 admin 챗봇의 SSR 페이지(admin.enabled 로 게이팅). 버전은 Spring Boot 4.0.5 BOM 이 관리.
+    // CSRF hidden field 는 thymeleaf-spring 의 RequestDataValueProcessor 가 자동 주입하므로
+    // thymeleaf-extras-springsecurity 는 첫 단계에선 불필요(sec: dialect 미사용).
+    implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("tools.jackson.module:jackson-module-kotlin")
 

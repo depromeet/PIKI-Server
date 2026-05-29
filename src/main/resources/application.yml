@@ -56,6 +56,14 @@ gemini:
     max-attempts: ${GEMINI_RETRY_MAX_ATTEMPTS:2}
     initial-delay-ms: ${GEMINI_RETRY_INITIAL_DELAY_MS:1000}
 
+admin:
+  # 개발 서버 전용 관리자 챗봇. 기본 비활성(fail-safe) — ADMIN_ENABLED=true 를 명시한 환경에서만 빈/라우트가 뜬다.
+  # 이 프로젝트엔 런타임 dev 프로파일이 없어(@Profile 미사용) 프로퍼티 게이팅으로 운영 노출을 차단한다.
+  enabled: ${ADMIN_ENABLED:false}
+  # enabled=true 인데 아래가 비어 있으면 AdminProperties.init 에서 부팅 실패시킨다 ("켰는데 로그인 불가" 방지).
+  username: ${ADMIN_USERNAME:}
+  password: ${ADMIN_PASSWORD:}
+
 s3:
   # 크롭한 상품 이미지 저장 버킷. 자격증명은 EC2 instance role / 로컬 환경변수(DefaultCredentialsProvider).
   bucket: ${S3_BUCKET:}
