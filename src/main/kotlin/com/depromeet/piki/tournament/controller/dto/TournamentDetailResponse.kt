@@ -1,5 +1,6 @@
 package com.depromeet.piki.tournament.controller.dto
 
+import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.service.dto.TournamentDetail
 import com.fasterxml.jackson.annotation.JsonInclude
@@ -22,10 +23,11 @@ data class TournamentDetailResponse(
         val price: Int?,
         val currency: String?,
         val imageUrl: String?,
+        val status: ItemStatus,
     ) {
         companion object {
             fun from(d: TournamentDetail.ItemDetail): ItemDetailResponse =
-                ItemDetailResponse(d.tournamentItemId, d.itemId, d.name, d.price, d.currency, d.imageUrl)
+                ItemDetailResponse(d.tournamentItemId, d.itemId, d.name, d.price, d.currency, d.imageUrl, d.status)
         }
     }
 
@@ -68,23 +70,12 @@ data class TournamentDetailResponse(
     )
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    data class RankedItemResponse(
-        val rank: Int,
-        val tournamentItemId: Long,
-        val itemId: Long,
-        val name: String?,
-        val price: Int?,
-        val currency: String?,
-        val imageUrl: String?,
-    ) {
+    data class CompletedData(val result: List<RankedItemResponse>) {
         companion object {
-            fun from(r: TournamentDetail.RankedItem): RankedItemResponse =
-                RankedItemResponse(r.rank, r.tournamentItemId, r.itemId, r.name, r.price, r.currency, r.imageUrl)
+            fun from(completed: TournamentDetail.Completed): CompletedData =
+                CompletedData(completed.result.map { RankedItemResponse.from(it) })
         }
     }
-
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    data class CompletedData(val result: List<RankedItemResponse>)
 
     companion object {
         fun from(detail: TournamentDetail): TournamentDetailResponse =
