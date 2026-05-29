@@ -53,9 +53,13 @@ class ActuatorIntegrationTest : IntegrationTestSupport() {
 
     @Test
     fun `GET actuator metrics - 미노출 경로라 인증 없이 접근 시 401 (노출 정책 회귀 가드)`() {
-        // metrics 엔드포인트는 application.yml exposure.include 에서 제외했고
-        // SecurityConfig 에서도 permitAll 하지 않았다. anyRequest().authenticated() 에 걸려 401.
-        // 향후 실수로 metrics 를 노출+permitAll 하면 이 단언이 깨져 회귀를 잡는다.
+        // metrics 엔드포인트는 application.yml exposure.include 에서 제외했고 SecurityConfig
+        // permitAll 에도 없다. permitAll 이 아니므로 anyRequest().authenticated() 에 걸려 인증 없이는 401.
+        //
+        // 주의 — 이 401 은 "permitAll 아님"만 증명한다. Security 필터가 DispatcherServlet 보다 먼저라
+        // 엔드포인트 등록 여부와 무관하게 401 이 난다. 따라서 누군가 metrics 를 exposure 에 노출하되
+        // permitAll 을 빠뜨리면 여전히 401 이라 이 가드는 못 잡는다. 이 가드가 실제로 막는 회귀는
+        // "노출 + permitAll 까지 돼 외부에 열리는" 경우다 (그 조합이면 200 이 되어 단언이 깨진다).
         val mockMvc =
             MockMvcBuilders
                 .webAppContextSetup(webApplicationContext)
