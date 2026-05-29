@@ -110,9 +110,11 @@ jobs:
             docker pull "$IMAGE"
             docker stop team3-server || true
             docker rm team3-server || true
+            # -p 를 127.0.0.1 에 바인딩해 호스트 공인 IP(EIP)로의 직접 접근을 막는다 (deploy.yml 과 동일 정책 —
+            # nginx·health check 는 localhost 접근이라 무영향, actuator/prometheus 외부 직접 scrape 우회만 차단).
             docker run -d \
               --name team3-server \
-              -p 8080:8080 \
+              -p 127.0.0.1:8080:8080 \
               -e GEMINI_API_KEY="$GEMINI_API_KEY" \
               -e DB_HOST="$DB_HOST" \
               -e DB_PORT="$DB_PORT" \

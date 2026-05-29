@@ -24,6 +24,12 @@ spring:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
+    # 마이그레이션이 전부 additive(순서 무관)이므로 머지 순서와 timestamp 순서가 어긋나도 안전하게 적용한다.
+    # 덕분에 머지 직전 timestamp 재발급이 불필요. 순서 의존이 필요한 변경은 단계 배포로 따로 다룬다.
+    out-of-order: true
+    # history 에는 적용 기록이 있으나 로컬엔 파일이 없는(missing) 마이그레이션의 검증 실패를 무시한다.
+    # 최종 스키마 정합성은 ddl-auto:validate 가 보증한다.
+    ignore-migration-patterns: "*:missing"
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -66,3 +72,18 @@ springdoc:
   api-docs:
     path: /v3/api-docs
   default-produces-media-type: application/json
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 최소 노출: health(상태), prometheus(메트릭 scrape) 둘뿐.
+        # info·metrics·env 등 나머지 actuator 엔드포인트는 노출하지 않는다 (info 는 contributor 가
+        # 없어 빈 응답이라 노출 표면만 늘릴 뿐이고, Alloy 도 prometheus·health 만 긁는다).
+        # 외부(nginx 443) 는 /actuator/ 를 차단하고, EC2 내부의 Grafana Alloy 만
+        # localhost 로 /actuator/prometheus 를 scrape 한다 (별도 PR).
+        include: health, prometheus
+  metrics:
+    tags:
+      # Grafana Cloud 에서 서비스 단위로 메트릭을 구분하는 공통 라벨.
+      application: ${spring.application.name}

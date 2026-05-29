@@ -7,7 +7,11 @@ interface TournamentItemRepository {
 
     fun countByTournamentId(tournamentId: Long): Int
 
+    fun findIdsByTournamentId(tournamentId: Long): List<Long>
+
     fun findAllByTournamentId(tournamentId: Long): List<TournamentItem>
+
+    fun findByIds(ids: List<Long>): List<TournamentItem>
 
     fun findById(id: Long): TournamentItem?
 
