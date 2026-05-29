@@ -200,6 +200,7 @@ interface WishlistApi {
         description = """
             위시 항목에 연결된 상품(item)의 이름·현재가·이미지·통화를 수정한다. 들어온 필드만 갱신한다.
             본인 위시만 수정 가능하며, item 을 직접 노출하지 않고 위시 소유 단위로 권한을 검증한다.
+            추출 실패(FAILED) 항목을 직접 보정하면 status 가 READY 로 복구된다.
         """,
     )
     @ApiResponses(
