@@ -120,18 +120,7 @@ gh project item-add 99 --owner depromeet --url {이슈 URL}
 
 ### A-7. Notion 보드 반영
 
-이슈를 `/notion-board` 에 `mode=issue` 로 넘겨 보드에 반영한다. **라벨과 무관하게 항상 호출한다** — 보드 비대상 여부는 `/notion-board` 가 사용자에게 묻고 사용자가 정한다. `$NOTION_TOKEN` 이 없으면 `/notion-board` 가 조용히 스킵하므로 이슈 생성 흐름은 영향받지 않는다.
-
-`/notion-board` 스킬에 다음 맥락을 전달한다:
-
-- `mode=issue`
-- 이번 이슈 번호·URL·제목
-- Epic 여부 (A 흐름=Epic / B 흐름=일반)
-- `$ISSUE_LABELS` (이슈에 붙은 분류 라벨 — Epic 은 `epic`)
-- 이번 작업이 무엇인지 한 줄 설명 (분해된 "무엇을" 에서 뽑은, 사람이 읽는 핵심)
-- 이번 대화 맥락
-
-`/notion-board` 는 매칭되는 기능 카드가 있으면 그 카드의 `개발 로그` 에 `이슈 #N` 한 줄을 남기고(상태는 건드리지 않음), 없으면 사용자 확인을 받아 `계획중` 카드를 새로 만든다. 결과(어느 카드에 기록/생성)는 결과 출력 단계에 함께 보고한다.
+이슈를 만든 뒤 `/notion-board` 를 `mode=issue` 로 호출한다. Epic 흐름이므로 Epic 여부=Epic 으로 넘긴다. 입력·게이트·best-effort 규약은 모두 `/notion-board` 의 `## 호출 계약` 을 따른다 — `/issue` 는 거르지 않고 항상 호출만 한다. 반영 결과(어느 카드에 기록/생성)는 결과 출력 단계에 함께 보고한다.
 
 ### A-8. 결과 출력
 
@@ -294,7 +283,7 @@ gh project item-add 99 --owner depromeet --url {이슈 URL}
 
 ### B-8. Notion 보드 반영
 
-A-7 과 동일 (`mode=issue` 로 `/notion-board` 호출). Epic 여부만 `B 흐름=일반` 으로 넘긴다.
+A-7 과 동일 (`mode=issue` 로 `/notion-board` 호출). 일반 흐름이므로 Epic 여부=일반 으로 넘긴다.
 
 ### B-9. 결과 출력
 
