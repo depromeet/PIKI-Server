@@ -19,6 +19,13 @@ class InMemoryNotificationTemplateProvider : NotificationTemplateProvider {
                 NotificationTemplate(title = "상품 정보를 가져오지 못했어요", body = ""),
         )
 
-    // enum 에 새 타입을 추가하고 여기 시드를 빠뜨리면 발송 시점에 즉시 깨져 누락을 드러낸다.
+    // 시작 시점 전수 검증 — enum 에 새 타입을 추가하고 여기 시드를 빠뜨리면, 첫 발송(런타임)이 아니라
+    // 빈 생성(앱 부팅) 시점에 즉시 깨져 누락을 드러낸다. find() 의 fail-fast 와 ParameterizedTest 로도
+    // 잡지만, 부팅 차단이 운영에서 가장 이르게 발견된다.
+    init {
+        val missing = NotificationType.entries.filterNot { it in templates }
+        require(missing.isEmpty()) { "템플릿 미등록: $missing" }
+    }
+
     override fun find(type: NotificationType): NotificationTemplate = templates[type] ?: error("템플릿 미등록: $type")
 }

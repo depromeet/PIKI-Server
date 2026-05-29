@@ -20,6 +20,13 @@ class NotificationDispatcher(
     private val byType: Map<KClass<*>, NotificationEventHandler<*>> =
         handlers.associateBy { it.eventType }
 
+    // associateBy 는 eventType 충돌 시 마지막 핸들러로 조용히 덮어쓴다 — 같은 이벤트에 핸들러를 둘
+    // 등록하면 한쪽 라우팅이 소리 없이 사라진다. 부팅 시점에 중복을 fail-fast 로 드러낸다.
+    init {
+        val duplicated = handlers.groupBy { it.eventType }.filterValues { it.size > 1 }.keys
+        require(duplicated.isEmpty()) { "eventType 중복 핸들러 등록: $duplicated" }
+    }
+
     fun dispatch(event: Any) {
         // 타입 캐스팅은 여기 한 곳에 격리한다 — byType 매칭이 eventType 과 event::class 의 일치를 보장하므로 안전.
         @Suppress("UNCHECKED_CAST")
