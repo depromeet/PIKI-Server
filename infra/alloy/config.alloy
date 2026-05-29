@@ -1,0 +1,71 @@
+// Grafana Alloy — PIKI 운영 박스(EC2) 단일 수집기.
+// 앱의 prometheus 메트릭 scrape + team3-blue/green 앱 컨테이너 로그를 Grafana Cloud 로 remote-write 한다.
+// 자격증명은 환경변수로 주입한다(provision-runtime.sh 의 docker run -e). secret 미등록 시
+// provision-runtime.sh 가 Alloy 기동 자체를 skip 하므로, 빈 endpoint 로 부팅해 crash loop 하는 일은 없다.
+
+// ── 메트릭: 앱 /actuator/prometheus → Grafana Cloud (Prometheus) ──
+// blue-green 이라 한 시점에 8080·8081 중 한 포트만 떠 있다. 죽은 포트의 scrape 실패는
+// 해당 타겟만 down 으로 잡힐 뿐 무해하다. 앱 포트가 127.0.0.1 바인딩(PR #290)이므로
+// 이 Alloy 는 --network host 로 띄워 localhost 를 scrape 한다.
+prometheus.scrape "app" {
+  targets = [
+    {"__address__" = "localhost:8080", "instance" = "team3-blue"},
+    {"__address__" = "localhost:8081", "instance" = "team3-green"},
+  ]
+  metrics_path    = "/actuator/prometheus"
+  scrape_interval = "30s"
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_METRICS_URL")
+    basic_auth {
+      username = sys.env("GRAFANA_METRICS_USER")
+      password = sys.env("GRAFANA_CLOUD_TOKEN")
+    }
+  }
+}
+
+// ── 로그: team3-blue/green 앱 컨테이너 stdout → Grafana Cloud (Loki) ──
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+  // blue-green 배포로 컨테이너가 자주 교체된다. 짧은 refresh 로 사라진 컨테이너를 타겟에서
+  // 빨리 제거해 loki.source.docker 의 "No such container" 추적 에러를 줄인다.
+  refresh_interval = "15s"
+}
+
+discovery.relabel "team3" {
+  targets = discovery.docker.containers.targets
+
+  // 앱 컨테이너(team3-blue / team3-green)만 수집한다. team3-redis·team3-alloy(자기) 등은 제외 —
+  // redis 의 과거 로그가 GC 의 too-old 거부(400)를 유발했고, 우리가 원하는 건 앱 로그뿐이기 때문.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/team3-(blue|green)"
+    action        = "keep"
+  }
+
+  // docker 가 붙이는 선행 슬래시를 떼어 container 라벨로 (/team3-blue → team3-blue).
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.team3.output
+  forward_to = [loki.write.grafana_cloud.receiver]
+}
+
+loki.write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_LOGS_URL")
+    basic_auth {
+      username = sys.env("GRAFANA_LOGS_USER")
+      password = sys.env("GRAFANA_CLOUD_TOKEN")
+    }
+  }
+}

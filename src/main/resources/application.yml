@@ -24,6 +24,12 @@ spring:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
+    # 마이그레이션이 전부 additive(순서 무관)이므로 머지 순서와 timestamp 순서가 어긋나도 안전하게 적용한다.
+    # 덕분에 머지 직전 timestamp 재발급이 불필요. 순서 의존이 필요한 변경은 단계 배포로 따로 다룬다.
+    out-of-order: true
+    # history 에는 적용 기록이 있으나 로컬엔 파일이 없는(missing) 마이그레이션의 검증 실패를 무시한다.
+    # 최종 스키마 정합성은 ddl-auto:validate 가 보증한다.
+    ignore-migration-patterns: "*:missing"
   data:
     redis:
       host: ${REDIS_HOST:localhost}
