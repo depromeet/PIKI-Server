@@ -43,12 +43,20 @@ class AdminAuditService(
         log.info("admin audit: user={} action={} tool={} status={}", adminUsername, actionType, toolName, resultStatus)
     }
 
-    // 키 이름에 민감 토큰이 섞이면 값을 가린다. 현재 tool 파라미터엔 민감정보가 없지만,
-    // 향후 tool 이 늘어 토큰·URL 등이 섞여도 로그·DB 로 새지 않게 방어한다.
-    private fun mask(parameters: Map<String, Any?>): Map<String, Any?> =
-        parameters.mapValues { (key, value) ->
-            if (SENSITIVE_KEYS.any { key.contains(it, ignoreCase = true) }) MASK else value
+    // 키 이름에 민감 토큰이 섞이면 값을 가린다. 현재 tool 파라미터엔 민감정보가 없지만, 향후 tool 이 늘어
+    // 토큰·URL 등이 섞여도 로그·DB 로 새지 않게 방어한다. 중첩 map/list 안의 값까지 재귀로 마스킹한다 —
+    // 최상위 키만 보면 {config:{token:...}} 같은 중첩 비밀이 평문으로 새기 때문.
+    private fun mask(value: Any?): Any? =
+        when (value) {
+            is Map<*, *> -> value.entries.associate { (key, nested) -> key to (if (isSensitive(key)) MASK else mask(nested)) }
+            is List<*> -> value.map { mask(it) }
+            else -> value
         }
+
+    private fun isSensitive(key: Any?): Boolean {
+        val name = key as? String ?: return false
+        return SENSITIVE_KEYS.any { name.contains(it, ignoreCase = true) }
+    }
 
     companion object {
         private val log = LoggerFactory.getLogger(AdminAuditService::class.java)
