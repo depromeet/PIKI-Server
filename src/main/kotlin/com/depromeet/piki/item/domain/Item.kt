@@ -45,7 +45,8 @@ class Item(
     var currency: String? = currency
         protected set
 
-    // 파싱 생애주기. 전이는 markReady/markFailed 로만 일어난다 (setter 비노출).
+    // 파싱 생애주기. PROCESSING→READY/FAILED 전이는 markReady/markFailed 로,
+    // FAILED→READY 복구는 사용자 직접 수정(update)으로 일어난다 (setter 비노출).
     // 기본값 READY 는 동기 완성 경로(Item.from)·DB 로딩 행과의 호환을 위한 것이고,
     // 비동기 등록은 Item.processing 으로 PROCESSING 을 명시한다.
     @Enumerated(EnumType.STRING)
@@ -90,6 +91,13 @@ class Item(
         this.currentPrice = newCurrentPrice
         this.imageUrl = newImageUrl
         this.currency = newCurrency
+        // 사용자가 직접 정보를 보정하면 추출 실패(FAILED) item 도 정상 항목이 된 것이므로 READY 로 복구한다.
+        // PROCESSING(파싱 중)은 백그라운드 워커의 markReady/markFailed 가 책임지므로 여기서 건드리지 않는다.
+        // (markReady 가 호출하는 update 도 이 시점 status 가 PROCESSING 이라 이 분기에 걸리지 않는다.)
+        if (status == ItemStatus.FAILED) {
+            status = ItemStatus.READY
+            log.info("item {} 사용자 직접 수정으로 FAILED → READY 복구", getIdOrNull())
+        }
     }
 
     // PROCESSING → READY. 백그라운드 파싱이 성공해 추출 결과(snapshot)를 채우며 전이한다.

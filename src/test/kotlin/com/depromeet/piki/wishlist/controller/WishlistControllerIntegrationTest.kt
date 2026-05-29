@@ -93,6 +93,19 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             ).wish
             .getId()
 
+    // FAILED 상태 item+wish 시딩 — 추출 실패 항목을 사용자가 직접 보정하는 시나리오용.
+    // 등록 API(비동기 파싱)를 거치지 않고 markFailed 로 FAILED 상태를 바로 만들어 영속화한다.
+    private fun seedFailedWish(
+        userId: UUID,
+        url: String,
+    ): Long =
+        wishPersistenceService
+            .persist(
+                userId,
+                Item.processing(ProductLink.parse(url)).apply { markFailed() },
+            ).wish
+            .getId()
+
     @Test
     fun `url 이 빈 문자열이면 400 BAD_REQUEST 가 반환된다`() {
         val mockMvc = buildMockMvc()
@@ -353,6 +366,35 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.item.currentPrice").value(50_000))
             .andExpect(jsonPath("$.data.item.currency").value("KRW"))
             .andExpect(jsonPath("$.data.item.imageUrl").value("https://cdn.example.com/orig.jpg"))
+    }
+
+    @Test
+    fun `FAILED 상태인 위시 item 을 직접 수정하면 200 과 함께 status 가 READY 로 복구된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedFailedWish(userId, "https://shop.example.com/products/1")
+        val body =
+            objectMapper.writeValueAsString(
+                mapOf(
+                    "name" to "직접 입력한 이름",
+                    "currentPrice" to 50_000,
+                ),
+            )
+
+        mockMvc
+            .perform(
+                patch("/api/v1/wishlists/$wishId")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader)
+                    .content(body),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.item.name").value("직접 입력한 이름"))
+            .andExpect(jsonPath("$.data.item.currentPrice").value(50_000))
+            // 추출 실패(FAILED) 항목을 직접 보정하면 정상 항목이 된 것이므로 READY 로 복구된다.
+            .andExpect(jsonPath("$.data.item.status").value("READY"))
     }
 
     @Test
