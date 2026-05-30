@@ -28,7 +28,15 @@ class AdminAuditService(
         resultSummary: String?,
         requestMessage: String?,
     ) {
-        val maskedJson = objectMapper.writeValueAsString(mask(parameters))
+        // 감사 기록은 best-effort 다 — 직렬화 실패(순환 참조·직렬화 불가 타입)가 비즈니스 트랜잭션(아이템
+        // 저장 등)까지 롤백시키면 안 되므로, 실패 시 placeholder 로 대체하고 비즈니스는 그대로 진행시킨다.
+        val maskedJson =
+            try {
+                objectMapper.writeValueAsString(mask(parameters))
+            } catch (e: Exception) {
+                log.warn("admin 감사 파라미터 직렬화 실패: action={} tool={}", actionType, toolName, e)
+                AUDIT_SERIALIZATION_FAILED
+            }
         repository.save(
             AdminAuditLog(
                 adminUsername = adminUsername,
@@ -61,6 +69,7 @@ class AdminAuditService(
     companion object {
         private val log = LoggerFactory.getLogger(AdminAuditService::class.java)
         private const val MASK = "*secret*"
+        private const val AUDIT_SERIALIZATION_FAILED = """{"error":"AUDIT_SERIALIZATION_FAILED"}"""
         private val SENSITIVE_KEYS = listOf("password", "token", "secret", "credential", "authorization")
         private const val RESULT_SUMMARY_MAX = 1000
         private const val REQUEST_MESSAGE_MAX = 2000
