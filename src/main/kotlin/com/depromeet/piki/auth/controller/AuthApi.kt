@@ -24,8 +24,8 @@ interface AuthApi {
         summary = "게스트 생성",
         description =
             "새 GUEST User 를 생성하고 JWT 토큰 쌍을 발급한다. " +
-                "X-Client-Type: web 이면 토큰을 HttpOnly 쿠키(Set-Cookie)로 내리고 body 토큰은 null, " +
-                "그 외(APP·미설정)는 body 로 토큰을 내린다.",
+                "기본은 토큰을 HttpOnly 쿠키(Set-Cookie)로 내리고 body 토큰은 null 이며(secure by default), " +
+                "X-Client-Type: app 일 때만 body 로 토큰을 내린다(네이티브 앱).",
     )
     // 인증 없이 호출하는 진입점 (SecurityConfig 의 permitAll). 글로벌 Bearer 요구를 해제한다.
     @SecurityRequirements
@@ -33,7 +33,7 @@ interface AuthApi {
         value = [
             ApiResponse(
                 responseCode = "201",
-                description = "게스트 생성 성공 (WEB: Set-Cookie 2개 + body 토큰 null / APP: body 토큰)",
+                description = "게스트 생성 성공 (기본: Set-Cookie 2개 + body 토큰 null / app: body 토큰)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -47,7 +47,7 @@ interface AuthApi {
         name = ClientType.HEADER,
         `in` = ParameterIn.HEADER,
         required = false,
-        description = "클라이언트 종류. web 이면 토큰을 HttpOnly 쿠키로 받고 body 토큰은 null. 그 외·미설정은 body 로 받음(기본).",
+        description = "클라이언트 종류. app 이면 body 로 토큰을 받는다(네이티브 secure storage). 그 외·미설정은 HttpOnly 쿠키로 받고 body 토큰은 null(기본, secure by default).",
         schema = Schema(allowableValues = ["web", "app"]),
     )
     fun createGuest(): ApiResponseBody<GuestCreateResponse>
@@ -56,8 +56,8 @@ interface AuthApi {
         summary = "토큰 갱신",
         description =
             "리프레시 토큰을 검증하고 새 액세스·리프레시 토큰 쌍을 발급한다. " +
-                "리프레시 토큰은 refresh_token 쿠키(WEB) 또는 요청 body(APP) 어느 쪽으로든 받는다. " +
-                "X-Client-Type: web 이면 새 토큰을 Set-Cookie 로 회전하고 body 토큰은 null.",
+                "리프레시 토큰은 refresh_token 쿠키(기본) 또는 요청 body(app) 어느 쪽으로든 받는다. " +
+                "기본은 새 토큰을 Set-Cookie 로 회전하고 body 토큰은 null 이며, X-Client-Type: app 일 때만 body 로 내린다.",
     )
     // 만료된 액세스 토큰을 가진 클라이언트도 호출해야 하므로 인증 없이 진입 (SecurityConfig 의 permitAll).
     @SecurityRequirements
@@ -65,7 +65,7 @@ interface AuthApi {
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "토큰 갱신 성공 (WEB: Set-Cookie 회전 + body 토큰 null / APP: body 토큰)",
+                description = "토큰 갱신 성공 (기본: Set-Cookie 회전 + body 토큰 null / app: body 토큰)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -99,7 +99,7 @@ interface AuthApi {
         name = ClientType.HEADER,
         `in` = ParameterIn.HEADER,
         required = false,
-        description = "클라이언트 종류. web 이면 새 토큰을 Set-Cookie 로 회전하고 body 토큰은 null. 그 외·미설정은 body 로 받음(기본).",
+        description = "클라이언트 종류. app 이면 body 로 받는다. 그 외·미설정은 새 토큰을 Set-Cookie 로 회전하고 body 토큰은 null(기본).",
         schema = Schema(allowableValues = ["web", "app"]),
     )
     fun refresh(
