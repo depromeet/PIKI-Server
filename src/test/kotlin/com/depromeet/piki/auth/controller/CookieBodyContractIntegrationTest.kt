@@ -147,6 +147,21 @@ class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `refresh - X-Client-Type app 이 명시되면 쿠키가 동봉돼도 body 로 응답한다 (명시 헤더 권위)`() {
+        // 명시한 app 헤더는 권위적 — 어떤 이유로 우리 쿠키가 동봉돼도 쿠키 추론으로 web 오분류되지 않는다.
+        val refreshCookie = createGuestWeb().response.getCookie("refresh_token")!!
+
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/token/refresh")
+                    .header(ClientType.HEADER, "app")
+                    .cookie(refreshCookie),
+            ).andExpect(status().isOk)
+            .andExpect(cookie().doesNotExist("access_token"))
+            .andExpect(jsonPath("$.data.accessToken").isString)
+    }
+
+    @Test
     fun `refresh - 쿠키도 body 도 없으면 400 이다`() {
         mockMvc()
             .perform(post("/api/v1/auth/token/refresh").contentType(MediaType.APPLICATION_JSON))
