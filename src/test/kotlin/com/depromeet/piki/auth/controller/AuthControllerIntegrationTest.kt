@@ -33,7 +33,7 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
     fun `POST auth guest - 201 과 accessToken, refreshToken, user 가 응답에 포함된다`() {
         // FE 의 진입 fill 흐름을 위해 user 정보가 응답에 같이 와야 한다. 회귀 가드.
         mockMvc()
-            .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
+            .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app"))
             .andExpect(status().isCreated)
             .andExpect(jsonPath("$.status").value(201))
             .andExpect(jsonPath("$.code").value("CREATED"))
@@ -49,7 +49,7 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
     fun `POST auth token refresh - 유효한 refreshToken 으로 새 토큰 쌍이 발급된다`() {
         val guestResult =
             mockMvc()
-                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
+                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app"))
                 .andReturn()
         val refreshToken =
             objectMapper
@@ -62,6 +62,7 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
             .perform(
                 post("/api/v1/auth/token/refresh")
                     .contentType(MediaType.APPLICATION_JSON)
+                    .header("X-Client-Type", "app")
                     .content(body),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
@@ -98,7 +99,7 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
     fun `POST auth logout - 인증된 사용자가 로그아웃하면 200 이 반환된다`() {
         val guestResult =
             mockMvc()
-                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
+                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app"))
                 .andReturn()
         val accessToken =
             objectMapper

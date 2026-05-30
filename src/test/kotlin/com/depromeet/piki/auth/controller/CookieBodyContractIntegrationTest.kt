@@ -24,7 +24,8 @@ import tools.jackson.databind.ObjectMapper
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
-// cookie + body 토큰 전달 contract (#166). WEB=쿠키전용 / APP=body전용 분리, 헤더 우선, refresh·logout.
+// cookie + body 토큰 전달 contract (#166). secure by default — 기본(미설정·web)=쿠키전용,
+// X-Client-Type: app 명시일 때만 body 전용. + 쿠키 인증·refresh 회전·logout 만료.
 @Transactional
 class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
     @Autowired
@@ -39,28 +40,27 @@ class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
             .apply<DefaultMockMvcBuilder>(springSecurity())
             .build()
 
+    // 기본(헤더 없음)이 곧 WEB 이라 헤더 없이 호출해 쿠키를 받는다.
     private fun createGuestWeb(): MvcResult =
-        mockMvc()
-            .perform(
-                post("/api/v1/auth/guest")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(ClientType.HEADER, "web"),
-            ).andReturn()
-
-    private fun createGuestApp(): MvcResult =
         mockMvc()
             .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
             .andReturn()
 
+    // body 토큰을 받으려면 app 을 명시해야 한다.
+    private fun createGuestApp(): MvcResult =
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/guest")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(ClientType.HEADER, "app"),
+            ).andReturn()
+
     @Test
-    fun `WEB - guest 생성 시 토큰을 HttpOnly 쿠키로 내리고 body 토큰은 null 이다`() {
+    fun `기본(헤더 없음) - 토큰을 HttpOnly 쿠키로 내리고 body 토큰은 null 이다 (secure by default)`() {
         val result =
             mockMvc()
-                .perform(
-                    post("/api/v1/auth/guest")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .header(ClientType.HEADER, "web"),
-                ).andExpect(status().isCreated)
+                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isCreated)
                 .andExpect(cookie().exists("access_token"))
                 .andExpect(cookie().httpOnly("access_token", true))
                 .andExpect(cookie().path("access_token", "/"))
@@ -81,10 +81,13 @@ class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `APP - 헤더 없으면 Set-Cookie 없이 body 로 토큰을 내린다 (회귀)`() {
+    fun `APP - X-Client-Type app 명시 시 Set-Cookie 없이 body 로 토큰을 내린다`() {
         mockMvc()
-            .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
-            .andExpect(status().isCreated)
+            .perform(
+                post("/api/v1/auth/guest")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(ClientType.HEADER, "app"),
+            ).andExpect(status().isCreated)
             .andExpect(cookie().doesNotExist("access_token"))
             .andExpect(cookie().doesNotExist("refresh_token"))
             .andExpect(jsonPath("$.data.accessToken").isString)
@@ -92,7 +95,7 @@ class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `WEB - access_token 쿠키만으로 인증 엔드포인트가 통과한다`() {
+    fun `기본 - access_token 쿠키만으로 인증 엔드포인트가 통과한다`() {
         val accessCookie = createGuestWeb().response.getCookie("access_token")!!
 
         mockMvc()
@@ -117,15 +120,13 @@ class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `WEB - refresh_token 쿠키로 토큰이 갱신되고 새 쿠키 값이 회전된다`() {
+    fun `기본 - refresh_token 쿠키로 토큰이 갱신되고 새 쿠키 값이 회전된다`() {
         val oldRefresh = createGuestWeb().response.getCookie("refresh_token")!!
 
         val result =
             mockMvc()
                 .perform(
-                    post("/api/v1/auth/token/refresh")
-                        .header(ClientType.HEADER, "web")
-                        .cookie(oldRefresh),
+                    post("/api/v1/auth/token/refresh").cookie(oldRefresh),
                 ).andExpect(status().isOk)
                 .andExpect(cookie().exists("access_token"))
                 .andExpect(cookie().exists("refresh_token"))
@@ -138,24 +139,8 @@ class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `refresh - X-Client-Type 없이 refresh_token 쿠키만 있어도 쿠키로 회전한다 (하드닝)`() {
-        // 웹이 refresh 에 X-Client-Type 을 빠뜨려도, 브라우저가 자동 전송한 refresh_token 쿠키로
-        // 웹임을 추론해 쿠키를 회전한다. 안 그러면 옛 쿠키가 stale 로 남아 세션이 죽는다.
-        val refreshCookie = createGuestWeb().response.getCookie("refresh_token")!!
-
-        mockMvc()
-            .perform(
-                post("/api/v1/auth/token/refresh")
-                    .cookie(refreshCookie),
-            ).andExpect(status().isOk)
-            .andExpect(cookie().exists("access_token"))
-            .andExpect(cookie().exists("refresh_token"))
-            .andExpect(jsonPath("$.data.accessToken").value(nullValue()))
-    }
-
-    @Test
-    fun `refresh - X-Client-Type app 이 명시되면 쿠키가 동봉돼도 body 로 응답한다 (명시 헤더 권위)`() {
-        // 명시한 app 헤더는 권위적 — 어떤 이유로 우리 쿠키가 동봉돼도 쿠키 추론으로 web 오분류되지 않는다.
+    fun `APP - X-Client-Type app 이 명시되면 쿠키가 동봉돼도 body 로 응답한다 (명시 헤더 권위)`() {
+        // app 을 명시하면 쿠키가 동봉돼도 body 로 준다 — 브라우저 외 클라가 쿠키를 갖고 있어도 app 계약을 존중.
         val refreshCookie = createGuestWeb().response.getCookie("refresh_token")!!
 
         mockMvc()
@@ -179,14 +164,12 @@ class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
 
     @Test
     fun `logout 시 X-Client-Type 없이도 토큰 쿠키가 Max-Age 0 으로 만료된다 (무조건)`() {
-        // 쿠키 만료는 fail-safe 로 ClientType 무관하게 내려가야 한다.
-        // 웹이 logout 에 X-Client-Type 을 빠뜨려도 살아있는 access 쿠키가 확실히 삭제되도록.
+        // 쿠키 만료는 fail-safe 로 ClientType 무관하게 내려가야 한다. 살아있는 access 쿠키가 확실히 삭제되도록.
         val accessCookie = createGuestWeb().response.getCookie("access_token")!!
 
         mockMvc()
             .perform(
-                post("/api/v1/auth/logout")
-                    .cookie(accessCookie),
+                post("/api/v1/auth/logout").cookie(accessCookie),
             ).andExpect(status().isOk)
             .andExpect(cookie().maxAge("access_token", 0))
             // path 까지 set 시점과 동일해야 브라우저가 실제로 삭제한다. path 가 틀려도 Max-Age=0 만 보면 통과하므로 함께 고정.
