@@ -49,6 +49,8 @@ fi
 #    crash loop 가 나기 때문. secret 등록 후 다음 배포에 자동 기동된다.
 #    --network host: 앱 포트가 127.0.0.1 바인딩(#290)이라 localhost:8080/8081 을 scrape 하려면 필요.
 #    --server.http.listen-addr=127.0.0.1: host 네트워크라 debug UI(12345)를 루프백에만 묶어 외부 노출을 막는다.
+#    /proc·/sys·/ 마운트: node_exporter(config 의 prometheus.exporter.unix)가 컨테이너 안에서 호스트
+#    메모리·swap·디스크를 읽으려면 필요하다. config 의 *_path 가 /host/* 를 가리킨다. ro,rslave 로 읽기전용.
 if [ -z "${GRAFANA_METRICS_URL:-}" ]; then
   echo "[alloy] GRAFANA_* 미설정 — skip (secret 등록 후 다음 배포에 기동)"
 else
@@ -62,6 +64,9 @@ else
     --network host \
     -v /etc/alloy-team3/config.alloy:/etc/alloy/config.alloy:ro \
     -v /var/run/docker.sock:/var/run/docker.sock:ro \
+    -v /proc:/host/proc:ro,rslave \
+    -v /sys:/host/sys:ro,rslave \
+    -v /:/host/root:ro,rslave \
     -e GRAFANA_METRICS_URL="${GRAFANA_METRICS_URL:-}" \
     -e GRAFANA_METRICS_USER="${GRAFANA_METRICS_USER:-}" \
     -e GRAFANA_LOGS_URL="${GRAFANA_LOGS_URL:-}" \
