@@ -5,6 +5,8 @@ import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.support.IntegrationTestSupport
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.mock.web.MockHttpSession
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
@@ -52,6 +54,21 @@ class AdminItemControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `실제 form login 으로 로그인하면 세션으로 실험 데이터 페이지에 접근된다`() {
+        // user() 주입이 아니라 실제 /admin/login POST 로 인증해, AdminSecurityConfig 의 form login·
+        // provider·비번 검증·세션 생성·성공 리다이렉트 경로까지 한 번 검증한다(CodeRabbit 지적 반영).
+        val login =
+            mockMvc()
+                .perform(formLogin("/admin/login").user("admin").password("admin-test-pw"))
+                .andExpect(status().is3xxRedirection)
+                .andReturn()
+        val session = login.request.session as MockHttpSession
+        mockMvc()
+            .perform(get("/admin/items").session(session))
+            .andExpect(status().isOk)
+    }
+
+    @Test
     fun `CSRF 토큰 없이 샘플 추가를 요청하면 403 이 반환된다`() {
         mockMvc()
             .perform(
@@ -76,11 +93,13 @@ class AdminItemControllerIntegrationTest : IntegrationTestSupport() {
 
         assertEquals(3, itemRepository.findRecent(10).size)
 
-        val logs = adminAuditLogRepository.findAll()
-        assertEquals(1, logs.size)
-        assertEquals("SUCCESS", logs.first().resultStatus)
-        assertEquals("items", logs.first().toolName)
-        assertEquals("INSERT_SAMPLE_ITEMS", logs.first().actionType)
+        // findAll 은 순서를 보장하지 않으므로 방금 요청의 로그를 action/tool 로 특정해 단언한다.
+        val log =
+            adminAuditLogRepository.findAll().single {
+                it.toolName == "items" && it.actionType == "INSERT_SAMPLE_ITEMS"
+            }
+        assertEquals("SUCCESS", log.resultStatus)
+        assertEquals("admin", log.adminUsername)
     }
 
     @Test
