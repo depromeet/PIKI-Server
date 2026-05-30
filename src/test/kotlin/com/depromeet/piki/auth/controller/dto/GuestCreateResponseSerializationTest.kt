@@ -46,6 +46,8 @@ class GuestCreateResponseSerializationTest {
 
         assertTrue(map.containsKey("accessToken"))
         assertNull(map["accessToken"])
+        // refreshToken 도 "키는 존재 + 값은 null" 까지 본다 — 필드가 통째로 빠져도 통과하는 회귀를 막기 위함.
+        assertTrue(map.containsKey("refreshToken"))
         assertNull(map["refreshToken"])
         assertTrue(map.containsKey("user"))
         assertTrue("tokenPair" !in map)

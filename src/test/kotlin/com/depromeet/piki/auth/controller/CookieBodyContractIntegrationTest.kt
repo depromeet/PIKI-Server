@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 // cookie + body 토큰 전달 contract (#166). WEB=쿠키전용 / APP=body전용 분리, 헤더 우선, refresh·logout.
@@ -116,18 +117,24 @@ class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `WEB - refresh_token 쿠키로 토큰이 갱신되고 새 쿠키가 내려온다`() {
-        val refreshCookie = createGuestWeb().response.getCookie("refresh_token")!!
+    fun `WEB - refresh_token 쿠키로 토큰이 갱신되고 새 쿠키 값이 회전된다`() {
+        val oldRefresh = createGuestWeb().response.getCookie("refresh_token")!!
 
-        mockMvc()
-            .perform(
-                post("/api/v1/auth/token/refresh")
-                    .header(ClientType.HEADER, "web")
-                    .cookie(refreshCookie),
-            ).andExpect(status().isOk)
-            .andExpect(cookie().exists("access_token"))
-            .andExpect(cookie().exists("refresh_token"))
-            .andExpect(jsonPath("$.data.accessToken").value(nullValue()))
+        val result =
+            mockMvc()
+                .perform(
+                    post("/api/v1/auth/token/refresh")
+                        .header(ClientType.HEADER, "web")
+                        .cookie(oldRefresh),
+                ).andExpect(status().isOk)
+                .andExpect(cookie().exists("access_token"))
+                .andExpect(cookie().exists("refresh_token"))
+                .andExpect(jsonPath("$.data.accessToken").value(nullValue()))
+                .andReturn()
+
+        // 존재만이 아니라 값이 실제로 바뀌었는지까지 본다 — 같은 토큰을 재발급하는 회귀를 잡기 위함.
+        val newRefresh = result.response.getCookie("refresh_token")!!.value
+        assertNotEquals(oldRefresh.value, newRefresh, "refresh_token 이 회전돼 값이 바뀌어야 한다")
     }
 
     @Test
@@ -182,7 +189,10 @@ class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
                     .cookie(accessCookie),
             ).andExpect(status().isOk)
             .andExpect(cookie().maxAge("access_token", 0))
+            // path 까지 set 시점과 동일해야 브라우저가 실제로 삭제한다. path 가 틀려도 Max-Age=0 만 보면 통과하므로 함께 고정.
+            .andExpect(cookie().path("access_token", "/"))
             .andExpect(cookie().maxAge("refresh_token", 0))
+            .andExpect(cookie().path("refresh_token", "/api/v1/auth"))
             .andExpect(jsonPath("$.data.loggedOut").value(true))
     }
 }
