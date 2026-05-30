@@ -130,7 +130,9 @@ class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
                 ).andExpect(status().isOk)
                 .andExpect(cookie().exists("access_token"))
                 .andExpect(cookie().exists("refresh_token"))
+                // WEB 계약: 두 body 토큰 모두 null(XSS 탈취 창 축소). guest WEB 테스트와 동일 강도.
                 .andExpect(jsonPath("$.data.accessToken").value(nullValue()))
+                .andExpect(jsonPath("$.data.refreshToken").value(nullValue()))
                 .andReturn()
 
         // 존재만이 아니라 값이 실제로 바뀌었는지까지 본다 — 같은 토큰을 재발급하는 회귀를 잡기 위함.
