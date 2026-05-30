@@ -1,5 +1,6 @@
 // Grafana Alloy — PIKI 운영 박스(EC2) 단일 수집기.
-// 앱의 prometheus 메트릭 scrape + team3-blue/green 앱 컨테이너 로그를 Grafana Cloud 로 remote-write 한다.
+// 앱 prometheus 메트릭 scrape + team3-blue/green 컨테이너 로그 + 호스트 메트릭(node_exporter)을
+// Grafana Cloud 로 remote-write 한다.
 // 자격증명은 환경변수로 주입한다(provision-runtime.sh 의 docker run -e). secret 미등록 시
 // provision-runtime.sh 가 Alloy 기동 자체를 skip 하므로, 빈 endpoint 로 부팅해 crash loop 하는 일은 없다.
 
@@ -68,4 +69,30 @@ loki.write "grafana_cloud" {
       password = sys.env("GRAFANA_CLOUD_TOKEN")
     }
   }
+}
+
+// ── 호스트 메트릭: node_exporter (메모리·swap·디스크·CPU) ──
+// 906Mi 박스 + heap 256m + 컨테이너 메모리 무제한이라, OOM·swap 폭증은 JVM heap 메트릭만으론 안 보인다.
+// 1순위 리스크(메모리)를 제대로 잡으려면 OS 레벨 메모리/swap/디스크를 봐야 한다.
+// 컨테이너에서 호스트를 보려면 provision-runtime.sh 가 /proc·/sys·/ 를 /host/* 로 마운트하고,
+// 아래 *_path 가 그 마운트를 가리킨다. node_exporter 메트릭엔 application 라벨이 없다(앱 메트릭과 구분).
+prometheus.exporter.unix "host" {
+  procfs_path = "/host/proc"
+  sysfs_path  = "/host/sys"
+  rootfs_path = "/host/root"
+
+  // 작은 박스라 불필요한 collector 는 끈다.
+  disable_collectors = ["ipvs", "btrfs", "infiniband", "xfs", "zfs"]
+
+  filesystem {
+    mount_points_exclude = "^/(dev|proc|sys|run/credentials/.+|var/lib/docker/.+|host/.+)($|/)"
+    fs_types_exclude     = "^(autofs|binfmt_misc|cgroup2?|configfs|debugfs|devpts|devtmpfs|tmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|procfs|pstore|securityfs|sysfs|tracefs)$"
+    mount_timeout        = "5s"
+  }
+}
+
+prometheus.scrape "host" {
+  targets         = prometheus.exporter.unix.host.targets
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+  scrape_interval = "30s"
 }
