@@ -25,5 +25,13 @@ class AuthException private constructor(
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
+
+        // refresh 토큰이 쿠키·body 어느 쪽에도 없을 때. 정상 클라이언트가 도달 가능한 계약 → 400.
+        fun refreshTokenRequired(): AuthException =
+            AuthException(
+                "리프레시 토큰이 필요합니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
     }
 }

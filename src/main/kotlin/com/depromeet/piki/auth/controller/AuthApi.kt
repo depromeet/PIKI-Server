@@ -1,11 +1,14 @@
 package com.depromeet.piki.auth.controller
 
 import com.depromeet.piki.auth.controller.dto.GuestCreateResponse
+import com.depromeet.piki.auth.controller.dto.LogoutResponse
 import com.depromeet.piki.auth.controller.dto.TokenRefreshRequest
 import com.depromeet.piki.auth.controller.dto.TokenRefreshResponse
+import com.depromeet.piki.auth.web.ClientType
 import com.depromeet.piki.common.response.ApiResponseBody
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.enums.ParameterIn
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
@@ -19,7 +22,10 @@ import java.util.UUID
 interface AuthApi {
     @Operation(
         summary = "게스트 생성",
-        description = "새 GUEST User 를 생성하고 JWT 토큰 쌍을 발급한다.",
+        description =
+            "새 GUEST User 를 생성하고 JWT 토큰 쌍을 발급한다. " +
+                "X-Client-Type: web 이면 토큰을 HttpOnly 쿠키(Set-Cookie)로 내리고 body 토큰은 null, " +
+                "그 외(APP·미설정)는 body 로 토큰을 내린다.",
     )
     // 인증 없이 호출하는 진입점 (SecurityConfig 의 permitAll). 글로벌 Bearer 요구를 해제한다.
     @SecurityRequirements
@@ -27,7 +33,7 @@ interface AuthApi {
         value = [
             ApiResponse(
                 responseCode = "201",
-                description = "게스트 생성 성공",
+                description = "게스트 생성 성공 (WEB: Set-Cookie 2개 + body 토큰 null / APP: body 토큰)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -37,11 +43,21 @@ interface AuthApi {
             ),
         ],
     )
+    @Parameter(
+        name = ClientType.HEADER,
+        `in` = ParameterIn.HEADER,
+        required = false,
+        description = "클라이언트 종류. web 이면 토큰을 HttpOnly 쿠키로 받고 body 토큰은 null. 그 외·미설정은 body 로 받음(기본).",
+        schema = Schema(allowableValues = ["web", "app"]),
+    )
     fun createGuest(): ApiResponseBody<GuestCreateResponse>
 
     @Operation(
         summary = "토큰 갱신",
-        description = "리프레시 토큰을 검증하고 새 액세스·리프레시 토큰 쌍을 발급한다.",
+        description =
+            "리프레시 토큰을 검증하고 새 액세스·리프레시 토큰 쌍을 발급한다. " +
+                "리프레시 토큰은 refresh_token 쿠키(WEB) 또는 요청 body(APP) 어느 쪽으로든 받는다. " +
+                "X-Client-Type: web 이면 새 토큰을 Set-Cookie 로 회전하고 body 토큰은 null.",
     )
     // 만료된 액세스 토큰을 가진 클라이언트도 호출해야 하므로 인증 없이 진입 (SecurityConfig 의 permitAll).
     @SecurityRequirements
@@ -49,7 +65,7 @@ interface AuthApi {
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "토큰 갱신 성공",
+                description = "토큰 갱신 성공 (WEB: Set-Cookie 회전 + body 토큰 null / APP: body 토큰)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -59,7 +75,7 @@ interface AuthApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "refreshToken 미입력",
+                description = "리프레시 토큰 미입력 (쿠키·body 모두 없음) · body 의 refreshToken 이 공백",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -79,17 +95,30 @@ interface AuthApi {
             ),
         ],
     )
-    fun refresh(request: TokenRefreshRequest): ApiResponseBody<TokenRefreshResponse>
+    @Parameter(
+        name = ClientType.HEADER,
+        `in` = ParameterIn.HEADER,
+        required = false,
+        description = "클라이언트 종류. web 이면 새 토큰을 Set-Cookie 로 회전하고 body 토큰은 null. 그 외·미설정은 body 로 받음(기본).",
+        schema = Schema(allowableValues = ["web", "app"]),
+    )
+    fun refresh(
+        request: TokenRefreshRequest?,
+        @Parameter(hidden = true) cookieRefreshToken: String?,
+    ): ApiResponseBody<TokenRefreshResponse>
 
     @Operation(
         summary = "로그아웃",
-        description = "리프레시 토큰을 삭제하여 로그아웃 처리한다.",
+        description =
+            "리프레시 토큰을 삭제하여 로그아웃 처리하고, 토큰 쿠키를 만료(Max-Age=0)시킨다. " +
+                "쿠키 만료는 클라이언트 종류와 무관하게 항상 내려간다(웹 쿠키가 확실히 삭제되도록). " +
+                "APP 은 쿠키를 쓰지 않아 영향 없다.",
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "로그아웃 성공",
+                description = "로그아웃 성공 (토큰 쿠키 만료)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -111,5 +140,5 @@ interface AuthApi {
     )
     fun logout(
         @Parameter(hidden = true) userId: UUID,
-    ): ApiResponseBody<Unit>
+    ): ApiResponseBody<LogoutResponse>
 }
