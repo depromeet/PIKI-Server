@@ -9,6 +9,7 @@ import com.depromeet.piki.auth.service.AuthService
 import com.depromeet.piki.auth.web.TokenCookieWriter
 import com.depromeet.piki.common.response.ApiResponseBody
 import jakarta.validation.Valid
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.CookieValue
@@ -24,6 +25,8 @@ import java.util.UUID
 class AuthController(
     private val authService: AuthService,
 ) : AuthApi {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     @PostMapping("/guest")
     @ResponseStatus(HttpStatus.CREATED)
     override fun createGuest(): ApiResponseBody<GuestCreateResponse> {
@@ -38,7 +41,10 @@ class AuthController(
         @Valid @RequestBody(required = false) request: TokenRefreshRequest?,
         @CookieValue(name = TokenCookieWriter.REFRESH_COOKIE, required = false) cookieRefreshToken: String?,
     ): ApiResponseBody<TokenRefreshResponse> {
-        val refreshToken = cookieRefreshToken ?: request?.refreshToken ?: throw AuthException.refreshTokenRequired()
+        // 빈 쿠키 값은 없는 것으로 본다 — 빈 쿠키가 body 입력을 가리지 않도록.
+        val cookieToken = cookieRefreshToken?.ifBlank { null }
+        val refreshToken = cookieToken ?: request?.refreshToken ?: throw AuthException.refreshTokenRequired()
+        log.info("토큰 갱신 요청: refreshToken 출처={}", cookieToken?.let { "cookie" } ?: "body")
         val tokenPair = authService.refresh(refreshToken)
         return ApiResponseBody.ok(TokenRefreshResponse.from(tokenPair))
     }
