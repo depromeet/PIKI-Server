@@ -42,6 +42,12 @@ jwt:
   access-token-expiry: ${JWT_ACCESS_EXPIRY:1h}
   refresh-token-expiry: ${JWT_REFRESH_EXPIRY:14d}
 
+auth:
+  cookie:
+    # 토큰 쿠키의 Secure 속성. 운영(HTTPS)은 true, 로컬(HTTP)은 .env 의 COOKIE_SECURE=false 로 끈다.
+    # 누락 시 기본 true (fail-safe-secure).
+    secure: ${COOKIE_SECURE:true}
+
 oauth:
   kakao:
     client-id: ${KAKAO_CLIENT_ID:}

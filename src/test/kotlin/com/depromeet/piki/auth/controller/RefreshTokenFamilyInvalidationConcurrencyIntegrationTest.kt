@@ -47,7 +47,7 @@ class RefreshTokenFamilyInvalidationConcurrencyIntegrationTest : IntegrationTest
 
         val guestResult =
             mockMvc
-                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
+                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app"))
                 .andReturn()
         val guestJson = objectMapper.readTree(guestResult.response.contentAsString)
         val accessToken = guestJson.at("/data/accessToken").asText()
