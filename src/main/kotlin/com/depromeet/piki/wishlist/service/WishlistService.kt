@@ -138,29 +138,27 @@ class WishlistService(
         return WishWithItem(wish = wish, item = item)
     }
 
+    // 멱등 삭제: 없거나 이미 삭제됐으면 "이미 목표 상태(없음)"이므로 성공으로 본다(no-op).
+    // 단 존재하는 위시가 남의 것이면 소유권은 보안 경계라 403 으로 막는다.
     @Transactional
     fun deleteWish(
         userId: UUID,
         wishId: Long,
     ) {
-        val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
+        val wish = wishRepository.findById(wishId) ?: return
         wish.verifyOwnedBy(userId)
         wish.delete()
     }
 
-    // 여러 위시를 한 번에 삭제한다(all-or-nothing). 단건 삭제와 같은 검증을 집합으로 확장한 것이라
-    // 존재(404) → 소유(403) 순서·의미가 단건과 일치한다. @Transactional 이라 검증 실패 시 아무것도 지워지지 않는다.
+    // 여러 위시를 한 번에 멱등 삭제한다. 없거나 이미 삭제된 id 는 조회에서 빠져 자연히 무시된다(목표 상태 달성).
+    // 존재하는 것 중 남의 위시가 하나라도 있으면 소유권 경계로 403, @Transactional 이라 본인 것도 함께 롤백된다.
     @Transactional
     fun deleteWishes(
         userId: UUID,
         wishIds: List<Long>,
     ) {
-        // 중복 id 는 같은 위시를 가리킬 뿐이므로 정규화한다. 정규화 후 개수가 존재 검증의 기준이 된다.
-        val distinctIds = wishIds.distinct()
-        val wishes = wishRepository.findAllByIds(distinctIds)
-        // 하나라도 없으면(이미 삭제됨 포함) 전체를 404 로 막는다 — 단건의 findById null → notFound 와 같은 계약.
-        if (wishes.size != distinctIds.size) throw WishException.notFound()
-        // 하나라도 본인 소유가 아니면 전체를 403 으로 막는다. 도메인이 자기방어한다.
+        // 중복 id 는 같은 위시를 가리킬 뿐이므로 정규화한다.
+        val wishes = wishRepository.findAllByIds(wishIds.distinct())
         wishes.forEach { it.verifyOwnedBy(userId) }
         wishes.forEach { it.delete() }
     }
