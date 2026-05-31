@@ -40,17 +40,32 @@ interface OAuthApi {
             ApiResponse(
                 responseCode = "200",
                 description = "로그인/가입 성공 (기본: Set-Cookie + body 토큰 null / app: body 토큰)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
             ),
             ApiResponse(
                 responseCode = "400",
                 description = "잘못된 요청 (code+redirectUri 도 accessToken 도 없음 · accessToken 과 code 를 동시 전달 · 지원하지 않는 provider)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
             ),
             ApiResponse(
                 responseCode = "502",
                 description = "소셜 제공자(Kakao/Google) 호출 실패 (네트워크·토큰 교환 실패·user_info 조회 실패 등)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
             ),
         ],
     )

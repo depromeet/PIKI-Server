@@ -21,7 +21,11 @@ data class OAuthLoginResponse(
     @get:Schema(description = "액세스 토큰 (APP=값 / WEB=null, 쿠키로 전달)", nullable = true, example = "eyJhbGciOiJIUzI1NiJ9...")
     val accessToken: String? get() = tokenPair.accessToken.takeIf { bodyTokensIncluded }
 
-    @get:Schema(description = "리프레시 토큰 (APP=값 / WEB=null, 쿠키로 전달)", nullable = true, example = "eyJhbGciOiJIUzI1NiJ9...")
+    @get:Schema(
+        description = "리프레시 토큰 (APP=값 / WEB=null, 쿠키로 전달)",
+        nullable = true,
+        example = "eyJhbGciOiJIUzI1NiJ9...",
+    )
     val refreshToken: String? get() = tokenPair.refreshToken.takeIf { bodyTokensIncluded }
 
     override fun withoutBodyTokens(): TokenCarrying = copy(bodyTokensIncluded = false)

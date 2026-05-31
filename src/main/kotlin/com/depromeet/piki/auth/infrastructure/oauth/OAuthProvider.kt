@@ -12,6 +12,7 @@ enum class OAuthProvider {
     companion object {
         // path 의 provider 문자열을 enum 으로. 미상은 400 (구현체 유무는 registry 가 판단).
         fun from(raw: String): OAuthProvider =
-            entries.firstOrNull { it.name.equals(raw.trim(), ignoreCase = true) } ?: throw OAuthException.unsupportedProvider()
+            entries.firstOrNull { it.name.equals(raw.trim(), ignoreCase = true) }
+                ?: throw OAuthException.unsupportedProvider()
     }
 }

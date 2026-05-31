@@ -24,5 +24,6 @@ data class OAuthLoginRequest(
             return v1 xor v2
         }
 
-    fun toCommand(): OAuthLoginCommand = OAuthLoginCommand(code = code, redirectUri = redirectUri, accessToken = accessToken)
+    fun toCommand(): OAuthLoginCommand =
+        OAuthLoginCommand(code = code, redirectUri = redirectUri, accessToken = accessToken)
 }

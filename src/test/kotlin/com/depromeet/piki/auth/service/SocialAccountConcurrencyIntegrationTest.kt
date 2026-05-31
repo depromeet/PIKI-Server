@@ -66,7 +66,10 @@ class SocialAccountConcurrencyIntegrationTest : IntegrationTestSupport() {
             assertEquals(resolvedIds.first(), linked.getIdOrNull(), "합류된 user 가 연결의 주인과 같아야 한다")
         } finally {
             // @Transactional 자동 롤백이 없으므로 만든 행을 직접 정리 (social_id 문자열로 삭제 → UUID 바이너리 바인딩 회피)
-            jdbcTemplate.update("DELETE FROM users WHERE id IN (SELECT user_id FROM user_details WHERE social_id = ?)", socialId)
+            jdbcTemplate.update(
+                "DELETE FROM users WHERE id IN (SELECT user_id FROM user_details WHERE social_id = ?)",
+                socialId,
+            )
             jdbcTemplate.update("DELETE FROM user_details WHERE social_id = ?", socialId)
         }
     }

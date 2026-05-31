@@ -18,5 +18,6 @@ class OAuthClientRegistry(
                 require(duplicates.isEmpty()) { "중복 OAuthClient provider 등록: $duplicates" }
             }.mapValues { (_, list) -> list.single() }
 
-    fun resolve(provider: OAuthProvider): OAuthClient = byProvider[provider] ?: throw OAuthException.unsupportedProvider()
+    fun resolve(provider: OAuthProvider): OAuthClient =
+        byProvider[provider] ?: throw OAuthException.unsupportedProvider()
 }

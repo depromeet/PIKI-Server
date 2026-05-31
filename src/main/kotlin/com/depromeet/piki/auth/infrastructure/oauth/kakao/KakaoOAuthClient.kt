@@ -36,7 +36,9 @@ class KakaoOAuthClient(
         return OAuthUserInfo(
             provider = OAuthProvider.KAKAO,
             socialId = userInfo.id.toString(),
-            profileImage = userInfo.kakaoAccount.profile.profileImageUrl.ifBlank { null },
+            profileImage =
+                userInfo.kakaoAccount.profile.profileImageUrl
+                    .ifBlank { null },
         )
     }
 
