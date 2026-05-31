@@ -19,6 +19,19 @@ class ProductImage private constructor(
     val bytes: ByteArray
         get() = rawBytes.copyOf()
 
+    // 스토리지 object key 의 확장자. of() 가 SUPPORTED_MIME_TYPES 로 mimeType 을 보장하므로
+    // else 는 도달 불가한 불변식 위반(코드 버그)이다.
+    val extension: String
+        get() =
+            when (mimeType) {
+                "image/png" -> "png"
+                "image/jpeg" -> "jpg"
+                "image/webp" -> "webp"
+                "image/heic" -> "heic"
+                "image/heif" -> "heif"
+                else -> error("지원하지 않는 MIME 타입의 확장자를 요청했다: $mimeType")
+            }
+
     companion object {
         // 이미지 추출이 받아들이는 이미지 형식. Gemini Vision 지원 목록 기준.
         // https://ai.google.dev/gemini-api/docs/vision

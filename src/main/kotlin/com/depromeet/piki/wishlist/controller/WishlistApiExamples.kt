@@ -168,6 +168,16 @@ class WishlistApiExamples(
                                 detail = "아직 처리 중인 상품은 수정할 수 없습니다.",
                             ),
                     )
+                    add(
+                        status = HttpStatus.BAD_GATEWAY,
+                        name = "이미지 저장 실패",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.RETRYABLE,
+                                status = HttpStatus.BAD_GATEWAY,
+                                detail = "이미지 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+                            ),
+                    )
                 }
             }
             if (handlerMethod.binds(WishlistController::deleteWish)) {

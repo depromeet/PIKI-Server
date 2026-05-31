@@ -12,9 +12,6 @@ data class WishlistUpdateRequest(
     @field:Schema(description = "수정할 현재 판매가", example = "119000", nullable = true)
     @field:Min(value = 0, message = "가격은 0 이상이어야 합니다.")
     val currentPrice: Int? = null,
-    @field:Schema(description = "수정할 대표 이미지 URL", example = "https://cdn.example.com/p/512.jpg", nullable = true)
-    @field:Size(max = 2048, message = "이미지 URL 은 2048자를 초과할 수 없습니다.")
-    val imageUrl: String? = null,
     @field:Schema(description = "수정할 통화 코드 (ISO 4217)", example = "KRW", nullable = true)
     @field:Size(max = 8, message = "통화 코드는 8자를 초과할 수 없습니다.")
     val currency: String? = null,
