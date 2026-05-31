@@ -32,11 +32,11 @@ class WishlistService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    // register 는 외부 LLM 호출(read-timeout 60s)을 동기로 기다리지 않는다.
+    // registerFromUrl 는 외부 LLM 호출(read-timeout 60s)을 동기로 기다리지 않는다.
     // link 만 가진 PROCESSING item 을 즉시 저장해 응답을 돌려주고(클라이언트는 "담는 중" 표시),
     // 실제 파싱은 itemParsingWorker 가 백그라운드에서 수행해 READY/FAILED 로 전이시킨다.
     // URL 형식 같은 계약 위반은 ProductLink.parse 가 동기로 거른다(400). 파싱 결과 실패만 FAILED 로 간다.
-    fun register(
+    fun registerFromUrl(
         rawUrl: String,
         userId: UUID,
     ): WishWithItem {
@@ -51,7 +51,7 @@ class WishlistService(
         return result
     }
 
-    // 이미지 등록은 register(link)와 같은 비동기 흐름 — 입력이 이미지(다건)일 뿐이다.
+    // 이미지 등록은 registerFromUrl(link)와 같은 비동기 흐름 — 입력이 이미지(다건)일 뿐이다.
     // 개수·형식을 동기로 검증(400)한 뒤 PROCESSING item·wish 를 배치 저장해 즉시 반환하고,
     // 실제 추출(Gemini·크롭·S3)은 imageParsingWorker 가 백그라운드에서 각 이미지를 병렬 파싱해
     // READY/FAILED 로 전이시킨다. 토너먼트 아이템 이미지 등록과 동일한 패턴이다.
