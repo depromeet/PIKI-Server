@@ -70,7 +70,7 @@ interface WishlistApi {
             ),
         ],
     )
-    fun register(
+    fun registerFromUrl(
         @Parameter(hidden = true) userId: UUID,
         request: WishlistRegisterRequest,
     ): ApiResponseBody<WishItemResponse>
