@@ -35,8 +35,6 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
         mockMvc()
             .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app"))
             .andExpect(status().isCreated)
-            .andExpect(jsonPath("$.status").value(201))
-            .andExpect(jsonPath("$.code").value("CREATED"))
             .andExpect(jsonPath("$.data.accessToken").isString)
             .andExpect(jsonPath("$.data.refreshToken").isString)
             .andExpect(jsonPath("$.data.user.id").isString)
@@ -65,7 +63,6 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
                     .header("X-Client-Type", "app")
                     .content(body),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.accessToken").isString)
             .andExpect(jsonPath("$.data.refreshToken").isString)
     }
@@ -79,8 +76,6 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body),
             ).andExpect(status().isUnauthorized)
-            .andExpect(jsonPath("$.status").value(401))
-            .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
     }
 
     @Test
@@ -92,7 +87,6 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
     }
 
     @Test
@@ -113,7 +107,6 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer $accessToken"),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
     }
 
     @Test

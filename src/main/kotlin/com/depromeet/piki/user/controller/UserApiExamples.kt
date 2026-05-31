@@ -35,7 +35,6 @@ class UserApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.UNAUTHORIZED,
-                                    status = HttpStatus.UNAUTHORIZED,
                                 ),
                         )
                     }
@@ -53,7 +52,6 @@ class UserApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    status = HttpStatus.BAD_REQUEST,
                                     detail = "닉네임은 1자 이상 10자 이하여야 한다.",
                                 ),
                         )
@@ -63,7 +61,6 @@ class UserApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.CONFLICT,
-                                    status = HttpStatus.CONFLICT,
                                     detail = "이미 사용 중인 닉네임입니다.",
                                 ),
                         )
@@ -87,7 +84,6 @@ class UserApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    status = HttpStatus.BAD_REQUEST,
                                     detail = "nickname 은 10자 이하여야 한다.",
                                 ),
                         )

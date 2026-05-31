@@ -70,8 +70,6 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
                 get("/api/v1/users/me")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.GUEST)}"),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.code").value("OK"))
             .andExpect(jsonPath("$.data.id").value(userId.toString()))
             .andExpect(jsonPath("$.data.nickname").value("테스트닉네임"))
             .andExpect(jsonPath("$.data.identityType").value("GUEST"))
@@ -150,7 +148,6 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(myUserId)}")
                     .content(body),
             ).andExpect(status().isConflict)
-            .andExpect(jsonPath("$.code").value("CONFLICT"))
     }
 
     @Test

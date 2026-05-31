@@ -73,7 +73,6 @@ class AuthApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    status = HttpStatus.BAD_REQUEST,
                                     detail = "리프레시 토큰이 필요합니다.",
                                 ),
                         )
@@ -83,7 +82,6 @@ class AuthApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.UNAUTHORIZED,
-                                    status = HttpStatus.UNAUTHORIZED,
                                     detail = "유효하지 않은 토큰입니다.",
                                 ),
                         )
@@ -102,7 +100,6 @@ class AuthApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.UNAUTHORIZED,
-                                    status = HttpStatus.UNAUTHORIZED,
                                 ),
                         )
                     }
@@ -137,7 +134,6 @@ class AuthApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    status = HttpStatus.BAD_REQUEST,
                                     detail = "nickname: must not be blank",
                                 ),
                         )
@@ -173,7 +169,6 @@ class AuthApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.NOT_FOUND,
-                                    status = HttpStatus.NOT_FOUND,
                                 ),
                         )
                         add(
@@ -182,7 +177,6 @@ class AuthApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.CONFLICT,
-                                    status = HttpStatus.CONFLICT,
                                 ),
                         )
                     }

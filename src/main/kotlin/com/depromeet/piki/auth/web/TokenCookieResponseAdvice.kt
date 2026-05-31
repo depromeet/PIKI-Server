@@ -88,10 +88,9 @@ class TokenCookieResponseAdvice(
         data: TokenCarrying,
     ): ApiResponseBody<*> =
         ApiResponseBody(
-            status = original.status,
             data = data.withoutBodyTokens(),
             detail = original.detail,
-            code = original.code,
+            traceId = original.traceId,
             pageResponse = original.pageResponse,
         )
 }

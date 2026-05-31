@@ -160,8 +160,6 @@ class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
         mockMvc()
             .perform(post("/api/v1/auth/token/refresh").contentType(MediaType.APPLICATION_JSON))
             .andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test

@@ -19,7 +19,7 @@ class GlobalExceptionHandler {
         val category = if (e is HttpMappable) e.category else ErrorCategory.SERVER_ERROR
         return ResponseEntity
             .status(status)
-            .body(ApiResponseBody.fail(category, status, e.message))
+            .body(ApiResponseBody.fail(category, e.message))
     }
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
@@ -34,7 +34,7 @@ class GlobalExceptionHandler {
         log.info("[ValidationException] {}", e.bindingResult.fieldErrors)
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
-            .body(ApiResponseBody.fail(ErrorCategory.INVALID_INPUT, HttpStatus.BAD_REQUEST, detail))
+            .body(ApiResponseBody.fail(ErrorCategory.INVALID_INPUT, detail))
     }
 
     @ExceptionHandler(IllegalArgumentException::class)
@@ -42,7 +42,7 @@ class GlobalExceptionHandler {
         log.info("[IllegalArgumentException] {}", e.message)
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
-            .body(ApiResponseBody.fail(ErrorCategory.INVALID_INPUT, HttpStatus.BAD_REQUEST, e.message))
+            .body(ApiResponseBody.fail(ErrorCategory.INVALID_INPUT, e.message))
     }
 
     @ExceptionHandler(Exception::class)
@@ -50,6 +50,6 @@ class GlobalExceptionHandler {
         log.error("[UnexpectedException] {}", e.message, e)
         return ResponseEntity
             .status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(ApiResponseBody.fail(ErrorCategory.SERVER_ERROR, HttpStatus.INTERNAL_SERVER_ERROR))
+            .body(ApiResponseBody.fail(ErrorCategory.SERVER_ERROR))
     }
 }

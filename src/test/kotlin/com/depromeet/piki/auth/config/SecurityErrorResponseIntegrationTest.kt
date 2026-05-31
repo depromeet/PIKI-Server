@@ -21,7 +21,7 @@ import java.util.UUID
 // Spring Security 필터 체인은 DispatcherServlet 이전이라 GlobalExceptionHandler 가 잡지 못하고,
 // 401·403 응답은 EntryPoint·AccessDeniedHandler 에서만 작성된다. 본문이 빈 채로 내려가던 회귀
 // (#213) 가 다시 새지 않도록, 필터 단 401·403 응답이 다른 엔드포인트와 같은 ApiResponseBody
-// contract (status·code·detail) 로 내려가는지 한 자리에서 검증한다.
+// contract (detail 등) 로 내려가는지 한 자리에서 검증한다.
 class SecurityErrorResponseIntegrationTest : IntegrationTestSupport() {
     @Autowired
     private lateinit var webApplicationContext: WebApplicationContext
@@ -35,8 +35,6 @@ class SecurityErrorResponseIntegrationTest : IntegrationTestSupport() {
             .perform(post("/api/v1/wishlists"))
             .andExpect(status().isUnauthorized)
             .andExpect(content().contentTypeCompatibleWith("application/json"))
-            .andExpect(jsonPath("$.status").value(401))
-            .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
             .andExpect(jsonPath("$.detail", notNullValue()))
     }
 
@@ -48,8 +46,6 @@ class SecurityErrorResponseIntegrationTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer invalid.token.value"),
             ).andExpect(status().isUnauthorized)
             .andExpect(content().contentTypeCompatibleWith("application/json"))
-            .andExpect(jsonPath("$.status").value(401))
-            .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
             .andExpect(jsonPath("$.detail", notNullValue()))
     }
 
@@ -63,8 +59,6 @@ class SecurityErrorResponseIntegrationTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer $memberToken"),
             ).andExpect(status().isForbidden)
             .andExpect(content().contentTypeCompatibleWith("application/json"))
-            .andExpect(jsonPath("$.status").value(403))
-            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
             .andExpect(jsonPath("$.detail", notNullValue()))
     }
 
