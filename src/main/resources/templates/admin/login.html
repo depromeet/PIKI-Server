@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PIKI 백오피스 로그인</title>
     <link rel="stylesheet" th:href="@{/admin-assets/backoffice.css}">
+    <!-- 빈 favicon. 없으면 브라우저가 /favicon.ico 를 자동 요청 → admin 체인 밖이라 JWT 체인이 401 을 낸다. data:, 로 차단. -->
+    <link rel="icon" href="data:,">
 </head>
 <body>
 <div class="login-container">
