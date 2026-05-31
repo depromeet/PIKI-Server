@@ -44,7 +44,7 @@ interface OAuthApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (code+redirectUri 도 accessToken 도 없음 · 지원하지 않는 provider)",
+                description = "잘못된 요청 (code+redirectUri 도 accessToken 도 없음 · accessToken 과 code 를 동시 전달 · 지원하지 않는 provider)",
                 content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
             ApiResponse(

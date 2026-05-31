@@ -167,6 +167,17 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `잘못된 요청 - accessToken 과 code 를 동시에 보내면 400`() {
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/google")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(loginBody("accessToken" to "t", "code" to "c", "redirectUri" to "https://app/callback")),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+    }
+
+    @Test
     fun `미지원 provider - apple 은 400`() {
         mockMvc()
             .perform(
