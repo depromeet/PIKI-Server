@@ -135,6 +135,8 @@ class TournamentServiceTest {
         ): List<Wish> = emptyList()
 
         override fun findById(id: Long): Wish? = null
+
+        override fun findAllByIds(ids: List<Long>): List<Wish> = emptyList()
     }
 
     private class TestUserRepository : UserRepository {

@@ -148,6 +148,23 @@ class WishlistService(
         wish.delete()
     }
 
+    // 여러 위시를 한 번에 삭제한다(all-or-nothing). 단건 삭제와 같은 검증을 집합으로 확장한 것이라
+    // 존재(404) → 소유(403) 순서·의미가 단건과 일치한다. @Transactional 이라 검증 실패 시 아무것도 지워지지 않는다.
+    @Transactional
+    fun deleteWishes(
+        userId: UUID,
+        wishIds: List<Long>,
+    ) {
+        // 중복 id 는 같은 위시를 가리킬 뿐이므로 정규화한다. 정규화 후 개수가 존재 검증의 기준이 된다.
+        val distinctIds = wishIds.distinct()
+        val wishes = wishRepository.findAllByIds(distinctIds)
+        // 하나라도 없으면(이미 삭제됨 포함) 전체를 404 로 막는다 — 단건의 findById null → notFound 와 같은 계약.
+        if (wishes.size != distinctIds.size) throw WishException.notFound()
+        // 하나라도 본인 소유가 아니면 전체를 403 으로 막는다. 도메인이 자기방어한다.
+        wishes.forEach { it.verifyOwnedBy(userId) }
+        wishes.forEach { it.delete() }
+    }
+
     companion object {
         private const val MIN_IMAGE_COUNT = 1
         private const val MAX_IMAGE_COUNT = 5

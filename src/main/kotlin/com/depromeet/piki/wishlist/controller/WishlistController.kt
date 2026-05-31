@@ -3,6 +3,7 @@ package com.depromeet.piki.wishlist.controller
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.common.response.PageResponse
 import com.depromeet.piki.wishlist.controller.dto.WishItemResponse
+import com.depromeet.piki.wishlist.controller.dto.WishlistBulkDeleteRequest
 import com.depromeet.piki.wishlist.controller.dto.WishlistRegisterRequest
 import com.depromeet.piki.wishlist.controller.dto.WishlistUpdateRequest
 import com.depromeet.piki.wishlist.service.WishlistService
@@ -97,6 +98,15 @@ class WishlistController(
         @PathVariable wishId: Long,
     ): ApiResponseBody<Unit> {
         wishlistService.deleteWish(userId = userId, wishId = wishId)
+        return ApiResponseBody.ok()
+    }
+
+    @DeleteMapping
+    override fun deleteWishes(
+        @AuthenticationPrincipal userId: UUID,
+        @Valid @RequestBody request: WishlistBulkDeleteRequest,
+    ): ApiResponseBody<Unit> {
+        wishlistService.deleteWishes(userId = userId, wishIds = request.wishIds)
         return ApiResponseBody.ok()
     }
 }

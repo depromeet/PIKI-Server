@@ -2,6 +2,7 @@ package com.depromeet.piki.wishlist.controller
 
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.wishlist.controller.dto.WishItemResponse
+import com.depromeet.piki.wishlist.controller.dto.WishlistBulkDeleteRequest
 import com.depromeet.piki.wishlist.controller.dto.WishlistRegisterRequest
 import com.depromeet.piki.wishlist.controller.dto.WishlistUpdateRequest
 import io.swagger.v3.oas.annotations.Operation
@@ -317,6 +318,74 @@ interface WishlistApi {
     fun deleteWish(
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "위시 항목 ID", example = "1024") wishId: Long,
+    ): ApiResponseBody<Unit>
+
+    @Operation(
+        summary = "위시리스트 다중 삭제",
+        description = """
+            위시 항목 여러 개를 한 번에 삭제한다(soft delete). 본인 위시만 삭제 가능하다.
+            all-or-nothing: 요청 목록 중 하나라도 존재하지 않거나(이미 삭제됨 포함) 본인 소유가 아니면
+            아무것도 삭제하지 않고 각각 404·403 으로 응답한다. 중복 ID 는 무시한다.
+            삭제된 항목은 조회 결과에서 제외된다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "삭제 성공 (data 없음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "400",
+                description = "잘못된 요청 (wishIds 가 비어 있음 · 100개 초과)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "권한 없음 (GUEST 권한으로 접근 불가 · MEMBER 필요, 또는 목록에 본인 위시가 아닌 항목이 섞여 있음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "목록에 존재하지 않는 위시 항목이 섞여 있음 (삭제된 항목 포함)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun deleteWishes(
+        @Parameter(hidden = true) userId: UUID,
+        request: WishlistBulkDeleteRequest,
     ): ApiResponseBody<Unit>
 
     @Operation(
