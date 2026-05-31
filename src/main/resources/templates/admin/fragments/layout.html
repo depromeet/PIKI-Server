@@ -21,6 +21,8 @@
     <nav class="bo-nav">
         <a th:href="@{/admin}" th:classappend="${active == 'home'} ? ' active' : ''">대시보드</a>
         <a th:href="@{/admin/items}" th:classappend="${active == 'items'} ? ' active' : ''">실험 데이터</a>
+        <a th:href="@{/admin/feature-requests}"
+           th:classappend="${active == 'feature-requests'} ? ' active' : ''">기능 요청</a>
     </nav>
     <form th:action="@{/admin/logout}" method="post" class="bo-logout">
         <button type="submit">로그아웃</button>

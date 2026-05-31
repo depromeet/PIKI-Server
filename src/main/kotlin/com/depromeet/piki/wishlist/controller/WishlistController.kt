@@ -31,11 +31,11 @@ class WishlistController(
 ) : WishlistApi {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    override fun register(
+    override fun registerFromUrl(
         @AuthenticationPrincipal userId: UUID,
         @Valid @RequestBody request: WishlistRegisterRequest,
     ): ApiResponseBody<WishItemResponse> {
-        val result = wishlistService.register(rawUrl = request.url, userId = userId)
+        val result = wishlistService.registerFromUrl(rawUrl = request.url, userId = userId)
         return ApiResponseBody.created(WishItemResponse.from(result.wish, result.item))
     }
 

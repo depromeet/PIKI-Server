@@ -12,7 +12,7 @@
   - **인라인 review thread**: actionable 코멘트. `reviewThreads` 로 조회되고 개별 resolve 가능.
   - **review body 안에 접힌 nitpick / 추가 코멘트**: `🧹 Nitpick comments (N)` 같은 `<details>` 블록. `reviewThreads` 에 **안 잡힌다** — `pulls/{PR}/reviews` 의 review body 를 따로 조회해야 보인다. 이걸 빠뜨리면 nitpick 을 통째로 놓친다 (resolve 대상은 아니지만 평가는 해야 한다).
 - **author 매칭은 `coderabbitai` 로 시작하는지(`startswith`)로 한다.** GitHub 의 두 API 가 같은 봇을 다르게 표기한다 — GraphQL `reviewThreads` 의 `author.login` 은 `coderabbitai`, REST `pulls/{PR}/reviews` 의 `user.login` 은 `coderabbitai[bot]`. 어느 한쪽 값으로 고정하면 다른 API 에서 매칭이 깨져 봇을 사람으로 오인하므로(예: reviewThreads 를 `coderabbitai[bot]` 로 비교하면 영원히 안 잡힘), 양쪽 모두 `coderabbitai` 로 시작하는지로 매칭한다.
-- **사람 리뷰어 thread 는 자동 reply 하지 않는다.** author 가 `coderabbitai` 로 시작하지 않으면 (즉 사람 리뷰면) reply / resolve 둘 다 모델이 건드리지 않는다 — 작성자(`@me`)가 직접 의도·뉘앙스를 담아 답한다. 1단계 카운트에서 1건 이상이면 3~4단계(thread reply/resolve)는 건너뛰고 사용자에게 "사람 리뷰 N건 있습니다" 만 알린다. (단 2.5단계 nitpick 조회·평가는 사람 리뷰 여부와 무관하게 수행한다.)
+- **이 스킬은 CodeRabbit thread/nitpick 만 다룬다 — 사람 리뷰는 조회·카운트·보고 어느 것도 하지 않는다.** 아래 모든 조회는 author 가 `coderabbitai` 로 시작하는 코멘트로 한정한다(각 절차의 `startswith("coderabbitai")` 필터). 사람 리뷰 thread 는 작성자(`@me`)가 직접 의도·뉘앙스를 담아 답할 영역이므로, 스킬이 그 존재를 들여다보거나 reply / resolve 하지 않는다.
 
 ## 절차
 
@@ -25,23 +25,7 @@ echo "PR #${PR}"
 
 PR 이 없으면 (`gh pr view` 실패) 먼저 `/pr` 로 PR 을 만들라고 안내하고 중단한다.
 
-### 1. 사람 리뷰 thread 카운트 — 1 이상이면 3~4단계 건너뛴다
-
-```bash
-HUMAN_THREADS=$(gh api graphql -f query='
-  query { repository(owner: "depromeet", name: "PIKI-Server") {
-    pullRequest(number: '"$PR"') {
-      reviewThreads(first: 50) { nodes {
-        comments(first: 1) { nodes { author { login } } }
-      } }
-    }
-  }}' --jq '[.data.repository.pullRequest.reviewThreads.nodes[]
-             | select(((.comments.nodes[0].author.login // "") | startswith("coderabbitai")) | not)] | length')
-echo "사람 리뷰 thread: ${HUMAN_THREADS}건"
-# HUMAN_THREADS > 0 → 3~4단계(thread reply/resolve) 건너뛰고 사용자에게 알림 (2.5 nitpick 은 그대로)
-```
-
-### 2. CodeRabbit 인라인 thread 조회 — author `coderabbitai*` 필터
+### 1. CodeRabbit 인라인 thread 조회 — author `coderabbitai*` 필터
 
 ```bash
 gh api graphql -f query='
@@ -57,7 +41,7 @@ gh api graphql -f query='
             | {id, isResolved, path, line}'
 ```
 
-### 2.5. review body 의 nitpick·추가 코멘트 조회 — reviewThreads 에 안 잡히므로 필수
+### 1.5. review body 의 nitpick·추가 코멘트 조회 — reviewThreads 에 안 잡히므로 필수
 
 ```bash
 gh api repos/depromeet/PIKI-Server/pulls/$PR/reviews \
@@ -66,7 +50,7 @@ gh api repos/depromeet/PIKI-Server/pulls/$PR/reviews \
 
 출력된 body 를 읽고 `🧹 Nitpick comments` 등 접힌 코멘트를 건별 평가한다. nitpick 은 thread 가 아니라 **resolve 대상이 아니므로**, 반영하면 커밋 + PR `## Updates`(또는 PR 일반 코멘트)로 처리 사실을 남긴다.
 
-### 3. 각 CodeRabbit thread 에 reply
+### 2. 각 CodeRabbit thread 에 reply
 
 ```bash
 gh api graphql -f query='
@@ -77,7 +61,7 @@ gh api graphql -f query='
   }' -F t="<thread id>" -f b="<reply 내용>"
 ```
 
-### 4. 자동 resolve 안 된 thread 면 resolve
+### 3. 자동 resolve 안 된 thread 면 resolve
 
 CodeRabbit 은 자동 resolve 하는 경우가 있어 `isResolved` 확인 후 분기한다.
 
