@@ -515,6 +515,134 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `여러 위시를 다중 삭제하면 200 이고 모두 조회에서 제외된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val keptWishId = seedReadyWish(userId, "https://shop.example.com/products/1", "남길 상품")
+        val deletedWishId1 = seedReadyWish(userId, "https://shop.example.com/products/2", "지울 상품1")
+        val deletedWishId2 = seedReadyWish(userId, "https://shop.example.com/products/3", "지울 상품2")
+        val body = objectMapper.writeValueAsString(mapOf("wishIds" to listOf(deletedWishId1, deletedWishId2)))
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader)
+                    .content(body),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.code").value("OK"))
+
+        // 다중 삭제된 둘은 빠지고 남긴 하나만 조회된다.
+        mockMvc
+            .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].wish.id").value(keptWishId))
+    }
+
+    @Test
+    fun `다중 삭제 목록에 남의 위시가 섞이면 403 이고 아무것도 삭제되지 않는다`() {
+        val mockMvc = buildMockMvc()
+        val ownerId = UUID.randomUUID()
+        val otherId = UUID.randomUUID()
+        insertMember(ownerId)
+        insertMember(otherId)
+        val myWishId = seedReadyWish(ownerId, "https://shop.example.com/products/1", "내 상품")
+        val othersWishId = seedReadyWish(otherId, "https://shop.example.com/products/2", "남의 상품")
+        val body = objectMapper.writeValueAsString(mapOf("wishIds" to listOf(myWishId, othersWishId)))
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(ownerId)}")
+                    .content(body),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+
+        // all-or-nothing: 내 위시도 지워지지 않고 그대로 남아 있다.
+        mockMvc
+            .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(ownerId)}"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].wish.id").value(myWishId))
+    }
+
+    @Test
+    fun `다중 삭제 목록에 존재하지 않는 위시가 섞이면 404 이고 아무것도 삭제되지 않는다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val existingWishId = seedReadyWish(userId, "https://shop.example.com/products/1", "존재하는 상품")
+        val body = objectMapper.writeValueAsString(mapOf("wishIds" to listOf(existingWishId, 99999999L)))
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader)
+                    .content(body),
+            ).andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+
+        // all-or-nothing: 존재하던 위시도 지워지지 않고 그대로 남아 있다.
+        mockMvc
+            .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].wish.id").value(existingWishId))
+    }
+
+    @Test
+    fun `다중 삭제 요청의 wishIds 가 비어 있으면 400 BAD_REQUEST 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val body = objectMapper.writeValueAsString(mapOf("wishIds" to emptyList<Long>()))
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}")
+                    .content(body),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+    }
+
+    @Test
+    fun `다중 삭제에 중복 id 를 보내도 정상 삭제되고 200 이 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "지울 상품")
+        // 같은 id 를 중복으로 보내도 서비스의 distinct 정규화로 존재 검증을 통과한다(404 로 떨어지지 않는다).
+        val body = objectMapper.writeValueAsString(mapOf("wishIds" to listOf(wishId, wishId)))
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader)
+                    .content(body),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+
+        mockMvc
+            .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(0))
+    }
+
+    @Test
     fun `다건 이미지로 등록하면 201 과 함께 PROCESSING 항목이 개수만큼 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
