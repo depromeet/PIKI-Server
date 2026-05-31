@@ -23,4 +23,13 @@ class OAuthClientRegistryTest {
 
         assertFailsWith<OAuthException> { registry.resolve(OAuthProvider.APPLE) }
     }
+
+    @Test
+    fun `동일 provider 를 두 번 등록하면 require 로 fail-fast 한다`() {
+        assertFailsWith<IllegalArgumentException> {
+            OAuthClientRegistry(
+                listOf(StubOAuthClient(OAuthProvider.KAKAO), StubOAuthClient(OAuthProvider.KAKAO)),
+            )
+        }
+    }
 }

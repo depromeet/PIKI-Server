@@ -188,7 +188,8 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
                             .header("X-Client-Type", "app")
                             .header(HttpHeaders.AUTHORIZATION, "Bearer ${guest.accessToken}")
                             .content(body),
-                    ).andReturn()
+                    ).andExpect(status().isOk)
+                    .andReturn()
                     .response.contentAsString,
             )
 
@@ -272,5 +273,6 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
             .andExpect(cookie().exists("access_token"))
             .andExpect(cookie().exists("refresh_token"))
             .andExpect(jsonPath("$.data.accessToken").value(nullValue()))
+            .andExpect(jsonPath("$.data.refreshToken").value(nullValue()))
     }
 }
