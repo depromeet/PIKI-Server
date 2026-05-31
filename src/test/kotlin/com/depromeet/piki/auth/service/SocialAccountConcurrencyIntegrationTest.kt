@@ -50,7 +50,9 @@ class SocialAccountConcurrencyIntegrationTest : IntegrationTestSupport() {
                         .onFailure { errors.add(it) }
                 }
             }
-            ready.await(5, TimeUnit.SECONDS)
+            // 모든 스레드가 시작 게이트에 도달했는지 강제 검증 — 안 하면 느린 CI 에서 일부가 준비 전에
+            // start 가 풀려 동시성이 약해지고 race 가 거짓양성으로 통과할 수 있다.
+            assertTrue(ready.await(5, TimeUnit.SECONDS), "모든 스레드가 시작 게이트에 준비돼야 한다")
             start.countDown() // 동시 출발
             pool.shutdown()
             assertTrue(pool.awaitTermination(15, TimeUnit.SECONDS), "동시 작업이 시간 내 끝나야 한다")
