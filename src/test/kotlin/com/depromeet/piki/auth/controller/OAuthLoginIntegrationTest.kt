@@ -4,6 +4,8 @@ import com.depromeet.piki.auth.infrastructure.oauth.OAuthProvider
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthUserInfo
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubOAuthClient
+import com.depromeet.piki.wishlist.domain.Wish
+import com.depromeet.piki.wishlist.repository.WishRepository
 import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -21,6 +23,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
+import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 
@@ -40,6 +43,9 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
     @Qualifier("googleOAuthClient")
     private lateinit var googleOAuthClient: StubOAuthClient
 
+    @Autowired
+    private lateinit var wishRepository: WishRepository
+
     private fun mockMvc(): MockMvc =
         MockMvcBuilders
             .webAppContextSetup(webApplicationContext)
@@ -50,7 +56,10 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
 
     private fun userIdOf(json: String): String = objectMapper.readTree(json).at("/data/user/id").asString()
 
-    private data class Guest(val accessToken: String, val userId: String)
+    private data class Guest(
+        val accessToken: String,
+        val userId: String,
+    )
 
     private fun createGuest(): Guest {
         val json =
@@ -65,7 +74,8 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
 
     @Test
     fun `신규 소셜 - app 으로 v2 로그인하면 MEMBER 로 가입되고 body 토큰이 온다`() {
-        googleOAuthClient.fetchByAccessTokenStub = { OAuthUserInfo(OAuthProvider.GOOGLE, "google_fresh", "https://img/p.jpg") }
+        googleOAuthClient.fetchByAccessTokenStub =
+            { OAuthUserInfo(OAuthProvider.GOOGLE, "google_fresh", "https://img/p.jpg") }
 
         mockMvc()
             .perform(
@@ -87,12 +97,20 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
 
         val first =
             mockMvc()
-                .perform(post("/api/v1/auth/login/kakao").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app").content(body))
-                .andReturn().response.contentAsString
+                .perform(
+                    post(
+                        "/api/v1/auth/login/kakao",
+                    ).contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app").content(body),
+                ).andReturn()
+                .response.contentAsString
         val second =
             mockMvc()
-                .perform(post("/api/v1/auth/login/kakao").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app").content(body))
-                .andReturn().response.contentAsString
+                .perform(
+                    post(
+                        "/api/v1/auth/login/kakao",
+                    ).contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app").content(body),
+                ).andReturn()
+                .response.contentAsString
 
         assertEquals(userIdOf(first), userIdOf(second))
     }
@@ -115,6 +133,36 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `게스트 연결 - 승격 후에도 게스트가 만든 위시(데이터)가 그대로 승계된다`() {
+        val guest = createGuest()
+        val guestId = UUID.fromString(guest.userId)
+        // 게스트 상태에서 위시 1건 생성 (user_id = 게스트 id). 승격은 id 를 유지하므로 이 행이 그대로 따라와야 한다.
+        wishRepository.save(Wish(userId = guestId, itemId = 1L))
+        kakaoOAuthClient.fetchByAccessTokenStub = { OAuthUserInfo(OAuthProvider.KAKAO, "kakao_inherit", null) }
+
+        val resultId =
+            userIdOf(
+                mockMvc()
+                    .perform(
+                        post("/api/v1/auth/login/kakao")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .header("X-Client-Type", "app")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer ${guest.accessToken}")
+                            .content(loginBody("accessToken" to "t")),
+                    ).andExpect(status().isOk)
+                    .andExpect(jsonPath("$.data.user.identityType").value("MEMBER"))
+                    .andReturn()
+                    .response.contentAsString,
+            )
+
+        // 승격된 멤버는 게스트와 같은 id 라, 그 id 로 만든 위시가 그대로 승계된다
+        assertEquals(guest.userId, resultId)
+        val wishes = wishRepository.findPage(guestId, null, 10)
+        assertEquals(1, wishes.size)
+        assertEquals(guestId, wishes.first().userId)
+    }
+
+    @Test
     fun `소셜 중복 - 게스트가 이미 타계정에 연결된 소셜로 로그인하면 그 기존 계정으로 로그인된다(게스트 포기)`() {
         kakaoOAuthClient.fetchByAccessTokenStub = { OAuthUserInfo(OAuthProvider.KAKAO, "kakao_dup", null) }
         val body = loginBody("accessToken" to "t")
@@ -122,8 +170,12 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
         val userAId =
             userIdOf(
                 mockMvc()
-                    .perform(post("/api/v1/auth/login/kakao").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app").content(body))
-                    .andReturn().response.contentAsString,
+                    .perform(
+                        post(
+                            "/api/v1/auth/login/kakao",
+                        ).contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app").content(body),
+                    ).andReturn()
+                    .response.contentAsString,
             )
 
         val guest = createGuest()
@@ -136,7 +188,8 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
                             .header("X-Client-Type", "app")
                             .header(HttpHeaders.AUTHORIZATION, "Bearer ${guest.accessToken}")
                             .content(body),
-                    ).andReturn().response.contentAsString,
+                    ).andReturn()
+                    .response.contentAsString,
             )
 
         assertEquals(userAId, resultId)
@@ -181,7 +234,11 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
     fun `미지원 provider - apple 은 400`() {
         mockMvc()
             .perform(
-                post("/api/v1/auth/login/apple").contentType(MediaType.APPLICATION_JSON).content(loginBody("accessToken" to "t")),
+                post("/api/v1/auth/login/apple").contentType(MediaType.APPLICATION_JSON).content(
+                    loginBody(
+                        "accessToken" to "t",
+                    ),
+                ),
             ).andExpect(status().isBadRequest)
     }
 
@@ -191,7 +248,11 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
 
         mockMvc()
             .perform(
-                post("/api/v1/auth/login/google").contentType(MediaType.APPLICATION_JSON).content(loginBody("accessToken" to "t")),
+                post("/api/v1/auth/login/google").contentType(MediaType.APPLICATION_JSON).content(
+                    loginBody(
+                        "accessToken" to "t",
+                    ),
+                ),
             ).andExpect(status().isBadGateway)
             .andExpect(jsonPath("$.status").value(502))
     }
@@ -202,7 +263,11 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
 
         mockMvc()
             .perform(
-                post("/api/v1/auth/login/google").contentType(MediaType.APPLICATION_JSON).content(loginBody("accessToken" to "t")),
+                post("/api/v1/auth/login/google").contentType(MediaType.APPLICATION_JSON).content(
+                    loginBody(
+                        "accessToken" to "t",
+                    ),
+                ),
             ).andExpect(status().isOk)
             .andExpect(cookie().exists("access_token"))
             .andExpect(cookie().exists("refresh_token"))
