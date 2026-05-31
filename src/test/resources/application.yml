@@ -4,6 +4,12 @@ spring:
   config:
     import: optional:file:.env.test[.properties]
 
+# 운영 OAuthClientConfig 의 실제 클라이언트 빈을 테스트 컨텍스트에서는 끈다.
+# 그러면 IntegrationStubs 의 stub(googleOAuthClient/kakaoOAuthClient)만 남아 외부 호출 없이 격리된다.
+oauth:
+  client:
+    enabled: false
+
 # 컨텍스트 로딩만 통과시키기 위한 더미 fallback. 실제 Gemini 호출 테스트는 @Disabled 또는
 # @EnabledIfEnvironmentVariable 로 별도 격리되어 있으므로 CI 에서 GEMINI_API_KEY 가 없어도
 # 컨텍스트 로딩 자체는 깨지지 않는다.

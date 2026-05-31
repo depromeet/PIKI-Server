@@ -81,6 +81,26 @@ class UserService(
         }
     }
 
+    // 소셜 신규 가입용 MEMBER 생성. 닉네임은 게스트와 동일하게 자동 생성(fill)하고 사용자가 나중에 수정한다.
+    // 프로필 이미지는 provider 가 준 게 있으면 쓰고, 없으면(동의 거부 등) dicebear 기본 아바타.
+    @Transactional
+    fun createSocialUser(profileImage: String?): User {
+        val id = UUID.randomUUID()
+        val nickname = generateUniqueGuestNickname()
+        return try {
+            userRepository.save(
+                User(
+                    id = id,
+                    nickname = nickname,
+                    profileImage = profileImage ?: dicebearUrl(id),
+                    identityType = IdentityType.MEMBER,
+                ),
+            )
+        } catch (e: DataIntegrityViolationException) {
+            throw UserException.duplicateNickname()
+        }
+    }
+
     @Transactional(readOnly = true)
     fun findById(userId: UUID): User = userRepository.findById(userId) ?: throw UserException.notFound(userId)
 

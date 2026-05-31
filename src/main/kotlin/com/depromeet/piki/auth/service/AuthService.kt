@@ -50,6 +50,9 @@ class AuthService(
         refreshTokenStore.delete(userId)
     }
 
+    // 이미 확정된 user 에게 토큰 발급. 소셜 로그인(OAuthLoginService)이 resolve 한 user 로 재사용한다.
+    fun issueTokensFor(user: User): SignupResult = SignupResult(tokenPair = issueTokenPair(user), user = user)
+
     private fun issueTokenPair(user: User): TokenPair {
         val accessToken = jwtProvider.generateAccessToken(user.id, user.identityType)
         val refreshToken = jwtProvider.generateRefreshToken(user.id)

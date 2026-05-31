@@ -38,8 +38,7 @@ class GoogleOAuthClient(
         return OAuthUserInfo(
             provider = OAuthProvider.GOOGLE,
             socialId = userInfo.id,
-            email = userInfo.email,
-            profileImage = userInfo.picture,
+            profileImage = userInfo.picture.ifBlank { null },
         )
     }
 
