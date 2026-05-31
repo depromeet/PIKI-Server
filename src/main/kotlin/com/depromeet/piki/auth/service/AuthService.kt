@@ -51,7 +51,11 @@ class AuthService(
     }
 
     // 이미 확정된 user 에게 토큰 발급. 소셜 로그인(OAuthLoginService)이 resolve 한 user 로 재사용한다.
-    fun issueTokensFor(user: User): SignupResult = SignupResult(tokenPair = issueTokenPair(user), user = user)
+    // 탈퇴 유저가 소셜 로그인으로 다시 토큰을 받지 못하도록 막는다 (refresh/issueTokenForExistingUser 와 동일 가드).
+    fun issueTokensFor(user: User): SignupResult {
+        user.deletedAt?.let { throw UserException.deletedUser(user.id) }
+        return SignupResult(tokenPair = issueTokenPair(user), user = user)
+    }
 
     private fun issueTokenPair(user: User): TokenPair {
         val accessToken = jwtProvider.generateAccessToken(user.id, user.identityType)
