@@ -7,10 +7,8 @@ import java.util.UUID
 
 // 아이템 파싱 실패 알림. 수신자 규칙은 완료 알림과 동일하다.
 @Component
-class ItemParsingFailedHandler : NotificationEventHandler<ItemParsingFailed>(
-    ItemParsingFailed::class,
-    NotificationType.ITEM_PARSING_FAILED,
-) {
+class ItemParsingFailedHandler :
+    NotificationEventHandler<ItemParsingFailed>(NotificationType.ITEM_PARSING_FAILED) {
     override fun resolveRefId(event: ItemParsingFailed): Long = event.itemId
 
     // TODO(#236 수신자 정책 합의): itemId 역조회로 수신자 결정 후 구현. (ItemParsingCompletedHandler 와 동일 보류 사유)

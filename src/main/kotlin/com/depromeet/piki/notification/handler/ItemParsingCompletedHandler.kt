@@ -7,10 +7,8 @@ import java.util.UUID
 
 // 아이템 파싱 완료 알림. itemId 역조회로 수신자를 정한다.
 @Component
-class ItemParsingCompletedHandler : NotificationEventHandler<ItemParsingCompleted>(
-    ItemParsingCompleted::class,
-    NotificationType.ITEM_PARSING_COMPLETED,
-) {
+class ItemParsingCompletedHandler :
+    NotificationEventHandler<ItemParsingCompleted>(NotificationType.ITEM_PARSING_COMPLETED) {
     override fun resolveRefId(event: ItemParsingCompleted): Long = event.itemId
 
     // TODO(#236 수신자 정책 합의): itemId 역조회로 수신자 결정 후 구현.
