@@ -1,7 +1,9 @@
 package com.depromeet.piki.auth.controller
 
 import com.depromeet.piki.auth.controller.dto.GuestCreateResponse
+import com.depromeet.piki.auth.controller.dto.LogoutResponse
 import com.depromeet.piki.auth.controller.dto.TokenRefreshResponse
+import com.depromeet.piki.auth.service.dto.TokenPair
 import com.depromeet.piki.common.exception.ErrorCategory
 import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
@@ -27,12 +29,10 @@ class AuthApiExamples(
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.CREATED,
-                            name = "게스트 생성 성공",
+                            name = "게스트 생성 성공 (APP — body 토큰)",
                             payload =
                                 ApiResponseBody.created(
                                     GuestCreateResponse(
-                                        accessToken = "eyJhbGciOiJIUzI1NiJ9.access",
-                                        refreshToken = "eyJhbGciOiJIUzI1NiJ9.refresh",
                                         user =
                                             UserResponse(
                                                 id = UUID.fromString("8f1a3c2b-9d44-4e2a-9b12-1a2b3c4d5e6f"),
@@ -40,6 +40,11 @@ class AuthApiExamples(
                                                 profileImage =
                                                     "https://api.dicebear.com/9.x/bottts/svg?seed=8f1a3c2b-9d44-4e2a-9b12-1a2b3c4d5e6f",
                                                 identityType = IdentityType.GUEST,
+                                            ),
+                                        tokenPair =
+                                            TokenPair(
+                                                accessToken = "eyJhbGciOiJIUzI1NiJ9.access",
+                                                refreshToken = "eyJhbGciOiJIUzI1NiJ9.refresh",
                                             ),
                                     ),
                                 ),
@@ -50,13 +55,26 @@ class AuthApiExamples(
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.OK,
-                            name = "토큰 갱신 성공",
+                            name = "토큰 갱신 성공 (APP — body 토큰)",
                             payload =
                                 ApiResponseBody.ok(
                                     TokenRefreshResponse(
-                                        accessToken = "eyJhbGciOiJIUzI1NiJ9.access",
-                                        refreshToken = "eyJhbGciOiJIUzI1NiJ9.refresh",
+                                        tokenPair =
+                                            TokenPair(
+                                                accessToken = "eyJhbGciOiJIUzI1NiJ9.access",
+                                                refreshToken = "eyJhbGciOiJIUzI1NiJ9.refresh",
+                                            ),
                                     ),
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.BAD_REQUEST,
+                            name = "리프레시 토큰 미입력",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.INVALID_INPUT,
+                                    status = HttpStatus.BAD_REQUEST,
+                                    detail = "리프레시 토큰이 필요합니다.",
                                 ),
                         )
                         add(
@@ -76,7 +94,7 @@ class AuthApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "로그아웃 성공",
-                            payload = ApiResponseBody.ok<Unit>(),
+                            payload = ApiResponseBody.ok(LogoutResponse()),
                         )
                         add(
                             status = HttpStatus.UNAUTHORIZED,
@@ -97,8 +115,6 @@ class AuthApiExamples(
                             payload =
                                 ApiResponseBody.created(
                                     GuestCreateResponse(
-                                        accessToken = "eyJhbGciOiJIUzI1NiJ9.access",
-                                        refreshToken = "eyJhbGciOiJIUzI1NiJ9.refresh",
                                         user =
                                             UserResponse(
                                                 id = UUID.fromString("3b9c1d2e-4f5a-4b6c-8d7e-9f0a1b2c3d4e"),
@@ -106,6 +122,11 @@ class AuthApiExamples(
                                                 profileImage =
                                                     "https://api.dicebear.com/9.x/bottts/svg?seed=3b9c1d2e-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
                                                 identityType = IdentityType.MEMBER,
+                                            ),
+                                        tokenPair =
+                                            TokenPair(
+                                                accessToken = "eyJhbGciOiJIUzI1NiJ9.access",
+                                                refreshToken = "eyJhbGciOiJIUzI1NiJ9.refresh",
                                             ),
                                     ),
                                 ),
@@ -130,8 +151,6 @@ class AuthApiExamples(
                             payload =
                                 ApiResponseBody.created(
                                     GuestCreateResponse(
-                                        accessToken = "eyJhbGciOiJIUzI1NiJ9.access",
-                                        refreshToken = "eyJhbGciOiJIUzI1NiJ9.refresh",
                                         user =
                                             UserResponse(
                                                 id = UUID.fromString("3b9c1d2e-4f5a-4b6c-8d7e-9f0a1b2c3d4e"),
@@ -139,6 +158,11 @@ class AuthApiExamples(
                                                 profileImage =
                                                     "https://api.dicebear.com/9.x/bottts/svg?seed=3b9c1d2e-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
                                                 identityType = IdentityType.MEMBER,
+                                            ),
+                                        tokenPair =
+                                            TokenPair(
+                                                accessToken = "eyJhbGciOiJIUzI1NiJ9.access",
+                                                refreshToken = "eyJhbGciOiJIUzI1NiJ9.refresh",
                                             ),
                                     ),
                                 ),

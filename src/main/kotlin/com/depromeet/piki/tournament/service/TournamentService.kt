@@ -12,6 +12,7 @@ import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.tournament.service.dto.AddTournamentItemsFromWish
 import com.depromeet.piki.tournament.service.dto.CreateTournament
+import com.depromeet.piki.tournament.service.dto.RankedItem
 import com.depromeet.piki.tournament.service.dto.RecordMatch
 import com.depromeet.piki.tournament.service.dto.TournamentDetail
 import com.depromeet.piki.tournament.service.dto.TournamentItemDetail
@@ -66,10 +67,11 @@ class TournamentService(
                 .map { it.itemId }
                 .toSet()
         // 요청 내 중복 확인 — wishCount 는 unique itemId 기준이라 먼저 걸러야 정확하다
-        if (command.itemIds.toSet().size != command.itemIds.size) throw TournamentException.duplicateTournamentItem()
+        val requestedItemIds = command.itemIds.toSet()
+        if (requestedItemIds.size != command.itemIds.size) throw TournamentException.duplicateTournamentItem()
         val wishCount = wishRepository.countByItemIdsAndUserId(command.itemIds, userId)
         if (wishCount < command.itemIds.size) throw TournamentException.itemNotInWishlist()
-        if (command.itemIds.any { it in existingItemIds }) throw TournamentException.duplicateTournamentItem()
+        if (requestedItemIds.any { it in existingItemIds }) throw TournamentException.duplicateTournamentItem()
         if (existingItemIds.size + command.itemIds.size > TOURNAMENT_MAX_ITEM_COUNT) {
             throw TournamentException.tooManyTournamentItems()
         }
@@ -111,8 +113,10 @@ class TournamentService(
                 .findByIds(tournamentItems.map { it.itemId })
                 .associate { it.getId() to it }
         if (tournamentItems.any { it.itemId !in itemById }) throw TournamentException.notFoundItems()
-        if (itemById.values.any { !it.isReady() }) throw TournamentException.itemNotReadyToStart()
-        itemById.values.forEach { item -> item.currentPrice ?: throw TournamentException.itemPriceRequired() }
+        for (item in itemById.values) {
+            if (!item.isReady()) throw TournamentException.itemNotReadyToStart()
+            item.currentPrice ?: throw TournamentException.itemPriceRequired()
+        }
 
         tournament.start()
         return tournamentItems
@@ -209,32 +213,7 @@ class TournamentService(
 
             TournamentStatus.COMPLETED -> {
                 val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
-                val rankedItems = computeRanking(histories)
-                val rankedTournamentItemIds = rankedItems.map { it.first }.toSet()
-                val tournamentItemById = tournamentItemRepository
-                    .findAllByTournamentId(tournamentId)
-                    .filter { it.getId() in rankedTournamentItemIds }
-                    .associateBy { it.getId() }
-                val itemById = itemRepository
-                    .findByIds(tournamentItemById.values.map { it.itemId })
-                    .associate { it.getId() to it }
-                TournamentDetail.Completed(
-                    tournamentId = tournament.getId(),
-                    name = tournament.name,
-                    result = rankedItems.map { (tournamentItemId, rank) ->
-                        val tournamentItem = tournamentItemById.getValue(tournamentItemId)
-                        val item = itemById[tournamentItem.itemId]
-                        TournamentDetail.RankedItem(
-                            rank = rank,
-                            tournamentItemId = tournamentItemId,
-                            itemId = tournamentItem.itemId,
-                            name = item?.name,
-                            price = item?.currentPrice,
-                            currency = item?.currency,
-                            imageUrl = item?.imageUrl,
-                        )
-                    },
-                )
+                buildCompleted(tournament, histories)
             }
         }
     }
@@ -300,21 +279,20 @@ class TournamentService(
     fun recordMatch(
         userId: UUID,
         command: RecordMatch,
-    ) {
+    ): TournamentDetail.Completed? {
         val tournament =
             tournamentRepository.findTournamentByIdForUpdate(command.tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isInProgress()) throw TournamentException.notInProgressTournament()
         tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
-        if (command.selectedTournamentItemId !in setOf(command.firstTournamentItemId, command.secondTournamentItemId)) {
+        if (command.selectedTournamentItemId != command.firstTournamentItemId &&
+            command.selectedTournamentItemId != command.secondTournamentItemId
+        ) {
             throw TournamentException.invalidWinner()
         }
 
-        val tournamentItemIds =
-            tournamentItemRepository
-                .findAllByTournamentId(command.tournamentId)
-                .mapTo(mutableSetOf()) { it.getId() }
+        val tournamentItemIds = tournamentItemRepository.findIdsByTournamentId(command.tournamentId).toSet()
         if (command.firstTournamentItemId !in tournamentItemIds ||
             command.secondTournamentItemId !in tournamentItemIds
         ) {
@@ -322,23 +300,58 @@ class TournamentService(
         }
 
         val histories = tournamentRepository.findTournamentHistoriesByTournamentId(command.tournamentId)
+        val eliminatedItemIds = histories.map { it.loser() }.toSet()
+        if (command.firstTournamentItemId in eliminatedItemIds || command.secondTournamentItemId in eliminatedItemIds) {
+            throw TournamentException.eliminatedTournamentItem()
+        }
         val firstRoundMatchCount = tournamentItemIds.size / 2
         val expectedRound = computeExpectedRound(tournamentItemIds.size, firstRoundMatchCount, histories)
         if (command.currentRound != expectedRound) throw TournamentException.invalidCurrentRound()
 
-        tournamentRepository.saveHistory(
-            TournamentHistory(
-                tournamentId = command.tournamentId,
-                currentRound = command.currentRound,
-                firstTournamentItemId = command.firstTournamentItemId,
-                secondTournamentItemId = command.secondTournamentItemId,
-                selectedTournamentItemId = command.selectedTournamentItemId,
-            ),
+        val newHistory = TournamentHistory(
+            tournamentId = command.tournamentId,
+            currentRound = command.currentRound,
+            firstTournamentItemId = command.firstTournamentItemId,
+            secondTournamentItemId = command.secondTournamentItemId,
+            selectedTournamentItemId = command.selectedTournamentItemId,
         )
+        tournamentRepository.saveHistory(newHistory)
 
-        if (tournament.isFinalRound(command.currentRound)) {
-            tournament.complete()
-        }
+        if (!tournament.isFinalRound(command.currentRound)) return null
+
+        tournament.complete()
+        return buildCompleted(tournament, histories + newHistory)
+    }
+
+    private fun buildCompleted(
+        tournament: Tournament,
+        histories: List<TournamentHistory>,
+    ): TournamentDetail.Completed {
+        val rankedPairs = computeRanking(histories)
+        val tournamentItemById = tournamentItemRepository
+            .findByIds(rankedPairs.map { it.first })
+            .associateBy { it.getId() }
+        val itemById = itemRepository
+            .findByIds(tournamentItemById.values.map { it.itemId })
+            .associate { it.getId() to it }
+        return TournamentDetail.Completed(
+            tournamentId = tournament.getId(),
+            name = tournament.name,
+            result = rankedPairs.map { (tournamentItemId, rank) ->
+                val tournamentItem = tournamentItemById.getValue(tournamentItemId)
+                val item = itemById[tournamentItem.itemId]
+                    ?: error("item 없음 — tournamentItemId=$tournamentItemId, itemId=${tournamentItem.itemId}")
+                RankedItem(
+                    rank = rank,
+                    tournamentItemId = tournamentItemId,
+                    itemId = tournamentItem.itemId,
+                    name = item.name,
+                    price = item.currentPrice,
+                    currency = item.currency,
+                    imageUrl = item.imageUrl,
+                )
+            },
+        )
     }
 
     @Transactional
@@ -374,13 +387,15 @@ class TournamentService(
         itemById: Map<Long, Item>,
     ): TournamentDetail.ItemDetail {
         val item = itemById[tournamentItem.itemId]
+            ?: error("item 없음 — tournamentItemId=${tournamentItem.getId()}, itemId=${tournamentItem.itemId}")
         return TournamentDetail.ItemDetail(
             tournamentItemId = tournamentItem.getId(),
             itemId = tournamentItem.itemId,
-            name = item?.name,
-            price = item?.currentPrice,
-            currency = item?.currency,
-            imageUrl = item?.imageUrl,
+            name = item.name,
+            price = item.currentPrice,
+            currency = item.currency,
+            imageUrl = item.imageUrl,
+            status = item.status,
         )
     }
 

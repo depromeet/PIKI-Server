@@ -104,9 +104,9 @@ class TournamentController(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
         @Valid @RequestBody request: RecordMatchRequest,
-    ): ApiResponseBody<Unit> {
-        tournamentService.recordMatch(userId, request.toRecordMatch(tournamentId))
-        return ApiResponseBody.ok()
+    ): ApiResponseBody<TournamentDetailResponse.CompletedData?> {
+        val result = tournamentService.recordMatch(userId, request.toRecordMatch(tournamentId))
+        return ApiResponseBody.ok(result?.let { TournamentDetailResponse.CompletedData.from(it) })
     }
 
     @GetMapping

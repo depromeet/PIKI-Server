@@ -1,6 +1,7 @@
 package com.depromeet.piki.auth.filter
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.piki.auth.web.TokenCookieWriter
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -30,11 +31,17 @@ class JwtAuthenticationFilter(
         filterChain.doFilter(request, response)
     }
 
-    private fun extractToken(request: HttpServletRequest): String? {
+    // 헤더(APP) 우선 → 없으면 access_token 쿠키(WEB). 둘 다 있으면 헤더가 이긴다.
+    private fun extractToken(request: HttpServletRequest): String? = extractFromHeader(request) ?: extractFromCookie(request)
+
+    private fun extractFromHeader(request: HttpServletRequest): String? {
         val header = request.getHeader(HttpHeaders.AUTHORIZATION) ?: return null
         if (!header.startsWith(BEARER_PREFIX)) return null
         return header.substring(BEARER_PREFIX.length)
     }
+
+    private fun extractFromCookie(request: HttpServletRequest): String? =
+        request.cookies?.firstOrNull { it.name == TokenCookieWriter.ACCESS_COOKIE }?.value
 
     companion object {
         private const val BEARER_PREFIX = "Bearer "

@@ -11,7 +11,6 @@ import java.util.UUID
 @Table(name = "user_details")
 class UserDetail(
     userId: UUID,
-    email: String,
     provider: String,
     socialId: String,
 ) : BaseEntity<UUID>() {
@@ -21,10 +20,6 @@ class UserDetail(
 
     override fun getIdOrNull(): UUID = userId
 
-    @Column(nullable = false)
-    var email: String = email
-        protected set
-
     @Column(nullable = false, length = 20)
     var provider: String = provider
         protected set
@@ -32,8 +27,4 @@ class UserDetail(
     @Column(name = "social_id", nullable = false)
     var socialId: String = socialId
         protected set
-
-    fun updateEmail(newEmail: String) {
-        email = newEmail
-    }
 }

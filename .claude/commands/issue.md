@@ -14,7 +14,7 @@
 
 **라벨은 한 작업 한 개.** type 차원(`feat`/`fix`/`refactor`/`perf`/`chore`) 과 영역 차원(`docs`/`test`/`infra`) 이 한 라벨로 합쳐져 있다. "외부 가시적 변화" 가 본질이면 그 type, 특정 영역만 만지면 그 영역. multi-label 부여하지 않는다.
 
-**채팅 끊김을 최소화한다.** 자유 텍스트는 한 메시지로 일괄 받고, 옵션 결정은 `AskUserQuestion` 으로 묶어 받는다. 사용자 인터랙션은 보통 **3~4 라운드** (Epic 여부 → 자유 입력 → 검수 → [일반 이슈] 작업 위치) 안에 끝난다.
+**채팅 끊김을 최소화한다.** 자유 텍스트는 한 메시지로 일괄 받고, 옵션 결정은 `AskUserQuestion` 으로 묶어 받는다. 사용자 인터랙션은 보통 **3~4 라운드** (Epic 여부 → 자유 입력 → 검수 → [일반 이슈] 작업 위치) 안에 끝난다. `$NOTION_TOKEN` 이 설정돼 있으면 마지막에 Notion 보드 카드 확인이 1라운드 더 붙는다 (`/notion-board` 가 매칭 카드 기록 / 신규 카드 생성을 묻는다).
 
 ## 절차
 
@@ -118,11 +118,16 @@ gh api graphql \
 gh project item-add 99 --owner depromeet --url {이슈 URL}
 ```
 
-### A-7. 결과 출력
+### A-7. Notion 보드 반영
+
+이슈를 만든 뒤 `/notion-board` 를 `mode=issue` 로 호출한다. Epic 흐름이므로 Epic 여부=Epic 으로 넘긴다. 입력·게이트·best-effort 규약은 모두 `/notion-board` 의 `## 호출 계약` 을 따른다 — `/issue` 는 거르지 않고 항상 호출만 한다. 반영 결과(어느 카드에 기록/생성)는 결과 출력 단계에 함께 보고한다.
+
+### A-8. 결과 출력
 
 - 이슈 URL
 - "Epic 은 브랜치를 만들지 않습니다. 하위 작업은 `/issue` 로 일반 이슈를 만들고 그 단계에서 이 epic 이 자동 추천됩니다."
 - "우선순위 / 일정 등 메타 정보는 GitHub Project 보드에서 직접 채우세요."
+- Notion 보드 반영 결과 (어느 카드에 `이슈 #N` 기록 / 새 `계획중` 카드 생성 / 토큰 없어 생략)
 
 ---
 
@@ -239,9 +244,7 @@ gh api graphql \
 
 #### 워크트리 선택 시
 
-1. **stale 워크트리 정리** (생성 직전 — CLAUDE.md "worktree 정리는 ... 이벤트에 얹는다"). `git worktree prune` 후 머지·삭제(gone)된 브랜치의 워크트리만 제거. **clean 한 것만, `--force` 금지** — dirty 면 작업 중일 수 있으므로 건드리지 않고 넘어간다.
-
-2. GitHub 브랜치 생성 + 이슈 연결. **`--checkout` 을 주지 않는다** — 현재 디렉토리를 끌고 가면 같은 브랜치를 워크트리에서 다시 체크아웃할 수 없어 충돌한다.
+1. GitHub 브랜치 생성 + 이슈 연결. **`--checkout` 을 주지 않는다** — 현재 디렉토리를 끌고 가면 같은 브랜치를 워크트리에서 다시 체크아웃할 수 없어 충돌한다.
    ```bash
    gh issue develop {이슈번호} \
      --repo depromeet/18th-team3-server \
@@ -249,14 +252,14 @@ gh api graphql \
      --name "{prefix}/{이슈번호}-{slug}"
    ```
 
-3. `gh` 가 만든 원격 브랜치를 가져와 워크트리로 분리한다 (로컬 브랜치는 워크트리에서 생성):
+2. `gh` 가 만든 원격 브랜치를 가져와 워크트리로 분리한다 (로컬 브랜치는 워크트리에서 생성):
    ```bash
    git fetch origin "{prefix}/{이슈번호}-{slug}":"refs/remotes/origin/{prefix}/{이슈번호}-{slug}"
    git worktree add ".claude/worktrees/{slug}" "{prefix}/{이슈번호}-{slug}"
    ```
    `git worktree add <path> <branch>` 는 로컬에 `{branch}` 가 없고 `origin/{branch}` 가 정확히 하나면 DWIM 으로 추적 브랜치를 만들어 붙인다. DWIM 이 안 되면 명시형으로 fallback: `git worktree add --track -b "{prefix}/{이슈번호}-{slug}" ".claude/worktrees/{slug}" "origin/{prefix}/{이슈번호}-{slug}"`.
 
-4. 세션을 워크트리로 진입시킨다 — `EnterWorktree` 도구를 **`path=".claude/worktrees/{slug}"`** 로 호출 (이미 만든 워크트리에 진입). `name=` 으로 새로 만들지 않는다 — 브랜치는 `gh issue develop` 이 base `dev` 로 이미 만들었고, `EnterWorktree(name=...)` 의 baseRef 기본값(`fresh`=origin/default-branch)은 이 레포에선 `main` 을 가리켜 CLAUDE.md(dev 분기) 와 어긋나기 때문. 이후 작업·커밋·`/pr` 은 이 워크트리에서 진행된다.
+3. 세션을 워크트리로 진입시킨다 — `EnterWorktree` 도구를 **`path=".claude/worktrees/{slug}"`** 로 호출 (이미 만든 워크트리에 진입). `name=` 으로 새로 만들지 않는다 — 브랜치는 `gh issue develop` 이 base `dev` 로 이미 만들었고, `EnterWorktree(name=...)` 의 baseRef 기본값(`fresh`=origin/default-branch)은 이 레포에선 `main` 을 가리켜 CLAUDE.md(dev 분기) 와 어긋나기 때문. 이후 작업·커밋·`/pr` 은 이 워크트리에서 진행된다.
 
 #### 현재 브랜치 선택 시 (기존 동작)
 
@@ -276,13 +279,18 @@ gh issue develop {이슈번호} \
 gh project item-add 99 --owner depromeet --url {이슈 URL}
 ```
 
-### B-8. 결과 출력
+### B-8. Notion 보드 반영
+
+A-7 과 동일 (`mode=issue` 로 `/notion-board` 호출). 일반 흐름이므로 Epic 여부=일반 으로 넘긴다.
+
+### B-9. 결과 출력
 
 - 이슈 URL
 - 브랜치명
 - **워크트리 선택 시**: 워크트리 경로(`.claude/worktrees/{slug}`) + "세션이 워크트리로 전환됐고 현재 체크아웃(`dev` 등)은 그대로 유지됩니다" + "작업·커밋·`/pr` 은 이 워크트리에서 진행됩니다"
 - **현재 브랜치 선택 시**: 현재 체크아웃된 브랜치 확인
 - "우선순위 / 일정은 필요시 GitHub Project 보드에서 채우세요."
+- Notion 보드 반영 결과 (어느 카드에 `이슈 #N` 기록 / 새 `계획중` 카드 생성 / 토큰 없어 생략)
 - 다음 단계 안내 (작업 시작 → 커밋 → PR)
 
 ---
@@ -294,13 +302,13 @@ gh project item-add 99 --owner depromeet --url {이슈 URL}
 - 분류 자동 결정은 시그널이 명확할 때만. 모호하면 `chore` fallback (보수적).
 - 라벨이 레포에 없어 `gh issue create` 가 실패하면 에러 그대로 보고.
 - `gh issue develop` 은 `--name` (브랜치 이름 옵션) 을 명시 (인터랙티브 회피). `--branch-name` 은 존재하지 않는 옵션이니 주의. `--checkout` 은 **현재 브랜치 작업을 고른 경우에만** 붙인다 — 워크트리 작업이면 현재 디렉토리가 끌려가 충돌하므로 빼고, 체크아웃은 `EnterWorktree` 가 대신한다.
-- **워크트리 진입은 `EnterWorktree(path=...)` 로만.** `git worktree add` 로 먼저 만든 뒤 `path` 로 진입한다. `EnterWorktree(name=...)` 는 새 브랜치를 자체 생성하며 baseRef 기본값이 이 레포의 git default branch(`main`)를 가리켜 `dev` 분기 정책과 어긋난다. `path` 로 진입한 워크트리는 `ExitWorktree` 가 제거하지 않으므로, 정리는 `/session-close` 나 다음 `/issue` 의 stale prune 에 맡긴다.
-- **워크트리 stale prune 안전 가드.** 생성 직전 정리는 clean(커밋 안 된 변경 없음) + 머지·삭제(gone)된 브랜치의 워크트리만 제거한다. `--force` 절대 금지, dirty 면 그냥 둔다.
+- **워크트리 진입은 `EnterWorktree(path=...)` 로만.** `git worktree add` 로 먼저 만든 뒤 `path` 로 진입한다. `EnterWorktree(name=...)` 는 새 브랜치를 자체 생성하며 baseRef 기본값이 이 레포의 git default branch(`main`)를 가리켜 `dev` 분기 정책과 어긋난다. `path` 로 진입한 워크트리는 `ExitWorktree` 가 제거하지 않으므로, 정리는 `/session-close` 에 맡긴다.
 - `gh project item-add` 권한 부족 시 사용자에게 `gh auth refresh -h github.com -s project` 안내 (인터랙티브 디바이스 인증, 일회성).
 - 본문에 `#{epic 번호}` 가 들어가면 GitHub 가 자동 cross-reference 링크 — 별도 sub-issue API 불필요.
 - 중복 이슈 검사 false positive 가능성 인지. 사용자가 "다른 이슈" 라 답하면 그대로 진행.
 - 이슈 템플릿(`.github/ISSUE_TEMPLATE/`)이 우선순위·일정을 required 로 정의해도 본문 자유 양식이라 강제받지 않는다. 이 스킬은 본질("왜/무엇을")만 받는 정책을 따른다.
 - **Assignee 는 `@me` 고정**. 이슈 만든 사람이 작업자라는 가정. 다른 사람에게 할당하려면 GitHub UI 에서 변경.
 - **Issue Type 은 GraphQL 별도 호출.** `gh issue create` 가 `--type` 미지원이라 `updateIssueIssueType` mutation 사용. depromeet org 의 type 은 Task / Bug / Feature 3종 — 우리 9개 라벨과 1:1 매핑이 안 되는 부분은 가장 가까운 type 으로 (refactor·perf·chore·docs·test·infra → Task, epic → Feature). org 가 type 을 추가/제거하면 본문의 type ID 도 갱신 필요.
+- **Notion 보드 반영은 `/notion-board` 에 위임**한다 (`mode=issue`). `$NOTION_TOKEN` 없으면 조용히 스킵하므로 이슈 생성은 영향 없다. 카드 매칭·신규 생성 확인은 `/notion-board` 가 사용자에게 직접 묻는다 — `/issue` 는 맥락만 넘기고, 보드 카드 입자(기능 단위)는 `/notion-board` 가 책임진다.
 
 $ARGUMENTS
