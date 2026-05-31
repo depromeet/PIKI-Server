@@ -6,9 +6,20 @@ spring:
 
 # 운영 OAuthClientConfig 의 실제 클라이언트 빈을 테스트 컨텍스트에서는 끈다.
 # 그러면 IntegrationStubs 의 stub(googleOAuthClient/kakaoOAuthClient)만 남아 외부 호출 없이 격리된다.
+# google/kakao 더미 값: GoogleProperties·KakaoProperties 는 @ConfigurationPropertiesScan 으로
+# 빈이 생성되고 @Validated(@NotBlank) 라, 값이 없으면 컨텍스트 로딩이 깨진다. 실제 호출은 stub 이
+# 대체하므로 값은 쓰이지 않는다 (test classpath 의 application.yml 이 main 을 대체하므로 여기 박는다).
 oauth:
   client:
     enabled: false
+  google:
+    client-id: test-google-client-id
+    client-secret: test-google-client-secret
+    redirect-uri: http://localhost/auth/callback/google
+  kakao:
+    client-id: test-kakao-client-id
+    client-secret: test-kakao-client-secret
+    redirect-uri: http://localhost/auth/callback/kakao
 
 # 컨텍스트 로딩만 통과시키기 위한 더미 fallback. 실제 Gemini 호출 테스트는 @Disabled 또는
 # @EnabledIfEnvironmentVariable 로 별도 격리되어 있으므로 CI 에서 GEMINI_API_KEY 가 없어도
