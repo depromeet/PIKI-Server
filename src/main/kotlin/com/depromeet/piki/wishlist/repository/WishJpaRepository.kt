@@ -28,4 +28,6 @@ interface WishJpaRepository : JpaRepository<Wish, Long> {
     ): List<Wish>
 
     fun findByIdAndDeletedAtIsNull(id: Long): Wish?
+
+    fun findByIdInAndDeletedAtIsNull(ids: Collection<Long>): List<Wish>
 }

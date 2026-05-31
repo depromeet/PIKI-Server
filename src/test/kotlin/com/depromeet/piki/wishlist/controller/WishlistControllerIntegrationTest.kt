@@ -515,18 +515,174 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `존재하지 않는 위시를 삭제하면 404 가 반환된다`() {
+    fun `존재하지 않는 위시를 삭제해도 200 이 반환된다 (멱등)`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
 
+        // 멱등: 없는 위시는 "이미 삭제된 목표 상태"이므로 no-op 으로 성공한다.
         mockMvc
             .perform(
                 delete("/api/v1/wishlists/99999999")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
-            ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
-            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.code").value("OK"))
+    }
+
+    @Test
+    fun `이미 삭제된 위시를 다시 삭제해도 200 이 반환된다 (멱등)`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "지울 상품")
+
+        mockMvc
+            .perform(delete("/api/v1/wishlists/$wishId").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+        // 같은 위시 재삭제 — 이미 삭제된 상태라 멱등하게 다시 200.
+        mockMvc
+            .perform(delete("/api/v1/wishlists/$wishId").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+    }
+
+    @Test
+    fun `여러 위시를 다중 삭제하면 200 이고 모두 조회에서 제외된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val keptWishId = seedReadyWish(userId, "https://shop.example.com/products/1", "남길 상품")
+        val deletedWishId1 = seedReadyWish(userId, "https://shop.example.com/products/2", "지울 상품1")
+        val deletedWishId2 = seedReadyWish(userId, "https://shop.example.com/products/3", "지울 상품2")
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .param("ids", "$deletedWishId1,$deletedWishId2")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.code").value("OK"))
+
+        // 다중 삭제된 둘은 빠지고 남긴 하나만 조회된다.
+        mockMvc
+            .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].wish.id").value(keptWishId))
+    }
+
+    @Test
+    fun `다중 삭제 목록에 남의 위시가 섞이면 403 이고 아무것도 삭제되지 않는다`() {
+        val mockMvc = buildMockMvc()
+        val ownerId = UUID.randomUUID()
+        val otherId = UUID.randomUUID()
+        insertMember(ownerId)
+        insertMember(otherId)
+        val myWishId = seedReadyWish(ownerId, "https://shop.example.com/products/1", "내 상품")
+        val othersWishId = seedReadyWish(otherId, "https://shop.example.com/products/2", "남의 상품")
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .param("ids", "$myWishId,$othersWishId")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(ownerId)}"),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+
+        // 남의것이 섞이면 403 + @Transactional 롤백 — 내 위시도 지워지지 않고 그대로 남아 있다.
+        mockMvc
+            .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(ownerId)}"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].wish.id").value(myWishId))
+    }
+
+    @Test
+    fun `다중 삭제 목록에 존재하지 않는 위시가 섞여도 본인 것은 삭제되고 200 이 반환된다 (멱등)`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val existingWishId = seedReadyWish(userId, "https://shop.example.com/products/1", "존재하는 상품")
+
+        // 없는 id 가 섞여도 멱등 — 존재하는 본인 위시만 삭제하고 없는 id 는 "이미 없는 상태"로 무시한다.
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .param("ids", "$existingWishId,99999999")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.code").value("OK"))
+
+        // 존재하던 본인 위시는 삭제되어 조회에서 빠진다.
+        mockMvc
+            .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(0))
+    }
+
+    @Test
+    fun `다중 삭제에 ids 를 보내지 않으면 400 BAD_REQUEST 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+
+        // ids 파라미터 자체를 생략 — required=false + orEmpty 로 WishDeleteIds 검증(빈 목록)에 닿아 400.
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.detail").value("삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다."))
+    }
+
+    @Test
+    fun `다중 삭제 ids 가 100 개를 초과하면 400 BAD_REQUEST 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        // 상한 100 정책을 테스트로 고정 — 101개면 WishDeleteIds 가 거부한다.
+        val ids = (1L..101L).joinToString(",")
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .param("ids", ids)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+    }
+
+    @Test
+    fun `다중 삭제에 중복 id 를 보내도 정상 삭제되고 200 이 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "지울 상품")
+
+        // 같은 id 를 중복으로 보내도 distinct 정규화로 1건으로 취급되어 정상 삭제된다.
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .param("ids", "$wishId,$wishId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+
+        mockMvc
+            .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(0))
     }
 
     @Test

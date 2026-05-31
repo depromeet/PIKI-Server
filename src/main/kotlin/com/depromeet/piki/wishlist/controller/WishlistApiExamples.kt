@@ -187,14 +187,33 @@ class WishlistApiExamples(
                                 detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
+                }
+            }
+            if (handlerMethod.binds(WishlistController::deleteWishes)) {
+                operation.examples(openApiObjectMapper.delegate) {
                     add(
-                        status = HttpStatus.NOT_FOUND,
-                        name = "존재하지 않는 위시 항목",
+                        status = HttpStatus.OK,
+                        name = "다중 삭제 성공",
+                        payload = ApiResponseBody.ok<Unit>(),
+                    )
+                    add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "ids 누락/빈 목록/100개 초과",
                         payload =
                             ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.NOT_FOUND,
-                                status = HttpStatus.NOT_FOUND,
-                                detail = "존재하지 않는 위시리스트 항목입니다.",
+                                category = ErrorCategory.INVALID_INPUT,
+                                status = HttpStatus.BAD_REQUEST,
+                                detail = "삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.FORBIDDEN,
+                        name = "본인 위시 아닌 항목 포함",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.FORBIDDEN,
+                                status = HttpStatus.FORBIDDEN,
+                                detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
                 }
