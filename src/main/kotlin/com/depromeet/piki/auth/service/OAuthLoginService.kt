@@ -34,19 +34,13 @@ class OAuthLoginService(
         client: OAuthClient,
         command: OAuthLoginCommand,
     ): OAuthUserInfo {
-        val accessToken = command.accessToken?.ifBlank { null }
-        val code = command.code?.ifBlank { null }
-        val redirectUri = command.redirectUri?.ifBlank { null }
-
-        // v2(accessToken) 흐름. code/redirectUri 가 함께 오면 어느 흐름인지 모호하므로 400 (silent v2 채택 금지).
-        accessToken?.let { token ->
-            (code ?: redirectUri)?.let { throw OAuthException.invalidRequest() }
-            return runProvider { client.fetchUserInfoByAccessToken(token) }
+        // v1 XOR v2 계약은 입력 경계(OAuthLoginRequest.validFlow)가 강제한다. 여기선 흐름 선택 + null-safety 만.
+        command.accessToken?.ifBlank { null }?.let { accessToken ->
+            return runProvider { client.fetchUserInfoByAccessToken(accessToken) }
         }
-        // v1(code+redirectUri) 흐름. 둘 중 하나라도 없으면 400.
-        val resolvedCode = code ?: throw OAuthException.invalidRequest()
-        val resolvedRedirectUri = redirectUri ?: throw OAuthException.invalidRequest()
-        return runProvider { client.fetchUserInfoByCode(resolvedCode, resolvedRedirectUri) }
+        val code = command.code?.ifBlank { null } ?: throw OAuthException.invalidRequest()
+        val redirectUri = command.redirectUri?.ifBlank { null } ?: throw OAuthException.invalidRequest()
+        return runProvider { client.fetchUserInfoByCode(code, redirectUri) }
     }
 
     // provider 호출 실패(네트워크·4xx/5xx·역직렬화 등)는 외부 의존성 장애로 502 로 매핑한다.

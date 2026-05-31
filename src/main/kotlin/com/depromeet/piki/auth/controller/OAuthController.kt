@@ -5,6 +5,7 @@ import com.depromeet.piki.auth.controller.dto.OAuthLoginResponse
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthProvider
 import com.depromeet.piki.auth.service.OAuthLoginService
 import com.depromeet.piki.common.response.ApiResponseBody
+import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.PathVariable
@@ -25,7 +26,7 @@ class OAuthController(
     @PostMapping("/{provider}")
     override fun login(
         @PathVariable provider: String,
-        @RequestBody request: OAuthLoginRequest,
+        @Valid @RequestBody request: OAuthLoginRequest,
         @AuthenticationPrincipal currentUserId: UUID?,
     ): ApiResponseBody<OAuthLoginResponse> {
         val oAuthProvider = OAuthProvider.from(provider)
