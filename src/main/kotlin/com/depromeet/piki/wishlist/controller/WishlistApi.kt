@@ -18,7 +18,7 @@ import java.util.UUID
 @Tag(name = "Wishlist", description = "위시리스트 등록/조회/복구/삭제 API")
 interface WishlistApi {
     @Operation(
-        summary = "위시리스트 등록",
+        summary = "등록 (URL)",
         description = """
             상품 페이지 URL 을 받아 위시리스트에 등록한다. 메타데이터(이름/가격/이미지) 추출은 외부 LLM 호출이라
             오래 걸리므로 동기로 기다리지 않는다. 등록 즉시 item.status=PROCESSING 인 항목을 201 로 반환하고,
@@ -70,13 +70,13 @@ interface WishlistApi {
             ),
         ],
     )
-    fun register(
+    fun registerFromUrl(
         @Parameter(hidden = true) userId: UUID,
         request: WishlistRegisterRequest,
     ): ApiResponseBody<WishItemResponse>
 
     @Operation(
-        summary = "위시리스트 조회",
+        summary = "조회 (다건)",
         description = """
             로그인한 유저 본인의 위시리스트를 최신 등록순(id desc)으로 조회한다.
             cursor 페이지네이션: 직전 응답의 pageResponse.nextCursor 를 다음 요청 cursor 로 그대로 전달한다.
@@ -139,7 +139,7 @@ interface WishlistApi {
     ): ApiResponseBody<List<WishItemResponse>>
 
     @Operation(
-        summary = "위시리스트 단건 조회",
+        summary = "조회 (단건)",
         description = """
             wishId 로 위시 항목 하나를 조회한다. 응답 모양은 목록 조회 항목과 같은 WishItemResponse(wish + item).
             본인 위시만 조회 가능하며, item 을 직접 노출하지 않고 위시 소유 단위로 권한을 검증한다.
@@ -196,7 +196,7 @@ interface WishlistApi {
     ): ApiResponseBody<WishItemResponse>
 
     @Operation(
-        summary = "위시 항목 복구 (추출 실패 보정)",
+        summary = "복구 (추출 실패 보정)",
         description = """
             추출에 실패(item.status=FAILED)한 위시 항목의 상품 정보(이름·현재가·이미지·통화)를 사용자가 직접 채워 복구한다.
             들어온 필드만 갱신하며, 보정에 성공하면 status 가 READY 로 복구된다.
@@ -276,7 +276,7 @@ interface WishlistApi {
     ): ApiResponseBody<WishItemResponse>
 
     @Operation(
-        summary = "위시리스트 삭제",
+        summary = "삭제 (단건)",
         description = """
             위시 항목을 삭제한다(soft delete). 멱등 — 이미 없거나 삭제된 항목이면 아무 일도 하지 않고 성공한다.
             존재하는 항목은 본인 위시만 삭제 가능하다. 삭제된 항목은 조회 결과에서 제외된다.
@@ -322,7 +322,7 @@ interface WishlistApi {
     ): ApiResponseBody<Unit>
 
     @Operation(
-        summary = "위시리스트 다중 삭제",
+        summary = "삭제 (다건)",
         description = """
             위시 항목 여러 개를 한 번에 멱등 삭제한다(soft delete). 요청 목록 중 없거나 이미 삭제된 id 는
             무시하고(목표 상태 달성) 성공으로 처리한다. 단 존재하는 항목 중 본인 소유가 아닌 위시가 하나라도
@@ -383,7 +383,7 @@ interface WishlistApi {
     ): ApiResponseBody<Unit>
 
     @Operation(
-        summary = "위시리스트 이미지 등록 (다건)",
+        summary = "등록 (이미지)",
         description = """
             상품 페이지를 캡처한 이미지 1~5장을 받아, 각 이미지를 PROCESSING 상태의 위시 항목으로 즉시 등록하고 목록을 반환한다.
             실제 상품 정보 추출(Gemini Vision)은 백그라운드에서 비동기로 진행되어 각 항목을 READY 또는 FAILED 로 전이시킨다.
