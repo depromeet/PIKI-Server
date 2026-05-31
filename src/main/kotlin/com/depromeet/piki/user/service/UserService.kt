@@ -14,11 +14,10 @@ class UserService(
     private val userRepository: UserRepository,
 ) {
     companion object {
-        private const val MAX_NICKNAME_ATTEMPTS = 10
         private const val DICEBEAR_BASE_URL = "https://api.dicebear.com/9.x/bottts/svg?seed="
 
         // 형용사 32 × 동물 32 = 1024 조합. 모든 조합이 닉네임 10자 제한 이하가 되도록
-        // 형용사는 5자 이하, 동물은 3자 이하로 유지한다(최대 5+1+3=9자). 풀 고갈 근본 대응은 #312.
+        // 형용사는 5자 이하, 동물은 3자 이하로 유지한다(최대 5+1+3=9자).
         private val NICKNAME_PREFIXES =
             listOf(
                 "날뛰는",
@@ -89,6 +88,9 @@ class UserService(
                 "청설모",
                 "살쾡이",
             )
+        private val NICKNAME_POOL: List<String> by lazy {
+            NICKNAME_PREFIXES.flatMap { prefix -> NICKNAME_ANIMALS.map { animal -> "$prefix $animal" } }
+        }
     }
 
     @Transactional
@@ -185,10 +187,7 @@ class UserService(
     private fun dicebearUrl(userId: UUID): String = "$DICEBEAR_BASE_URL$userId"
 
     private fun generateUniqueGuestNickname(): String {
-        repeat(MAX_NICKNAME_ATTEMPTS) {
-            val candidate = "${NICKNAME_PREFIXES.random()} ${NICKNAME_ANIMALS.random()}"
-            if (!userRepository.existsByNickname(candidate)) return candidate
-        }
-        throw UserException.nicknameGenerationFailed()
+        val taken = userRepository.findNicknamesIn(NICKNAME_POOL).toSet()
+        return (NICKNAME_POOL - taken).randomOrNull() ?: throw UserException.nicknameGenerationFailed()
     }
 }
