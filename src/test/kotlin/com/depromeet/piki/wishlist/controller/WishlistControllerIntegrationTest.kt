@@ -542,14 +542,12 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val keptWishId = seedReadyWish(userId, "https://shop.example.com/products/1", "남길 상품")
         val deletedWishId1 = seedReadyWish(userId, "https://shop.example.com/products/2", "지울 상품1")
         val deletedWishId2 = seedReadyWish(userId, "https://shop.example.com/products/3", "지울 상품2")
-        val body = objectMapper.writeValueAsString(mapOf("wishIds" to listOf(deletedWishId1, deletedWishId2)))
 
         mockMvc
             .perform(
                 delete("/api/v1/wishlists")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, authHeader)
-                    .content(body),
+                    .param("ids", "$deletedWishId1,$deletedWishId2")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.code").value("OK"))
@@ -571,14 +569,12 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         insertMember(otherId)
         val myWishId = seedReadyWish(ownerId, "https://shop.example.com/products/1", "내 상품")
         val othersWishId = seedReadyWish(otherId, "https://shop.example.com/products/2", "남의 상품")
-        val body = objectMapper.writeValueAsString(mapOf("wishIds" to listOf(myWishId, othersWishId)))
 
         mockMvc
             .perform(
                 delete("/api/v1/wishlists")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(ownerId)}")
-                    .content(body),
+                    .param("ids", "$myWishId,$othersWishId")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(ownerId)}"),
             ).andExpect(status().isForbidden)
             .andExpect(jsonPath("$.status").value(403))
             .andExpect(jsonPath("$.code").value("FORBIDDEN"))
@@ -598,15 +594,13 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
         val existingWishId = seedReadyWish(userId, "https://shop.example.com/products/1", "존재하는 상품")
-        // 없는 id 가 섞여도 멱등 — 존재하는 본인 위시만 삭제하고 없는 id 는 "이미 없는 상태"로 무시한다.
-        val body = objectMapper.writeValueAsString(mapOf("wishIds" to listOf(existingWishId, 99999999L)))
 
+        // 없는 id 가 섞여도 멱등 — 존재하는 본인 위시만 삭제하고 없는 id 는 "이미 없는 상태"로 무시한다.
         mockMvc
             .perform(
                 delete("/api/v1/wishlists")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, authHeader)
-                    .content(body),
+                    .param("ids", "$existingWishId,99999999")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.code").value("OK"))
@@ -619,18 +613,35 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `다중 삭제 요청의 wishIds 가 비어 있으면 400 BAD_REQUEST 가 반환된다`() {
+    fun `다중 삭제에 ids 를 보내지 않으면 400 BAD_REQUEST 가 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
-        val body = objectMapper.writeValueAsString(mapOf("wishIds" to emptyList<Long>()))
+
+        // ids 파라미터 자체를 생략 — required=false + orEmpty 로 WishDeleteIds 검증(빈 목록)에 닿아 400.
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.detail").value("삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다."))
+    }
+
+    @Test
+    fun `다중 삭제 ids 가 100 개를 초과하면 400 BAD_REQUEST 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        // 상한 100 정책을 테스트로 고정 — 101개면 WishDeleteIds 가 거부한다.
+        val ids = (1L..101L).joinToString(",")
 
         mockMvc
             .perform(
                 delete("/api/v1/wishlists")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}")
-                    .content(body),
+                    .param("ids", ids)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.status").value(400))
             .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
@@ -643,15 +654,13 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
         val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "지울 상품")
-        // 같은 id 를 중복으로 보내도 서비스의 distinct 정규화로 존재 검증을 통과한다(404 로 떨어지지 않는다).
-        val body = objectMapper.writeValueAsString(mapOf("wishIds" to listOf(wishId, wishId)))
 
+        // 같은 id 를 중복으로 보내도 distinct 정규화로 1건으로 취급되어 정상 삭제된다.
         mockMvc
             .perform(
                 delete("/api/v1/wishlists")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, authHeader)
-                    .content(body),
+                    .param("ids", "$wishId,$wishId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
 
