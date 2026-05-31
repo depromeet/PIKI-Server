@@ -500,18 +500,37 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `존재하지 않는 위시를 삭제하면 404 가 반환된다`() {
+    fun `존재하지 않는 위시를 삭제해도 200 이 반환된다 (멱등)`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
 
+        // 멱등: 없는 위시는 "이미 삭제된 목표 상태"이므로 no-op 으로 성공한다.
         mockMvc
             .perform(
                 delete("/api/v1/wishlists/99999999")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
-            ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
-            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.code").value("OK"))
+    }
+
+    @Test
+    fun `이미 삭제된 위시를 다시 삭제해도 200 이 반환된다 (멱등)`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "지울 상품")
+
+        mockMvc
+            .perform(delete("/api/v1/wishlists/$wishId").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+        // 같은 위시 재삭제 — 이미 삭제된 상태라 멱등하게 다시 200.
+        mockMvc
+            .perform(delete("/api/v1/wishlists/$wishId").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
     }
 
     @Test
@@ -564,7 +583,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.status").value(403))
             .andExpect(jsonPath("$.code").value("FORBIDDEN"))
 
-        // all-or-nothing: 내 위시도 지워지지 않고 그대로 남아 있다.
+        // 남의것이 섞이면 403 + @Transactional 롤백 — 내 위시도 지워지지 않고 그대로 남아 있다.
         mockMvc
             .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(ownerId)}"))
             .andExpect(status().isOk)
@@ -573,12 +592,13 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `다중 삭제 목록에 존재하지 않는 위시가 섞이면 404 이고 아무것도 삭제되지 않는다`() {
+    fun `다중 삭제 목록에 존재하지 않는 위시가 섞여도 본인 것은 삭제되고 200 이 반환된다 (멱등)`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
         val existingWishId = seedReadyWish(userId, "https://shop.example.com/products/1", "존재하는 상품")
+        // 없는 id 가 섞여도 멱등 — 존재하는 본인 위시만 삭제하고 없는 id 는 "이미 없는 상태"로 무시한다.
         val body = objectMapper.writeValueAsString(mapOf("wishIds" to listOf(existingWishId, 99999999L)))
 
         mockMvc
@@ -587,16 +607,15 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.AUTHORIZATION, authHeader)
                     .content(body),
-            ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
-            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.code").value("OK"))
 
-        // all-or-nothing: 존재하던 위시도 지워지지 않고 그대로 남아 있다.
+        // 존재하던 본인 위시는 삭제되어 조회에서 빠진다.
         mockMvc
             .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, authHeader))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.length()").value(1))
-            .andExpect(jsonPath("$.data[0].wish.id").value(existingWishId))
+            .andExpect(jsonPath("$.data.length()").value(0))
     }
 
     @Test
