@@ -68,6 +68,26 @@ body {
   background: #1d4ed8;
 }
 
+/* 비밀번호 보기 토글 — .login-container input 의 공통 스타일이 체크박스에 적용되지 않게 reset */
+.login-show-pw {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #6b7280;
+  cursor: pointer;
+  text-align: left;
+}
+
+.login-show-pw input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+}
+
 /* 백오피스 셸 (사이드바 + 본문) */
 .bo-shell {
   display: flex;

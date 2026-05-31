@@ -15,7 +15,7 @@ import org.springframework.http.MediaType
 import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
-@Tag(name = "Wishlist", description = "위시리스트 등록/조회/수정/삭제 API")
+@Tag(name = "Wishlist", description = "위시리스트 등록/조회/복구/삭제 API")
 interface WishlistApi {
     @Operation(
         summary = "위시리스트 등록",
@@ -196,18 +196,20 @@ interface WishlistApi {
     ): ApiResponseBody<WishItemResponse>
 
     @Operation(
-        summary = "위시리스트 수정",
+        summary = "위시 항목 복구 (추출 실패 보정)",
         description = """
-            위시 항목에 연결된 상품(item)의 이름·현재가·이미지·통화를 수정한다. 들어온 필드만 갱신한다.
-            본인 위시만 수정 가능하며, item 을 직접 노출하지 않고 위시 소유 단위로 권한을 검증한다.
-            추출 실패(FAILED) 항목을 직접 보정하면 status 가 READY 로 복구된다.
+            추출에 실패(item.status=FAILED)한 위시 항목의 상품 정보(이름·현재가·이미지·통화)를 사용자가 직접 채워 복구한다.
+            들어온 필드만 갱신하며, 보정에 성공하면 status 가 READY 로 복구된다.
+            item 데이터는 링크에서 기계 추출한 사실이라, 이미 완성(READY)된 항목은 수정할 수 없고(409 CONFLICT),
+            파싱 중(PROCESSING)인 항목은 백그라운드 워커 소관이라 끼어들 수 없다(409 CONFLICT).
+            본인 위시만 보정 가능하며, item 을 직접 노출하지 않고 위시 소유 단위로 권한을 검증한다.
         """,
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "수정 성공",
+                description = "추출 실패(FAILED) 항목 보정 성공 — status 가 READY 로 복구됨",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -217,7 +219,7 @@ interface WishlistApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (currentPrice 음수 · name/imageUrl/currency 길이 초과)",
+                description = "잘못된 요청 (보정 후에도 상품명 없음 · currentPrice 음수 · name/imageUrl/currency 길이 초과)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -255,9 +257,19 @@ interface WishlistApi {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "409",
+                description = "수정할 수 없는 상태 (이미 등록 완료(READY) · 아직 처리 중(PROCESSING))",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
         ],
     )
-    fun updateWish(
+    fun recoverWishItem(
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "위시 항목 ID", example = "1024") wishId: Long,
         request: WishlistUpdateRequest,
@@ -376,7 +388,7 @@ interface WishlistApi {
             상품 페이지를 캡처한 이미지 1~5장을 받아, 각 이미지를 PROCESSING 상태의 위시 항목으로 즉시 등록하고 목록을 반환한다.
             실제 상품 정보 추출(Gemini Vision)은 백그라운드에서 비동기로 진행되어 각 항목을 READY 또는 FAILED 로 전이시킨다.
             URL 등록과 결과 모양(WishItemResponse)이 같다. 이미지 등록 항목은 URL 이 없어 sourceUrl 이 null 이며,
-            추출 결과는 조회로 폴링하거나 수정 API 로 교정한다.
+            추출 결과는 조회로 폴링하며, 추출 실패(FAILED) 항목은 보정 API(PATCH)로 직접 채워 복구한다.
         """,
     )
     @ApiResponses(
