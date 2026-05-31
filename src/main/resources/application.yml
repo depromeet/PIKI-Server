@@ -2,7 +2,10 @@ spring:
   application:
     name: PIKI
   config:
-    import: optional:file:.env[.properties]
+    # .env 다음에 .env.local 을 읽어 로컬 개인 override 를 덮어쓴다(뒤가 우선). 둘 다 optional·gitignore.
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:.env.local[.properties]
   servlet:
     multipart:
       max-file-size: 5MB

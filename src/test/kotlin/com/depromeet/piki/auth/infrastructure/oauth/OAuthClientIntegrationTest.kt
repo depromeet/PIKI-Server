@@ -24,7 +24,6 @@ class OAuthClientIntegrationTest : IntegrationTestSupport() {
             OAuthUserInfo(
                 provider = OAuthProvider.KAKAO,
                 socialId = "kakao_123",
-                email = "user@kakao.com",
                 profileImage = "https://img.kakao.com/profile.jpg",
             )
         }
@@ -33,7 +32,7 @@ class OAuthClientIntegrationTest : IntegrationTestSupport() {
 
         assertEquals(OAuthProvider.KAKAO, result.provider)
         assertEquals("kakao_123", result.socialId)
-        assertEquals("user@kakao.com", result.email)
+        assertEquals("https://img.kakao.com/profile.jpg", result.profileImage)
     }
 
     @Test
@@ -42,7 +41,6 @@ class OAuthClientIntegrationTest : IntegrationTestSupport() {
             OAuthUserInfo(
                 provider = OAuthProvider.KAKAO,
                 socialId = "kakao_sdk_123",
-                email = "user@kakao.com",
                 profileImage = "https://img.kakao.com/profile.jpg",
             )
         }
@@ -59,7 +57,6 @@ class OAuthClientIntegrationTest : IntegrationTestSupport() {
             OAuthUserInfo(
                 provider = OAuthProvider.GOOGLE,
                 socialId = "google_456",
-                email = "user@gmail.com",
                 profileImage = "https://lh3.googleusercontent.com/profile.jpg",
             )
         }
@@ -68,7 +65,6 @@ class OAuthClientIntegrationTest : IntegrationTestSupport() {
 
         assertEquals(OAuthProvider.GOOGLE, result.provider)
         assertEquals("google_456", result.socialId)
-        assertEquals("user@gmail.com", result.email)
     }
 
     @Test
@@ -77,8 +73,7 @@ class OAuthClientIntegrationTest : IntegrationTestSupport() {
             OAuthUserInfo(
                 provider = OAuthProvider.GOOGLE,
                 socialId = "google_sdk_456",
-                email = "user@gmail.com",
-                profileImage = "https://lh3.googleusercontent.com/profile.jpg",
+                profileImage = null,
             )
         }
 
@@ -86,6 +81,8 @@ class OAuthClientIntegrationTest : IntegrationTestSupport() {
 
         assertEquals(OAuthProvider.GOOGLE, result.provider)
         assertEquals("google_sdk_456", result.socialId)
+        // provider 가 이미지를 안 주면 null (소비측에서 기본 이미지로 대체)
+        assertEquals(null, result.profileImage)
     }
 
     @Test

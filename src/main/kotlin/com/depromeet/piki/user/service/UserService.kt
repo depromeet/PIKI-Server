@@ -17,6 +17,8 @@ class UserService(
         private const val MAX_NICKNAME_ATTEMPTS = 10
         private const val DICEBEAR_BASE_URL = "https://api.dicebear.com/9.x/bottts/svg?seed="
 
+        // 형용사 32 × 동물 32 = 1024 조합. 모든 조합이 닉네임 10자 제한 이하가 되도록
+        // 형용사는 5자 이하, 동물은 3자 이하로 유지한다(최대 5+1+3=9자). 풀 고갈 근본 대응은 #312.
         private val NICKNAME_PREFIXES =
             listOf(
                 "날뛰는",
@@ -35,6 +37,22 @@ class UserService(
                 "구르는",
                 "노래하는",
                 "울부짖는",
+                "용감한",
+                "귀여운",
+                "똑똑한",
+                "엉뚱한",
+                "수줍은",
+                "행복한",
+                "게으른",
+                "화난",
+                "신비한",
+                "우아한",
+                "까칠한",
+                "명랑한",
+                "차분한",
+                "도도한",
+                "엉큼한",
+                "발랄한",
             )
         private val NICKNAME_ANIMALS =
             listOf(
@@ -54,6 +72,22 @@ class UserService(
                 "돌고래",
                 "부엉이",
                 "다람쥐",
+                "너구리",
+                "수달",
+                "거북이",
+                "두더지",
+                "햄스터",
+                "코알라",
+                "캥거루",
+                "미어캣",
+                "알파카",
+                "치타",
+                "표범",
+                "오리",
+                "거위",
+                "두루미",
+                "청설모",
+                "살쾡이",
             )
     }
 
@@ -75,6 +109,26 @@ class UserService(
         return try {
             userRepository.save(
                 User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.MEMBER),
+            )
+        } catch (e: DataIntegrityViolationException) {
+            throw UserException.duplicateNickname()
+        }
+    }
+
+    // 소셜 신규 가입용 MEMBER 생성. 닉네임은 게스트와 동일하게 자동 생성(fill)하고 사용자가 나중에 수정한다.
+    // 프로필 이미지는 provider 가 준 게 있으면 쓰고, 없으면(동의 거부 등) dicebear 기본 아바타.
+    @Transactional
+    fun createSocialUser(profileImage: String?): User {
+        val id = UUID.randomUUID()
+        val nickname = generateUniqueGuestNickname()
+        return try {
+            userRepository.save(
+                User(
+                    id = id,
+                    nickname = nickname,
+                    profileImage = profileImage ?: dicebearUrl(id),
+                    identityType = IdentityType.MEMBER,
+                ),
             )
         } catch (e: DataIntegrityViolationException) {
             throw UserException.duplicateNickname()

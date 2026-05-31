@@ -7,7 +7,6 @@ data class KakaoUserInfoResponse(
     @JsonProperty("kakao_account") val kakaoAccount: KakaoAccount,
 ) {
     data class KakaoAccount(
-        val email: String = "",
         val profile: Profile = Profile(),
     ) {
         data class Profile(
