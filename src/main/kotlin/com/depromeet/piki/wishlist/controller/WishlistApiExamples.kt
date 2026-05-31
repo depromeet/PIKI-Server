@@ -22,7 +22,7 @@ class WishlistApiExamples(
     @Bean
     fun wishlistOpenApiExamples(): OperationCustomizer =
         OperationCustomizer { operation, handlerMethod ->
-            if (handlerMethod.binds(WishlistController::register)) {
+            if (handlerMethod.binds(WishlistController::registerFromUrl)) {
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.CREATED,
