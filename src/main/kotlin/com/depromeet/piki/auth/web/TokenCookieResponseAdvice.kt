@@ -90,7 +90,6 @@ class TokenCookieResponseAdvice(
         ApiResponseBody(
             data = data.withoutBodyTokens(),
             detail = original.detail,
-            traceId = original.traceId,
             pageResponse = original.pageResponse,
         )
 }
