@@ -106,6 +106,17 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             ).wish
             .getId()
 
+    // PROCESSING 상태 item+wish 시딩 — 파싱 중 항목에 클라이언트가 끼어드는(409) 시나리오용.
+    // 등록 API(워커 디스패치)를 거치지 않고 PROCESSING item 을 바로 영속화해 전이 전 상태에 멈춰 둔다.
+    private fun seedProcessingWish(
+        userId: UUID,
+        url: String,
+    ): Long =
+        wishPersistenceService
+            .persist(userId, Item.processing(ProductLink.parse(url)))
+            .wish
+            .getId()
+
     @Test
     fun `url 이 빈 문자열이면 400 BAD_REQUEST 가 반환된다`() {
         val mockMvc = buildMockMvc()
@@ -307,21 +318,14 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `위시 item 의 이름·가격·이미지·통화를 수정하면 200 과 갱신된 값이 반환된다`() {
+    fun `이미 등록 완료(READY)된 위시 item 을 수정하려 하면 409 CONFLICT 가 반환된다`() {
+        // item 데이터는 링크에서 기계 추출한 사실이라, 완성된(READY) 항목은 클라이언트가 손으로 못 바꾼다.
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
-        val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "잘못 읽힌 이름")
-        val body =
-            objectMapper.writeValueAsString(
-                mapOf(
-                    "name" to "교정된 이름",
-                    "currentPrice" to 88_000,
-                    "imageUrl" to "https://cdn.example.com/fixed.jpg",
-                    "currency" to "KRW",
-                ),
-            )
+        val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "이미 완성된 상품")
+        val body = objectMapper.writeValueAsString(mapOf("name" to "바꾸려는 이름"))
 
         mockMvc
             .perform(
@@ -329,43 +333,32 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.AUTHORIZATION, authHeader)
                     .content(body),
-            ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.data.wish.id").value(wishId))
-            .andExpect(jsonPath("$.data.item.name").value("교정된 이름"))
-            .andExpect(jsonPath("$.data.item.currentPrice").value(88_000))
-            .andExpect(jsonPath("$.data.item.imageUrl").value("https://cdn.example.com/fixed.jpg"))
-            .andExpect(jsonPath("$.data.item.currency").value("KRW"))
+            ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.status").value(409))
+            .andExpect(jsonPath("$.code").value("CONFLICT"))
+            .andExpect(jsonPath("$.detail").value("이미 등록 완료된 상품은 수정할 수 없습니다."))
     }
 
     @Test
-    fun `name 만 수정하면 currentPrice·currency·imageUrl 은 유지된다`() {
+    fun `파싱 중(PROCESSING)인 위시 item 을 수정하려 하면 409 CONFLICT 가 반환된다`() {
+        // 파싱 중 항목의 status 전이는 백그라운드 워커 소관이라 클라이언트가 끼어들 수 없다.
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
-        val wishId =
-            seedReadyWish(
-                userId,
-                "https://shop.example.com/products/1",
-                name = "원래 이름",
-                currentPrice = 50_000,
-                currency = "KRW",
-                imageUrl = "https://cdn.example.com/orig.jpg",
-            )
+        val wishId = seedProcessingWish(userId, "https://shop.example.com/products/1")
+        val body = objectMapper.writeValueAsString(mapOf("name" to "끼어든 수정"))
 
         mockMvc
             .perform(
                 patch("/api/v1/wishlists/$wishId")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.AUTHORIZATION, authHeader)
-                    .content(objectMapper.writeValueAsString(mapOf("name" to "새 이름"))),
-            ).andExpect(status().isOk)
-            // name 만 갱신, 나머지는 시딩 시점 값 유지
-            .andExpect(jsonPath("$.data.item.name").value("새 이름"))
-            .andExpect(jsonPath("$.data.item.currentPrice").value(50_000))
-            .andExpect(jsonPath("$.data.item.currency").value("KRW"))
-            .andExpect(jsonPath("$.data.item.imageUrl").value("https://cdn.example.com/orig.jpg"))
+                    .content(body),
+            ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.status").value(409))
+            .andExpect(jsonPath("$.code").value("CONFLICT"))
+            .andExpect(jsonPath("$.detail").value("아직 처리 중인 상품은 수정할 수 없습니다."))
     }
 
     @Test
@@ -395,6 +388,28 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.item.currentPrice").value(50_000))
             // 추출 실패(FAILED) 항목을 직접 보정하면 정상 항목이 된 것이므로 READY 로 복구된다.
             .andExpect(jsonPath("$.data.item.status").value("READY"))
+    }
+
+    @Test
+    fun `이름 없이 FAILED 위시 item 을 복구하려 하면 400 BAD_REQUEST 가 반환된다`() {
+        // 이름 없는 보정은 쓸 수 없는 상품을 READY 로 승격시키므로 막는다 (READY ⟹ name 불변식).
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedFailedWish(userId, "https://shop.example.com/products/1")
+        val body = objectMapper.writeValueAsString(mapOf("currentPrice" to 50_000))
+
+        mockMvc
+            .perform(
+                patch("/api/v1/wishlists/$wishId")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader)
+                    .content(body),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.detail").value("상품명을 입력해야 합니다."))
     }
 
     @Test

@@ -74,13 +74,13 @@ class WishlistController(
     }
 
     @PatchMapping("/{wishId}")
-    override fun updateWish(
+    override fun recoverWishItem(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable wishId: Long,
         @Valid @RequestBody request: WishlistUpdateRequest,
     ): ApiResponseBody<WishItemResponse> {
         val result =
-            wishlistService.updateWish(
+            wishlistService.recoverWishItem(
                 userId = userId,
                 wishId = wishId,
                 name = request.name,
