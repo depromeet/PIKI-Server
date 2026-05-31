@@ -106,6 +106,17 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             ).wish
             .getId()
 
+    // PROCESSING 상태 item+wish 시딩 — 파싱 중 항목에 클라이언트가 끼어드는(409) 시나리오용.
+    // 등록 API(워커 디스패치)를 거치지 않고 PROCESSING item 을 바로 영속화해 전이 전 상태에 멈춰 둔다.
+    private fun seedProcessingWish(
+        userId: UUID,
+        url: String,
+    ): Long =
+        wishPersistenceService
+            .persist(userId, Item.processing(ProductLink.parse(url)))
+            .wish
+            .getId()
+
     @Test
     fun `url 이 빈 문자열이면 400 BAD_REQUEST 가 반환된다`() {
         val mockMvc = buildMockMvc()
@@ -307,21 +318,14 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `위시 item 의 이름·가격·이미지·통화를 수정하면 200 과 갱신된 값이 반환된다`() {
+    fun `이미 등록 완료(READY)된 위시 item 을 수정하려 하면 409 CONFLICT 가 반환된다`() {
+        // item 데이터는 링크에서 기계 추출한 사실이라, 완성된(READY) 항목은 클라이언트가 손으로 못 바꾼다.
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
-        val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "잘못 읽힌 이름")
-        val body =
-            objectMapper.writeValueAsString(
-                mapOf(
-                    "name" to "교정된 이름",
-                    "currentPrice" to 88_000,
-                    "imageUrl" to "https://cdn.example.com/fixed.jpg",
-                    "currency" to "KRW",
-                ),
-            )
+        val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "이미 완성된 상품")
+        val body = objectMapper.writeValueAsString(mapOf("name" to "바꾸려는 이름"))
 
         mockMvc
             .perform(
@@ -329,43 +333,32 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.AUTHORIZATION, authHeader)
                     .content(body),
-            ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.data.wish.id").value(wishId))
-            .andExpect(jsonPath("$.data.item.name").value("교정된 이름"))
-            .andExpect(jsonPath("$.data.item.currentPrice").value(88_000))
-            .andExpect(jsonPath("$.data.item.imageUrl").value("https://cdn.example.com/fixed.jpg"))
-            .andExpect(jsonPath("$.data.item.currency").value("KRW"))
+            ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.status").value(409))
+            .andExpect(jsonPath("$.code").value("CONFLICT"))
+            .andExpect(jsonPath("$.detail").value("이미 등록 완료된 상품은 수정할 수 없습니다."))
     }
 
     @Test
-    fun `name 만 수정하면 currentPrice·currency·imageUrl 은 유지된다`() {
+    fun `파싱 중(PROCESSING)인 위시 item 을 수정하려 하면 409 CONFLICT 가 반환된다`() {
+        // 파싱 중 항목의 status 전이는 백그라운드 워커 소관이라 클라이언트가 끼어들 수 없다.
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
-        val wishId =
-            seedReadyWish(
-                userId,
-                "https://shop.example.com/products/1",
-                name = "원래 이름",
-                currentPrice = 50_000,
-                currency = "KRW",
-                imageUrl = "https://cdn.example.com/orig.jpg",
-            )
+        val wishId = seedProcessingWish(userId, "https://shop.example.com/products/1")
+        val body = objectMapper.writeValueAsString(mapOf("name" to "끼어든 수정"))
 
         mockMvc
             .perform(
                 patch("/api/v1/wishlists/$wishId")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.AUTHORIZATION, authHeader)
-                    .content(objectMapper.writeValueAsString(mapOf("name" to "새 이름"))),
-            ).andExpect(status().isOk)
-            // name 만 갱신, 나머지는 시딩 시점 값 유지
-            .andExpect(jsonPath("$.data.item.name").value("새 이름"))
-            .andExpect(jsonPath("$.data.item.currentPrice").value(50_000))
-            .andExpect(jsonPath("$.data.item.currency").value("KRW"))
-            .andExpect(jsonPath("$.data.item.imageUrl").value("https://cdn.example.com/orig.jpg"))
+                    .content(body),
+            ).andExpect(status().isConflict)
+            .andExpect(jsonPath("$.status").value(409))
+            .andExpect(jsonPath("$.code").value("CONFLICT"))
+            .andExpect(jsonPath("$.detail").value("아직 처리 중인 상품은 수정할 수 없습니다."))
     }
 
     @Test
@@ -395,6 +388,28 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.item.currentPrice").value(50_000))
             // 추출 실패(FAILED) 항목을 직접 보정하면 정상 항목이 된 것이므로 READY 로 복구된다.
             .andExpect(jsonPath("$.data.item.status").value("READY"))
+    }
+
+    @Test
+    fun `이름 없이 FAILED 위시 item 을 복구하려 하면 400 BAD_REQUEST 가 반환된다`() {
+        // 이름 없는 보정은 쓸 수 없는 상품을 READY 로 승격시키므로 막는다 (READY ⟹ name 불변식).
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedFailedWish(userId, "https://shop.example.com/products/1")
+        val body = objectMapper.writeValueAsString(mapOf("currentPrice" to 50_000))
+
+        mockMvc
+            .perform(
+                patch("/api/v1/wishlists/$wishId")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader)
+                    .content(body),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.detail").value("상품명을 입력해야 합니다."))
     }
 
     @Test
@@ -500,18 +515,174 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `존재하지 않는 위시를 삭제하면 404 가 반환된다`() {
+    fun `존재하지 않는 위시를 삭제해도 200 이 반환된다 (멱등)`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
 
+        // 멱등: 없는 위시는 "이미 삭제된 목표 상태"이므로 no-op 으로 성공한다.
         mockMvc
             .perform(
                 delete("/api/v1/wishlists/99999999")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
-            ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
-            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.code").value("OK"))
+    }
+
+    @Test
+    fun `이미 삭제된 위시를 다시 삭제해도 200 이 반환된다 (멱등)`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "지울 상품")
+
+        mockMvc
+            .perform(delete("/api/v1/wishlists/$wishId").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+        // 같은 위시 재삭제 — 이미 삭제된 상태라 멱등하게 다시 200.
+        mockMvc
+            .perform(delete("/api/v1/wishlists/$wishId").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+    }
+
+    @Test
+    fun `여러 위시를 다중 삭제하면 200 이고 모두 조회에서 제외된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val keptWishId = seedReadyWish(userId, "https://shop.example.com/products/1", "남길 상품")
+        val deletedWishId1 = seedReadyWish(userId, "https://shop.example.com/products/2", "지울 상품1")
+        val deletedWishId2 = seedReadyWish(userId, "https://shop.example.com/products/3", "지울 상품2")
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .param("ids", "$deletedWishId1,$deletedWishId2")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.code").value("OK"))
+
+        // 다중 삭제된 둘은 빠지고 남긴 하나만 조회된다.
+        mockMvc
+            .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].wish.id").value(keptWishId))
+    }
+
+    @Test
+    fun `다중 삭제 목록에 남의 위시가 섞이면 403 이고 아무것도 삭제되지 않는다`() {
+        val mockMvc = buildMockMvc()
+        val ownerId = UUID.randomUUID()
+        val otherId = UUID.randomUUID()
+        insertMember(ownerId)
+        insertMember(otherId)
+        val myWishId = seedReadyWish(ownerId, "https://shop.example.com/products/1", "내 상품")
+        val othersWishId = seedReadyWish(otherId, "https://shop.example.com/products/2", "남의 상품")
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .param("ids", "$myWishId,$othersWishId")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(ownerId)}"),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.status").value(403))
+            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
+
+        // 남의것이 섞이면 403 + @Transactional 롤백 — 내 위시도 지워지지 않고 그대로 남아 있다.
+        mockMvc
+            .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(ownerId)}"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].wish.id").value(myWishId))
+    }
+
+    @Test
+    fun `다중 삭제 목록에 존재하지 않는 위시가 섞여도 본인 것은 삭제되고 200 이 반환된다 (멱등)`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val existingWishId = seedReadyWish(userId, "https://shop.example.com/products/1", "존재하는 상품")
+
+        // 없는 id 가 섞여도 멱등 — 존재하는 본인 위시만 삭제하고 없는 id 는 "이미 없는 상태"로 무시한다.
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .param("ids", "$existingWishId,99999999")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.code").value("OK"))
+
+        // 존재하던 본인 위시는 삭제되어 조회에서 빠진다.
+        mockMvc
+            .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(0))
+    }
+
+    @Test
+    fun `다중 삭제에 ids 를 보내지 않으면 400 BAD_REQUEST 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+
+        // ids 파라미터 자체를 생략 — required=false + orEmpty 로 WishDeleteIds 검증(빈 목록)에 닿아 400.
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.detail").value("삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다."))
+    }
+
+    @Test
+    fun `다중 삭제 ids 가 100 개를 초과하면 400 BAD_REQUEST 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        // 상한 100 정책을 테스트로 고정 — 101개면 WishDeleteIds 가 거부한다.
+        val ids = (1L..101L).joinToString(",")
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .param("ids", ids)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+    }
+
+    @Test
+    fun `다중 삭제에 중복 id 를 보내도 정상 삭제되고 200 이 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "지울 상품")
+
+        // 같은 id 를 중복으로 보내도 distinct 정규화로 1건으로 취급되어 정상 삭제된다.
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists")
+                    .param("ids", "$wishId,$wishId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+
+        mockMvc
+            .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, authHeader))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(0))
     }
 
     @Test

@@ -1,0 +1,310 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  background: #f4f5f7;
+  color: #1f2329;
+}
+
+/* 로그인 */
+.login-container {
+  max-width: 360px;
+  margin: 120px auto;
+  padding: 32px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  text-align: center;
+}
+
+.login-container h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+}
+
+.login-desc {
+  margin: 0 0 24px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.login-error {
+  color: #d92d20;
+  font-size: 14px;
+}
+
+.login-info {
+  color: #2563eb;
+  font-size: 14px;
+}
+
+.login-container form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login-container input {
+  padding: 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+.login-container button {
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.login-container button:hover {
+  background: #1d4ed8;
+}
+
+/* 비밀번호 보기 토글 — .login-container input 의 공통 스타일이 체크박스에 적용되지 않게 reset */
+.login-show-pw {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #6b7280;
+  cursor: pointer;
+  text-align: left;
+}
+
+.login-show-pw input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+/* 백오피스 셸 (사이드바 + 본문) */
+.bo-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.bo-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: #1f2329;
+  color: #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 0;
+}
+
+.bo-brand {
+  padding: 0 20px 20px;
+  font-size: 18px;
+  font-weight: 600;
+  border-bottom: 1px solid #343a40;
+}
+
+.bo-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0;
+}
+
+.bo-nav a {
+  padding: 12px 20px;
+  color: #c0c4cc;
+  text-decoration: none;
+  font-size: 15px;
+}
+
+.bo-nav a:hover {
+  background: #2b3036;
+  color: #fff;
+}
+
+.bo-nav a.active {
+  background: #2563eb;
+  color: #fff;
+}
+
+.bo-logout {
+  padding: 12px 20px 0;
+}
+
+.bo-logout button {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #4b5563;
+  border-radius: 8px;
+  background: transparent;
+  color: #c0c4cc;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.bo-logout button:hover {
+  background: #2b3036;
+  color: #fff;
+}
+
+.bo-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: #fff;
+}
+
+.bo-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.bo-header h1 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.bo-content {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.bo-desc {
+  margin: 0 0 20px;
+  color: #6b7280;
+}
+
+/* 홈(대시보드) 카드 */
+.bo-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.bo-card {
+  display: block;
+  padding: 20px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  background: #fff;
+  transition: box-shadow 0.15s;
+}
+
+.bo-card:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.bo-card h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.bo-card p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.bo-card-disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.bo-card-disabled:hover {
+  box-shadow: none;
+}
+
+/* 플래시 메시지 */
+.bo-message {
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #e7f5ec;
+  color: #137333;
+  margin: 0 0 16px;
+}
+
+.bo-error {
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #fee4e2;
+  color: #d92d20;
+  margin: 0 0 16px;
+}
+
+/* 패널 (폼 / 테이블 묶음) */
+.bo-panel {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.bo-panel h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+}
+
+/* 폼 */
+.bo-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  max-width: 320px;
+}
+
+.bo-field label {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.bo-field input {
+  padding: 10px 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+.bo-panel form button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.bo-panel form button:hover {
+  background: #1d4ed8;
+}
+
+/* 테이블 */
+.bo-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.bo-table th,
+.bo-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+}
+
+.bo-table th {
+  color: #6b7280;
+  font-weight: 600;
+}

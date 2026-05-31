@@ -54,3 +54,10 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+
+# admin 백오피스를 모든 통합 테스트가 공유하는 단일 컨텍스트에서 항상 켠다(전역 1회 — @ActiveProfiles 분기 금지).
+# 폼 기반이라 외부 LLM 호출이 없고, 자격증명은 부팅 통과용 더미.
+admin:
+  enabled: true
+  username: admin
+  password: admin-test-pw

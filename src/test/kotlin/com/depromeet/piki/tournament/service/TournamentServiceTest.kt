@@ -95,6 +95,8 @@ class TournamentServiceTest {
 
         override fun findStaleProcessingIds(cutoff: java.time.LocalDateTime): List<Long> = emptyList()
 
+        override fun findRecent(limit: Int): List<Item> = emptyList()
+
         companion object {
             const val DEFAULT_PRICE = 10_000
         }
@@ -133,6 +135,8 @@ class TournamentServiceTest {
         ): List<Wish> = emptyList()
 
         override fun findById(id: Long): Wish? = null
+
+        override fun findAllByIds(ids: List<Long>): List<Wish> = emptyList()
     }
 
     private class TestUserRepository : UserRepository {

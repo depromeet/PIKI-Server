@@ -8,6 +8,7 @@ import com.depromeet.piki.item.service.ItemParsingService
 import com.depromeet.piki.item.service.ItemParsingWorker
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.wishlist.domain.WishCursor
+import com.depromeet.piki.wishlist.domain.WishDeleteIds
 import com.depromeet.piki.wishlist.domain.WishException
 import com.depromeet.piki.wishlist.domain.WishlistSize
 import com.depromeet.piki.wishlist.repository.WishRepository
@@ -120,9 +121,10 @@ class WishlistService(
         return WishWithItem(wish = wish, item = item)
     }
 
-    // item 의 name·currentPrice 를 수정한다. 변경은 @Transactional 커밋 시 dirty checking 으로 반영.
+    // 추출 실패(FAILED) item 을 사용자가 직접 보정해 READY 로 복구한다. READY·PROCESSING 은 도메인(recover)이
+    // 409 로 막는다. 변경은 @Transactional 커밋 시 dirty checking 으로 반영.
     @Transactional
-    fun updateWish(
+    fun recoverWishItem(
         userId: UUID,
         wishId: Long,
         name: String?,
@@ -134,18 +136,33 @@ class WishlistService(
         wish.verifyOwnedBy(userId)
         // wish 가 가리키는 item 은 반드시 존재한다. 없으면 영속화 경로가 깨진 코드 버그다.
         val item = itemRepository.findById(wish.itemId) ?: error("wish ${wish.getId()} 의 item ${wish.itemId} 가 없다")
-        item.update(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
+        item.recover(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
         return WishWithItem(wish = wish, item = item)
     }
 
+    // 멱등 삭제: 없거나 이미 삭제됐으면 "이미 목표 상태(없음)"이므로 성공으로 본다(no-op).
+    // 단 존재하는 위시가 남의 것이면 소유권은 보안 경계라 403 으로 막는다.
     @Transactional
     fun deleteWish(
         userId: UUID,
         wishId: Long,
     ) {
-        val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
+        val wish = wishRepository.findById(wishId) ?: return
         wish.verifyOwnedBy(userId)
         wish.delete()
+    }
+
+    // 여러 위시를 한 번에 멱등 삭제한다. 없거나 이미 삭제된 id 는 조회에서 빠져 자연히 무시된다(목표 상태 달성).
+    // 존재하는 것 중 남의 위시가 하나라도 있으면 소유권 경계로 403, @Transactional 이라 본인 것도 함께 롤백된다.
+    @Transactional
+    fun deleteWishes(
+        userId: UUID,
+        wishIds: WishDeleteIds,
+    ) {
+        // WishDeleteIds 가 distinct·개수(1~100) 검증을 끝낸 값이라 여기선 조회·소유검증·삭제만 한다.
+        val wishes = wishRepository.findAllByIds(wishIds.values)
+        wishes.forEach { it.verifyOwnedBy(userId) }
+        wishes.forEach { it.delete() }
     }
 
     companion object {

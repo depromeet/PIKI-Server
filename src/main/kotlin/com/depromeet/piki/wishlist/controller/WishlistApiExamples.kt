@@ -101,11 +101,11 @@ class WishlistApiExamples(
                     )
                 }
             }
-            if (handlerMethod.binds(WishlistController::updateWish)) {
+            if (handlerMethod.binds(WishlistController::recoverWishItem)) {
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.OK,
-                        name = "수정 성공",
+                        name = "FAILED 보정 성공 (READY 로 복구)",
                         payload = ApiResponseBody.ok(sampleEntry),
                     )
                     add(
@@ -116,6 +116,16 @@ class WishlistApiExamples(
                                 category = ErrorCategory.INVALID_INPUT,
                                 status = HttpStatus.BAD_REQUEST,
                                 detail = "가격은 0 이상이어야 합니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "상품명 없이 복구 시도",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.INVALID_INPUT,
+                                status = HttpStatus.BAD_REQUEST,
+                                detail = "상품명을 입력해야 합니다.",
                             ),
                     )
                     add(
@@ -136,6 +146,26 @@ class WishlistApiExamples(
                                 category = ErrorCategory.NOT_FOUND,
                                 status = HttpStatus.NOT_FOUND,
                                 detail = "존재하지 않는 위시리스트 항목입니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.CONFLICT,
+                        name = "이미 등록 완료(READY) 항목 — 수정 불가",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.CONFLICT,
+                                status = HttpStatus.CONFLICT,
+                                detail = "이미 등록 완료된 상품은 수정할 수 없습니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.CONFLICT,
+                        name = "아직 처리 중(PROCESSING) 항목 — 수정 불가",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.CONFLICT,
+                                status = HttpStatus.CONFLICT,
+                                detail = "아직 처리 중인 상품은 수정할 수 없습니다.",
                             ),
                     )
                 }
@@ -157,14 +187,33 @@ class WishlistApiExamples(
                                 detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
+                }
+            }
+            if (handlerMethod.binds(WishlistController::deleteWishes)) {
+                operation.examples(openApiObjectMapper.delegate) {
                     add(
-                        status = HttpStatus.NOT_FOUND,
-                        name = "존재하지 않는 위시 항목",
+                        status = HttpStatus.OK,
+                        name = "다중 삭제 성공",
+                        payload = ApiResponseBody.ok<Unit>(),
+                    )
+                    add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "ids 누락/빈 목록/100개 초과",
                         payload =
                             ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.NOT_FOUND,
-                                status = HttpStatus.NOT_FOUND,
-                                detail = "존재하지 않는 위시리스트 항목입니다.",
+                                category = ErrorCategory.INVALID_INPUT,
+                                status = HttpStatus.BAD_REQUEST,
+                                detail = "삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.FORBIDDEN,
+                        name = "본인 위시 아닌 항목 포함",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.FORBIDDEN,
+                                status = HttpStatus.FORBIDDEN,
+                                detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
                 }

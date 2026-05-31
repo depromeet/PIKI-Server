@@ -5,6 +5,7 @@ import com.depromeet.piki.common.response.PageResponse
 import com.depromeet.piki.wishlist.controller.dto.WishItemResponse
 import com.depromeet.piki.wishlist.controller.dto.WishlistRegisterRequest
 import com.depromeet.piki.wishlist.controller.dto.WishlistUpdateRequest
+import com.depromeet.piki.wishlist.domain.WishDeleteIds
 import com.depromeet.piki.wishlist.service.WishlistService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
@@ -74,13 +75,13 @@ class WishlistController(
     }
 
     @PatchMapping("/{wishId}")
-    override fun updateWish(
+    override fun recoverWishItem(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable wishId: Long,
         @Valid @RequestBody request: WishlistUpdateRequest,
     ): ApiResponseBody<WishItemResponse> {
         val result =
-            wishlistService.updateWish(
+            wishlistService.recoverWishItem(
                 userId = userId,
                 wishId = wishId,
                 name = request.name,
@@ -97,6 +98,19 @@ class WishlistController(
         @PathVariable wishId: Long,
     ): ApiResponseBody<Unit> {
         wishlistService.deleteWish(userId = userId, wishId = wishId)
+        return ApiResponseBody.ok()
+    }
+
+    // 다중 삭제는 의미상 DELETE 지만, DELETE + body 는 중간자(게이트웨이·LB·CDN)가 body 를 스트립/거절할 수 있어
+    // (RFC 9110 은 DELETE body 의미를 정의하지 않음) id 목록을 query param(?ids=1,2,3)으로 받는다.
+    // 누락 시 required=false + orEmpty 로 WishDeleteIds 검증(400)에 닿게 한다 — required=true 면 누락이
+    // MissingServletRequestParameterException → 캐치올 500 으로 새기 때문이다(registerFromImages 의 교훈).
+    @DeleteMapping
+    override fun deleteWishes(
+        @AuthenticationPrincipal userId: UUID,
+        @RequestParam(name = "ids", required = false) ids: List<Long>?,
+    ): ApiResponseBody<Unit> {
+        wishlistService.deleteWishes(userId = userId, wishIds = WishDeleteIds.of(ids.orEmpty()))
         return ApiResponseBody.ok()
     }
 }
