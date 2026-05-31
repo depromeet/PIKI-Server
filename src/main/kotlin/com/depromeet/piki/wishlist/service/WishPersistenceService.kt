@@ -43,4 +43,20 @@ class WishPersistenceService(
             WishWithItem(wish = wish, item = item)
         }
     }
+
+    // FAILED item 의 수동 보정 영속화 — S3 업로드(외부 호출)는 호출부가 트랜잭션 바깥에서 끝내고,
+    // 여기선 recover(값 변경 + FAILED→READY 전이)만 짧은 트랜잭션으로 묶는다(dirty checking).
+    // recover 가 READY/PROCESSING 을 409, 이름 없음을 400 으로 막는다(도메인 자기방어).
+    @Transactional
+    fun recoverItem(
+        itemId: Long,
+        name: String?,
+        currentPrice: Int?,
+        imageUrl: String?,
+        currency: String?,
+    ): Item {
+        val item = itemRepository.findById(itemId) ?: error("item $itemId 가 없다")
+        item.recover(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
+        return item
+    }
 }

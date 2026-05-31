@@ -198,8 +198,9 @@ interface WishlistApi {
     @Operation(
         summary = "복구 (추출 실패 보정)",
         description = """
-            추출에 실패(item.status=FAILED)한 위시 항목의 상품 정보(이름·현재가·이미지·통화)를 사용자가 직접 채워 복구한다.
-            들어온 필드만 갱신하며, 보정에 성공하면 status 가 READY 로 복구된다.
+            추출에 실패(item.status=FAILED)한 위시 항목의 상품 정보를 사용자가 직접 채워 복구한다(multipart/form-data).
+            텍스트(이름·현재가·통화)는 form 필드로, 이미지는 image 파트로 받는다 — 이미지는 URL 이 아니라 파일로만 받아
+            서버가 그대로 S3 에 올려 대표 이미지로 채운다(추출·크롭 없음). 들어온 값만 갱신하고, 보정에 성공하면 READY 로 복구된다.
             item 데이터는 링크에서 기계 추출한 사실이라, 이미 완성(READY)된 항목은 수정할 수 없고(409 CONFLICT),
             파싱 중(PROCESSING)인 항목은 백그라운드 워커 소관이라 끼어들 수 없다(409 CONFLICT).
             본인 위시만 보정 가능하며, item 을 직접 노출하지 않고 위시 소유 단위로 권한을 검증한다.
@@ -219,7 +220,9 @@ interface WishlistApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (보정 후에도 상품명 없음 · currentPrice 음수 · name/imageUrl/currency 길이 초과)",
+                description =
+                    "잘못된 요청 (보정 후에도 상품명 없음 · currentPrice 음수 · name/currency 길이 초과 · " +
+                        "빈 이미지 · 지원하지 않는 이미지 형식(png/jpeg/webp/heic/heif만 허용))",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -267,12 +270,23 @@ interface WishlistApi {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "502",
+                description = "이미지 저장소(S3) 업로드 실패 — 재시도 가능",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
         ],
     )
     fun recoverWishItem(
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "위시 항목 ID", example = "1024") wishId: Long,
         request: WishlistUpdateRequest,
+        image: MultipartFile?,
     ): ApiResponseBody<WishItemResponse>
 
     @Operation(

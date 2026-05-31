@@ -1,5 +1,6 @@
 package com.depromeet.piki.wishlist.service
 
+import com.depromeet.piki.common.storage.ImageStorage
 import com.depromeet.piki.image.domain.ProductImage
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.repository.ItemRepository
@@ -27,6 +28,7 @@ class WishlistService(
     private val imageParsingWorker: ImageParsingWorker,
     private val itemParsingService: ItemParsingService,
     private val wishPersistenceService: WishPersistenceService,
+    private val imageStorage: ImageStorage,
     private val wishRepository: WishRepository,
     private val itemRepository: ItemRepository,
 ) {
@@ -121,23 +123,33 @@ class WishlistService(
         return WishWithItem(wish = wish, item = item)
     }
 
-    // 추출 실패(FAILED) item 을 사용자가 직접 보정해 READY 로 복구한다. READY·PROCESSING 은 도메인(recover)이
-    // 409 로 막는다. 변경은 @Transactional 커밋 시 dirty checking 으로 반영.
-    @Transactional
+    // 추출 실패(FAILED) item 을 사용자가 직접 보정해 READY 로 복구한다. 이미지를 함께 주면 그대로 S3 에 올려
+    // imageUrl 을 채운다(추출·크롭 없음 — 사용자가 고른 이미지를 그대로 대표 이미지로). READY·PROCESSING 은
+    // recover 가 409 로 막는다. 외부 호출(S3)을 트랜잭션에 넣지 않기 위해 검증·소유권·상태 사전확인·업로드를
+    // 트랜잭션 밖에서 끝내고, 영속화만 wishPersistenceService.recoverItem(@Transactional)에 위임한다.
     fun recoverWishItem(
         userId: UUID,
         wishId: Long,
         name: String?,
         currentPrice: Int?,
-        imageUrl: String?,
         currency: String?,
+        image: MultipartFile?,
     ): WishWithItem {
+        // 이미지 형식 검증(빈 바이트·미지원 MIME) — 외부 호출 전에 동기로 거른다(400).
+        val productImage = image?.let { ProductImage.of(it.bytes, it.contentType) }
         val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
         wish.verifyOwnedBy(userId)
         // wish 가 가리키는 item 은 반드시 존재한다. 없으면 영속화 경로가 깨진 코드 버그다.
         val item = itemRepository.findById(wish.itemId) ?: error("wish ${wish.getId()} 의 item ${wish.itemId} 가 없다")
-        item.recover(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
-        return WishWithItem(wish = wish, item = item)
+        // FAILED 가 아니면 S3 에 올리기 전에 막는다(orphan 업로드 방지). recover 가 사유별 409 를 던진다.
+        if (!item.isFailed()) item.recover()
+        // 이미지가 있으면 S3 업로드(트랜잭션 밖). 실패 시 ImageStorageException(502).
+        val imageUrl =
+            productImage?.let {
+                imageStorage.upload(it.bytes, "items/${UUID.randomUUID()}.${it.extension}", it.mimeType)
+            }
+        val recovered = wishPersistenceService.recoverItem(wish.itemId, name, currentPrice, imageUrl, currency)
+        return WishWithItem(wish = wish, item = recovered)
     }
 
     // 멱등 삭제: 없거나 이미 삭제됐으면 "이미 목표 상태(없음)"이므로 성공으로 본다(no-op).

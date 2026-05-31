@@ -1,14 +1,17 @@
 package com.depromeet.piki.wishlist.controller
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.piki.common.storage.ImageStorageException
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.support.IntegrationTestSupport
+import com.depromeet.piki.support.StubImageStorage
 import com.depromeet.piki.support.uuidToBytes
 import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.wishlist.service.WishPersistenceService
 import org.hamcrest.Matchers.nullValue
+import org.hamcrest.Matchers.startsWith
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
@@ -20,7 +23,6 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -44,6 +46,9 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
     @Autowired
     private lateinit var wishPersistenceService: WishPersistenceService
+
+    @Autowired
+    private lateinit var stubImageStorage: StubImageStorage
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
@@ -325,14 +330,15 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
         val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "이미 완성된 상품")
-        val body = objectMapper.writeValueAsString(mapOf("name" to "바꾸려는 이름"))
 
         mockMvc
             .perform(
-                patch("/api/v1/wishlists/$wishId")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, authHeader)
-                    .content(body),
+                multipart("/api/v1/wishlists/$wishId")
+                    .param("name", "바꾸려는 이름")
+                    .with {
+                        it.method = "PATCH"
+                        it
+                    }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isConflict)
             .andExpect(jsonPath("$.status").value(409))
             .andExpect(jsonPath("$.code").value("CONFLICT"))
@@ -347,14 +353,15 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
         val wishId = seedProcessingWish(userId, "https://shop.example.com/products/1")
-        val body = objectMapper.writeValueAsString(mapOf("name" to "끼어든 수정"))
 
         mockMvc
             .perform(
-                patch("/api/v1/wishlists/$wishId")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, authHeader)
-                    .content(body),
+                multipart("/api/v1/wishlists/$wishId")
+                    .param("name", "끼어든 수정")
+                    .with {
+                        it.method = "PATCH"
+                        it
+                    }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isConflict)
             .andExpect(jsonPath("$.status").value(409))
             .andExpect(jsonPath("$.code").value("CONFLICT"))
@@ -368,20 +375,16 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
         val wishId = seedFailedWish(userId, "https://shop.example.com/products/1")
-        val body =
-            objectMapper.writeValueAsString(
-                mapOf(
-                    "name" to "직접 입력한 이름",
-                    "currentPrice" to 50_000,
-                ),
-            )
 
         mockMvc
             .perform(
-                patch("/api/v1/wishlists/$wishId")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, authHeader)
-                    .content(body),
+                multipart("/api/v1/wishlists/$wishId")
+                    .param("name", "직접 입력한 이름")
+                    .param("currentPrice", "50000")
+                    .with {
+                        it.method = "PATCH"
+                        it
+                    }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.item.name").value("직접 입력한 이름"))
@@ -398,14 +401,15 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
         val wishId = seedFailedWish(userId, "https://shop.example.com/products/1")
-        val body = objectMapper.writeValueAsString(mapOf("currentPrice" to 50_000))
 
         mockMvc
             .perform(
-                patch("/api/v1/wishlists/$wishId")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, authHeader)
-                    .content(body),
+                multipart("/api/v1/wishlists/$wishId")
+                    .param("currentPrice", "50000")
+                    .with {
+                        it.method = "PATCH"
+                        it
+                    }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.status").value(400))
             .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
@@ -420,14 +424,15 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         insertMember(ownerId)
         insertMember(otherId)
         val wishId = seedReadyWish(ownerId, "https://shop.example.com/products/1", "내 상품")
-        val body = objectMapper.writeValueAsString(mapOf("name" to "남이 바꾼 이름"))
 
         mockMvc
             .perform(
-                patch("/api/v1/wishlists/$wishId")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(otherId)}")
-                    .content(body),
+                multipart("/api/v1/wishlists/$wishId")
+                    .param("name", "남이 바꾼 이름")
+                    .with {
+                        it.method = "PATCH"
+                        it
+                    }.header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(otherId)}"),
             ).andExpect(status().isForbidden)
             .andExpect(jsonPath("$.status").value(403))
             .andExpect(jsonPath("$.code").value("FORBIDDEN"))
@@ -438,14 +443,15 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
-        val body = objectMapper.writeValueAsString(mapOf("name" to "아무거나"))
 
         mockMvc
             .perform(
-                patch("/api/v1/wishlists/99999999")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}")
-                    .content(body),
+                multipart("/api/v1/wishlists/99999999")
+                    .param("name", "아무거나")
+                    .with {
+                        it.method = "PATCH"
+                        it
+                    }.header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isNotFound)
             .andExpect(jsonPath("$.status").value(404))
             .andExpect(jsonPath("$.code").value("NOT_FOUND"))
@@ -458,17 +464,119 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         insertMember(userId)
         val authHeader = "Bearer ${memberToken(userId)}"
         val wishId = seedReadyWish(userId, "https://shop.example.com/products/1", "상품")
-        val body = objectMapper.writeValueAsString(mapOf("currentPrice" to -1))
 
         mockMvc
             .perform(
-                patch("/api/v1/wishlists/$wishId")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, authHeader)
-                    .content(body),
+                multipart("/api/v1/wishlists/$wishId")
+                    .param("currentPrice", "-1")
+                    .with {
+                        it.method = "PATCH"
+                        it
+                    }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.status").value(400))
             .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+    }
+
+    @Test
+    fun `FAILED 위시 item 을 이미지와 함께 보정하면 200 과 갱신된 imageUrl 로 복구된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedFailedWish(userId, "https://shop.example.com/products/1")
+        val image = MockMultipartFile("image", "p.png", "image/png", byteArrayOf(1, 2, 3))
+
+        mockMvc
+            .perform(
+                multipart("/api/v1/wishlists/$wishId")
+                    .file(image)
+                    .param("name", "직접 입력한 이름")
+                    .with {
+                        it.method = "PATCH"
+                        it
+                    }.header(HttpHeaders.AUTHORIZATION, authHeader),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.item.name").value("직접 입력한 이름"))
+            // 올린 이미지가 그대로 S3(stub)에 올라가 imageUrl 로 채워지고, FAILED 가 READY 로 복구된다.
+            .andExpect(jsonPath("$.data.item.imageUrl").value(startsWith("${StubImageStorage.BASE_URL}/items/")))
+            .andExpect(jsonPath("$.data.item.status").value("READY"))
+    }
+
+    @Test
+    fun `이미지 보정 시 지원하지 않는 형식을 보내면 400 BAD_REQUEST 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedFailedWish(userId, "https://shop.example.com/products/1")
+        val gif = MockMultipartFile("image", "p.gif", "image/gif", byteArrayOf(1, 2, 3))
+
+        mockMvc
+            .perform(
+                multipart("/api/v1/wishlists/$wishId")
+                    .file(gif)
+                    .param("name", "이름")
+                    .with {
+                        it.method = "PATCH"
+                        it
+                    }.header(HttpHeaders.AUTHORIZATION, authHeader),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+    }
+
+    @Test
+    fun `이미지 보정 시 빈 이미지를 보내면 400 BAD_REQUEST 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedFailedWish(userId, "https://shop.example.com/products/1")
+        val emptyImage = MockMultipartFile("image", "empty.png", "image/png", ByteArray(0))
+
+        mockMvc
+            .perform(
+                multipart("/api/v1/wishlists/$wishId")
+                    .file(emptyImage)
+                    .param("name", "이름")
+                    .with {
+                        it.method = "PATCH"
+                        it
+                    }.header(HttpHeaders.AUTHORIZATION, authHeader),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+    }
+
+    @Test
+    fun `이미지 보정 중 S3 업로드가 실패하면 502 BAD_GATEWAY 가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val authHeader = "Bearer ${memberToken(userId)}"
+        val wishId = seedFailedWish(userId, "https://shop.example.com/products/1")
+        val image = MockMultipartFile("image", "p.png", "image/png", byteArrayOf(1, 2, 3))
+        // S3 업로드 실패 주입. 공유 stub 이므로 끝에서 직접 기본 동작으로 복원한다.
+        stubImageStorage.behavior = { _, _, _ -> throw ImageStorageException.uploadFailed() }
+
+        try {
+            mockMvc
+                .perform(
+                    multipart("/api/v1/wishlists/$wishId")
+                        .file(image)
+                        .param("name", "이름")
+                        .with {
+                            it.method = "PATCH"
+                            it
+                        }.header(HttpHeaders.AUTHORIZATION, authHeader),
+                ).andExpect(status().isBadGateway)
+                .andExpect(jsonPath("$.status").value(502))
+                .andExpect(jsonPath("$.code").value("BAD_GATEWAY"))
+        } finally {
+            stubImageStorage.behavior = stubImageStorage.defaultBehavior
+        }
     }
 
     @Test
