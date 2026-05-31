@@ -3,13 +3,13 @@ package com.depromeet.piki.auth.infrastructure.oauth.google
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthClient
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthParams
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthProvider
+import com.depromeet.piki.auth.infrastructure.oauth.OAuthRestClient
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthUserInfo
 import com.depromeet.piki.auth.infrastructure.oauth.google.dto.GoogleTokenResponse
 import com.depromeet.piki.auth.infrastructure.oauth.google.dto.GoogleUserInfoResponse
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.util.LinkedMultiValueMap
-import org.springframework.web.client.RestClient
 import org.springframework.web.client.body
 
 class GoogleOAuthClient(
@@ -17,8 +17,8 @@ class GoogleOAuthClient(
 ) : OAuthClient {
     override val provider = OAuthProvider.GOOGLE
 
-    private val tokenClient = RestClient.builder().baseUrl(TOKEN_BASE_URL).build()
-    private val userInfoClient = RestClient.builder().baseUrl(USER_INFO_BASE_URL).build()
+    private val tokenClient = OAuthRestClient.create(TOKEN_BASE_URL)
+    private val userInfoClient = OAuthRestClient.create(USER_INFO_BASE_URL)
 
     // v1 — 백엔드가 code → access_token 교환 후 v2 메서드를 재사용해 user_info 조회.
     override fun fetchUserInfoByCode(
