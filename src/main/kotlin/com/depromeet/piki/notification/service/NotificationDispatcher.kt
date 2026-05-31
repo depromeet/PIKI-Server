@@ -10,14 +10,14 @@ import kotlin.reflect.KClass
 // 도메인 이벤트의 종류를 모른다 — when 분기 없이 handlers 맵으로만 라우팅하므로, 새 이벤트가 늘어도 이 클래스는 불변이다.
 @Component
 class NotificationDispatcher(
-    handlers: List<NotificationEventHandler<*>>,
+    handlers: List<NotificationEventHandler>,
     private val templateProvider: NotificationTemplateProvider,
     private val renderer: NotificationTemplateRenderer,
     private val persistence: NotificationPersistenceService,
     private val channels: List<NotificationChannel>,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
-    private val byType: Map<KClass<*>, NotificationEventHandler<*>> =
+    private val byType: Map<KClass<*>, NotificationEventHandler> =
         handlers.associateBy { it.eventType }
 
     // associateBy 는 eventType 충돌 시 마지막 핸들러로 조용히 덮어쓴다 — 같은 이벤트에 핸들러를 둘
@@ -28,10 +28,9 @@ class NotificationDispatcher(
     }
 
     fun dispatch(event: Any) {
-        // 타입 캐스팅은 여기 한 곳에 격리한다 — byType 매칭이 eventType 과 event::class 의 일치를 보장하므로 안전.
-        @Suppress("UNCHECKED_CAST")
+        // byType 매칭이 eventType 과 event::class 의 일치를 보장하므로, 핸들러는 event 를 자기 타입으로 안전하게 캐스팅한다.
         val handler =
-            byType[event::class] as? NotificationEventHandler<Any>
+            byType[event::class]
                 ?: error("핸들러 미등록: ${event::class.simpleName}")
 
         val recipients = handler.resolveRecipients(event)
