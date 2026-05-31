@@ -9,7 +9,8 @@ services:
       MYSQL_USER: ${DB_USERNAME:-piki}
       MYSQL_PASSWORD: ${DB_PASSWORD:-piki}
     ports:
-      - "3306:3306"
+      # loopback 바인딩 — 공유망·원격 Docker host 에서 무인증 외부 접근을 막는다. 로컬 앱은 localhost 로 접속.
+      - "127.0.0.1:3306:3306"
     volumes:
       - piki-mysql-data:/var/lib/mysql
     command:
@@ -28,7 +29,8 @@ services:
     container_name: piki-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      # loopback 바인딩 — Redis 무인증 외부 접근(데이터 변조·삭제) 차단. 로컬 앱은 localhost 로 접속.
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
