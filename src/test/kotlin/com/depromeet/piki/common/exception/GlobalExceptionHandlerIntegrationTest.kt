@@ -1,12 +1,14 @@
 package com.depromeet.piki.common.exception
 
 import com.depromeet.piki.support.IntegrationTestSupport
+import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -80,5 +82,41 @@ class GlobalExceptionHandlerIntegrationTest : IntegrationTestSupport() {
             ).andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.status").value(400))
             .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+    }
+
+    @Test
+    fun `검증 실패(@Valid 위반)는 400 으로 매핑되고 detail 에 첫 필드 에러를 노출한다`() {
+        // refresh 는 @Valid + TokenRefreshRequest(@NotBlank) 라, refreshToken 이 빈 문자열이면
+        // MethodArgumentNotValidException → detailOf 가 "{field}: ..." 를 노출하는 분기를 탄다.
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/token/refresh")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"refreshToken":""}"""),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+            .andExpect(jsonPath("$.detail", containsString("refreshToken")))
+    }
+
+    @Test
+    fun `POST 전용 엔드포인트에 GET 하면 500 이 아니라 405 로 매핑된다`() {
+        // /api/v1/dev/{userId}/token 은 POST 전용 + GUEST 권한 필요. 게스트 토큰으로 보안을 통과시킨 뒤
+        // GET 으로 호출해 HttpRequestMethodNotSupportedException(405) 을 유발한다.
+        val guest =
+            objectMapper.readTree(
+                mockMvc()
+                    .perform(post("/api/v1/auth/guest").header("X-Client-Type", "app"))
+                    .andReturn()
+                    .response.contentAsString,
+            )
+        val guestId = guest.at("/data/user/id").asString()
+        val guestToken = guest.at("/data/accessToken").asString()
+
+        mockMvc()
+            .perform(get("/api/v1/dev/$guestId/token").header(HttpHeaders.AUTHORIZATION, "Bearer $guestToken"))
+            .andExpect(status().isMethodNotAllowed)
+            .andExpect(jsonPath("$.status").value(405))
+            .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"))
     }
 }
