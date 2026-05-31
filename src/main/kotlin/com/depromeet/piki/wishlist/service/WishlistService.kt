@@ -8,6 +8,7 @@ import com.depromeet.piki.item.service.ItemParsingService
 import com.depromeet.piki.item.service.ItemParsingWorker
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.wishlist.domain.WishCursor
+import com.depromeet.piki.wishlist.domain.WishDeleteIds
 import com.depromeet.piki.wishlist.domain.WishException
 import com.depromeet.piki.wishlist.domain.WishlistSize
 import com.depromeet.piki.wishlist.repository.WishRepository
@@ -155,10 +156,10 @@ class WishlistService(
     @Transactional
     fun deleteWishes(
         userId: UUID,
-        wishIds: List<Long>,
+        wishIds: WishDeleteIds,
     ) {
-        // 중복 id 는 같은 위시를 가리킬 뿐이므로 정규화한다.
-        val wishes = wishRepository.findAllByIds(wishIds.distinct())
+        // WishDeleteIds 가 distinct·개수(1~100) 검증을 끝낸 값이라 여기선 조회·소유검증·삭제만 한다.
+        val wishes = wishRepository.findAllByIds(wishIds.values)
         wishes.forEach { it.verifyOwnedBy(userId) }
         wishes.forEach { it.delete() }
     }

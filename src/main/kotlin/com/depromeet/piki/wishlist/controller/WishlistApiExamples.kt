@@ -168,12 +168,12 @@ class WishlistApiExamples(
                     )
                     add(
                         status = HttpStatus.BAD_REQUEST,
-                        name = "빈 목록",
+                        name = "ids 누락/빈 목록/100개 초과",
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
                                 status = HttpStatus.BAD_REQUEST,
-                                detail = "삭제할 위시 ID 목록은 비어 있을 수 없습니다.",
+                                detail = "삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다.",
                             ),
                     )
                     add(

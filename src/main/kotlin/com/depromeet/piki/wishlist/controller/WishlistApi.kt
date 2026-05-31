@@ -2,7 +2,6 @@ package com.depromeet.piki.wishlist.controller
 
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.wishlist.controller.dto.WishItemResponse
-import com.depromeet.piki.wishlist.controller.dto.WishlistBulkDeleteRequest
 import com.depromeet.piki.wishlist.controller.dto.WishlistRegisterRequest
 import com.depromeet.piki.wishlist.controller.dto.WishlistUpdateRequest
 import io.swagger.v3.oas.annotations.Operation
@@ -317,6 +316,8 @@ interface WishlistApi {
             무시하고(목표 상태 달성) 성공으로 처리한다. 단 존재하는 항목 중 본인 소유가 아닌 위시가 하나라도
             섞이면 소유권 경계로 403 을 주고 아무것도 삭제하지 않는다. 중복 ID 는 무시한다.
             삭제된 항목은 조회 결과에서 제외된다.
+            id 목록은 query param 으로 받는다(예: ?ids=1024,1025,1026, 1~100개). DELETE + body 는
+            중간자(게이트웨이·LB·CDN)가 body 를 스트립/거절할 수 있어 피한다.
         """,
     )
     @ApiResponses(
@@ -333,7 +334,7 @@ interface WishlistApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (wishIds 가 비어 있음 · 100개 초과)",
+                description = "잘못된 요청 (ids 가 비어 있음 · 누락 · 100개 초과)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -365,7 +366,8 @@ interface WishlistApi {
     )
     fun deleteWishes(
         @Parameter(hidden = true) userId: UUID,
-        request: WishlistBulkDeleteRequest,
+        @Parameter(description = "삭제할 위시 ID 목록 (쉼표 구분, 1~100개)", example = "1024,1025,1026")
+        ids: List<Long>?,
     ): ApiResponseBody<Unit>
 
     @Operation(

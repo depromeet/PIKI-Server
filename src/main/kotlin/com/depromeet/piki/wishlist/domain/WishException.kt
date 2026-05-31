@@ -42,5 +42,12 @@ class WishException private constructor(
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
+
+        fun invalidIdCount(): WishException =
+            WishException(
+                "삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
     }
 }
