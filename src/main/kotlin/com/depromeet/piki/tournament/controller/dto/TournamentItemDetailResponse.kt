@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonInclude
 data class TournamentItemDetailResponse(
     val tournamentItemId: Long,
     val itemId: Long,
+    val sourceUrl: String?,
     val name: String?,
     val imageUrl: String?,
     val price: Int?,
@@ -19,6 +20,7 @@ data class TournamentItemDetailResponse(
             TournamentItemDetailResponse(
                 tournamentItemId = detail.tournamentItemId,
                 itemId = detail.itemId,
+                sourceUrl = detail.sourceUrl,
                 name = detail.name,
                 imageUrl = detail.imageUrl,
                 price = detail.price,
