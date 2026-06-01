@@ -634,6 +634,7 @@ interface TournamentApi {
             - PROCESSING: 파싱 진행 중 (name·price·imageUrl 은 null)
             - READY: 파싱 완료 (모든 필드 채워짐)
             - FAILED: 파싱 실패 (상품 페이지 아님 또는 추출 불가)
+            sourceUrl: 등록 시 입력한 원본 링크. 이미지로 등록한 경우 null.
             토너먼트 참여자만 조회할 수 있다.
         """,
     )

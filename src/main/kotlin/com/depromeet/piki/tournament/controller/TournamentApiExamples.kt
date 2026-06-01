@@ -357,14 +357,31 @@ class TournamentApiExamples(
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.OK,
-                            name = "READY - 파싱 완료",
+                            name = "READY - 파싱 완료 (링크 등록)",
                             payload = ApiResponseBody.ok(
                                 TournamentItemDetailResponse(
                                     tournamentItemId = 10,
                                     itemId = 100,
+                                    sourceUrl = "https://www.nike.com/kr/t/air-max/example",
                                     name = "나이키 에어맥스",
                                     imageUrl = "https://cdn.example.com/items/1.jpg",
                                     price = 129_000,
+                                    currency = "KRW",
+                                    status = ItemStatus.READY,
+                                ),
+                            ),
+                        )
+                        add(
+                            status = HttpStatus.OK,
+                            name = "READY - 파싱 완료 (이미지 등록, sourceUrl=null)",
+                            payload = ApiResponseBody.ok(
+                                TournamentItemDetailResponse(
+                                    tournamentItemId = 11,
+                                    itemId = 101,
+                                    sourceUrl = null,
+                                    name = "아디다스 울트라부스트",
+                                    imageUrl = "https://cdn.example.com/items/2.jpg",
+                                    price = 189_000,
                                     currency = "KRW",
                                     status = ItemStatus.READY,
                                 ),
@@ -377,6 +394,7 @@ class TournamentApiExamples(
                                 TournamentItemDetailResponse(
                                     tournamentItemId = 10,
                                     itemId = 100,
+                                    sourceUrl = "https://www.nike.com/kr/t/air-max/example",
                                     name = null,
                                     imageUrl = null,
                                     price = null,
@@ -392,6 +410,7 @@ class TournamentApiExamples(
                                 TournamentItemDetailResponse(
                                     tournamentItemId = 10,
                                     itemId = 100,
+                                    sourceUrl = "https://www.nike.com/kr/t/air-max/example",
                                     name = null,
                                     imageUrl = null,
                                     price = null,
