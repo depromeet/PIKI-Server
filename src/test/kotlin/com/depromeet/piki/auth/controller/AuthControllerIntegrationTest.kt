@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
+import kotlin.test.assertNotEquals
 
 @Transactional
 class AuthControllerIntegrationTest : IntegrationTestSupport() {
@@ -121,5 +122,21 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
         mockMvc()
             .perform(post("/api/v1/auth/logout").contentType(MediaType.APPLICATION_JSON))
             .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `POST auth guest - 연속 두 번 호출하면 서로 다른 닉네임이 발급된다`() {
+        val firstResult =
+            mockMvc()
+                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app"))
+                .andReturn()
+        val secondResult =
+            mockMvc()
+                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app"))
+                .andReturn()
+
+        val firstNickname = objectMapper.readTree(firstResult.response.contentAsString).at("/data/user/nickname").asText()
+        val secondNickname = objectMapper.readTree(secondResult.response.contentAsString).at("/data/user/nickname").asText()
+        assertNotEquals(firstNickname, secondNickname)
     }
 }

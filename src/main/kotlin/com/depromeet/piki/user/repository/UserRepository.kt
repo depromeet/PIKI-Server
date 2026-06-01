@@ -18,4 +18,6 @@ interface UserRepository {
         nickname: String,
         excludeUserId: UUID,
     ): Boolean
+
+    fun findNicknamesIn(candidates: Collection<String>): List<String>
 }

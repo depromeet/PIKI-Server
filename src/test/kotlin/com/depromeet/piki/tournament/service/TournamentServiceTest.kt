@@ -158,6 +158,9 @@ class TournamentServiceTest {
             nickname: String,
             excludeUserId: UUID,
         ): Boolean = users.values.any { it.nickname == nickname && it.id != excludeUserId }
+
+        override fun findNicknamesIn(candidates: Collection<String>): List<String> =
+            users.values.map { it.nickname }.filter { it in candidates }
     }
 
     private class TestTournamentItemRepository : TournamentItemRepository {
