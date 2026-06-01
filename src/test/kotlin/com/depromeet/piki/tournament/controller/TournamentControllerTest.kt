@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -840,6 +841,137 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 delete("/api/v1/tournaments/$tournamentId1/items/$itemOfTournament2")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-items-itemId 는 FAILED 아이템을 수정하고 READY 로 전환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val failedItem = itemJpaRepository.save(Item(status = ItemStatus.FAILED))
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"name":"수정된 이름","price":50000,"currency":"KRW"}"""),
+            ).andExpect(status().isOk)
+
+        val updated = itemJpaRepository.findById(failedItem.getId()).get()
+        assertEquals("수정된 이름", updated.name)
+        assertEquals(50000, updated.currentPrice)
+        assertEquals("KRW", updated.currency)
+        assertEquals(ItemStatus.READY, updated.status)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-items-itemId 에서 READY 아이템이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val readyItemId = saveWishItem()
+        addItemsToTournament(mockMvc, tournamentId, userId, readyItemId)
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"name":"수정 시도"}"""),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-items-itemId 에서 PROCESSING 아이템이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val processingItem = itemJpaRepository.save(Item(status = ItemStatus.PROCESSING))
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = processingItem.getId(), userId = userId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"name":"수정 시도"}"""),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-items-itemId 에서 IN_PROGRESS 토너먼트이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, item1Id) = startTournamentWith2Items(mockMvc)
+        val failedItem = itemJpaRepository.save(Item(status = ItemStatus.FAILED))
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).last().getId()
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"name":"수정 시도","price":10000,"currency":"KRW"}"""),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-items-itemId 에서 아이템 등록자가 아니면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        tournamentUserJpaRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
+        val failedItem = itemJpaRepository.save(Item(status = ItemStatus.FAILED))
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = otherUserId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"name":"수정 시도"}"""),
+            ).andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-items-itemId 는 이름이 있는 FAILED 아이템에 가격만 보내면 이름을 유지하며 200 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val failedItem = itemJpaRepository.save(Item(name = "기존 이름", status = ItemStatus.FAILED))
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"price":50000,"currency":"KRW"}"""),
+            ).andExpect(status().isOk)
+
+        val updated = itemJpaRepository.findById(failedItem.getId()).get()
+        assertEquals("기존 이름", updated.name)
+        assertEquals(50000, updated.currentPrice)
+        assertEquals(ItemStatus.READY, updated.status)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-items-itemId 에서 이름 없이 수정하면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val failedItem = itemJpaRepository.save(Item(status = ItemStatus.FAILED))
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"price":50000}"""),
+            ).andExpect(status().isBadRequest)
     }
 
     @Test
