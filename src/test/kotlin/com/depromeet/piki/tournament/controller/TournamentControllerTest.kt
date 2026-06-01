@@ -3,6 +3,7 @@ package com.depromeet.piki.tournament.controller
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.domain.ItemStatus
+import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.item.repository.ItemJpaRepository
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubImageParsingWorker
@@ -1101,6 +1102,33 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.name").value("나이키 에어맥스"))
             .andExpect(jsonPath("$.data.price").value(129_000))
             .andExpect(jsonPath("$.data.currency").value("KRW"))
+            .andExpect(jsonPath("$.data.status").value("READY"))
+            // 이미지·위시 등록 아이템은 sourceUrl 이 없어 응답에 포함되지 않는다
+            .andExpect(jsonPath("$.data.sourceUrl").doesNotExist())
+    }
+
+    @Test
+    fun `GET tournaments-id-items-tournamentItemId 는 링크 등록 아이템의 sourceUrl 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val sourceUrl = "https://www.nike.com/kr/t/air-max/example"
+        val linkItem = itemJpaRepository.save(
+            Item(
+                link = ProductLink.parse(sourceUrl),
+                name = "나이키",
+                currentPrice = 100_000,
+                currency = "KRW",
+            ),
+        )
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = linkItem.getId(), userId = userId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.sourceUrl").value(sourceUrl))
             .andExpect(jsonPath("$.data.status").value("READY"))
     }
 
