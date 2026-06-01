@@ -32,6 +32,10 @@ data "aws_ami" "ubuntu_2404_arm64" {
   }
 }
 
+# -----------------------------------------------------------------------------
+# 운영(prod) EC2 — 기존 인스턴스. Name 태그만 prod 로 명시.
+# var.environment 기본값(dev)이 바뀌어도 이 태그는 영향 받지 않도록 하드코딩.
+# -----------------------------------------------------------------------------
 resource "aws_instance" "app" {
   ami                    = var.ec2_ami_id != null ? var.ec2_ami_id : data.aws_ami.ubuntu_2404_arm64[0].id
   instance_type          = var.ec2_instance_type
@@ -41,11 +45,6 @@ resource "aws_instance" "app" {
   key_name               = "team3-SE-1"
   iam_instance_profile   = aws_iam_instance_profile.app.name
 
-  # IMDSv2 강제 — 2019 Capital One 사태의 원인이었던 IMDSv1 SSRF 취약점 방어.
-  # http_tokens = "required" 로 두면 메타데이터 조회 시 토큰 세션이 필수가 된다.
-  # hop_limit = 2 — 앱이 Docker bridge 컨테이너에서 돌아 IMDS(169.254.169.254)까지
-  # "컨테이너 → 호스트" 1홉이 더 필요하다. 1 이면 컨테이너 안 앱이 instance role
-  # 자격증명을 못 받아 S3 업로드가 실패한다. 2 는 컨테이너 한 단계까지만 허용해 여전히 안전.
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
@@ -60,6 +59,37 @@ resource "aws_instance" "app" {
   }
 
   tags = {
-    Name = "${local.name_prefix}-app"
+    Name = "team3-prod-app"
+  }
+}
+
+# -----------------------------------------------------------------------------
+# 개발(dev) EC2 — 신규 인스턴스.
+# 동일 VPC/서브넷/SG 를 공유하며, 별도 EIP 와 도메인(dev.*)으로 분리.
+# -----------------------------------------------------------------------------
+resource "aws_instance" "dev_app" {
+  ami                    = var.ec2_ami_id != null ? var.ec2_ami_id : data.aws_ami.ubuntu_2404_arm64[0].id
+  instance_type          = var.ec2_instance_type
+  subnet_id              = aws_subnet.public.id
+  availability_zone      = var.azs[0]
+  vpc_security_group_ids = [aws_security_group.ec2.id]
+  key_name               = "team3-SE-1"
+  iam_instance_profile   = aws_iam_instance_profile.app.name
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
+  root_block_device {
+    volume_size           = 20
+    volume_type           = "gp3"
+    encrypted             = true
+    delete_on_termination = true
+  }
+
+  tags = {
+    Name = "team3-dev-app"
   }
 }
