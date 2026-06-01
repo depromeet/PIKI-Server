@@ -17,6 +17,8 @@
   [ -z "$NOTION_TOKEN" ] && eval "$(grep '^export NOTION_TOKEN=' ~/.zshrc 2>/dev/null)"
   ```
 - **모든 Notion 호출은 HTTP 200 을 확인한다.** read(카드 조회·본문 조회)가 비-200이면 그 단계에서 멈추고 보드 반영을 생략한다(best-effort). 비-200 응답을 본문인 양 파싱하면 401/403/429/5xx 를 "카드 없음"·"미기록"으로 오인해 잘못 진행한다. 카드 생성(`mode=issue`)·append·상태 PATCH 도 200 이 아니면 사용자에게 보고하고 멈춘다.
+- **임시파일은 브랜치별 경로로 격리한다.** Notion 호출의 응답·요청 임시파일(`nb_cards`/`nb_created`/`nb_body`/`nb_append`/`nb_create`)은 고정 이름이 아니라 `/tmp/<이름>_$SLUG.json` 을 쓴다 (`SLUG` = 브랜치명의 `/` 를 `_` 로 치환). 두 워크트리 세션이 동시에 보드 반영을 돌려도 파일이 안 겹친다. 셸 변수는 bash 호출 간 유지되지 않으므로 각 bash 블록은 `SLUG=$(git branch --show-current | tr '/' '_')` 를 자기 안에서 다시 구한다. **quoted heredoc(`<<'PY'`) 안에선 `$SLUG` 가 확장되지 않으므로, `python3` 가 여는 파일 경로는 셸에서 argv 로 넘겨 `sys.argv[1]` 로 받는다.**
+- **진입 시 stale 정리.** 2단계 시작에서 7일 넘게 안 건드린 `nb_*.json` 임시파일을 mtime 기준으로 지운다 — `session-close` 를 안 거치고 중단된 작업의 누수를 회수하되, 동시 세션의 최신 파일은 보존한다. 임시파일은 지워져도 API 재조회로 재생성돼 손실이 없으므로, 진행 중 작업을 안 건드리도록 임계값을 넉넉히 둔다.
 
 ## 상수
 
@@ -57,14 +59,16 @@
 
 ```bash
 [ -z "$NOTION_TOKEN" ] && eval "$(grep '^export NOTION_TOKEN=' ~/.zshrc 2>/dev/null)"
+SLUG=$(git branch --show-current | tr '/' '_')
+find /tmp/ -maxdepth 1 -name 'nb_*.json' -mmin +10080 -delete 2>/dev/null   # 진입 정리: 7일+ stale 누수 회수, 최신 파일 보존 (임시파일은 재조회로 재생성돼 손실 없으니 임계값 넉넉히). /tmp/ trailing slash 필수 (macOS /tmp 는 /private/tmp symlink — 슬래시 없으면 find no-op), -mmin +10080 = 7일 초과 (-mtime 은 +1일 반올림)
 DB=5a0c800c-72cf-8307-8297-8124d888ca79
 code=$(curl -s -X POST "https://api.notion.com/v1/databases/$DB/query" \
   -H "Authorization: Bearer $NOTION_TOKEN" -H "Notion-Version: 2022-06-28" -H "Content-Type: application/json" \
-  --data '{"page_size":100}' -o /tmp/nb_cards.json -w "%{http_code}")
+  --data '{"page_size":100}' -o /tmp/nb_cards_$SLUG.json -w "%{http_code}")
 [ "$code" = "200" ] || { echo "Notion query 실패 (HTTP $code) — 보드 반영 생략"; exit 0; }
-python3 - <<'PY'
-import json
-d=json.load(open('/tmp/nb_cards.json'))
+python3 - "/tmp/nb_cards_$SLUG.json" <<'PY'
+import json, sys
+d=json.load(open(sys.argv[1]))
 for p in d.get('results',[]):
     pr=p['properties']
     title=''.join(t['plain_text'] for t in pr['프로젝트명']['title'])
@@ -99,7 +103,8 @@ PY
 
 ```bash
 [ -z "$NOTION_TOKEN" ] && eval "$(grep '^export NOTION_TOKEN=' ~/.zshrc 2>/dev/null)"
-cat > /tmp/nb_create.json <<'JSON'
+SLUG=$(git branch --show-current | tr '/' '_')
+cat > /tmp/nb_create_$SLUG.json <<'JSON'
 {"parent":{"database_id":"5a0c800c-72cf-8307-8297-8124d888ca79"},
  "properties":{
    "프로젝트명":{"title":[{"text":{"content":"[BE] <카드 제목>"}}]},
@@ -108,9 +113,12 @@ cat > /tmp/nb_create.json <<'JSON'
 JSON
 code=$(curl -s -X POST "https://api.notion.com/v1/pages" \
   -H "Authorization: Bearer $NOTION_TOKEN" -H "Notion-Version: 2022-06-28" -H "Content-Type: application/json" \
-  --data @/tmp/nb_create.json -o /tmp/nb_created.json -w "%{http_code}")
+  --data @/tmp/nb_create_$SLUG.json -o /tmp/nb_created_$SLUG.json -w "%{http_code}")
 [ "$code" = "200" ] || { echo "카드 생성 실패 (HTTP $code) — 보드 반영 생략"; exit 0; }
-python3 -c "import json;print(json.load(open('/tmp/nb_created.json'))['id'])"
+python3 - "/tmp/nb_created_$SLUG.json" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1]))['id'])
+PY
 ```
 
 - 출력된 page id 가 `<PAGE_ID>`. `프로젝트명`·`상태` 외 property(`파트`/`시작일`/`마감일`/`담당자`/`진행률`)는 **세팅하지 않는다** — 사람 몫.
@@ -122,12 +130,13 @@ python3 -c "import json;print(json.load(open('/tmp/nb_created.json'))['id'])"
 
 ```bash
 [ -z "$NOTION_TOKEN" ] && eval "$(grep '^export NOTION_TOKEN=' ~/.zshrc 2>/dev/null)"
+SLUG=$(git branch --show-current | tr '/' '_')
 code=$(curl -s "https://api.notion.com/v1/blocks/<PAGE_ID>/children?page_size=100" \
-  -H "Authorization: Bearer $NOTION_TOKEN" -H "Notion-Version: 2022-06-28" -o /tmp/nb_body.json -w "%{http_code}")
+  -H "Authorization: Bearer $NOTION_TOKEN" -H "Notion-Version: 2022-06-28" -o /tmp/nb_body_$SLUG.json -w "%{http_code}")
 [ "$code" = "200" ] || { echo "카드 본문 조회 실패 (HTTP $code) — 보드 반영 생략"; exit 0; }
-python3 - <<'PY'
-import json
-d=json.load(open('/tmp/nb_body.json'))
+python3 - "/tmp/nb_body_$SLUG.json" <<'PY'
+import json, sys
+d=json.load(open(sys.argv[1]))
 heading=False; already=False
 TOKEN='<MATCH_TOKEN>'   # mode=pr: 'PR #<번호>', mode=issue: '이슈 #<번호>'
 for b in d.get('results',[]):
@@ -144,7 +153,7 @@ PY
 
 ### 5. append (개발 로그)
 
-`/tmp/nb_append.json` 을 만든다 — `개발 로그` heading 이 **없을 때만**(3b 신규 카드는 항상 없음) heading_3 을 먼저 포함, 이어서 bullet (전체를 링크로):
+`/tmp/nb_append_$SLUG.json` 을 만든다 (`SLUG` = 브랜치명의 `/`→`_`, 전제 규칙) — `개발 로그` heading 이 **없을 때만**(3b 신규 카드는 항상 없음) heading_3 을 먼저 포함, 이어서 bullet (전체를 링크로):
 
 - `mode=pr`: bullet 텍스트 = `PR #<번호> <사람이 읽는 PR 제목> (<KST 오늘 날짜>)`, link = `<PR_URL>`.
 - `mode=issue`: bullet 텍스트 = `이슈 #<번호> <이슈 제목> (<KST 오늘 날짜>)`, link = `<이슈 URL>`.
@@ -164,9 +173,10 @@ PY
 
 ```bash
 [ -z "$NOTION_TOKEN" ] && eval "$(grep '^export NOTION_TOKEN=' ~/.zshrc 2>/dev/null)"
+SLUG=$(git branch --show-current | tr '/' '_')
 code=$(curl -s -X PATCH "https://api.notion.com/v1/blocks/<PAGE_ID>/children" \
   -H "Authorization: Bearer $NOTION_TOKEN" -H "Notion-Version: 2022-06-28" -H "Content-Type: application/json" \
-  --data @/tmp/nb_append.json -o /dev/null -w "%{http_code}")
+  --data @/tmp/nb_append_$SLUG.json -o /dev/null -w "%{http_code}")
 echo "append HTTP $code"; [ "$code" = "200" ] || echo "append 실패 — 사용자에게 보고"
 ```
 
