@@ -62,6 +62,6 @@ private fun writeApiResponseBody(
     response.status = status.value()
     response.contentType = MediaType.APPLICATION_JSON_VALUE
     response.characterEncoding = Charsets.UTF_8.name()
-    val body = ApiResponseBody.fail<Nothing>(category, status)
+    val body = ApiResponseBody.fail<Nothing>(category)
     response.writer.write(objectMapper.writeValueAsString(body))
 }

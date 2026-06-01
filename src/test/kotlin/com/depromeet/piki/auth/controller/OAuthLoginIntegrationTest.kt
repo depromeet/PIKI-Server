@@ -217,7 +217,6 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
             .perform(
                 post("/api/v1/auth/login/google").contentType(MediaType.APPLICATION_JSON).content("{}"),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test
@@ -228,7 +227,6 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(loginBody("accessToken" to "t", "code" to "c", "redirectUri" to "https://app/callback")),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test
@@ -255,7 +253,6 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
                     ),
                 ),
             ).andExpect(status().isBadGateway)
-            .andExpect(jsonPath("$.status").value(502))
     }
 
     @Test

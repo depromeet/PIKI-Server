@@ -35,7 +35,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                status = HttpStatus.BAD_REQUEST,
                                 detail = "지원하지 않는 URL 형식입니다.",
                             ),
                     )
@@ -85,7 +84,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.FORBIDDEN,
-                                status = HttpStatus.FORBIDDEN,
                                 detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
@@ -95,7 +93,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.NOT_FOUND,
-                                status = HttpStatus.NOT_FOUND,
                                 detail = "존재하지 않는 위시리스트 항목입니다.",
                             ),
                     )
@@ -114,7 +111,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                status = HttpStatus.BAD_REQUEST,
                                 detail = "가격은 0 이상이어야 합니다.",
                             ),
                     )
@@ -124,7 +120,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                status = HttpStatus.BAD_REQUEST,
                                 detail = "상품명을 입력해야 합니다.",
                             ),
                     )
@@ -134,7 +129,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.FORBIDDEN,
-                                status = HttpStatus.FORBIDDEN,
                                 detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
@@ -144,7 +138,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.NOT_FOUND,
-                                status = HttpStatus.NOT_FOUND,
                                 detail = "존재하지 않는 위시리스트 항목입니다.",
                             ),
                     )
@@ -154,7 +147,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.CONFLICT,
-                                status = HttpStatus.CONFLICT,
                                 detail = "이미 등록 완료된 상품은 수정할 수 없습니다.",
                             ),
                     )
@@ -164,7 +156,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.CONFLICT,
-                                status = HttpStatus.CONFLICT,
                                 detail = "아직 처리 중인 상품은 수정할 수 없습니다.",
                             ),
                     )
@@ -174,7 +165,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.RETRYABLE,
-                                status = HttpStatus.BAD_GATEWAY,
                                 detail = "이미지 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.",
                             ),
                     )
@@ -193,7 +183,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.FORBIDDEN,
-                                status = HttpStatus.FORBIDDEN,
                                 detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
@@ -212,7 +201,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                status = HttpStatus.BAD_REQUEST,
                                 detail = "삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다.",
                             ),
                     )
@@ -222,7 +210,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.FORBIDDEN,
-                                status = HttpStatus.FORBIDDEN,
                                 detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
@@ -241,7 +228,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                status = HttpStatus.BAD_REQUEST,
                                 detail = "이미지는 최소 1개, 최대 5개까지 전송할 수 있습니다.",
                             ),
                     )
@@ -251,7 +237,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                status = HttpStatus.BAD_REQUEST,
                                 detail = ProductImage.unsupportedMimeTypeMessage("image/gif"),
                             ),
                     )
