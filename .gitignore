@@ -22,10 +22,9 @@ build/
 # IntelliJ 컴파일 출력
 out/
 
-# Environment
-.env
-.env.test
-.env-local
+# Environment — .env* 전부 무시하되 템플릿(.env.example)은 커밋 유지
+.env*
+!.env.example
 
 # Kotlin
 .kotlin/

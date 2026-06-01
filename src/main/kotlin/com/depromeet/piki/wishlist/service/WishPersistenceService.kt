@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
-// WishlistService 의 register 가 외부 LLM 호출을 트랜잭션 바깥에 두도록
+// WishlistService 의 registerFromUrl 가 외부 LLM 호출을 트랜잭션 바깥에 두도록
 // 영속화만 별도 빈으로 분리. 같은 빈에서 호출하면 Spring AOP proxy 를
 // 거치지 않아 @Transactional 가 무력화되기 때문이다.
 @Service
@@ -42,5 +42,21 @@ class WishPersistenceService(
             val wish = wishRepository.save(Wish(userId = userId, itemId = item.getId()))
             WishWithItem(wish = wish, item = item)
         }
+    }
+
+    // FAILED item 의 수동 보정 영속화 — S3 업로드(외부 호출)는 호출부가 트랜잭션 바깥에서 끝내고,
+    // 여기선 recover(값 변경 + FAILED→READY 전이)만 짧은 트랜잭션으로 묶는다(dirty checking).
+    // recover 가 READY/PROCESSING 을 409, 이름 없음을 400 으로 막는다(도메인 자기방어).
+    @Transactional
+    fun recoverItem(
+        itemId: Long,
+        name: String?,
+        currentPrice: Int?,
+        imageUrl: String?,
+        currency: String?,
+    ): Item {
+        val item = itemRepository.findById(itemId) ?: error("item $itemId 가 없다")
+        item.recover(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
+        return item
     }
 }

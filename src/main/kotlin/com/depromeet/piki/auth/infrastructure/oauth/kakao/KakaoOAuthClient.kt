@@ -3,13 +3,13 @@ package com.depromeet.piki.auth.infrastructure.oauth.kakao
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthClient
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthParams
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthProvider
+import com.depromeet.piki.auth.infrastructure.oauth.OAuthRestClient
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthUserInfo
 import com.depromeet.piki.auth.infrastructure.oauth.kakao.dto.KakaoTokenResponse
 import com.depromeet.piki.auth.infrastructure.oauth.kakao.dto.KakaoUserInfoResponse
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.util.LinkedMultiValueMap
-import org.springframework.web.client.RestClient
 import org.springframework.web.client.body
 
 class KakaoOAuthClient(
@@ -17,8 +17,8 @@ class KakaoOAuthClient(
 ) : OAuthClient {
     override val provider = OAuthProvider.KAKAO
 
-    private val authClient = RestClient.builder().baseUrl(AUTH_BASE_URL).build()
-    private val apiClient = RestClient.builder().baseUrl(API_BASE_URL).build()
+    private val authClient = OAuthRestClient.create(AUTH_BASE_URL)
+    private val apiClient = OAuthRestClient.create(API_BASE_URL)
 
     // v1 — 백엔드가 code → access_token 교환 후 v2 메서드를 재사용해 user_info 조회.
     override fun fetchUserInfoByCode(
@@ -36,8 +36,9 @@ class KakaoOAuthClient(
         return OAuthUserInfo(
             provider = OAuthProvider.KAKAO,
             socialId = userInfo.id.toString(),
-            email = userInfo.kakaoAccount.email,
-            profileImage = userInfo.kakaoAccount.profile.profileImageUrl,
+            profileImage =
+                userInfo.kakaoAccount.profile.profileImageUrl
+                    .ifBlank { null },
         )
     }
 

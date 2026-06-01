@@ -18,7 +18,7 @@ import java.util.UUID
 @Tag(name = "Wishlist", description = "위시리스트 등록/조회/복구/삭제 API")
 interface WishlistApi {
     @Operation(
-        summary = "위시리스트 등록",
+        summary = "등록 (URL)",
         description = """
             상품 페이지 URL 을 받아 위시리스트에 등록한다. 메타데이터(이름/가격/이미지) 추출은 외부 LLM 호출이라
             오래 걸리므로 동기로 기다리지 않는다. 등록 즉시 item.status=PROCESSING 인 항목을 201 로 반환하고,
@@ -70,13 +70,13 @@ interface WishlistApi {
             ),
         ],
     )
-    fun register(
+    fun registerFromUrl(
         @Parameter(hidden = true) userId: UUID,
         request: WishlistRegisterRequest,
     ): ApiResponseBody<WishItemResponse>
 
     @Operation(
-        summary = "위시리스트 조회",
+        summary = "조회 (다건)",
         description = """
             로그인한 유저 본인의 위시리스트를 최신 등록순(id desc)으로 조회한다.
             cursor 페이지네이션: 직전 응답의 pageResponse.nextCursor 를 다음 요청 cursor 로 그대로 전달한다.
@@ -139,7 +139,7 @@ interface WishlistApi {
     ): ApiResponseBody<List<WishItemResponse>>
 
     @Operation(
-        summary = "위시리스트 단건 조회",
+        summary = "조회 (단건)",
         description = """
             wishId 로 위시 항목 하나를 조회한다. 응답 모양은 목록 조회 항목과 같은 WishItemResponse(wish + item).
             본인 위시만 조회 가능하며, item 을 직접 노출하지 않고 위시 소유 단위로 권한을 검증한다.
@@ -196,10 +196,11 @@ interface WishlistApi {
     ): ApiResponseBody<WishItemResponse>
 
     @Operation(
-        summary = "위시 항목 복구 (추출 실패 보정)",
+        summary = "복구 (추출 실패 보정)",
         description = """
-            추출에 실패(item.status=FAILED)한 위시 항목의 상품 정보(이름·현재가·이미지·통화)를 사용자가 직접 채워 복구한다.
-            들어온 필드만 갱신하며, 보정에 성공하면 status 가 READY 로 복구된다.
+            추출에 실패(item.status=FAILED)한 위시 항목의 상품 정보를 사용자가 직접 채워 복구한다(multipart/form-data).
+            텍스트(이름·현재가·통화)는 form 필드로, 이미지는 image 파트로 받는다 — 이미지는 URL 이 아니라 파일로만 받아
+            서버가 그대로 S3 에 올려 대표 이미지로 채운다(추출·크롭 없음). 들어온 값만 갱신하고, 보정에 성공하면 READY 로 복구된다.
             item 데이터는 링크에서 기계 추출한 사실이라, 이미 완성(READY)된 항목은 수정할 수 없고(409 CONFLICT),
             파싱 중(PROCESSING)인 항목은 백그라운드 워커 소관이라 끼어들 수 없다(409 CONFLICT).
             본인 위시만 보정 가능하며, item 을 직접 노출하지 않고 위시 소유 단위로 권한을 검증한다.
@@ -219,7 +220,9 @@ interface WishlistApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (보정 후에도 상품명 없음 · currentPrice 음수 · name/imageUrl/currency 길이 초과)",
+                description =
+                    "잘못된 요청 (보정 후에도 상품명 없음 · currentPrice 음수 · name/currency 길이 초과 · " +
+                        "빈 이미지 · 지원하지 않는 이미지 형식(png/jpeg/webp/heic/heif만 허용))",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -267,26 +270,37 @@ interface WishlistApi {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "502",
+                description = "이미지 저장소(S3) 업로드 실패 — 재시도 가능",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
         ],
     )
     fun recoverWishItem(
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "위시 항목 ID", example = "1024") wishId: Long,
         request: WishlistUpdateRequest,
+        image: MultipartFile?,
     ): ApiResponseBody<WishItemResponse>
 
     @Operation(
-        summary = "위시리스트 삭제",
+        summary = "삭제 (단건)",
         description = """
-            위시 항목을 삭제한다(soft delete). 본인 위시만 삭제 가능하다.
-            삭제된 항목은 조회 결과에서 제외된다.
+            위시 항목을 삭제한다(soft delete). 멱등 — 이미 없거나 삭제된 항목이면 아무 일도 하지 않고 성공한다.
+            존재하는 항목은 본인 위시만 삭제 가능하다. 삭제된 항목은 조회 결과에서 제외된다.
         """,
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "삭제 성공 (data 없음)",
+                description = "삭제 성공 (없거나 이미 삭제된 항목도 멱등 성공, data 없음)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -314,9 +328,59 @@ interface WishlistApi {
                     ),
                 ],
             ),
+        ],
+    )
+    fun deleteWish(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "위시 항목 ID", example = "1024") wishId: Long,
+    ): ApiResponseBody<Unit>
+
+    @Operation(
+        summary = "삭제 (다건)",
+        description = """
+            위시 항목 여러 개를 한 번에 멱등 삭제한다(soft delete). 요청 목록 중 없거나 이미 삭제된 id 는
+            무시하고(목표 상태 달성) 성공으로 처리한다. 단 존재하는 항목 중 본인 소유가 아닌 위시가 하나라도
+            섞이면 소유권 경계로 403 을 주고 아무것도 삭제하지 않는다. 중복 ID 는 무시한다.
+            삭제된 항목은 조회 결과에서 제외된다.
+            id 목록은 query param 으로 받는다(예: ?ids=1024,1025,1026, 1~100개). DELETE + body 는
+            중간자(게이트웨이·LB·CDN)가 body 를 스트립/거절할 수 있어 피한다.
+        """,
+    )
+    @ApiResponses(
+        value = [
             ApiResponse(
-                responseCode = "404",
-                description = "존재하지 않는 위시 항목 (삭제된 항목 포함)",
+                responseCode = "200",
+                description = "삭제 성공 (없거나 이미 삭제된 항목은 무시, data 없음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "400",
+                description = "잘못된 요청 (ids 가 비어 있음 · 누락 · 100개 초과)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "권한 없음 (GUEST 권한으로 접근 불가 · MEMBER 필요, 또는 목록에 본인 위시가 아닌 항목이 섞여 있음)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -326,13 +390,14 @@ interface WishlistApi {
             ),
         ],
     )
-    fun deleteWish(
+    fun deleteWishes(
         @Parameter(hidden = true) userId: UUID,
-        @Parameter(description = "위시 항목 ID", example = "1024") wishId: Long,
+        @Parameter(description = "삭제할 위시 ID 목록 (쉼표 구분, 1~100개)", example = "1024,1025,1026")
+        ids: List<Long>?,
     ): ApiResponseBody<Unit>
 
     @Operation(
-        summary = "위시리스트 이미지 등록 (다건)",
+        summary = "등록 (이미지)",
         description = """
             상품 페이지를 캡처한 이미지 1~5장을 받아, 각 이미지를 PROCESSING 상태의 위시 항목으로 즉시 등록하고 목록을 반환한다.
             실제 상품 정보 추출(Gemini Vision)은 백그라운드에서 비동기로 진행되어 각 항목을 READY 또는 FAILED 로 전이시킨다.

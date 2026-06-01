@@ -145,6 +145,10 @@ class Item(
     // PROCESSING(파싱 중)·FAILED(실패)는 false — 이름·가격이 비어 있어 출전에 부적합하다.
     fun isReady(): Boolean = status == ItemStatus.READY
 
+    // 클라이언트 보정(recover) 대상인지 — FAILED 만 보정 가능. 서비스가 S3 업로드 같은 외부 작업 전에
+    // 미리 걸러 헛된 비용(orphan 업로드)을 막는 사전 가드용. 도메인 최후 보루는 recover 가 진다.
+    fun isFailed(): Boolean = status == ItemStatus.FAILED
+
     // READY 불변식 — "쓸 수 있는 상품"은 최소한 이름이 있어야 한다. isReady() 게이트(목록 노출·토너먼트 출전)가
     // 미완성 item 을 정상 상품으로 취급하지 않도록, READY 가 되는 명시 경로(from·markReady)에서 검사한다.
     // 엔티티 최후의 보루이므로 require(불변식)다 — 정상 흐름에선 입력 경계(recover 의 nameRequiredForReady,
