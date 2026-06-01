@@ -236,6 +236,7 @@ class TournamentService(
         return TournamentItemDetail(
             tournamentItemId = tournamentItem.getId(),
             itemId = item.getId(),
+            sourceUrl = item.link?.value?.toString(),
             name = item.name,
             imageUrl = item.imageUrl,
             price = item.currentPrice,
