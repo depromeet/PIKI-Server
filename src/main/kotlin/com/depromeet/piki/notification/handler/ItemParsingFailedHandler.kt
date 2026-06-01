@@ -12,7 +12,7 @@ class ItemParsingFailedHandler :
     override fun resolveRefId(event: ItemParsingFailed): Long = event.itemId
 
     // TODO(#236 수신자 정책 합의): itemId 역조회로 수신자 결정 후 구현. (ItemParsingCompletedHandler 와 동일 보류 사유)
-    override fun resolveRecipients(event: ItemParsingFailed): List<UUID> = emptyList()
+    override fun resolveRecipients(event: ItemParsingFailed): Set<UUID> = emptySet()
 
     // 변수 없는 알림 — resolveVariables 는 베이스 기본값(emptyMap)을 그대로 쓴다.
 }

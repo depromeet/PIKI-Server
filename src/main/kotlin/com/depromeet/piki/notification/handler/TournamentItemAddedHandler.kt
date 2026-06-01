@@ -12,7 +12,7 @@ class TournamentItemAddedHandler :
     override fun resolveRefId(event: TournamentItemAdded): Long = event.tournamentId
 
     // TODO(#236 수신자 정책 합의): tournamentId 역조회 — owner-only vs 참가자 fan-out(actor 제외) 결정 후 구현.
-    override fun resolveRecipients(event: TournamentItemAdded): List<UUID> = emptyList()
+    override fun resolveRecipients(event: TournamentItemAdded): Set<UUID> = emptySet()
 
     // TODO(#236): actorId -> actorName 닉네임 조회. 수신자 핸들러 완성 시 함께 채운다.
     override fun resolveVariables(event: TournamentItemAdded): Map<String, String> = emptyMap()

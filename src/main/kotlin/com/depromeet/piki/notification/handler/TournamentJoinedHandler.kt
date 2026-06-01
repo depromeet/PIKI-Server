@@ -14,7 +14,7 @@ class TournamentJoinedHandler :
     override fun resolveRefId(event: TournamentJoined): Long = event.tournamentId
 
     // TODO(#236 수신자 정책 합의 + 참여 기능 신설): tournamentId 역조회로 수신자 결정 후 구현.
-    override fun resolveRecipients(event: TournamentJoined): List<UUID> = emptyList()
+    override fun resolveRecipients(event: TournamentJoined): Set<UUID> = emptySet()
 
     // TODO(#236): actorId -> actorName 닉네임 조회. 수신자 핸들러 완성 시 함께 채운다.
     override fun resolveVariables(event: TournamentJoined): Map<String, String> = emptyMap()

@@ -25,7 +25,9 @@ abstract class NotificationEventHandler<E : Any>(
     abstract fun resolveRefId(event: E): Long
 
     // 수신자 (개인=본인 / 협업=참가자 fan-out). refId 로 위시·토너먼트를 역조회해 결정한다.
-    abstract fun resolveRecipients(event: E): List<UUID>
+    // Set 으로 둬 "수신자는 중복 없는 집합"을 타입에 박는다 — owner + 참가자를 합쳐도 같은 유저에게
+    // 알림 row 가 중복 저장되지 않는다(#236 fan-out 안전).
+    abstract fun resolveRecipients(event: E): Set<UUID>
 
     // 템플릿 변수 (예: actorName). 변수 없는 알림은 기본값 emptyMap 을 그대로 쓰고 override 하지 않는다.
     open fun resolveVariables(event: E): Map<String, String> = emptyMap()
