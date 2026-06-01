@@ -2,7 +2,10 @@ spring:
   application:
     name: PIKI
   config:
-    import: optional:file:.env[.properties]
+    # .env 다음에 .env.local 을 읽어 로컬 개인 override 를 덮어쓴다(뒤가 우선). 둘 다 optional·gitignore.
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:.env.local[.properties]
   servlet:
     multipart:
       max-file-size: 5MB
@@ -24,6 +27,12 @@ spring:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
+    # 마이그레이션이 전부 additive(순서 무관)이므로 머지 순서와 timestamp 순서가 어긋나도 안전하게 적용한다.
+    # 덕분에 머지 직전 timestamp 재발급이 불필요. 순서 의존이 필요한 변경은 단계 배포로 따로 다룬다.
+    out-of-order: true
+    # history 에는 적용 기록이 있으나 로컬엔 파일이 없는(missing) 마이그레이션의 검증 실패를 무시한다.
+    # 최종 스키마 정합성은 ddl-auto:validate 가 보증한다.
+    ignore-migration-patterns: "*:missing"
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -35,6 +44,12 @@ jwt:
   # Spring 의 Duration 파싱은 1h / 14d / 30m / PT1H30M 등 다양한 형식 지원.
   access-token-expiry: ${JWT_ACCESS_EXPIRY:1h}
   refresh-token-expiry: ${JWT_REFRESH_EXPIRY:14d}
+
+auth:
+  cookie:
+    # 토큰 쿠키의 Secure 속성. 운영(HTTPS)은 true, 로컬(HTTP)은 .env 의 COOKIE_SECURE=false 로 끈다.
+    # 누락 시 기본 true (fail-safe-secure).
+    secure: ${COOKIE_SECURE:true}
 
 oauth:
   kakao:
@@ -56,6 +71,14 @@ gemini:
     max-attempts: ${GEMINI_RETRY_MAX_ATTEMPTS:2}
     initial-delay-ms: ${GEMINI_RETRY_INITIAL_DELAY_MS:1000}
 
+admin:
+  # 개발 서버 전용 관리자 백오피스. 기본 비활성(fail-safe) — ADMIN_ENABLED=true 를 명시한 환경에서만 빈/라우트가 뜬다.
+  # 이 프로젝트엔 런타임 dev 프로파일이 없어(@Profile 미사용) 프로퍼티 게이팅으로 운영 노출을 차단한다.
+  enabled: ${ADMIN_ENABLED:false}
+  # enabled=true 인데 아래가 비어 있으면 AdminProperties.init 에서 부팅 실패시킨다 ("켰는데 로그인 불가" 방지).
+  username: ${ADMIN_USERNAME:}
+  password: ${ADMIN_PASSWORD:}
+
 s3:
   # 크롭한 상품 이미지 저장 버킷. 자격증명은 EC2 instance role / 로컬 환경변수(DefaultCredentialsProvider).
   bucket: ${S3_BUCKET:}
@@ -66,3 +89,23 @@ springdoc:
   api-docs:
     path: /v3/api-docs
   default-produces-media-type: application/json
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 최소 노출: health(상태), prometheus(메트릭 scrape) 둘뿐.
+        # info·metrics·env 등 나머지 actuator 엔드포인트는 노출하지 않는다 (info 는 contributor 가
+        # 없어 빈 응답이라 노출 표면만 늘릴 뿐이고, Alloy 도 prometheus·health 만 긁는다).
+        # 외부(nginx 443) 는 /actuator/ 를 차단하고, EC2 내부의 Grafana Alloy 만
+        # localhost 로 /actuator/prometheus 를 scrape 한다 (별도 PR).
+        include: health, prometheus
+  metrics:
+    tags:
+      # Grafana Cloud 에서 서비스 단위로 메트릭을 구분하는 공통 라벨.
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      # Zipkin 등 외부 export 가 없어 모든 요청을 추적해도 비용은 span 생성 + MDC put/remove 뿐.
+      # 모든 응답·로그에 traceId 가 빠짐없이 찍히도록 1.0 으로 둔다 (기본 0.1 이면 일부 요청에 누락).
+      probability: 1.0

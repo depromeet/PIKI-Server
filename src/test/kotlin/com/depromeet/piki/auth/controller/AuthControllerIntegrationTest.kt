@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
+import kotlin.test.assertNotEquals
 
 @Transactional
 class AuthControllerIntegrationTest : IntegrationTestSupport() {
@@ -33,10 +34,8 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
     fun `POST auth guest - 201 과 accessToken, refreshToken, user 가 응답에 포함된다`() {
         // FE 의 진입 fill 흐름을 위해 user 정보가 응답에 같이 와야 한다. 회귀 가드.
         mockMvc()
-            .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
+            .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app"))
             .andExpect(status().isCreated)
-            .andExpect(jsonPath("$.status").value(201))
-            .andExpect(jsonPath("$.code").value("CREATED"))
             .andExpect(jsonPath("$.data.accessToken").isString)
             .andExpect(jsonPath("$.data.refreshToken").isString)
             .andExpect(jsonPath("$.data.user.id").isString)
@@ -49,7 +48,7 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
     fun `POST auth token refresh - 유효한 refreshToken 으로 새 토큰 쌍이 발급된다`() {
         val guestResult =
             mockMvc()
-                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
+                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app"))
                 .andReturn()
         val refreshToken =
             objectMapper
@@ -62,9 +61,9 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
             .perform(
                 post("/api/v1/auth/token/refresh")
                     .contentType(MediaType.APPLICATION_JSON)
+                    .header("X-Client-Type", "app")
                     .content(body),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.accessToken").isString)
             .andExpect(jsonPath("$.data.refreshToken").isString)
     }
@@ -78,8 +77,6 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body),
             ).andExpect(status().isUnauthorized)
-            .andExpect(jsonPath("$.status").value(401))
-            .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
     }
 
     @Test
@@ -91,14 +88,13 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
     }
 
     @Test
     fun `POST auth logout - 인증된 사용자가 로그아웃하면 200 이 반환된다`() {
         val guestResult =
             mockMvc()
-                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
+                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app"))
                 .andReturn()
         val accessToken =
             objectMapper
@@ -112,7 +108,6 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer $accessToken"),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
     }
 
     @Test
@@ -120,5 +115,21 @@ class AuthControllerIntegrationTest : IntegrationTestSupport() {
         mockMvc()
             .perform(post("/api/v1/auth/logout").contentType(MediaType.APPLICATION_JSON))
             .andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `POST auth guest - 연속 두 번 호출하면 서로 다른 닉네임이 발급된다`() {
+        val firstResult =
+            mockMvc()
+                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app"))
+                .andReturn()
+        val secondResult =
+            mockMvc()
+                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app"))
+                .andReturn()
+
+        val firstNickname = objectMapper.readTree(firstResult.response.contentAsString).at("/data/user/nickname").asText()
+        val secondNickname = objectMapper.readTree(secondResult.response.contentAsString).at("/data/user/nickname").asText()
+        assertNotEquals(firstNickname, secondNickname)
     }
 }

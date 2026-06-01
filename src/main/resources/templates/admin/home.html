@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/fragments/layout :: head('PIKI 백오피스')}"></head>
+<body>
+<div class="bo-shell">
+    <div th:replace="~{admin/fragments/layout :: sidebar('home')}"></div>
+    <main class="bo-main">
+        <header class="bo-header">
+            <h1>대시보드</h1>
+        </header>
+        <section class="bo-content">
+            <p class="bo-desc">PIKI 개발 서버 운영 도구입니다. 아래 기능을 사용할 수 있습니다.</p>
+            <div class="bo-cards">
+                <a th:href="@{/admin/items}" class="bo-card">
+                    <h2>실험 데이터</h2>
+                    <p>샘플 상품을 추가하고 최근 등록된 item 을 조회합니다.</p>
+                </a>
+                <a th:href="@{/admin/feature-requests}" class="bo-card">
+                    <h2>기능 요청</h2>
+                    <p>백오피스에 있으면 하는 기능을 남기고 모인 요청을 검토합니다.</p>
+                </a>
+                <div class="bo-card bo-card-disabled">
+                    <h2>추가 기능</h2>
+                    <p>백오피스 기능이 순차적으로 추가될 예정입니다.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+</body>
+</html>

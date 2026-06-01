@@ -22,7 +22,7 @@ class WishlistApiExamples(
     @Bean
     fun wishlistOpenApiExamples(): OperationCustomizer =
         OperationCustomizer { operation, handlerMethod ->
-            if (handlerMethod.binds(WishlistController::register)) {
+            if (handlerMethod.binds(WishlistController::registerFromUrl)) {
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.CREATED,
@@ -35,7 +35,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                status = HttpStatus.BAD_REQUEST,
                                 detail = "지원하지 않는 URL 형식입니다.",
                             ),
                     )
@@ -85,7 +84,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.FORBIDDEN,
-                                status = HttpStatus.FORBIDDEN,
                                 detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
@@ -95,17 +93,16 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.NOT_FOUND,
-                                status = HttpStatus.NOT_FOUND,
                                 detail = "존재하지 않는 위시리스트 항목입니다.",
                             ),
                     )
                 }
             }
-            if (handlerMethod.binds(WishlistController::updateWish)) {
+            if (handlerMethod.binds(WishlistController::recoverWishItem)) {
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.OK,
-                        name = "수정 성공",
+                        name = "FAILED 보정 성공 (READY 로 복구)",
                         payload = ApiResponseBody.ok(sampleEntry),
                     )
                     add(
@@ -114,8 +111,16 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                status = HttpStatus.BAD_REQUEST,
                                 detail = "가격은 0 이상이어야 합니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "상품명 없이 복구 시도",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.INVALID_INPUT,
+                                detail = "상품명을 입력해야 합니다.",
                             ),
                     )
                     add(
@@ -124,7 +129,6 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.FORBIDDEN,
-                                status = HttpStatus.FORBIDDEN,
                                 detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
@@ -134,8 +138,34 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.NOT_FOUND,
-                                status = HttpStatus.NOT_FOUND,
                                 detail = "존재하지 않는 위시리스트 항목입니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.CONFLICT,
+                        name = "이미 등록 완료(READY) 항목 — 수정 불가",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.CONFLICT,
+                                detail = "이미 등록 완료된 상품은 수정할 수 없습니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.CONFLICT,
+                        name = "아직 처리 중(PROCESSING) 항목 — 수정 불가",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.CONFLICT,
+                                detail = "아직 처리 중인 상품은 수정할 수 없습니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.BAD_GATEWAY,
+                        name = "이미지 저장 실패",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.RETRYABLE,
+                                detail = "이미지 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.",
                             ),
                     )
                 }
@@ -153,18 +183,34 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.FORBIDDEN,
-                                status = HttpStatus.FORBIDDEN,
                                 detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
+                }
+            }
+            if (handlerMethod.binds(WishlistController::deleteWishes)) {
+                operation.examples(openApiObjectMapper.delegate) {
                     add(
-                        status = HttpStatus.NOT_FOUND,
-                        name = "존재하지 않는 위시 항목",
+                        status = HttpStatus.OK,
+                        name = "다중 삭제 성공",
+                        payload = ApiResponseBody.ok<Unit>(),
+                    )
+                    add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "ids 누락/빈 목록/100개 초과",
                         payload =
                             ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.NOT_FOUND,
-                                status = HttpStatus.NOT_FOUND,
-                                detail = "존재하지 않는 위시리스트 항목입니다.",
+                                category = ErrorCategory.INVALID_INPUT,
+                                detail = "삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.FORBIDDEN,
+                        name = "본인 위시 아닌 항목 포함",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.FORBIDDEN,
+                                detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
                 }
@@ -173,8 +219,17 @@ class WishlistApiExamples(
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.CREATED,
-                        name = "이미지 등록 성공 (URL 없음)",
-                        payload = ApiResponseBody.created(imageSampleEntry),
+                        name = "이미지 등록 접수 (PROCESSING, 다건)",
+                        payload = ApiResponseBody.created(imageProcessingEntries),
+                    )
+                    add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "이미지 개수 위반 (1~5개 아님)",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.INVALID_INPUT,
+                                detail = "이미지는 최소 1개, 최대 5개까지 전송할 수 있습니다.",
+                            ),
                     )
                     add(
                         status = HttpStatus.BAD_REQUEST,
@@ -182,18 +237,7 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                status = HttpStatus.BAD_REQUEST,
                                 detail = ProductImage.unsupportedMimeTypeMessage("image/gif"),
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.BAD_GATEWAY,
-                        name = "Gemini 호출 실패",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.RETRYABLE,
-                                status = HttpStatus.BAD_GATEWAY,
-                                detail = "Gemini 호출 실패",
                             ),
                     )
                 }
@@ -241,23 +285,42 @@ class WishlistApiExamples(
                 ),
         )
 
-    // 이미지 등록 항목 — URL·이미지·통화가 없어 해당 필드가 null 이다. 동기 완성이라 READY.
-    private val imageSampleEntry =
-        WishItemResponse(
-            wish =
-                WishItemResponse.WishView(
-                    id = 1025,
-                    createdAt = LocalDateTime.of(2026, 5, 21, 10, 5, 0),
-                ),
-            item =
-                WishItemResponse.ItemView(
-                    id = 513,
-                    status = ItemStatus.READY,
-                    name = "에어 조던 1 미드",
-                    currentPrice = 119_000,
-                    currency = null,
-                    imageUrl = null,
-                    sourceUrl = null,
-                ),
+    // 이미지 등록 직후 항목들 — link 도 없는 PROCESSING(sourceUrl=null). 비동기 추출이 끝나면 name·가격·이미지가 채워진다.
+    private val imageProcessingEntries =
+        listOf(
+            WishItemResponse(
+                wish =
+                    WishItemResponse.WishView(
+                        id = 1025,
+                        createdAt = LocalDateTime.of(2026, 5, 21, 10, 5, 0),
+                    ),
+                item =
+                    WishItemResponse.ItemView(
+                        id = 513,
+                        status = ItemStatus.PROCESSING,
+                        name = null,
+                        currentPrice = null,
+                        currency = null,
+                        imageUrl = null,
+                        sourceUrl = null,
+                    ),
+            ),
+            WishItemResponse(
+                wish =
+                    WishItemResponse.WishView(
+                        id = 1027,
+                        createdAt = LocalDateTime.of(2026, 5, 21, 10, 5, 0),
+                    ),
+                item =
+                    WishItemResponse.ItemView(
+                        id = 515,
+                        status = ItemStatus.PROCESSING,
+                        name = null,
+                        currentPrice = null,
+                        currency = null,
+                        imageUrl = null,
+                        sourceUrl = null,
+                    ),
+            ),
         )
 }

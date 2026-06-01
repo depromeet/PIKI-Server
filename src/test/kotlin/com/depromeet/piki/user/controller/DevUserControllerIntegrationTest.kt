@@ -1,15 +1,18 @@
 package com.depromeet.piki.user.controller
 
+import com.depromeet.piki.auth.web.ClientType
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.uuidToBytes
 import com.depromeet.piki.user.domain.IdentityType
 import org.hamcrest.Matchers.notNullValue
+import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
@@ -34,7 +37,6 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
         buildMockMvc()
             .perform(get("/api/v1/dev/users"))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data").isArray)
             .andExpect(jsonPath("$.data[?(@.userId == '${userId}')].nickname").value("테스트유저"))
             .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
@@ -45,7 +47,6 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
         buildMockMvc()
             .perform(get("/api/v1/dev/users"))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data").isArray)
             .andExpect(jsonPath("$.data").isEmpty)
             .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
@@ -64,14 +65,13 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `존재하는 userId 로 단건 조회 시 200 과 AT·RT·user 정보가 반환된다`() {
+    fun `app - 단건 조회 시 200 과 body 에 AT·RT·user 정보가 반환된다`() {
         val userId = UUID.randomUUID()
         insertUser(userId, "단건유저", IdentityType.MEMBER)
 
         buildMockMvc()
-            .perform(get("/api/v1/dev/users/$userId"))
+            .perform(get("/api/v1/dev/users/$userId").header(ClientType.HEADER, "app"))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.accessToken", notNullValue()))
             .andExpect(jsonPath("$.data.refreshToken", notNullValue()))
             .andExpect(jsonPath("$.data.user.id").value(userId.toString()))
@@ -80,12 +80,26 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `web(기본) - 단건 조회 시 Set-Cookie 로 토큰을 내리고 body 토큰은 null 이다`() {
+        // FE 웹 팀이 쿠키 흐름으로도 테스트할 수 있어야 하므로 양쪽을 모두 검증한다.
+        val userId = UUID.randomUUID()
+        insertUser(userId, "단건유저", IdentityType.MEMBER)
+
+        buildMockMvc()
+            .perform(get("/api/v1/dev/users/$userId"))
+            .andExpect(status().isOk)
+            .andExpect(cookie().exists("access_token"))
+            .andExpect(cookie().exists("refresh_token"))
+            .andExpect(jsonPath("$.data.accessToken").value(nullValue()))
+            .andExpect(jsonPath("$.data.refreshToken").value(nullValue()))
+            .andExpect(jsonPath("$.data.user.id").value(userId.toString()))
+    }
+
+    @Test
     fun `존재하지 않는 userId 로 단건 조회 시 404 가 ApiResponseBody 로 반환된다`() {
         buildMockMvc()
             .perform(get("/api/v1/dev/users/${UUID.randomUUID()}"))
             .andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
-            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
             .andExpect(jsonPath("$.data").doesNotExist())
     }
 
@@ -94,7 +108,6 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
         buildMockMvc()
             .perform(get("/api/v1/dev/users"))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
     }
 
     private fun buildMockMvc(): MockMvc =

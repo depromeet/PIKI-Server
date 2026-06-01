@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<!--
+  PIKI 백오피스 공통 레이아웃 fragment.
+  head(pageTitle): 메타·CSS.
+  sidebar(active): 좌측 네비. active 인자로 현재 메뉴를 강조한다. 기능이 늘면 nav 에 항목을 추가한다.
+-->
+<head th:fragment="head(pageTitle)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${pageTitle}">PIKI 백오피스</title>
+    <link rel="stylesheet" th:href="@{/admin-assets/backoffice.css}">
+    <!-- 빈 favicon. 없으면 브라우저가 /favicon.ico 를 자동 요청하는데, 이 경로는 admin SecurityFilterChain
+         (securityMatcher: /admin/**, /admin-assets/**) 밖이라 JWT 체인(@Order 2)이 잡아 401 JSON 을 낸다.
+         data:, 로 요청 자체를 없애 401 을 차단한다. -->
+    <link rel="icon" href="data:,">
+</head>
+<body>
+<aside th:fragment="sidebar(active)" class="bo-sidebar">
+    <div class="bo-brand">PIKI 백오피스</div>
+    <nav class="bo-nav">
+        <a th:href="@{/admin}" th:classappend="${active == 'home'} ? ' active' : ''">대시보드</a>
+        <a th:href="@{/admin/items}" th:classappend="${active == 'items'} ? ' active' : ''">실험 데이터</a>
+        <a th:href="@{/admin/feature-requests}"
+           th:classappend="${active == 'feature-requests'} ? ' active' : ''">기능 요청</a>
+    </nav>
+    <form th:action="@{/admin/logout}" method="post" class="bo-logout">
+        <button type="submit">로그아웃</button>
+    </form>
+</aside>
+</body>
+</html>

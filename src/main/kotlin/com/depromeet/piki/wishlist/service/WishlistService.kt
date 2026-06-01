@@ -2,20 +2,21 @@ package com.depromeet.piki.wishlist.service
 
 import com.depromeet.piki.common.storage.ImageStorage
 import com.depromeet.piki.image.domain.ProductImage
-import com.depromeet.piki.image.service.ImageCropper
-import com.depromeet.piki.image.service.ProductImageExtractor
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.repository.ItemRepository
+import com.depromeet.piki.item.service.ImageParsingWorker
 import com.depromeet.piki.item.service.ItemParsingService
 import com.depromeet.piki.item.service.ItemParsingWorker
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.wishlist.domain.WishCursor
+import com.depromeet.piki.wishlist.domain.WishDeleteIds
 import com.depromeet.piki.wishlist.domain.WishException
 import com.depromeet.piki.wishlist.domain.WishlistSize
 import com.depromeet.piki.wishlist.repository.WishRepository
 import com.depromeet.piki.wishlist.service.dto.WishWithItem
 import com.depromeet.piki.wishlist.service.dto.WishlistPage
 import org.slf4j.LoggerFactory
+import org.springframework.core.task.TaskRejectedException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
@@ -23,22 +24,21 @@ import java.util.UUID
 
 @Service
 class WishlistService(
-    private val productImageExtractor: ProductImageExtractor,
-    private val imageCropper: ImageCropper,
-    private val imageStorage: ImageStorage,
     private val itemParsingWorker: ItemParsingWorker,
+    private val imageParsingWorker: ImageParsingWorker,
     private val itemParsingService: ItemParsingService,
     private val wishPersistenceService: WishPersistenceService,
+    private val imageStorage: ImageStorage,
     private val wishRepository: WishRepository,
     private val itemRepository: ItemRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    // register 는 외부 LLM 호출(read-timeout 60s)을 동기로 기다리지 않는다.
+    // registerFromUrl 는 외부 LLM 호출(read-timeout 60s)을 동기로 기다리지 않는다.
     // link 만 가진 PROCESSING item 을 즉시 저장해 응답을 돌려주고(클라이언트는 "담는 중" 표시),
     // 실제 파싱은 itemParsingWorker 가 백그라운드에서 수행해 READY/FAILED 로 전이시킨다.
     // URL 형식 같은 계약 위반은 ProductLink.parse 가 동기로 거른다(400). 파싱 결과 실패만 FAILED 로 간다.
-    fun register(
+    fun registerFromUrl(
         rawUrl: String,
         userId: UUID,
     ): WishWithItem {
@@ -53,30 +53,30 @@ class WishlistService(
         return result
     }
 
-    // 이미지 등록도 link 와 같은 흐름 — 입력이 이미지일 뿐. 외부 추출·크롭·S3 업로드는 트랜잭션 바깥, 영속화만 위임.
-    // 추출 결과는 link 추출과 동일한 ProductSnapshot 이라 Item.from 을 공유한다 (link 만 null).
-    // bbox 가 있으면 상품 영역을 크롭해 S3 에 올리고 그 URL 을 imageUrl 로 채운다.
-    // bbox 가 없거나(못 잡음) 크롭이 불가한 포맷(HEIC 등)이면 imageUrl 은 null 로 둔다.
+    // 이미지 등록은 registerFromUrl(link)와 같은 비동기 흐름 — 입력이 이미지(다건)일 뿐이다.
+    // 개수·형식을 동기로 검증(400)한 뒤 PROCESSING item·wish 를 배치 저장해 즉시 반환하고,
+    // 실제 추출(Gemini·크롭·S3)은 imageParsingWorker 가 백그라운드에서 각 이미지를 병렬 파싱해
+    // READY/FAILED 로 전이시킨다. 토너먼트 아이템 이미지 등록과 동일한 패턴이다.
     fun registerFromImages(
-        image: MultipartFile,
+        images: List<MultipartFile>,
         userId: UUID,
-    ): WishWithItem {
-        val productImage = ProductImage.of(image.bytes, image.contentType)
-        val extraction = productImageExtractor.extract(productImage)
-        // 크롭 이미지는 부가 정보다. S3 일시 장애·타임아웃이 이미지 등록 전체를 5xx 로 깨뜨리지 않도록,
-        // 업로드 실패는 imageUrl=null 로 degrade 한다 (imageUrl 없이도 등록 가능한 계약).
-        val imageUrl =
-            extraction.boundingBox
-                ?.let { imageCropper.crop(productImage.bytes, it) }
-                ?.let { cropped ->
-                    runCatching {
-                        imageStorage.upload(cropped, "items/${UUID.randomUUID()}.png", "image/png")
-                    }.getOrElse { e ->
-                        log.warn("크롭 이미지 S3 업로드 실패, imageUrl 없이 등록 진행: {}", e.message)
-                        null
-                    }
-                }
-        return wishPersistenceService.persist(userId, Item.from(extraction.snapshot.copy(imageUrl = imageUrl)))
+    ): List<WishWithItem> {
+        if (images.size !in MIN_IMAGE_COUNT..MAX_IMAGE_COUNT) throw WishException.invalidImageCount()
+        // 형식 검증(빈 바이트·미지원 MIME) — 실패 시 즉시 400. 유효한 이미지만 PROCESSING 으로 등록한다.
+        val productImages = images.map { ProductImage.of(it.bytes, it.contentType) }
+        val results = wishPersistenceService.persistProcessingImages(userId, productImages.size)
+        results.zip(productImages).forEach { (result, productImage) ->
+            val itemId = result.item.getId()
+            // 워커 디스패치가 큐 포화 등으로 거부되면 PROCESSING 으로 방치하지 않고 즉시 FAILED 로 떨어뜨린다.
+            try {
+                imageParsingWorker.parse(itemId, productImage)
+            } catch (e: TaskRejectedException) {
+                log.warn("파싱 워커 디스패치 거부, item {} 를 FAILED 처리: {}", itemId, e.message)
+                runCatching { itemParsingService.markFailed(itemId) }
+                    .onFailure { ex -> log.error("item {} FAILED 전이 실패, PROCESSING 방치 위험", itemId, ex) }
+            }
+        }
+        return results
     }
 
     @Transactional(readOnly = true)
@@ -123,31 +123,62 @@ class WishlistService(
         return WishWithItem(wish = wish, item = item)
     }
 
-    // item 의 name·currentPrice 를 수정한다. 변경은 @Transactional 커밋 시 dirty checking 으로 반영.
-    @Transactional
-    fun updateWish(
+    // 추출 실패(FAILED) item 을 사용자가 직접 보정해 READY 로 복구한다. 이미지를 함께 주면 그대로 S3 에 올려
+    // imageUrl 을 채운다(추출·크롭 없음 — 사용자가 고른 이미지를 그대로 대표 이미지로). READY·PROCESSING 은
+    // recover 가 409 로 막는다. 외부 호출(S3)을 트랜잭션에 넣지 않기 위해 검증·소유권·상태 사전확인·업로드를
+    // 트랜잭션 밖에서 끝내고, 영속화만 wishPersistenceService.recoverItem(@Transactional)에 위임한다.
+    fun recoverWishItem(
         userId: UUID,
         wishId: Long,
         name: String?,
         currentPrice: Int?,
-        imageUrl: String?,
         currency: String?,
+        image: MultipartFile?,
     ): WishWithItem {
+        // 이미지 형식 검증(빈 바이트·미지원 MIME) — 외부 호출 전에 동기로 거른다(400).
+        val productImage = image?.let { ProductImage.of(it.bytes, it.contentType) }
         val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
         wish.verifyOwnedBy(userId)
         // wish 가 가리키는 item 은 반드시 존재한다. 없으면 영속화 경로가 깨진 코드 버그다.
         val item = itemRepository.findById(wish.itemId) ?: error("wish ${wish.getId()} 의 item ${wish.itemId} 가 없다")
-        item.update(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
-        return WishWithItem(wish = wish, item = item)
+        // FAILED 가 아니면 S3 에 올리기 전에 막는다(orphan 업로드 방지). recover 가 사유별 409 를 던진다.
+        if (!item.isFailed()) item.recover()
+        // 이미지가 있으면 S3 업로드(트랜잭션 밖). 실패 시 ImageStorageException(502).
+        val imageUrl =
+            productImage?.let {
+                imageStorage.upload(it.bytes, "items/${UUID.randomUUID()}.${it.extension}", it.mimeType)
+            }
+        val recovered = wishPersistenceService.recoverItem(wish.itemId, name, currentPrice, imageUrl, currency)
+        return WishWithItem(wish = wish, item = recovered)
     }
 
+    // 멱등 삭제: 없거나 이미 삭제됐으면 "이미 목표 상태(없음)"이므로 성공으로 본다(no-op).
+    // 단 존재하는 위시가 남의 것이면 소유권은 보안 경계라 403 으로 막는다.
     @Transactional
     fun deleteWish(
         userId: UUID,
         wishId: Long,
     ) {
-        val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
+        val wish = wishRepository.findById(wishId) ?: return
         wish.verifyOwnedBy(userId)
         wish.delete()
+    }
+
+    // 여러 위시를 한 번에 멱등 삭제한다. 없거나 이미 삭제된 id 는 조회에서 빠져 자연히 무시된다(목표 상태 달성).
+    // 존재하는 것 중 남의 위시가 하나라도 있으면 소유권 경계로 403, @Transactional 이라 본인 것도 함께 롤백된다.
+    @Transactional
+    fun deleteWishes(
+        userId: UUID,
+        wishIds: WishDeleteIds,
+    ) {
+        // WishDeleteIds 가 distinct·개수(1~100) 검증을 끝낸 값이라 여기선 조회·소유검증·삭제만 한다.
+        val wishes = wishRepository.findAllByIds(wishIds.values)
+        wishes.forEach { it.verifyOwnedBy(userId) }
+        wishes.forEach { it.delete() }
+    }
+
+    companion object {
+        private const val MIN_IMAGE_COUNT = 1
+        private const val MAX_IMAGE_COUNT = 5
     }
 }

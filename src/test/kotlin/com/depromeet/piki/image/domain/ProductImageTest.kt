@@ -2,6 +2,7 @@ package com.depromeet.piki.image.domain
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.ValueSource
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -66,5 +67,20 @@ class ProductImageTest {
         assertFailsWith<IllegalArgumentException> {
             ProductImage.of(byteArrayOf(1), mimeType)
         }
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        "image/png, png",
+        "image/jpeg, jpg",
+        "image/webp, webp",
+        "image/heic, heic",
+        "image/heif, heif",
+    )
+    fun `MIME 타입에서 스토리지 object key 확장자를 도출한다`(
+        mimeType: String,
+        expected: String,
+    ) {
+        assertEquals(expected, ProductImage.of(byteArrayOf(1), mimeType).extension)
     }
 }

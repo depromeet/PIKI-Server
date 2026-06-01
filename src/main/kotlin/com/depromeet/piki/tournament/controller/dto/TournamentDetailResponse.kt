@@ -1,5 +1,6 @@
 package com.depromeet.piki.tournament.controller.dto
 
+import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.service.dto.TournamentDetail
 import com.fasterxml.jackson.annotation.JsonInclude
@@ -22,21 +23,11 @@ data class TournamentDetailResponse(
         val price: Int?,
         val currency: String?,
         val imageUrl: String?,
+        val status: ItemStatus,
     ) {
         companion object {
             fun from(d: TournamentDetail.ItemDetail): ItemDetailResponse =
-                ItemDetailResponse(d.tournamentItemId, d.itemId, d.name, d.price, d.currency, d.imageUrl)
-        }
-    }
-
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    data class BracketMatchResponse(
-        val firstItem: ItemDetailResponse,
-        val secondItem: ItemDetailResponse,
-    ) {
-        companion object {
-            fun from(m: TournamentDetail.BracketMatch): BracketMatchResponse =
-                BracketMatchResponse(ItemDetailResponse.from(m.firstItem), ItemDetailResponse.from(m.secondItem))
+                ItemDetailResponse(d.tournamentItemId, d.itemId, d.name, d.price, d.currency, d.imageUrl, d.status)
         }
     }
 
@@ -73,29 +64,18 @@ data class TournamentDetailResponse(
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     data class InProgressData(
-        val startRound: Int,
-        val bracket: List<BracketMatchResponse>,
-        val history: List<HistoryResponse>,
+        val currentRound: Int,
+        val lastHistory: HistoryResponse?,
+        val remainingItems: List<ItemDetailResponse>,
     )
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    data class RankedItemResponse(
-        val rank: Int,
-        val tournamentItemId: Long,
-        val itemId: Long,
-        val name: String?,
-        val price: Int?,
-        val currency: String?,
-        val imageUrl: String?,
-    ) {
+    data class CompletedData(val result: List<RankedItemResponse>) {
         companion object {
-            fun from(r: TournamentDetail.RankedItem): RankedItemResponse =
-                RankedItemResponse(r.rank, r.tournamentItemId, r.itemId, r.name, r.price, r.currency, r.imageUrl)
+            fun from(completed: TournamentDetail.Completed): CompletedData =
+                CompletedData(completed.result.map { RankedItemResponse.from(it) })
         }
     }
-
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    data class CompletedData(val result: List<RankedItemResponse>)
 
     companion object {
         fun from(detail: TournamentDetail): TournamentDetailResponse =
@@ -122,9 +102,9 @@ data class TournamentDetailResponse(
                         pending = null,
                         inProgress =
                             InProgressData(
-                                startRound = detail.startRound,
-                                bracket = detail.bracket.map { BracketMatchResponse.from(it) },
-                                history = detail.history.map { HistoryResponse.from(it) },
+                                currentRound = detail.currentRound,
+                                lastHistory = detail.lastHistory?.let { HistoryResponse.from(it) },
+                                remainingItems = detail.remainingItems.map { ItemDetailResponse.from(it) },
                             ),
                         completed = null,
                     )

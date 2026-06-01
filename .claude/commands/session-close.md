@@ -3,7 +3,7 @@
 ## 언제 쓰나
 
 - `/session-check` 결과가 "닫아도 안전"이고, 지금 작업하던 워크트리를 정리하고 세션을 끝내려 할 때.
-- 보통 `/session-check` 가 끝에 "지금 마무리할까요?"로 물어 자동 호출하지만, 단독 호출도 된다.
+- **항상 사용자가 직접 호출한다.** `/session-check` 는 점검만 하고 이 스킬을 자동 호출하지 않는다 — 닫아도 안전하면 사용자에게 `/session-close` 입력을 안내할 뿐이다. close(워크트리 제거)는 이 스킬을 명시적으로 호출할 때만 일어난다.
 
 ## 전제 — 작업 중엔 워크트리에 "들어가 있다"
 
@@ -14,6 +14,7 @@
 - **머지+clean 일 때만 제거.** uncommitted 가 있거나 브랜치가 아직 머지 안 됐으면 **거부**한다(작업 유실 방지). session-check 통과를 전제하되 자체 재확인한다.
 - **제거는 `ExitWorktree` 로 한다.** `ExitWorktree({action:"remove"})` 가 워크트리 나가기 + 디렉터리/브랜치 삭제 + cwd 복원(메인으로)을 한 번에 처리한다 — "자기가 선 폴더를 자기가 못 지운다"는 문제를 도구가 해결한다. 수동 `git -C ... worktree remove` 보다 안전·정석.
 - **현재 작업 1개만.** 다른 워크트리·머지된 다른 stale 브랜치는 안 건드린다(별도 세션 몫).
+- **임시파일도 함께 정리한다.** 워크트리를 제거할 때, 이 브랜치가 `/tmp` 에 남긴 `/pr`·`/notion-board` 임시파일(`pr_body_$SLUG.md`·`nb_*_$SLUG.json`)도 지운다. **현재 브랜치 것만** — 동시에 도는 다른 세션의 파일은 안 건드린다("현재 1개만"과 같은 결). `session-close` 를 안 거치고 떠난 세션·중단 작업의 누수는 다음 `/pr`·`/notion-board` 진입의 mtime prune 이 회수한다.
 - **`/clear` 는 자동 호출 불가.** 스킬은 빌트인 슬래시 커맨드를 못 부른다(claude-code-guide 확인). 정리 후 사용자에게 `/clear` 입력을 안내하는 것으로 끝낸다.
 - **이모지·체크기호 금지.** 굵게·불릿으로만 표시한다.
 
@@ -45,9 +46,14 @@ gh pr list --head "$BR" --state merged --json number,headRefName \
 - **dirty** (status 비어있지 않음) → **거부.** "uncommitted N건 — 먼저 `/commit` 하거나 `/session-check`." 중단.
 - **미머지** (위 merged PR 카운트가 0) → **거부.** "브랜치 `$BR` 미머지 — PR 머지 후 다시." 중단. (열린 PR 만 있는 경우도 여기 해당 — 머지 전이므로 삭제 금지.)
 - 둘 다 통과(clean + 머지됨) → **제거한다**:
-  1. `ExitWorktree({action: "remove"})` 를 호출한다.
-  2. 거부하면서 변경 목록을 돌려주면 — clean 은 이미 확인했으니 그 목록은 **squash-merge 커밋(원래 브랜치 dev 의 ancestor 가 아닌 것)** 인 false alarm 이다. 이때만 `ExitWorktree({action: "remove", discard_changes: true})` 로 재호출한다. (clean·머지를 확인하기 **전에는 절대** `discard_changes: true` 를 주지 않는다.)
-  3. ExitWorktree 가 **no-op** 이라고 하면(이번 세션의 `EnterWorktree` 로 들어간 워크트리가 아님 — 이전 세션·수동 생성 등), **fallback** 으로 메인에서 ref 연산한다. 이건 이 스킬의 **마지막 bash 호출**이어야 한다(`$CUR` 삭제 시 cwd 가 사라짐 — 세 명령 모두 `-C "$MAIN"` 이라 cwd 비의존):
+  1. 이 브랜치가 `/tmp` 에 남긴 임시파일을 먼저 정리한다 (작업이 끝났으므로). **현재 브랜치 슬러그 것만** 지워 동시에 도는 다른 세션 파일은 건드리지 않는다. 별도 bash 호출이라 슬러그를 다시 구한다 (`$BR` 은 유지되지 않음):
+     ```bash
+     SLUG=$(git branch --show-current | tr '/' '_')
+     rm -f /tmp/pr_body_"$SLUG".md /tmp/nb_*_"$SLUG".json 2>/dev/null
+     ```
+  2. `ExitWorktree({action: "remove"})` 를 호출한다.
+  3. 거부하면서 변경 목록을 돌려주면 — clean 은 이미 확인했으니 그 목록은 **squash-merge 커밋(원래 브랜치 dev 의 ancestor 가 아닌 것)** 인 false alarm 이다. 이때만 `ExitWorktree({action: "remove", discard_changes: true})` 로 재호출한다. (clean·머지를 확인하기 **전에는 절대** `discard_changes: true` 를 주지 않는다.)
+  4. ExitWorktree 가 **no-op** 이라고 하면(이번 세션의 `EnterWorktree` 로 들어간 워크트리가 아님 — 이전 세션·수동 생성 등), **fallback** 으로 메인에서 ref 연산한다. 이건 이 스킬의 **마지막 bash 호출**이어야 한다(`$CUR` 삭제 시 cwd 가 사라짐 — 세 명령 모두 `-C "$MAIN"` 이라 cwd 비의존):
      ```bash
      git -C "$MAIN" worktree remove "$CUR" && git -C "$MAIN" branch -D "$BR" && git -C "$MAIN" worktree prune
      ```

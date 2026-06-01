@@ -4,11 +4,13 @@ import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkRequest
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromWishResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.RecordMatchRequest
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
+import com.depromeet.piki.tournament.controller.dto.TournamentItemDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
@@ -51,9 +53,9 @@ class TournamentController(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
         @Valid @RequestBody request: AddTournamentItemsRequest,
-    ): ApiResponseBody<Unit> {
-        tournamentService.addItemsFromWish(userId, request.toAddTournamentItemsFromWish(tournamentId))
-        return ApiResponseBody.ok()
+    ): ApiResponseBody<AddTournamentItemsFromWishResponse> {
+        val tournamentItemIds = tournamentService.addItemsFromWish(userId, request.toAddTournamentItemsFromWish(tournamentId))
+        return ApiResponseBody.ok(AddTournamentItemsFromWishResponse(tournamentItemIds))
     }
 
     @PostMapping("/{tournamentId}/items/link")
@@ -62,18 +64,20 @@ class TournamentController(
         @PathVariable tournamentId: Long,
         @Valid @RequestBody request: AddTournamentItemFromLinkRequest,
     ): ApiResponseBody<AddTournamentItemFromLinkResponse> {
-        val itemId = tournamentItemService.addItemFromLink(userId, tournamentId, request.url)
-        return ApiResponseBody.ok(AddTournamentItemFromLinkResponse(itemId))
+        val tournamentItemId = tournamentItemService.addItemFromLink(userId, tournamentId, request.url)
+        return ApiResponseBody.ok(AddTournamentItemFromLinkResponse(tournamentItemId))
     }
 
     @PostMapping("/{tournamentId}/items/images", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     override fun addItemsFromImages(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
-        @RequestParam("images") images: List<MultipartFile>,
+        @RequestParam("images", required = false) images: List<MultipartFile>?,
     ): ApiResponseBody<AddTournamentItemsFromImagesResponse> {
-        val itemIds = tournamentItemService.addItemsFromImages(userId, tournamentId, images)
-        return ApiResponseBody.ok(AddTournamentItemsFromImagesResponse(itemIds))
+        // images 파트 미첨부(0장)는 Spring 이 진입 전 예외로 끊어 캐치올(500)로 가므로,
+        // required=false + orEmpty 로 항상 서비스 검증(invalidImageCount, 400)에 닿게 한다.
+        val tournamentItemIds = tournamentItemService.addItemsFromImages(userId, tournamentId, images.orEmpty())
+        return ApiResponseBody.ok(AddTournamentItemsFromImagesResponse(tournamentItemIds))
     }
 
     @DeleteMapping("/{tournamentId}/items/{tournamentItemId}")
@@ -100,9 +104,9 @@ class TournamentController(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
         @Valid @RequestBody request: RecordMatchRequest,
-    ): ApiResponseBody<Unit> {
-        tournamentService.recordMatch(userId, request.toRecordMatch(tournamentId))
-        return ApiResponseBody.ok()
+    ): ApiResponseBody<TournamentDetailResponse.CompletedData?> {
+        val result = tournamentService.recordMatch(userId, request.toRecordMatch(tournamentId))
+        return ApiResponseBody.ok(result?.let { TournamentDetailResponse.CompletedData.from(it) })
     }
 
     @GetMapping
@@ -121,5 +125,15 @@ class TournamentController(
     ): ApiResponseBody<TournamentDetailResponse> {
         val detail = tournamentService.getTournamentById(tournamentId, userId)
         return ApiResponseBody.ok(TournamentDetailResponse.from(detail))
+    }
+
+    @GetMapping("/{tournamentId}/items/{tournamentItemId}")
+    override fun getTournamentItem(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+        @PathVariable tournamentItemId: Long,
+    ): ApiResponseBody<TournamentItemDetailResponse> {
+        val detail = tournamentService.getTournamentItem(userId, tournamentId, tournamentItemId)
+        return ApiResponseBody.ok(TournamentItemDetailResponse.from(detail))
     }
 }

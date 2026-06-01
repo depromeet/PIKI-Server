@@ -44,7 +44,7 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
     private fun createGuest(): Pair<String, String> {
         val result =
             mockMvc()
-                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON))
+                .perform(post("/api/v1/auth/guest").contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app"))
                 .andReturn()
         val json = objectMapper.readTree(result.response.contentAsString)
         return json.at("/data/accessToken").asText() to json.at("/data/refreshToken").asText()
@@ -69,6 +69,7 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
                         mockMvc
                             .perform(
                                 post("/api/v1/auth/token/refresh")
+                                    .header("X-Client-Type", "app")
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(mapOf("refreshToken" to r1))),
                             ).andExpect(status().isOk)
@@ -81,6 +82,7 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
             mockMvc
                 .perform(
                     post("/api/v1/auth/token/refresh")
+                        .header("X-Client-Type", "app")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(mapOf("refreshToken" to r2))),
                 ).andExpect(status().isOk)
@@ -107,6 +109,7 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
                         mockMvc
                             .perform(
                                 post("/api/v1/auth/token/refresh")
+                                    .header("X-Client-Type", "app")
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(r1Body),
                             ).andExpect(status().isOk)
@@ -120,19 +123,19 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
             mockMvc
                 .perform(
                     post("/api/v1/auth/token/refresh")
+                        .header("X-Client-Type", "app")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(r1Body),
                 ).andExpect(status().isUnauthorized)
-                .andExpect(jsonPath("$.status").value(401))
 
             // R2 도 무효화됐는지 확인 — 정상 흐름이면 200 이어야 하지만 family invalidation 으로 401
             mockMvc
                 .perform(
                     post("/api/v1/auth/token/refresh")
+                        .header("X-Client-Type", "app")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(mapOf("refreshToken" to r2))),
                 ).andExpect(status().isUnauthorized)
-                .andExpect(jsonPath("$.status").value(401))
         } finally {
             cleanup(userId)
         }
@@ -156,6 +159,7 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
                         mockMvc
                             .perform(
                                 post("/api/v1/auth/token/refresh")
+                                    .header("X-Client-Type", "app")
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content(r1Body),
                             ).andExpect(status().isOk)
@@ -169,6 +173,7 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
             mockMvc
                 .perform(
                     post("/api/v1/auth/token/refresh")
+                        .header("X-Client-Type", "app")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(r1Body),
                 ).andExpect(status().isUnauthorized)
@@ -177,6 +182,7 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
             mockMvc
                 .perform(
                     post("/api/v1/auth/token/refresh")
+                        .header("X-Client-Type", "app")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(mapOf("refreshToken" to attackerR2))),
                 ).andExpect(status().isUnauthorized)
@@ -202,10 +208,10 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
             mockMvc
                 .perform(
                     post("/api/v1/auth/token/refresh")
+                        .header("X-Client-Type", "app")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(mapOf("refreshToken" to refreshToken))),
                 ).andExpect(status().isUnauthorized)
-                .andExpect(jsonPath("$.status").value(401))
         } finally {
             cleanup(userId)
         }

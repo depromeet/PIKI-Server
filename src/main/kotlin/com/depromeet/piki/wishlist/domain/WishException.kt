@@ -35,5 +35,19 @@ class WishException private constructor(
                 ErrorCategory.NOT_FOUND,
                 HttpStatus.NOT_FOUND,
             )
+
+        fun invalidImageCount(): WishException =
+            WishException(
+                "이미지는 최소 1개, 최대 5개까지 전송할 수 있습니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
+
+        fun invalidIdCount(): WishException =
+            WishException(
+                "삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
     }
 }

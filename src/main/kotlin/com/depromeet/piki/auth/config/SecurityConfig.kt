@@ -4,6 +4,7 @@ import com.depromeet.piki.auth.filter.JwtAuthenticationFilter
 import com.depromeet.piki.user.domain.IdentityType
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.annotation.Order
 import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
@@ -17,7 +18,11 @@ class SecurityConfig(
     private val authenticationEntryPoint: ApiResponseAuthenticationEntryPoint,
     private val accessDeniedHandler: ApiResponseAccessDeniedHandler,
 ) {
+    // @Order(2): admin 백오피스 체인(AdminSecurityConfig, @Order(1))이 /admin/** 를 먼저 잡고,
+    // 나머지 모든 요청은 이 기존 JWT(stateless) 체인이 처리한다. admin.enabled=false 면 admin 체인이
+    // 아예 없어 이 체인만 단독으로 동작한다.
     @Bean
+    @Order(2)
     fun securityFilterChain(
         http: HttpSecurity,
         jwtAuthenticationFilter: JwtAuthenticationFilter,
@@ -37,7 +42,16 @@ class SecurityConfig(
                     // 신규 컨테이너 롤백 → 배포 차단으로 이어진다.
                     .requestMatchers(HttpMethod.GET, "/health")
                     .permitAll()
+                    // actuator health/prometheus 는 EC2 내부의 Grafana Alloy 가 localhost 로
+                    // 직접 scrape 한다 (nginx 미경유). 외부 도달은 nginx 가 /actuator/ 를 403 으로
+                    // 차단(infra/nginx/...conf)하므로, 앱 레벨 permitAll + 네트워크 레벨 차단의 2층 구조다.
+                    // metrics·env 등 나머지 actuator 엔드포인트는 application.yml 에서 애초에 노출하지 않는다.
+                    .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/prometheus")
+                    .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/guest")
+                    .permitAll()
+                    // 소셜 로그인 진입점 — 미인증으로 호출(게스트 토큰은 선택). 게스트 토큰을 보내면 필터가 principal 을 채워 게스트-연결로 동작.
+                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/login/*")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/token/refresh")
                     .permitAll()

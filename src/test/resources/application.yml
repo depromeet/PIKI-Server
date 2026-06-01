@@ -4,6 +4,23 @@ spring:
   config:
     import: optional:file:.env.test[.properties]
 
+# 운영 OAuthClientConfig 의 실제 클라이언트 빈을 테스트 컨텍스트에서는 끈다.
+# 그러면 IntegrationStubs 의 stub(googleOAuthClient/kakaoOAuthClient)만 남아 외부 호출 없이 격리된다.
+# google/kakao 더미 값: GoogleProperties·KakaoProperties 는 @ConfigurationPropertiesScan 으로
+# 빈이 생성되고 @Validated(@NotBlank) 라, 값이 없으면 컨텍스트 로딩이 깨진다. 실제 호출은 stub 이
+# 대체하므로 값은 쓰이지 않는다 (test classpath 의 application.yml 이 main 을 대체하므로 여기 박는다).
+oauth:
+  client:
+    enabled: false
+  google:
+    client-id: test-google-client-id
+    client-secret: test-google-client-secret
+    redirect-uri: http://localhost/auth/callback/google
+  kakao:
+    client-id: test-kakao-client-id
+    client-secret: test-kakao-client-secret
+    redirect-uri: http://localhost/auth/callback/kakao
+
 # 컨텍스트 로딩만 통과시키기 위한 더미 fallback. 실제 Gemini 호출 테스트는 @Disabled 또는
 # @EnabledIfEnvironmentVariable 로 별도 격리되어 있으므로 CI 에서 GEMINI_API_KEY 가 없어도
 # 컨텍스트 로딩 자체는 깨지지 않는다.
@@ -26,3 +43,21 @@ s3:
   bucket: test-bucket
   region: ap-northeast-2
   public-base-url: https://test-bucket.s3.ap-northeast-2.amazonaws.com
+
+# actuator 노출은 운영과 동일하게 박는다 — test classpath 의 application.yml 이 main 을 대체하므로
+# 여기 없으면 health(기본 노출)만 떠 /actuator/prometheus 통합 테스트가 깨진다.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# admin 백오피스를 모든 통합 테스트가 공유하는 단일 컨텍스트에서 항상 켠다(전역 1회 — @ActiveProfiles 분기 금지).
+# 폼 기반이라 외부 LLM 호출이 없고, 자격증명은 부팅 통과용 더미.
+admin:
+  enabled: true
+  username: admin
+  password: admin-test-pw

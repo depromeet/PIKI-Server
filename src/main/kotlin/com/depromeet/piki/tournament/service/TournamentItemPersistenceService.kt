@@ -8,6 +8,7 @@ import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
+import com.depromeet.piki.tournament.service.dto.PersistedTournamentItem
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -27,13 +28,13 @@ class TournamentItemPersistenceService(
         userId: UUID,
         tournamentId: Long,
         link: ProductLink,
-    ): Long {
+    ): PersistedTournamentItem {
         validateAndCheckCapacity(userId, tournamentId, 1)
         val item = itemRepository.save(Item.processing(link))
-        tournamentItemRepository.saveAll(
+        val tournamentItem = tournamentItemRepository.saveAll(
             listOf(TournamentItem(tournamentId = tournamentId, itemId = item.getId(), userId = userId)),
-        )
-        return item.getId()
+        ).first()
+        return PersistedTournamentItem(itemId = item.getId(), tournamentItemId = tournamentItem.getId())
     }
 
     @Transactional
@@ -41,13 +42,15 @@ class TournamentItemPersistenceService(
         userId: UUID,
         tournamentId: Long,
         count: Int,
-    ): List<Long> {
+    ): List<PersistedTournamentItem> {
         validateAndCheckCapacity(userId, tournamentId, count)
         val items = itemRepository.saveAll(List(count) { Item(status = ItemStatus.PROCESSING) })
-        tournamentItemRepository.saveAll(
+        val tournamentItems = tournamentItemRepository.saveAll(
             items.map { TournamentItem(tournamentId = tournamentId, itemId = it.getId(), userId = userId) },
         )
-        return items.map { it.getId() }
+        return items.zip(tournamentItems) { item, tournamentItem ->
+            PersistedTournamentItem(itemId = item.getId(), tournamentItemId = tournamentItem.getId())
+        }
     }
 
     private fun validateAndCheckCapacity(
