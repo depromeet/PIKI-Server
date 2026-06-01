@@ -902,6 +902,28 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `PATCH tournaments-id-items-itemId 는 이름이 있는 FAILED 아이템에 가격만 보내면 이름을 유지하며 200 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val failedItem = itemJpaRepository.save(Item(name = "기존 이름", status = ItemStatus.FAILED))
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"price":50000,"currency":"KRW"}"""),
+            ).andExpect(status().isOk)
+
+        val updated = itemJpaRepository.findById(failedItem.getId()).get()
+        assertEquals("기존 이름", updated.name)
+        assertEquals(50000, updated.currentPrice)
+        assertEquals(ItemStatus.READY, updated.status)
+    }
+
+    @Test
     fun `PATCH tournaments-id-items-itemId 에서 이름 없이 수정하면 400 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)

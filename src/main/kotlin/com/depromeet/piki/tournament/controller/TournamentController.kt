@@ -10,10 +10,10 @@ import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.RecordMatchRequest
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
-import com.depromeet.piki.tournament.controller.dto.UpdateTournamentItemRequest
 import com.depromeet.piki.tournament.controller.dto.TournamentItemDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
+import com.depromeet.piki.tournament.controller.dto.UpdateTournamentItemRequest
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.service.TournamentItemService
 import com.depromeet.piki.tournament.service.TournamentService

@@ -409,7 +409,6 @@ class TournamentService(
             imageUrl = command.imageUrl,
             currency = command.currency,
         )
-        itemRepository.save(item)
     }
 
     private fun toItemDetail(
