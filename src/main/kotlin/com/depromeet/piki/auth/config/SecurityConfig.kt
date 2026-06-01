@@ -19,7 +19,7 @@ class SecurityConfig(
     private val accessDeniedHandler: ApiResponseAccessDeniedHandler,
 ) {
     // @Order(2): admin 백오피스 체인(AdminSecurityConfig, @Order(1))이 /admin/** 를 먼저 잡고,
-    // 나머지 모든 요청은 이 기존 JWT(stateless) 체인이 처리한다. admin.enabled=false 면 admin 체인이
+    // 나머지 모든 요청은 이 기존 JWT(stateless) 체인이 처리한다. prod 환경에서는 admin 체인이
     // 아예 없어 이 체인만 단독으로 동작한다.
     @Bean
     @Order(2)
