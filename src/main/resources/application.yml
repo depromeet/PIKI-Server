@@ -104,3 +104,8 @@ management:
     tags:
       # Grafana Cloud 에서 서비스 단위로 메트릭을 구분하는 공통 라벨.
       application: ${spring.application.name}
+  tracing:
+    sampling:
+      # Zipkin 등 외부 export 가 없어 모든 요청을 추적해도 비용은 span 생성 + MDC put/remove 뿐.
+      # 모든 응답·로그에 traceId 가 빠짐없이 찍히도록 1.0 으로 둔다 (기본 0.1 이면 일부 요청에 누락).
+      probability: 1.0

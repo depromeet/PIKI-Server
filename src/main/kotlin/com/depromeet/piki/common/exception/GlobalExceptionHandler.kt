@@ -28,7 +28,7 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         val category = if (e is HttpMappable) e.category else ErrorCategory.SERVER_ERROR
         return ResponseEntity
             .status(status)
-            .body(ApiResponseBody.fail(category, status, e.message))
+            .body(ApiResponseBody.fail(category, e.message))
     }
 
     @ExceptionHandler(IllegalArgumentException::class)
@@ -36,7 +36,7 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         log.info("[IllegalArgumentException] {}", e.message)
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
-            .body(ApiResponseBody.fail(ErrorCategory.INVALID_INPUT, HttpStatus.BAD_REQUEST, e.message))
+            .body(ApiResponseBody.fail(ErrorCategory.INVALID_INPUT, e.message))
     }
 
     @ExceptionHandler(Exception::class)
@@ -44,7 +44,7 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         log.error("[UnexpectedException] {}", e.message, e)
         return ResponseEntity
             .status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(ApiResponseBody.fail(ErrorCategory.SERVER_ERROR, HttpStatus.INTERNAL_SERVER_ERROR))
+            .body(ApiResponseBody.fail(ErrorCategory.SERVER_ERROR))
     }
 
     // RESEH 의 모든 표준 예외 핸들러가 최종적으로 이 메서드를 거쳐 응답 바디를 만든다 → ApiResponseBody 로 통일.
@@ -64,7 +64,7 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
         } else {
             log.info("[{}] {} → {}", ex.javaClass.simpleName, ex.message, status.value())
         }
-        val wrapped: ApiResponseBody<Nothing> = ApiResponseBody.fail(categoryOf(status), status, detailOf(ex))
+        val wrapped: ApiResponseBody<Nothing> = ApiResponseBody.fail(categoryOf(status), detailOf(ex))
         return ResponseEntity.status(statusCode).headers(headers).body(wrapped)
     }
 

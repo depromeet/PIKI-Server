@@ -40,8 +40,6 @@ class GlobalExceptionHandlerIntegrationTest : IntegrationTestSupport() {
             .perform(
                 post("/api/v1/auth/login/google").contentType(MediaType.APPLICATION_JSON).content("{ broken json "),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
             .andExpect(jsonPath("$.detail").isString)
     }
 
@@ -51,8 +49,6 @@ class GlobalExceptionHandlerIntegrationTest : IntegrationTestSupport() {
             .perform(
                 post("/api/v1/auth/login/google").contentType(MediaType.TEXT_PLAIN).content("hello"),
             ).andExpect(status().isUnsupportedMediaType)
-            .andExpect(jsonPath("$.status").value(415))
-            .andExpect(jsonPath("$.code").value("UNSUPPORTED_MEDIA_TYPE"))
     }
 
     @Test
@@ -61,8 +57,6 @@ class GlobalExceptionHandlerIntegrationTest : IntegrationTestSupport() {
             .perform(
                 post("/api/v1/auth/token/refresh").contentType(MediaType.APPLICATION_JSON).content("{ bad "),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test
@@ -80,8 +74,6 @@ class GlobalExceptionHandlerIntegrationTest : IntegrationTestSupport() {
             .perform(
                 post("/api/v1/dev/not-a-uuid/token").header(HttpHeaders.AUTHORIZATION, "Bearer $guestToken"),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test
@@ -94,8 +86,6 @@ class GlobalExceptionHandlerIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"refreshToken":""}"""),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
             .andExpect(jsonPath("$.detail", containsString("refreshToken")))
     }
 
@@ -116,7 +106,5 @@ class GlobalExceptionHandlerIntegrationTest : IntegrationTestSupport() {
         mockMvc()
             .perform(get("/api/v1/dev/$guestId/token").header(HttpHeaders.AUTHORIZATION, "Bearer $guestToken"))
             .andExpect(status().isMethodNotAllowed)
-            .andExpect(jsonPath("$.status").value(405))
-            .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"))
     }
 }

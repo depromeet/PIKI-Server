@@ -51,7 +51,6 @@ class OAuthApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                status = HttpStatus.BAD_REQUEST,
                                 detail = "소셜 로그인 요청이 올바르지 않습니다 (code+redirectUri 또는 accessToken 이 필요합니다).",
                             ),
                     )
@@ -61,7 +60,6 @@ class OAuthApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.RETRYABLE,
-                                status = HttpStatus.BAD_GATEWAY,
                                 detail = "소셜 로그인 제공자 호출에 실패했습니다.",
                             ),
                     )

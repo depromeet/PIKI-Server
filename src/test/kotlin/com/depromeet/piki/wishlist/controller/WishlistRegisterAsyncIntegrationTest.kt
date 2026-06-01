@@ -81,8 +81,6 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}")
                         .content(body),
                 ).andExpect(status().isCreated)
-                .andExpect(jsonPath("$.status").value(201))
-                .andExpect(jsonPath("$.code").value("CREATED"))
                 .andExpect(jsonPath("$.data.wish.id").isNumber)
                 .andExpect(jsonPath("$.data.item.status").value("PROCESSING"))
                 // 파싱 전이라 추출 결과는 아직 비어 있고, 입력으로 받은 sourceUrl 만 채워진다.
