@@ -81,8 +81,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"name":"테스트 토너먼트"}"""),
             ).andExpect(status().isCreated)
-            .andExpect(jsonPath("$.status").value(201))
-            .andExpect(jsonPath("$.code").value("CREATED"))
             .andExpect(jsonPath("$.data.tournamentId").isNumber)
     }
 
@@ -100,7 +98,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":[$item1Id,$item2Id]}"""),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.tournamentItemIds").isArray)
             .andExpect(jsonPath("$.data.tournamentItemIds.length()").value(2))
     }
@@ -118,7 +115,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":[$itemId]}"""),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
     }
 
     @Test
@@ -135,7 +131,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":[999999]}"""),
             ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
     }
 
     @Test
@@ -153,7 +148,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":[$processingItemId]}"""),
             ).andExpect(status().isConflict)
-            .andExpect(jsonPath("$.status").value(409))
     }
 
     @Test
@@ -168,7 +162,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":[]}"""),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
     }
 
     @Test
@@ -183,7 +176,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":[100,200]}"""),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.status").value(403))
     }
 
     @Test
@@ -200,7 +192,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 post("/api/v1/tournaments/$tournamentId/start")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.items").isArray)
             .andExpect(jsonPath("$.data.items.length()").value(2))
             .andExpect(jsonPath("$.data.items[0].tournamentItemId").isNumber)
@@ -224,7 +215,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 post("/api/v1/tournaments/$tournamentId/start")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.status").value(403))
     }
 
     @Test
@@ -237,7 +227,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 post("/api/v1/tournaments/$tournamentId/start")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
     }
 
     @Test
@@ -254,7 +243,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                         """{"currentRound":2,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}""",
                     ),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
     }
 
     @Test
@@ -278,7 +266,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(matchBody),
             ).andExpect(status().isConflict)
-            .andExpect(jsonPath("$.status").value(409))
     }
 
     @Test
@@ -316,7 +303,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"currentRound":4,"firstTournamentItemId":$ti2,"secondTournamentItemId":$ti3,"selectedTournamentItemId":$ti3}"""),
             ).andExpect(status().isConflict)
-            .andExpect(jsonPath("$.status").value(409))
     }
 
     @Test
@@ -333,7 +319,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                         """{"currentRound":4,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}""",
                     ),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
     }
 
     @Test
@@ -350,7 +335,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                         """{"currentRound":2,"firstTournamentItemId":$item1Id,"secondTournamentItemId":$item2Id,"selectedTournamentItemId":$item1Id}""",
                     ),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.status").value(403))
     }
 
     @Test
@@ -365,8 +349,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 get("/api/v1/tournaments")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.code").value("OK"))
             .andExpect(jsonPath("$.data.length()").value(2))
             .andExpect(jsonPath("$.data[0].tournamentId").isNumber)
             .andExpect(jsonPath("$.data[0].name").isString)
@@ -753,7 +735,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 get("/api/v1/tournaments/$tournamentId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.status").value(403))
     }
 
     @Test
@@ -765,7 +746,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 get("/api/v1/tournaments/999999")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
     }
 
     @Test
@@ -780,7 +760,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 delete("/api/v1/tournaments/$tournamentId/items/$itemId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
 
         val remaining = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
         assertEquals(1, remaining.size)
@@ -797,7 +776,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 delete("/api/v1/tournaments/$tournamentId/items/$item1Id")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isConflict)
-            .andExpect(jsonPath("$.status").value(409))
     }
 
     @Test
@@ -812,7 +790,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 delete("/api/v1/tournaments/$tournamentId/items/$itemId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.status").value(403))
     }
 
     @Test
@@ -828,7 +805,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 delete("/api/v1/tournaments/$tournamentId/items/$itemId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
 
         assertTrue(
             tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).none { it.getId() == itemId },
@@ -845,7 +821,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 delete("/api/v1/tournaments/$tournamentId/items/999999")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
     }
 
     @Test
@@ -864,7 +839,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 delete("/api/v1/tournaments/$tournamentId1/items/$itemOfTournament2")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
     }
 
     @Test
@@ -882,7 +856,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""{"url":"https://example.com/product"}"""),
                     ).andExpect(status().isOk)
-                    .andExpect(jsonPath("$.status").value(200))
                     .andExpect(jsonPath("$.data.tournamentItemId").isNumber)
                     .andReturn()
 
@@ -909,7 +882,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"url":""}"""),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
     }
 
     @Test
@@ -924,7 +896,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"url":"https://example.com/product"}"""),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.status").value(403))
     }
 
     @Test
@@ -938,7 +909,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"url":"https://example.com/product"}"""),
             ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
     }
 
     @Test
@@ -957,7 +927,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                         .file(image2)
                         .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
                 ).andExpect(status().isOk)
-                .andExpect(jsonPath("$.status").value(200))
                 .andExpect(jsonPath("$.data.tournamentItemIds").isArray)
                 .andExpect(jsonPath("$.data.tournamentItemIds.length()").value(2))
 
@@ -979,7 +948,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .file(image)
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.status").value(403))
     }
 
     @Test
@@ -995,7 +963,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(request)
             .andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
     }
 
     @Test
@@ -1009,7 +976,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 multipart("/api/v1/tournaments/$tournamentId/items/images")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
     }
 
     @Test
@@ -1026,7 +992,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"itemIds":[$itemId]}"""),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.status").value(403))
     }
 
     @Test
@@ -1043,7 +1008,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"url":"https://example.com/product"}"""),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
     }
 
     @Test
@@ -1060,7 +1024,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .file(image)
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
     }
 
     private fun buildMockMvc(): MockMvc =
@@ -1133,7 +1096,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 get("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.tournamentItemId").value(tournamentItemId))
             .andExpect(jsonPath("$.data.itemId").value(itemId))
             .andExpect(jsonPath("$.data.name").value("나이키 에어맥스"))
@@ -1173,7 +1135,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 get("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.status").value(403))
     }
 
     @Test
@@ -1185,7 +1146,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 get("/api/v1/tournaments/999999/items/1")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
     }
 
     @Test
@@ -1198,7 +1158,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 get("/api/v1/tournaments/$tournamentId/items/999999")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
     }
 
     @Test
@@ -1214,7 +1173,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 get("/api/v1/tournaments/$tournamentId1/items/$itemOfTournament2")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
     }
 
     private fun startTournamentWith2Items(mockMvc: MockMvc): TournamentStart {

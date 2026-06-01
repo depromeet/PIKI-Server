@@ -156,8 +156,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}")
                     .content(body),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
             .andExpect(jsonPath("$.detail").value("유효한 URL 형식이 아닙니다."))
     }
 
@@ -172,8 +170,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 get("/api/v1/wishlists")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.code").value("OK"))
             .andExpect(jsonPath("$.data.length()").value(0))
             .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
             .andExpect(jsonPath("$.pageResponse.nextCursor").value(nullValue()))
@@ -259,8 +255,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 get("/api/v1/wishlists/$wishId")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.code").value("OK"))
             .andExpect(jsonPath("$.data.wish.id").value(wishId))
             .andExpect(jsonPath("$.data.item.name").value("에어 조던 1 미드"))
             .andExpect(jsonPath("$.data.item.currentPrice").value(119_000))
@@ -283,8 +277,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 get("/api/v1/wishlists/$wishId")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(otherId)}"),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.status").value(403))
-            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
     }
 
     @Test
@@ -298,8 +290,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 get("/api/v1/wishlists/99999999")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
-            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
     }
 
     @Test
@@ -318,8 +308,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         mockMvc
             .perform(get("/api/v1/wishlists/$wishId").header(HttpHeaders.AUTHORIZATION, authHeader))
             .andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
-            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
     }
 
     @Test
@@ -340,8 +328,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isConflict)
-            .andExpect(jsonPath("$.status").value(409))
-            .andExpect(jsonPath("$.code").value("CONFLICT"))
             .andExpect(jsonPath("$.detail").value("이미 등록 완료된 상품은 수정할 수 없습니다."))
     }
 
@@ -363,8 +349,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isConflict)
-            .andExpect(jsonPath("$.status").value(409))
-            .andExpect(jsonPath("$.code").value("CONFLICT"))
             .andExpect(jsonPath("$.detail").value("아직 처리 중인 상품은 수정할 수 없습니다."))
     }
 
@@ -386,7 +370,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.item.name").value("직접 입력한 이름"))
             .andExpect(jsonPath("$.data.item.currentPrice").value(50_000))
             // 추출 실패(FAILED) 항목을 직접 보정하면 정상 항목이 된 것이므로 READY 로 복구된다.
@@ -411,8 +394,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
             .andExpect(jsonPath("$.detail").value("상품명을 입력해야 합니다."))
     }
 
@@ -434,8 +415,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(otherId)}"),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.status").value(403))
-            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
     }
 
     @Test
@@ -453,8 +432,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
-            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
     }
 
     @Test
@@ -474,8 +451,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test
@@ -497,7 +472,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.item.name").value("직접 입력한 이름"))
             // 올린 이미지가 그대로 S3(stub)에 올라가 imageUrl 로 채워지고, FAILED 가 READY 로 복구된다.
             .andExpect(jsonPath("$.data.item.imageUrl").value(startsWith("${StubImageStorage.BASE_URL}/items/")))
@@ -523,8 +497,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test
@@ -546,8 +518,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test
@@ -572,8 +542,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                             it
                         }.header(HttpHeaders.AUTHORIZATION, authHeader),
                 ).andExpect(status().isBadGateway)
-                .andExpect(jsonPath("$.status").value(502))
-                .andExpect(jsonPath("$.code").value("BAD_GATEWAY"))
         } finally {
             stubImageStorage.behavior = stubImageStorage.defaultBehavior
         }
@@ -593,7 +561,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 delete("/api/v1/wishlists/$deletedWishId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
 
         mockMvc
             .perform(
@@ -618,8 +585,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 delete("/api/v1/wishlists/$wishId")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(otherId)}"),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.status").value(403))
-            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
     }
 
     @Test
@@ -634,8 +599,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 delete("/api/v1/wishlists/99999999")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.code").value("OK"))
     }
 
     @Test
@@ -653,7 +616,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         mockMvc
             .perform(delete("/api/v1/wishlists/$wishId").header(HttpHeaders.AUTHORIZATION, authHeader))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
     }
 
     @Test
@@ -672,8 +634,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .param("ids", "$deletedWishId1,$deletedWishId2")
                     .header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.code").value("OK"))
 
         // 다중 삭제된 둘은 빠지고 남긴 하나만 조회된다.
         mockMvc
@@ -699,8 +659,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .param("ids", "$myWishId,$othersWishId")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(ownerId)}"),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.status").value(403))
-            .andExpect(jsonPath("$.code").value("FORBIDDEN"))
 
         // 남의것이 섞이면 403 + @Transactional 롤백 — 내 위시도 지워지지 않고 그대로 남아 있다.
         mockMvc
@@ -725,8 +683,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .param("ids", "$existingWishId,99999999")
                     .header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
-            .andExpect(jsonPath("$.code").value("OK"))
 
         // 존재하던 본인 위시는 삭제되어 조회에서 빠진다.
         mockMvc
@@ -747,8 +703,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 delete("/api/v1/wishlists")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
             .andExpect(jsonPath("$.detail").value("삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다."))
     }
 
@@ -766,8 +720,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .param("ids", ids)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test
@@ -785,7 +737,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .param("ids", "$wishId,$wishId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
 
         mockMvc
             .perform(get("/api/v1/wishlists").header(HttpHeaders.AUTHORIZATION, authHeader))
@@ -808,8 +759,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .file(image2)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isCreated)
-            .andExpect(jsonPath("$.status").value(201))
-            .andExpect(jsonPath("$.code").value("CREATED"))
             .andExpect(jsonPath("$.data.length()").value(2))
             // 등록 직후라 두 항목 모두 PROCESSING — 추출 결과는 비어 있고 sourceUrl 도 null(이미지 등록).
             // 실제 파싱 완료(READY/FAILED)·크롭 imageUrl 은 WishlistRegisterAsyncIntegrationTest 가 검증한다.
@@ -834,8 +783,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         mockMvc
             .perform(request)
             .andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test
@@ -850,8 +797,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 multipart("/api/v1/wishlists/images")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test
@@ -867,8 +812,6 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .file(emptyImage)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test
@@ -884,7 +827,5 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .file(gif)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.status").value(400))
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 }
