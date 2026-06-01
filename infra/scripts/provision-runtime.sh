@@ -33,7 +33,30 @@ else
     redis:7-alpine
 fi
 
-# 3) nginx default 사이트 — 불필요한 stock catch-all 노출. 있으면 제거하고 reload.
+# 3) mysql (dev 전용) — prod 는 RDS 를 쓰므로 ENVIRONMENT=dev 일 때만 기동.
+#    redis 와 동일하게 named 볼륨 + 있으면 skip 패턴. 앱의 DB_* 환경변수와 같은 값으로 초기화.
+#    포트는 172.17.0.1:3306 바인딩 — 앱 컨테이너가 docker bridge 를 통해 접근하고 외부엔 노출 안 함.
+if [ "${ENVIRONMENT:-}" = "dev" ]; then
+  if docker ps -a --format '{{.Names}}' | grep -qx 'team3-mysql'; then
+    echo "[mysql] team3-mysql 이미 존재 — skip"
+  else
+    echo "[mysql] team3-mysql named 볼륨으로 기동"
+    docker run -d \
+      --name team3-mysql \
+      --restart unless-stopped \
+      -p 172.17.0.1:3306:3306 \
+      -v team3-mysql-data:/var/lib/mysql \
+      -e MYSQL_DATABASE="${DB_NAME}" \
+      -e MYSQL_USER="${DB_USERNAME}" \
+      -e MYSQL_PASSWORD="${DB_PASSWORD}" \
+      -e MYSQL_ROOT_PASSWORD="${DB_PASSWORD}" \
+      mysql:8.4
+  fi
+else
+  echo "[mysql] prod 환경 — skip (RDS 사용)"
+fi
+
+# 4) nginx default 사이트 — 불필요한 stock catch-all 노출. 있으면 제거하고 reload.
 if [ -e /etc/nginx/sites-enabled/default ]; then
   echo "[nginx] sites-enabled/default 제거"
   sudo rm -f /etc/nginx/sites-enabled/default

@@ -125,9 +125,15 @@ jobs:
           target: "/tmp/team3-alloy"
           strip_components: 2
 
-      - name: Provision runtime (swap·redis·nginx·alloy)
+      - name: Provision runtime (swap·redis·mysql·nginx·alloy)
         uses: appleboy/ssh-action@v1
         env:
+          ENVIRONMENT: ${{ secrets.ENVIRONMENT }}
+          # dev MySQL 초기화용 — ENVIRONMENT=dev 일 때만 provision-runtime.sh 가 컨테이너를 기동.
+          # prod 는 RDS 를 쓰므로 이 값들이 있어도 무시된다.
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           # Alloy 가 Grafana Cloud 로 remote-write 할 자격증명. 미등록(빈 값)이면 provision-runtime.sh 가
           # Alloy 기동을 skip 한다. token 1개를 metrics·logs 가 공유, URL·USER 는 Prometheus/Loki 각각.
           GRAFANA_METRICS_URL: ${{ secrets.GRAFANA_METRICS_URL }}
@@ -139,9 +145,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          # appleboy/ssh-action 이 envs 목록을 SSH 세션에 export 하므로, script 가 실행하는
-          # provision-runtime.sh 자식 프로세스도 이 값들을 상속한다.
-          envs: GRAFANA_METRICS_URL,GRAFANA_METRICS_USER,GRAFANA_LOGS_URL,GRAFANA_LOGS_USER,GRAFANA_CLOUD_TOKEN
+          envs: ENVIRONMENT,DB_NAME,DB_USERNAME,DB_PASSWORD,GRAFANA_METRICS_URL,GRAFANA_METRICS_USER,GRAFANA_LOGS_URL,GRAFANA_LOGS_USER,GRAFANA_CLOUD_TOKEN
           script: |
             chmod +x /tmp/team3-provision/provision-runtime.sh
             /tmp/team3-provision/provision-runtime.sh
