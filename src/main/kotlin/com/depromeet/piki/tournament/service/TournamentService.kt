@@ -18,6 +18,7 @@ import com.depromeet.piki.tournament.service.dto.TournamentDetail
 import com.depromeet.piki.tournament.service.dto.TournamentItemDetail
 import com.depromeet.piki.tournament.service.dto.TournamentStartResult
 import com.depromeet.piki.tournament.service.dto.TournamentSummary
+import com.depromeet.piki.tournament.service.dto.UpdateTournamentItem
 import com.depromeet.piki.user.repository.UserRepository
 import com.depromeet.piki.wishlist.repository.WishRepository
 import org.springframework.stereotype.Service
@@ -381,6 +382,34 @@ class TournamentService(
 
         val deleted = tournamentItemRepository.deleteIfPending(tournamentItemId, tournamentId)
         if (deleted == 0) throw TournamentException.notPendingTournament()
+    }
+
+    @Transactional
+    fun updateItem(
+        userId: UUID,
+        command: UpdateTournamentItem,
+    ) {
+        val tournament =
+            tournamentRepository.findTournamentById(command.tournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        if (!tournament.isPending()) throw TournamentException.notPendingTournament()
+        tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)
+            ?: throw TournamentException.forbiddenTournament()
+        val tournamentItem =
+            tournamentItemRepository.findById(command.tournamentItemId)
+                ?: throw TournamentException.notFoundTournamentItem()
+        if (tournamentItem.tournamentId != command.tournamentId) throw TournamentException.notFoundTournamentItem()
+        if (tournamentItem.userId != userId) throw TournamentException.forbiddenTournament()
+        val item =
+            itemRepository.findById(tournamentItem.itemId)
+                ?: error("item 없음 — tournamentItemId=${command.tournamentItemId}, itemId=${tournamentItem.itemId}")
+        item.recover(
+            name = command.name,
+            currentPrice = command.price,
+            imageUrl = command.imageUrl,
+            currency = command.currency,
+        )
+        itemRepository.save(item)
     }
 
     private fun toItemDetail(

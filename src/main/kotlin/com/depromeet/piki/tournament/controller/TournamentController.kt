@@ -10,6 +10,7 @@ import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.RecordMatchRequest
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
+import com.depromeet.piki.tournament.controller.dto.UpdateTournamentItemRequest
 import com.depromeet.piki.tournament.controller.dto.TournamentItemDetailResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
@@ -22,6 +23,7 @@ import org.springframework.http.MediaType
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -78,6 +80,17 @@ class TournamentController(
         // required=false + orEmpty 로 항상 서비스 검증(invalidImageCount, 400)에 닿게 한다.
         val tournamentItemIds = tournamentItemService.addItemsFromImages(userId, tournamentId, images.orEmpty())
         return ApiResponseBody.ok(AddTournamentItemsFromImagesResponse(tournamentItemIds))
+    }
+
+    @PatchMapping("/{tournamentId}/items/{tournamentItemId}")
+    override fun updateItem(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+        @PathVariable tournamentItemId: Long,
+        @Valid @RequestBody request: UpdateTournamentItemRequest,
+    ): ApiResponseBody<Unit> {
+        tournamentService.updateItem(userId, request.toUpdateTournamentItem(tournamentId, tournamentItemId))
+        return ApiResponseBody.ok()
     }
 
     @DeleteMapping("/{tournamentId}/items/{tournamentItemId}")
