@@ -9,7 +9,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class NotificationEventHandlerTest {
-    // eventType 은 제네릭 타입 인자 E 에서 ResolvableType 으로 자동 도출된다(::class 명시 제거).
+    // eventType 은 제네릭 타입 인자 E 에서 GenericTypeResolver 로 자동 도출된다(::class 명시 제거).
     // reflection 기반이라 클래스 계층이 바뀌면 조용히 틀어질 수 있어, 도출 결과를 직접 못 박아 회귀를 잡는다.
     @Test
     fun `각 핸들러의 eventType 이 제네릭 인자에서 올바르게 도출된다`() {
