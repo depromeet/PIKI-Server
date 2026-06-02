@@ -73,7 +73,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         "Bearer ${jwtProvider.generateAccessToken(userId, IdentityType.MEMBER)}"
 
     @Test
-    fun `POST tournaments 는 201 과 함께 tournamentId 를 반환한다`() {
+    fun `POST tournaments 는 201 과 함께 tournamentId inviteCode inviteExpiresAt 을 반환한다`() {
         val mockMvc = buildMockMvc()
 
         mockMvc
@@ -84,6 +84,142 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .content("""{"name":"테스트 토너먼트"}"""),
             ).andExpect(status().isCreated)
             .andExpect(jsonPath("$.data.tournamentId").isNumber)
+            .andExpect(jsonPath("$.data.inviteCode").isString)
+            .andExpect(jsonPath("$.data.inviteExpiresAt").isString)
+    }
+
+    @Test
+    fun `POST tournaments 에서 inviteDurationMinutes 를 지정하면 해당 시간으로 만료 시각이 설정된다`() {
+        val mockMvc = buildMockMvc()
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"name":"테스트 토너먼트","inviteDurationMinutes":60}"""),
+            ).andExpect(status().isCreated)
+            .andExpect(jsonPath("$.data.inviteCode").isString)
+    }
+
+    @Test
+    fun `POST tournaments 에서 inviteDurationMinutes 가 0 이면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"name":"테스트 토너먼트","inviteDurationMinutes":0}"""),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `POST tournaments-id-join 은 유효한 초대 코드로 토너먼트 참여에 성공한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/join")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteCode":"$inviteCode"}"""),
+            ).andExpect(status().isOk)
+
+        val participants = tournamentUserJpaRepository.findByTournamentIdAndDeletedAtIsNull(tournamentId)
+        assertEquals(2, participants.size)
+    }
+
+    @Test
+    fun `POST tournaments-id-join 은 잘못된 초대 코드면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, _) = createTournamentWithInviteCode(mockMvc)
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/join")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteCode":"000000"}"""),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `POST tournaments-id-join 은 이미 참여 중이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/join")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteCode":"$inviteCode"}"""),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `POST tournaments-id-join-guest 는 새 게스트 계정을 생성하고 토너먼트에 참여한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/join/guest")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteCode":"$inviteCode","nickname":"새친구"}"""),
+            ).andExpect(status().isCreated)
+            .andExpect(jsonPath("$.data.accessToken").isString)
+            .andExpect(jsonPath("$.data.refreshToken").isString)
+            .andExpect(jsonPath("$.data.userId").isString)
+            .andExpect(jsonPath("$.data.nickname").value("새친구"))
+            .andExpect(jsonPath("$.data.tournamentId").value(tournamentId))
+
+        val participants = tournamentUserJpaRepository.findByTournamentIdAndDeletedAtIsNull(tournamentId)
+        assertEquals(2, participants.size)
+    }
+
+    @Test
+    fun `POST tournaments-id-join-guest 는 JWT 없이도 호출 가능하다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/join/guest")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteCode":"$inviteCode","nickname":"무인증친구"}"""),
+            ).andExpect(status().isCreated)
+    }
+
+    @Test
+    fun `POST tournaments-id-join-guest 는 잘못된 초대 코드면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, _) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/join/guest")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteCode":"000000","nickname":"새친구"}"""),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `POST tournaments-id-join-guest 는 닉네임이 비어 있으면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/join/guest")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteCode":"$inviteCode","nickname":""}"""),
+            ).andExpect(status().isBadRequest)
     }
 
     @Test
@@ -1180,6 +1316,22 @@ class TournamentControllerTest : IntegrationTestSupport() {
         return objectMapper.readTree(result.response.contentAsString)["data"]["tournamentId"].asLong()
     }
 
+    private fun createTournamentWithInviteCode(
+        mockMvc: MockMvc,
+        name: String = "테스트 토너먼트",
+    ): Pair<Long, String> {
+        val result =
+            mockMvc
+                .perform(
+                    post("/api/v1/tournaments")
+                        .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"name":"$name"}"""),
+                ).andReturn()
+        val data = objectMapper.readTree(result.response.contentAsString)["data"]
+        return data["tournamentId"].asLong() to data["inviteCode"].asText()
+    }
+
     private fun saveUser(
         id: UUID,
         profileImage: String,
@@ -1396,6 +1548,175 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 get("/api/v1/tournaments/$tournamentId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isNotFound)
+    }
+
+    // ── 초대 미리보기 ──────────────────────────────────────────────────
+
+    @Test
+    fun `GET invite-preview 는 유효한 초대 코드로 토너먼트 정보를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId/invite-preview")
+                    .param("inviteCode", inviteCode),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.tournamentId").value(tournamentId))
+            .andExpect(jsonPath("$.data.tournamentName").isString)
+            .andExpect(jsonPath("$.data.itemCount").value(0))
+            .andExpect(jsonPath("$.data.participantCount").value(1))
+    }
+
+    @Test
+    fun `GET invite-preview 는 JWT 없이도 호출 가능하다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId/invite-preview")
+                    .param("inviteCode", inviteCode),
+            ).andExpect(status().isOk)
+    }
+
+    @Test
+    fun `GET invite-preview 는 초대 코드가 불일치하면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, _) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId/invite-preview")
+                    .param("inviteCode", "ZZZ999"),
+            ).andExpect(status().isBadRequest)
+    }
+
+    // ── 플레이 링크 ──────────────────────────────────────────────────
+
+    @Test
+    fun `POST play-link 는 완료된 토너먼트에 소유자가 플레이 링크를 생성한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/play-link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data").isString)
+    }
+
+    @Test
+    fun `POST play-link 는 PENDING 토너먼트에는 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/play-link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}"),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `GET play-link-info 는 JWT 없이도 호출 가능하다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+
+        mockMvc
+            .perform(get("/api/v1/tournaments/$tournamentId/play-link-info"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.sourceTournamentId").value(tournamentId))
+            .andExpect(jsonPath("$.data.tournamentName").isString)
+    }
+
+    @Test
+    fun `GET play-link-info 는 플레이 링크가 없으면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(get("/api/v1/tournaments/$tournamentId/play-link-info"))
+            .andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `POST from-play-link 는 원본 아이템 구성으로 새 토너먼트를 생성한다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+        val (tournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/from-play-link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isCreated)
+            .andExpect(jsonPath("$.data").isNumber)
+    }
+
+    // ── 그룹 결과 ──────────────────────────────────────────────────
+
+    @Test
+    fun `GET group-result 는 완료된 토너먼트의 그룹 결과를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId/group-result")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.items").isArray)
+    }
+
+    @Test
+    fun `GET group-result 는 PENDING 토너먼트에는 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId/group-result")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isConflict)
+    }
+
+    private fun completeTournamentWith2Items(mockMvc: MockMvc): TournamentStart {
+        val tournamentId = createTournament(mockMvc)
+        val item1Id = saveWishItem(name = "아이템1")
+        val item2Id = saveWishItem(name = "아이템2")
+        addItemsToTournament(mockMvc, tournamentId, userId, item1Id, item2Id)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+        val items = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId)
+        val ti1 = items[0].getId()
+        val ti2 = items[1].getId()
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/matches")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"currentRound":2,"firstTournamentItemId":$ti1,"secondTournamentItemId":$ti2,"selectedTournamentItemId":$ti1}"""),
+        )
+        return TournamentStart(tournamentId = tournamentId, item1Id = ti1, item2Id = ti2)
     }
 
     private fun startTournamentWith2Items(mockMvc: MockMvc): TournamentStart {
