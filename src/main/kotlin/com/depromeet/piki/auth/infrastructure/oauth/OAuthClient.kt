@@ -9,7 +9,12 @@ interface OAuthClient {
 
     // RFC 6749 §4.1 Authorization Code Grant — provider 인가 URL 생성.
     // state 는 CSRF 방지용 (RFC 6749 §10.12). 호출자가 Redis 에 저장 후 사용자를 이 URL 로 redirect.
-    fun buildAuthUrl(state: String): String
+    // redirectUri 가 null 이면 provider 별 properties 기본값을 사용한다.
+    fun buildAuthUrl(state: String, redirectUri: String? = null): String
+
+    // 허용된 redirect_uri 목록. OAuthUrlService 가 검증에 사용한다.
+    // 기본 redirectUri 는 항상 포함. 추가 허용 URI 는 properties.allowedRedirectUris 로 주입.
+    val allowedRedirectUris: List<String>
 
     fun fetchUserInfoByCode(
         code: String,

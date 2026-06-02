@@ -33,5 +33,9 @@ class OAuthException private constructor(
         // state 없음 · 만료 · 이미 소비됨 → 401. CSRF 방지용 state 불일치로 요청을 거부.
         fun invalidState(): OAuthException =
             OAuthException("유효하지 않은 state 파라미터입니다. 인가 URL 을 새로 발급받아 다시 시도하세요.", ErrorCategory.UNAUTHORIZED, HttpStatus.UNAUTHORIZED)
+
+        // 허용되지 않은 redirect_uri → 400. 등록된 URI 외 Open Redirect 를 차단한다.
+        fun invalidRedirectUri(): OAuthException =
+            OAuthException("허용되지 않은 redirect_uri 입니다.", ErrorCategory.INVALID_INPUT, HttpStatus.BAD_REQUEST)
     }
 }

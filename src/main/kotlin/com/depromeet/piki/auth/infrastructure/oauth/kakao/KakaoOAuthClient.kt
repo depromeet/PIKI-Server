@@ -17,15 +17,17 @@ class KakaoOAuthClient(
     private val kakaoProperties: KakaoProperties,
 ) : OAuthClient {
     override val provider = OAuthProvider.KAKAO
+    override val allowedRedirectUris: List<String>
+        get() = listOf(kakaoProperties.redirectUri) + kakaoProperties.allowedRedirectUris
 
     private val authClient = OAuthRestClient.create(AUTH_BASE_URL)
     private val apiClient = OAuthRestClient.create(API_BASE_URL)
 
-    override fun buildAuthUrl(state: String): String =
+    override fun buildAuthUrl(state: String, redirectUri: String?): String =
         UriComponentsBuilder
             .fromUriString("$AUTH_BASE_URL/oauth/authorize")
             .queryParam(OAuthParams.CLIENT_ID, kakaoProperties.clientId)
-            .queryParam(OAuthParams.REDIRECT_URI, kakaoProperties.redirectUri)
+            .queryParam(OAuthParams.REDIRECT_URI, redirectUri ?: kakaoProperties.redirectUri)
             .queryParam(OAuthParams.RESPONSE_TYPE, OAuthParams.RESPONSE_TYPE_CODE)
             .queryParam(OAuthParams.STATE, state)
             .build()

@@ -45,6 +45,15 @@ class OAuthUrlApiExamples(
                                 detail = "지원하지 않는 소셜 로그인 제공자입니다.",
                             ),
                     )
+                    add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "허용되지 않은 redirect_uri",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.INVALID_INPUT,
+                                detail = "허용되지 않은 redirect_uri 입니다.",
+                            ),
+                    )
                 }
             }
             operation
