@@ -362,7 +362,7 @@ class TournamentService(
         tournamentId: Long,
     ) {
         val tournament =
-            tournamentRepository.findTournamentById(tournamentId)
+            tournamentRepository.findTournamentByIdForUpdate(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         val tournamentUser =
             tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
