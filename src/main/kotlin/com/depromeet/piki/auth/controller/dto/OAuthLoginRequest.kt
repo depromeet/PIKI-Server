@@ -13,6 +13,11 @@ data class OAuthLoginRequest(
     val redirectUri: String? = null,
     @field:Schema(description = "v2 SDK 흐름 — 모바일 SDK 가 받은 access_token", nullable = true)
     val accessToken: String? = null,
+    @field:Schema(
+        description = "CSRF 방지용 state. GET /auth/{provider}/url 로 발급받은 값을 전송 (v1 웹 흐름 권장·v2 선택). 미전송 시 state 검증을 생략한다.",
+        nullable = true,
+    )
+    val state: String? = null,
 ) {
     // v1(code+redirectUri) XOR v2(accessToken) — 정확히 한 흐름만 유효. 둘 다·둘 다 없음·공백은 400(입력 경계 계약).
     @get:JsonIgnore
@@ -25,5 +30,5 @@ data class OAuthLoginRequest(
         }
 
     fun toCommand(): OAuthLoginCommand =
-        OAuthLoginCommand(code = code, redirectUri = redirectUri, accessToken = accessToken)
+        OAuthLoginCommand(code = code, redirectUri = redirectUri, accessToken = accessToken, state = state)
 }
