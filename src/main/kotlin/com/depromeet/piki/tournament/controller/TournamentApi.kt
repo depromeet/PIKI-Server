@@ -707,7 +707,6 @@ interface TournamentApi {
         request: UpdateTournamentItemRequest,
     ): ApiResponseBody<Unit>
 
-   
     @Operation(
         summary = "토너먼트 삭제",
         description = "PENDING 또는 COMPLETED 상태의 토너먼트를 삭제한다. 토너먼트 소유자만 삭제할 수 있으며, IN_PROGRESS 상태에서는 삭제할 수 없다.",
@@ -770,7 +769,7 @@ interface TournamentApi {
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
     ): ApiResponseBody<Unit>
-  
+
     @Operation(
         summary = "토너먼트 아이템 삭제",
         description = "PENDING 상태의 토너먼트에서 아이템을 제거한다. 아이템을 추가한 본인 또는 토너먼트 소유자만 삭제할 수 있다.",
@@ -829,4 +828,9 @@ interface TournamentApi {
             ),
         ],
     )
+    fun deleteItem(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
+        @Parameter(description = "토너먼트 아이템 ID", example = "10") tournamentItemId: Long,
+    ): ApiResponseBody<Unit>
 }
