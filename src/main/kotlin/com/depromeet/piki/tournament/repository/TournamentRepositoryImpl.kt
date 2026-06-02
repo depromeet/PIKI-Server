@@ -36,4 +36,12 @@ class TournamentRepositoryImpl(
             ?.let { tournamentJpaRepository.findByIdInAndStatusInOrderByCreatedAtDesc(ids, it) }
             ?: tournamentJpaRepository.findByIdInOrderByCreatedAtDesc(ids)
     }
+
+    override fun deleteTournamentById(tournamentId: Long) {
+        tournamentJpaRepository.deleteById(tournamentId)
+    }
+
+    override fun deleteHistoriesByTournamentId(tournamentId: Long) {
+        tournamentHistoryJpaRepository.deleteAllByTournamentId(tournamentId)
+    }
 }

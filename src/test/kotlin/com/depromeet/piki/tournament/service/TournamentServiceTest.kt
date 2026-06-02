@@ -57,6 +57,10 @@ class TournamentServiceTest {
         override fun findByTournamentIds(tournamentIds: List<Long>): List<TournamentUser> =
             users.filter { it.tournamentId in tournamentIds }
 
+        override fun deleteAllByTournamentId(tournamentId: Long) {
+            users.removeAll { it.tournamentId == tournamentId }
+        }
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
@@ -201,6 +205,10 @@ class TournamentServiceTest {
             return 1
         }
 
+        override fun deleteAllByTournamentId(tournamentId: Long) {
+            items.removeAll { it.tournamentId == tournamentId }
+        }
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
@@ -244,6 +252,14 @@ class TournamentServiceTest {
                 .filter { it.getId() in ids }
                 .filter { statuses.isNullOrEmpty() || it.status in statuses }
                 .sortedByDescending { it.createdAt }
+
+        override fun deleteTournamentById(tournamentId: Long) {
+            tournaments.remove(tournamentId)
+        }
+
+        override fun deleteHistoriesByTournamentId(tournamentId: Long) {
+            histories.removeAll { it.tournamentId == tournamentId }
+        }
 
         private fun setEntityId(
             entity: LongBaseEntity,
@@ -1110,5 +1126,64 @@ class TournamentServiceTest {
                 service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
             }
         assertEquals(HttpStatus.FORBIDDEN, ex.httpStatus)
+    }
+
+    @Test
+    fun `deleteTournament 는 PENDING 토너먼트를 소유자가 삭제하면 연관 데이터가 모두 제거된다`() {
+        val tournamentId = service.create(userId, CreateTournament("삭제 대상"))
+        testWishRepository.addWish(userId, 1L, 2L)
+        service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
+
+        service.deleteTournament(userId, tournamentId)
+
+        assertEquals(null, repository.tournaments[tournamentId])
+        assertEquals(0, tournamentItemRepository.items.count { it.tournamentId == tournamentId })
+        assertEquals(0, tournamentUserRepository.users.count { it.tournamentId == tournamentId })
+    }
+
+    @Test
+    fun `deleteTournament 는 COMPLETED 토너먼트도 삭제할 수 있다`() {
+        val tournamentId = createAndStart(listOf(1L, 2L))
+        val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
+        service.recordMatch(
+            userId,
+            RecordMatch(tournamentId, 2, items[0].getId(), items[1].getId(), items[0].getId()),
+        )
+
+        service.deleteTournament(userId, tournamentId)
+
+        assertEquals(null, repository.tournaments[tournamentId])
+    }
+
+    @Test
+    fun `deleteTournament 는 IN_PROGRESS 토너먼트 삭제 시 409 예외가 발생한다`() {
+        val tournamentId = createAndStart(listOf(1L, 2L))
+
+        val ex = assertFailsWith<TournamentException> { service.deleteTournament(userId, tournamentId) }
+        assertEquals(HttpStatus.CONFLICT, ex.httpStatus)
+    }
+
+    @Test
+    fun `deleteTournament 는 참가자이지만 소유자가 아니면 403 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        // otherUserId 를 참가자로 추가 (소유자는 userId)
+        tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
+
+        val ex = assertFailsWith<TournamentException> { service.deleteTournament(otherUserId, tournamentId) }
+        assertEquals(HttpStatus.FORBIDDEN, ex.httpStatus)
+    }
+
+    @Test
+    fun `deleteTournament 는 소유자가 아니면 403 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+
+        val ex = assertFailsWith<TournamentException> { service.deleteTournament(otherUserId, tournamentId) }
+        assertEquals(HttpStatus.FORBIDDEN, ex.httpStatus)
+    }
+
+    @Test
+    fun `deleteTournament 는 존재하지 않는 토너먼트면 404 예외가 발생한다`() {
+        val ex = assertFailsWith<TournamentException> { service.deleteTournament(userId, 999L) }
+        assertEquals(HttpStatus.NOT_FOUND, ex.httpStatus)
     }
 }

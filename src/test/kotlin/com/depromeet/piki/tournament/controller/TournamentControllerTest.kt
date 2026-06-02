@@ -1335,6 +1335,53 @@ class TournamentControllerTest : IntegrationTestSupport() {
             ).andExpect(status().isNotFound)
     }
 
+    @Test
+    fun `DELETE tournaments-id 는 소유자가 PENDING 토너먼트를 삭제하면 200 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+    }
+
+    @Test
+    fun `DELETE tournaments-id 에서 IN_PROGRESS 토너먼트 삭제 시도 시 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId) = startTournamentWith2Items(mockMvc)
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `DELETE tournaments-id 에서 소유자가 아닌 사용자가 요청하면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `DELETE tournaments-id 에서 존재하지 않는 토너먼트이면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/999999")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isNotFound)
+    }
+
     private fun startTournamentWith2Items(mockMvc: MockMvc): TournamentStart {
         val tournamentId = createTournament(mockMvc)
         addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem(name = "아이템1"), saveWishItem(name = "아이템2"))

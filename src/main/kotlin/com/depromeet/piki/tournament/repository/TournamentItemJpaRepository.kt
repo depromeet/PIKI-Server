@@ -25,4 +25,8 @@ interface TournamentItemJpaRepository : JpaRepository<TournamentItem, Long> {
         @Param("tournamentId") tournamentId: Long,
         @Param("status") status: TournamentStatus = TournamentStatus.PENDING,
     ): Int
+
+    @Modifying
+    @Query("DELETE FROM TournamentItem t WHERE t.tournamentId = :tournamentId")
+    fun deleteAllByTournamentId(@Param("tournamentId") tournamentId: Long)
 }

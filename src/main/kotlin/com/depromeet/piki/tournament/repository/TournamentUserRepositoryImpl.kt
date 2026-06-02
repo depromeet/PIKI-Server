@@ -27,4 +27,8 @@ class TournamentUserRepositoryImpl(
         } else {
             tournamentUserJpaRepository.findByTournamentIdIn(tournamentIds)
         }
+
+    override fun deleteAllByTournamentId(tournamentId: Long) {
+        tournamentUserJpaRepository.deleteAllByTournamentId(tournamentId)
+    }
 }

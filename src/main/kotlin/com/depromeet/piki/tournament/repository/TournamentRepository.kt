@@ -19,4 +19,8 @@ interface TournamentRepository {
         ids: List<Long>,
         statuses: List<TournamentStatus>?,
     ): List<Tournament>
+
+    fun deleteTournamentById(tournamentId: Long)
+
+    fun deleteHistoriesByTournamentId(tournamentId: Long)
 }

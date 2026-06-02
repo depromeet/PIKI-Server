@@ -357,6 +357,25 @@ class TournamentService(
     }
 
     @Transactional
+    fun deleteTournament(
+        userId: UUID,
+        tournamentId: Long,
+    ) {
+        val tournament =
+            tournamentRepository.findTournamentById(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        val tournamentUser =
+            tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+                ?: throw TournamentException.forbiddenTournament()
+        if (tournamentUser.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
+        if (tournament.isInProgress()) throw TournamentException.inProgressTournamentCannotBeDeleted()
+        tournamentRepository.deleteHistoriesByTournamentId(tournamentId)
+        tournamentItemRepository.deleteAllByTournamentId(tournamentId)
+        tournamentUserRepository.deleteAllByTournamentId(tournamentId)
+        tournamentRepository.deleteTournamentById(tournamentId)
+    }
+
+    @Transactional
     fun deleteItem(
         userId: UUID,
         tournamentId: Long,
