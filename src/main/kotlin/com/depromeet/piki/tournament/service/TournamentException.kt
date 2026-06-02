@@ -143,6 +143,13 @@ class TournamentException private constructor(
                 HttpStatus.BAD_REQUEST,
             )
 
+        fun inProgressTournamentCannotBeDeleted(): TournamentException =
+            TournamentException(
+                "진행 중인 토너먼트는 삭제할 수 없습니다.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
+
         fun statusNotSupported(): TournamentException =
             TournamentException(
                 "해당 상태의 토너먼트 조회는 아직 지원되지 않습니다.",

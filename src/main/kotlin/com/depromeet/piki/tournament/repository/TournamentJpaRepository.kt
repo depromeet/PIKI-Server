@@ -8,13 +8,16 @@ import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Query
 
 interface TournamentJpaRepository : JpaRepository<Tournament, Long> {
+    fun findByIdAndDeletedAtIsNull(id: Long): Tournament?
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT t FROM Tournament t WHERE t.id = :id")
+    @Query("SELECT t FROM Tournament t WHERE t.id = :id AND t.deletedAt IS NULL")
     fun findByIdForUpdate(id: Long): Tournament?
-    fun findByIdInAndStatusInOrderByCreatedAtDesc(
+
+    fun findByIdInAndStatusInAndDeletedAtIsNullOrderByCreatedAtDesc(
         ids: List<Long>,
         statuses: List<TournamentStatus>,
     ): List<Tournament>
 
-    fun findByIdInOrderByCreatedAtDesc(ids: List<Long>): List<Tournament>
+    fun findByIdInAndDeletedAtIsNullOrderByCreatedAtDesc(ids: List<Long>): List<Tournament>
 }

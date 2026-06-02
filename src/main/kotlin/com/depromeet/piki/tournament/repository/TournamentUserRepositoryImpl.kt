@@ -1,6 +1,7 @@
 package com.depromeet.piki.tournament.repository
 
 import com.depromeet.piki.tournament.domain.TournamentUser
+import java.time.LocalDateTime
 import org.springframework.stereotype.Repository
 import java.util.UUID
 
@@ -13,18 +14,22 @@ class TournamentUserRepositoryImpl(
     override fun findByTournamentIdAndUserId(
         tournamentId: Long,
         userId: UUID,
-    ): TournamentUser? = tournamentUserJpaRepository.findByTournamentIdAndUserId(tournamentId, userId)
+    ): TournamentUser? = tournamentUserJpaRepository.findByTournamentIdAndUserIdAndDeletedAtIsNull(tournamentId, userId)
 
     override fun findTournamentIdsByUserId(userId: UUID): List<Long> =
         tournamentUserJpaRepository.findTournamentIdsByUserId(userId)
 
     override fun findByTournamentId(tournamentId: Long): List<TournamentUser> =
-        tournamentUserJpaRepository.findByTournamentId(tournamentId)
+        tournamentUserJpaRepository.findByTournamentIdAndDeletedAtIsNull(tournamentId)
 
     override fun findByTournamentIds(tournamentIds: List<Long>): List<TournamentUser> =
         if (tournamentIds.isEmpty()) {
             emptyList()
         } else {
-            tournamentUserJpaRepository.findByTournamentIdIn(tournamentIds)
+            tournamentUserJpaRepository.findByTournamentIdInAndNotDeleted(tournamentIds)
         }
+
+    override fun softDeleteAllByTournamentId(tournamentId: Long) {
+        tournamentUserJpaRepository.softDeleteAllByTournamentId(tournamentId, LocalDateTime.now())
+    }
 }

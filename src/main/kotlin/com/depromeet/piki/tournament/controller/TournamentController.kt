@@ -141,6 +141,15 @@ class TournamentController(
         return ApiResponseBody.ok()
     }
 
+    @DeleteMapping("/{tournamentId}")
+    override fun deleteTournament(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+    ): ApiResponseBody<Unit> {
+        tournamentService.deleteTournament(userId, tournamentId)
+        return ApiResponseBody.ok()
+    }
+
     @DeleteMapping("/{tournamentId}/items/{tournamentItemId}")
     override fun deleteItem(
         @AuthenticationPrincipal userId: UUID,
