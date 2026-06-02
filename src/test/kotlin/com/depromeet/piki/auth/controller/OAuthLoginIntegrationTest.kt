@@ -44,6 +44,10 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
     private lateinit var googleOAuthClient: StubOAuthClient
 
     @Autowired
+    @Qualifier("appleOAuthClient")
+    private lateinit var appleOAuthClient: StubOAuthClient
+
+    @Autowired
     private lateinit var wishRepository: WishRepository
 
     private fun mockMvc(): MockMvc =
@@ -86,6 +90,25 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.data.user.identityType").value("MEMBER"))
             .andExpect(jsonPath("$.data.user.profileImage").value("https://img/p.jpg"))
+            .andExpect(jsonPath("$.data.accessToken").isString)
+            .andExpect(jsonPath("$.data.refreshToken").isString)
+    }
+
+    @Test
+    fun `apple - app v2 로그인하면 provider 해석과 appleOAuthClient 빈 선택을 거쳐 MEMBER 로 가입된다`() {
+        // /login/{provider} 에 apple 을 넣어 OAuthProvider.APPLE 해석 → appleOAuthClient 빈 선택까지의
+        // 라우팅·와이어링을 실제로 태운다 (stub 으로 외부 Apple 호출만 격리).
+        appleOAuthClient.fetchByAccessTokenStub =
+            { OAuthUserInfo(OAuthProvider.APPLE, "apple_fresh", null) }
+
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/apple")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("X-Client-Type", "app")
+                    .content(loginBody("accessToken" to "apple-identity-token")),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.user.identityType").value("MEMBER"))
             .andExpect(jsonPath("$.data.accessToken").isString)
             .andExpect(jsonPath("$.data.refreshToken").isString)
     }
