@@ -12,10 +12,10 @@ class OAuthUrlService(
     private val oAuthClientRegistry: OAuthClientRegistry,
     private val oAuthStateStore: OAuthStateStore,
 ) {
-    fun buildUrl(provider: OAuthProvider): OAuthUrlResult {
+    fun buildUrl(provider: OAuthProvider, redirectUri: String? = null): OAuthUrlResult {
         val state = UUID.randomUUID().toString()
         val client = oAuthClientRegistry.resolve(provider)
-        val url = client.buildAuthUrl(state)
+        val url = client.buildAuthUrl(state, redirectUri)
         oAuthStateStore.store(state)
         return OAuthUrlResult(url = url, state = state)
     }

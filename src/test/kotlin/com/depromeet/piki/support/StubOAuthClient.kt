@@ -15,11 +15,12 @@ class StubOAuthClient(
     var fetchByAccessTokenStub: (String) -> OAuthUserInfo = { _ ->
         error("stub.fetchByAccessTokenStub 를 테스트 본문에서 명시 세팅해야 한다.")
     }
-    var buildAuthUrlStub: (String) -> String = { state ->
-        "https://stub-auth.example.com/oauth/authorize?provider=${provider.name.lowercase()}&state=$state"
+    var buildAuthUrlStub: (String, String?) -> String = { state, redirectUri ->
+        "https://stub-auth.example.com/oauth/authorize?provider=${provider.name.lowercase()}&state=$state" +
+            (redirectUri?.let { "&redirect_uri=$it" } ?: "")
     }
 
-    override fun buildAuthUrl(state: String): String = buildAuthUrlStub(state)
+    override fun buildAuthUrl(state: String, redirectUri: String?): String = buildAuthUrlStub(state, redirectUri)
 
     override fun fetchUserInfoByCode(
         code: String,
