@@ -17,8 +17,6 @@ class GoogleOAuthClient(
     private val googleProperties: GoogleProperties,
 ) : OAuthClient {
     override val provider = OAuthProvider.GOOGLE
-    override val allowedRedirectUris: List<String>
-        get() = listOf(googleProperties.redirectUri) + googleProperties.allowedRedirectUris
 
     private val tokenClient = OAuthRestClient.create(TOKEN_BASE_URL)
     private val userInfoClient = OAuthRestClient.create(USER_INFO_BASE_URL)

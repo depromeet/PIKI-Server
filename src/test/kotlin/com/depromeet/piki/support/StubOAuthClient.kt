@@ -19,10 +19,6 @@ class StubOAuthClient(
         "https://stub-auth.example.com/oauth/authorize?provider=${provider.name.lowercase()}&state=$state" +
             (redirectUri?.let { "&redirect_uri=$it" } ?: "")
     }
-    // OAuthUrlService 가 redirectUri 검증에 사용한다. 테스트 본문에서 허용할 URI 를 명시 세팅한다.
-    var allowedRedirectUrisStub: List<String> = emptyList()
-    override val allowedRedirectUris: List<String> get() = allowedRedirectUrisStub
-
     override fun buildAuthUrl(state: String, redirectUri: String?): String = buildAuthUrlStub(state, redirectUri)
 
     override fun fetchUserInfoByCode(

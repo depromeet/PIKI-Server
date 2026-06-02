@@ -15,6 +15,4 @@ data class KakaoProperties(
     val clientSecret: String,
     @field:NotBlank(message = "Kakao redirect-uri 는 비어 있을 수 없다.")
     val redirectUri: String,
-    // 추가 허용 redirect_uri. 로컬 개발 등에서 필요시 .env.local 에 KAKAO_ALLOWED_REDIRECT_URIS[0]=http://localhost:... 로 주입.
-    val allowedRedirectUris: List<String> = emptyList(),
 )
