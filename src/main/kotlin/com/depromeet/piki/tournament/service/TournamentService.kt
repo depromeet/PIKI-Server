@@ -369,10 +369,7 @@ class TournamentService(
                 ?: throw TournamentException.forbiddenTournament()
         if (tournamentUser.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
         if (tournament.isInProgress()) throw TournamentException.inProgressTournamentCannotBeDeleted()
-        tournamentRepository.deleteHistoriesByTournamentId(tournamentId)
-        tournamentItemRepository.deleteAllByTournamentId(tournamentId)
-        tournamentUserRepository.deleteAllByTournamentId(tournamentId)
-        tournamentRepository.deleteTournamentById(tournamentId)
+        tournament.softDelete()
     }
 
     @Transactional

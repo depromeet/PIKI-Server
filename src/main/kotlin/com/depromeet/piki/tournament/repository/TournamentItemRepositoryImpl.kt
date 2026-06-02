@@ -28,8 +28,4 @@ class TournamentItemRepositoryImpl(
         id: Long,
         tournamentId: Long,
     ): Int = tournamentItemJpaRepository.deleteIfPending(id, tournamentId)
-
-    override fun deleteAllByTournamentId(tournamentId: Long) {
-        tournamentItemJpaRepository.deleteAllByTournamentId(tournamentId)
-    }
 }

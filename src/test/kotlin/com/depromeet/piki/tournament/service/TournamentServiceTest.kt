@@ -28,6 +28,7 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -56,10 +57,6 @@ class TournamentServiceTest {
 
         override fun findByTournamentIds(tournamentIds: List<Long>): List<TournamentUser> =
             users.filter { it.tournamentId in tournamentIds }
-
-        override fun deleteAllByTournamentId(tournamentId: Long) {
-            users.removeAll { it.tournamentId == tournamentId }
-        }
 
         private fun setEntityId(
             entity: LongBaseEntity,
@@ -205,10 +202,6 @@ class TournamentServiceTest {
             return 1
         }
 
-        override fun deleteAllByTournamentId(tournamentId: Long) {
-            items.removeAll { it.tournamentId == tournamentId }
-        }
-
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
@@ -237,9 +230,17 @@ class TournamentServiceTest {
             histories.add(history)
         }
 
-        override fun findTournamentById(tournamentId: Long): Tournament? = tournaments[tournamentId]
+        override fun findTournamentById(tournamentId: Long): Tournament? {
+            val tournament = tournaments[tournamentId] ?: return null
+            tournament.deletedAt ?: return tournament
+            return null
+        }
 
-        override fun findTournamentByIdForUpdate(tournamentId: Long): Tournament? = tournaments[tournamentId]
+        override fun findTournamentByIdForUpdate(tournamentId: Long): Tournament? {
+            val tournament = tournaments[tournamentId] ?: return null
+            tournament.deletedAt ?: return tournament
+            return null
+        }
 
         override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
             histories.filter { it.tournamentId == tournamentId }
@@ -252,14 +253,6 @@ class TournamentServiceTest {
                 .filter { it.getId() in ids }
                 .filter { statuses.isNullOrEmpty() || it.status in statuses }
                 .sortedByDescending { it.createdAt }
-
-        override fun deleteTournamentById(tournamentId: Long) {
-            tournaments.remove(tournamentId)
-        }
-
-        override fun deleteHistoriesByTournamentId(tournamentId: Long) {
-            histories.removeAll { it.tournamentId == tournamentId }
-        }
 
         private fun setEntityId(
             entity: LongBaseEntity,
@@ -1129,20 +1122,20 @@ class TournamentServiceTest {
     }
 
     @Test
-    fun `deleteTournament 는 PENDING 토너먼트를 소유자가 삭제하면 연관 데이터가 모두 제거된다`() {
+    fun `deleteTournament 는 PENDING 토너먼트를 소유자가 소프트 딜리트한다`() {
         val tournamentId = service.create(userId, CreateTournament("삭제 대상"))
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
 
         service.deleteTournament(userId, tournamentId)
 
-        assertEquals(null, repository.tournaments[tournamentId])
-        assertEquals(0, tournamentItemRepository.items.count { it.tournamentId == tournamentId })
-        assertEquals(0, tournamentUserRepository.users.count { it.tournamentId == tournamentId })
+        assertNotNull(repository.tournaments[tournamentId]!!.deletedAt)
+        // 소프트 딜리트 후 findTournamentById 는 null 을 반환한다
+        assertEquals(null, repository.findTournamentById(tournamentId))
     }
 
     @Test
-    fun `deleteTournament 는 COMPLETED 토너먼트도 삭제할 수 있다`() {
+    fun `deleteTournament 는 COMPLETED 토너먼트도 소프트 딜리트할 수 있다`() {
         val tournamentId = createAndStart(listOf(1L, 2L))
         val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
         service.recordMatch(
@@ -1152,7 +1145,7 @@ class TournamentServiceTest {
 
         service.deleteTournament(userId, tournamentId)
 
-        assertEquals(null, repository.tournaments[tournamentId])
+        assertNotNull(repository.tournaments[tournamentId]!!.deletedAt)
     }
 
     @Test

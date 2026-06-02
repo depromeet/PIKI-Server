@@ -21,6 +21,4 @@ interface TournamentItemRepository {
         id: Long,
         tournamentId: Long,
     ): Int
-
-    fun deleteAllByTournamentId(tournamentId: Long)
 }

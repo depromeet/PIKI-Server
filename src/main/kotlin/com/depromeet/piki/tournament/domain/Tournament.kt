@@ -44,6 +44,10 @@ class Tournament(
 
     fun isInProgress(): Boolean = status == TournamentStatus.IN_PROGRESS
 
+    fun softDelete() {
+        deletedAt = java.time.LocalDateTime.now()
+    }
+
     companion object {
         internal const val FINAL_ROUND_SIZE = 2
     }

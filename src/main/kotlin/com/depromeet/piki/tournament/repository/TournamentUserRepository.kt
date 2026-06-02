@@ -16,6 +16,4 @@ interface TournamentUserRepository {
     fun findByTournamentId(tournamentId: Long): List<TournamentUser>
 
     fun findByTournamentIds(tournamentIds: List<Long>): List<TournamentUser>
-
-    fun deleteAllByTournamentId(tournamentId: Long)
 }
