@@ -27,7 +27,7 @@ class OAuthLoginService(
     ): SignupResult {
         // state 가 있으면 Redis 에서 소비 검증. 없거나 만료된 state 는 401 — CSRF 방지.
         // state 를 보내지 않으면 검증 생략 (v2 SDK 흐름 · 과도기 호환).
-        command.state?.let { state ->
+        command.state?.ifBlank { null }?.let { state ->
             if (!oAuthStateStore.consumeIfValid(state)) throw OAuthException.invalidState()
         }
         val client = oAuthClientRegistry.resolve(provider)
