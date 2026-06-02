@@ -3,6 +3,7 @@ package com.depromeet.piki.tournament.repository
 import com.depromeet.piki.tournament.domain.Tournament
 import com.depromeet.piki.tournament.domain.TournamentHistory
 import com.depromeet.piki.tournament.domain.TournamentStatus
+import java.time.LocalDateTime
 import org.springframework.stereotype.Repository
 
 @Repository
@@ -23,7 +24,11 @@ class TournamentRepositoryImpl(
         tournamentJpaRepository.findByIdForUpdate(tournamentId)
 
     override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
-        tournamentHistoryJpaRepository.findAllByTournamentIdOrderByCurrentRoundAscIdAsc(tournamentId)
+        tournamentHistoryJpaRepository.findAllByTournamentIdAndDeletedAtIsNullOrderByCurrentRoundAscIdAsc(tournamentId)
+
+    override fun softDeleteHistoriesByTournamentId(tournamentId: Long) {
+        tournamentHistoryJpaRepository.softDeleteAllByTournamentId(tournamentId, LocalDateTime.now())
+    }
 
     override fun findByIdsAndStatuses(
         ids: List<Long>,

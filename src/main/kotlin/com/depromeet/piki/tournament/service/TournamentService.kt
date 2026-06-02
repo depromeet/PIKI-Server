@@ -369,6 +369,9 @@ class TournamentService(
                 ?: throw TournamentException.forbiddenTournament()
         if (tournamentUser.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
         if (tournament.isInProgress()) throw TournamentException.inProgressTournamentCannotBeDeleted()
+        tournamentRepository.softDeleteHistoriesByTournamentId(tournamentId)
+        tournamentItemRepository.softDeleteAllByTournamentId(tournamentId)
+        tournamentUserRepository.softDeleteAllByTournamentId(tournamentId)
         tournament.softDelete()
     }
 
@@ -396,7 +399,7 @@ class TournamentService(
             if (!isTournamentOwner) throw TournamentException.forbiddenTournament()
         }
 
-        val deleted = tournamentItemRepository.deleteIfPending(tournamentItemId, tournamentId)
+        val deleted = tournamentItemRepository.softDeleteIfPending(tournamentItemId, tournamentId)
         if (deleted == 0) throw TournamentException.notPendingTournament()
     }
 

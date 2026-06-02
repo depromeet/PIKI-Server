@@ -4,6 +4,7 @@ import com.depromeet.piki.common.domain.LongBaseEntity
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
+import java.time.LocalDateTime
 import java.util.UUID
 
 // 토너먼트에 올라간 아이템. 게스트·회원이 추가한 item 을 토너먼트가 참조하는 연결 엔티티.
@@ -22,5 +23,9 @@ class TournamentItem(
     init {
         require(tournamentId > 0) { "tournamentId 는 양수여야 한다: $tournamentId" }
         require(itemId > 0) { "itemId 는 양수여야 한다: $itemId" }
+    }
+
+    fun softDelete() {
+        deletedAt = LocalDateTime.now()
     }
 }

@@ -58,6 +58,10 @@ class TournamentServiceTest {
         override fun findByTournamentIds(tournamentIds: List<Long>): List<TournamentUser> =
             users.filter { it.tournamentId in tournamentIds }
 
+        override fun softDeleteAllByTournamentId(tournamentId: Long) {
+            users.filter { it.tournamentId == tournamentId }.forEach { it.softDelete() }
+        }
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
@@ -176,13 +180,14 @@ class TournamentServiceTest {
                 item
             }
 
-        override fun countByTournamentId(tournamentId: Long): Int = items.count { it.tournamentId == tournamentId }
+        override fun countByTournamentId(tournamentId: Long): Int =
+            items.count { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }
 
         override fun findIdsByTournamentId(tournamentId: Long): List<Long> =
-            items.filter { it.tournamentId == tournamentId }.map { it.getId() }
+            items.filter { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }.map { it.getId() }
 
         override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
-            items.filter { it.tournamentId == tournamentId }
+            items.filter { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }
 
         override fun findByIds(ids: List<Long>): List<TournamentItem> =
             items.filter { it.getId() in ids }
@@ -193,13 +198,18 @@ class TournamentServiceTest {
             items.remove(tournamentItem)
         }
 
-        override fun deleteIfPending(
+        override fun softDeleteIfPending(
             id: Long,
             tournamentId: Long,
         ): Int {
             val item = items.find { it.getId() == id && it.tournamentId == tournamentId } ?: return 0
-            items.remove(item)
+            item.deletedAt?.let { return 0 }
+            item.softDelete()
             return 1
+        }
+
+        override fun softDeleteAllByTournamentId(tournamentId: Long) {
+            items.filter { it.tournamentId == tournamentId }.forEach { it.softDelete() }
         }
 
         private fun setEntityId(
@@ -253,6 +263,10 @@ class TournamentServiceTest {
                 .filter { it.getId() in ids }
                 .filter { statuses.isNullOrEmpty() || it.status in statuses }
                 .sortedByDescending { it.createdAt }
+
+        override fun softDeleteHistoriesByTournamentId(tournamentId: Long) {
+            histories.filter { it.tournamentId == tournamentId }.forEach { it.softDelete() }
+        }
 
         private fun setEntityId(
             entity: LongBaseEntity,
@@ -1122,7 +1136,7 @@ class TournamentServiceTest {
     }
 
     @Test
-    fun `deleteTournament 는 PENDING 토너먼트를 소유자가 소프트 딜리트한다`() {
+    fun `deleteTournament 는 PENDING 토너먼트를 소유자가 소프트 딜리트하고 연관 데이터도 함께 소프트 딜리트한다`() {
         val tournamentId = service.create(userId, CreateTournament("삭제 대상"))
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
@@ -1130,8 +1144,10 @@ class TournamentServiceTest {
         service.deleteTournament(userId, tournamentId)
 
         assertNotNull(repository.tournaments[tournamentId]!!.deletedAt)
+        assertTrue(tournamentItemRepository.items.filter { it.tournamentId == tournamentId }.all { it.deletedAt?.let { true } ?: false })
+        assertTrue(tournamentUserRepository.users.filter { it.tournamentId == tournamentId }.all { it.deletedAt?.let { true } ?: false })
         // 소프트 딜리트 후 findTournamentById 는 null 을 반환한다
-        assertEquals(null, repository.findTournamentById(tournamentId))
+        assertNull(repository.findTournamentById(tournamentId))
     }
 
     @Test
