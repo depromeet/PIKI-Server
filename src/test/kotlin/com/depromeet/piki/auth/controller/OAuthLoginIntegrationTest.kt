@@ -230,10 +230,10 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `미지원 provider - apple 은 400`() {
+    fun `미지원 provider - facebook 은 400`() {
         mockMvc()
             .perform(
-                post("/api/v1/auth/login/apple").contentType(MediaType.APPLICATION_JSON).content(
+                post("/api/v1/auth/login/facebook").contentType(MediaType.APPLICATION_JSON).content(
                     loginBody(
                         "accessToken" to "t",
                     ),
