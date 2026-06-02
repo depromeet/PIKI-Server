@@ -21,11 +21,11 @@ class GoogleOAuthClient(
     private val tokenClient = OAuthRestClient.create(TOKEN_BASE_URL)
     private val userInfoClient = OAuthRestClient.create(USER_INFO_BASE_URL)
 
-    override fun buildAuthUrl(state: String): String =
+    override fun buildAuthUrl(state: String, redirectUri: String?): String =
         UriComponentsBuilder
             .fromUriString(AUTH_URL)
             .queryParam(OAuthParams.CLIENT_ID, googleProperties.clientId)
-            .queryParam(OAuthParams.REDIRECT_URI, googleProperties.redirectUri)
+            .queryParam(OAuthParams.REDIRECT_URI, redirectUri ?: googleProperties.redirectUri)
             .queryParam(OAuthParams.RESPONSE_TYPE, OAuthParams.RESPONSE_TYPE_CODE)
             .queryParam(OAuthParams.SCOPE, "email profile")
             .queryParam(OAuthParams.STATE, state)

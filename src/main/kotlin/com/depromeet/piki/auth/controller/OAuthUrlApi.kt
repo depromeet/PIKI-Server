@@ -36,7 +36,7 @@ interface OAuthUrlApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "지원하지 않는 provider",
+                description = "잘못된 요청 (지원하지 않는 provider)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -49,5 +49,10 @@ interface OAuthUrlApi {
     fun getAuthUrl(
         @Parameter(description = "소셜 제공자", example = "kakao", schema = Schema(allowableValues = ["kakao", "google"]))
         provider: String,
+        @Parameter(
+            description = "redirect_uri 동적 지정 (생략 시 서버 기본값 사용). 로컬 개발 등 프로덕션과 다른 콜백 URL 이 필요할 때 사용.",
+            example = "http://localhost:3000/auth/callback/google",
+        )
+        redirectUri: String?,
     ): ApiResponseBody<OAuthUrlResponse>
 }
