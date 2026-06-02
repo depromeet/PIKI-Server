@@ -88,28 +88,37 @@ class AppleOAuthClient(
         idToken: String,
         expectedAud: String,
     ): OAuthUserInfo {
-        // parse(서명·issuer 검증)만 재시도한다. aud/sub 같은 클레임 검증 실패는 JWKS refresh 로 복구되지 않으므로
-        // 재시도에 포함시키면 잘못된 토큰이 몰릴 때 /auth/keys 호출이 self-amplifying 으로 증폭된다.
-        val claims =
-            runCatching { parseIdToken(idToken, getJwks()) }
-                .getOrElse { firstError ->
-                    // JWKS 키 교체 직후 kid 불일치·서명 검증 실패 가능성 → 캐시 무효화 후 1회 재시도
-                    // 실패 원인을 운영에서 추적하려면 exception class 와 message 를 같이 남긴다
-                    // (네트워크 vs JWT 형식 vs 서명 검증 vs JWKS 파싱 등 구분 단서).
-                    log.warn(
-                        "Apple id_token parse 실패, JWKS 캐시 무효화 후 재시도: {}: {}",
-                        firstError.javaClass.simpleName,
-                        firstError.message,
-                    )
-                    jwksCachedAt = 0L
-                    try {
-                        parseIdToken(idToken, getJwks())
-                    } catch (e: Exception) {
-                        throw OAuthException.providerError(e)
-                    }
-                }
+        val claims = parseWithKidRotationRetry(idToken)
         return verifyClaimsAndExtract(claims, expectedAud)
     }
+
+    // JWKS refresh+재시도는 "kid 가 현재 캐시된 JWKS 에 없음"(= Apple 키 회전) 일 때만 한다.
+    // 서명 위조(kid 는 맞는데 검증 실패)·exp·issuer·malformed 는 refresh 로 복구되지 않으므로 즉시 실패시킨다 —
+    // 이렇게 좁히지 않으면 만료·위조 토큰이 몰릴 때 매 실패마다 /auth/keys 를 다시 호출해 self-amplifying 으로 증폭된다.
+    private fun parseWithKidRotationRetry(idToken: String): Claims =
+        try {
+            parseIdToken(idToken, getJwks())
+        } catch (e: Exception) {
+            if (!isKidRotation(e)) throw OAuthException.providerError(e)
+            // 캐시 JWKS 에 없는 kid → Apple 이 키를 회전했을 가능성. 캐시 무효화 후 최신 JWKS 로 1회만 재시도.
+            // 운영 추적용으로 exception class·message 를 남긴다.
+            log.warn(
+                "Apple id_token 의 kid 가 캐시 JWKS 에 없음, 키 회전 가능성 → 캐시 무효화 후 재시도: {}: {}",
+                e.javaClass.simpleName,
+                e.message,
+            )
+            jwksCachedAt = 0L
+            try {
+                parseIdToken(idToken, getJwks())
+            } catch (retry: Exception) {
+                throw OAuthException.providerError(retry)
+            }
+        }
+
+    // JJWT 가 keyLocator 의 예외를 wrap 할 수 있어 cause 체인까지 본다. AppleKidNotFoundException 이
+    // 체인 어딘가에 있으면 "kid 회전" 으로 보고 JWKS 재조회를 1회 허용한다.
+    internal fun isKidRotation(e: Throwable): Boolean =
+        generateSequence(e) { it.cause }.any { it is AppleKidNotFoundException }
 
     // JWKS fetch / parse 와 분리된 순수 클레임 검증. 외부 호출 없이 단위 테스트가 직접 호출한다.
     // parse 가 끝난 claims 를 받아 aud · sub 만 본다 — 검증 실패는 JWKS refresh 로 복구되지 않으므로
@@ -143,9 +152,13 @@ class AppleOAuthClient(
         // jwkSet.getKeys() 는 JWK 셋의 키 목록 (Map.keys 와 다름 — Map.keys 는 문자열 키 셋).
         val keyLocator =
             object : Locator<Key> {
+                // kid 부재·JWKS 미존재는 "Apple 키 회전" 신호로 구분해 던진다. verifyIdTokenAndExtract 가
+                // 이 예외(또는 cause 체인)일 때만 JWKS 를 다시 받아 1회 재시도한다 — 서명 위조·exp·issuer
+                // 실패는 refresh 로 복구되지 않으므로 재시도 대상이 아니다.
                 override fun locate(header: Header): Key? {
-                    val kid = header["kid"] as? String ?: return null
+                    val kid = header["kid"] as? String ?: throw AppleKidNotFoundException(null)
                     return jwkSet.getKeys().firstOrNull { it.getId() == kid }?.toKey()
+                        ?: throw AppleKidNotFoundException(kid)
                 }
             }
         return Jwts
@@ -159,8 +172,9 @@ class AppleOAuthClient(
 
     private fun getJwks(): String {
         val now = System.currentTimeMillis()
-        val cached = cachedJwksJson
-        if (cached != null && now - jwksCachedAt < JWKS_CACHE_TTL_MS) return cached
+        cachedJwksJson?.let { cached ->
+            if (now - jwksCachedAt < JWKS_CACHE_TTL_MS) return cached
+        }
 
         return try {
             val fresh =
@@ -220,3 +234,9 @@ class AppleOAuthClient(
         private val CLIENT_SECRET_TTL_MS = 180L * 24 * 60 * 60 * 1000 // 6개월 (Apple 최대)
     }
 }
+
+// id_token 의 kid 가 현재 JWKS 에 없을 때 keyLocator 가 던진다 = Apple 키 회전 신호.
+// 이 예외(또는 cause 체인 포함)일 때만 JWKS 캐시를 무효화하고 재조회한다 (parseWithKidRotationRetry).
+private class AppleKidNotFoundException(
+    kid: String?,
+) : RuntimeException("Apple JWKS 에서 kid=$kid 를 찾지 못했다")
