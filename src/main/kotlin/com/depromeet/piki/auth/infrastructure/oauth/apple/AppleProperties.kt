@@ -8,20 +8,20 @@ import org.springframework.validation.annotation.Validated
 @Validated
 @ConfigurationProperties("oauth.apple")
 data class AppleProperties(
-    @field:NotBlank(message = "Apple team-id 는 비어 있을 수 없다.")
+    @field:NotBlank(message = "Apple Team ID 가 필요합니다 (env: APPLE_TEAM_ID / property: oauth.apple.team-id).")
     val teamId: String,
-    @field:NotBlank(message = "Apple key-id 는 비어 있을 수 없다.")
+    @field:NotBlank(message = "Apple Key ID 가 필요합니다 (env: APPLE_KEY_ID / property: oauth.apple.key-id).")
     val keyId: String,
     // Services ID — v1(서버 redirect) 흐름의 client_id, id_token 의 aud 값
-    @field:NotBlank(message = "Apple client-id 는 비어 있을 수 없다.")
+    @field:NotBlank(message = "Apple Services ID 가 필요합니다 (env: APPLE_CLIENT_ID / property: oauth.apple.client-id).")
     val clientId: String,
     // Bundle ID — iOS SDK(v2) 가 발급한 identityToken 의 aud 값
-    @field:NotBlank(message = "Apple bundle-id 는 비어 있을 수 없다.")
+    @field:NotBlank(message = "Apple Bundle ID 가 필요합니다 (env: APPLE_BUNDLE_ID / property: oauth.apple.bundle-id).")
     val bundleId: String,
     // .p8 파일 내용. 환경변수로 주입 시 개행을 \n 으로 치환해 한 줄로 넣는다.
-    @field:NotBlank(message = "Apple private-key 는 비어 있을 수 없다.")
+    @field:NotBlank(message = "Apple Private Key 가 필요합니다 (env: APPLE_PRIVATE_KEY / property: oauth.apple.private-key).")
     val privateKey: String,
-    @field:NotBlank(message = "Apple redirect-uri 는 비어 있을 수 없다.")
+    @field:NotBlank(message = "Apple Redirect URI 가 필요합니다 (env: APPLE_REDIRECT_URI / property: oauth.apple.redirect-uri).")
     val redirectUri: String,
 ) {
     // data class 의 자동 toString() 은 .p8 평문을 그대로 노출시킨다. 부팅 로그·BindException·디버그

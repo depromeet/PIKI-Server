@@ -94,7 +94,13 @@ class AppleOAuthClient(
             runCatching { parseIdToken(idToken, getJwks()) }
                 .getOrElse { firstError ->
                     // JWKS 키 교체 직후 kid 불일치·서명 검증 실패 가능성 → 캐시 무효화 후 1회 재시도
-                    log.warn("Apple id_token parse 실패, JWKS 캐시 무효화 후 재시도: {}", firstError.message)
+                    // 실패 원인을 운영에서 추적하려면 exception class 와 message 를 같이 남긴다
+                    // (네트워크 vs JWT 형식 vs 서명 검증 vs JWKS 파싱 등 구분 단서).
+                    log.warn(
+                        "Apple id_token parse 실패, JWKS 캐시 무효화 후 재시도: {}: {}",
+                        firstError.javaClass.simpleName,
+                        firstError.message,
+                    )
                     jwksCachedAt = 0L
                     try {
                         parseIdToken(idToken, getJwks())
