@@ -137,6 +137,31 @@ class AuthApiExamples(
                                     detail = "nickname: must not be blank",
                                 ),
                         )
+                        add(
+                            status = HttpStatus.UNAUTHORIZED,
+                            name = "인증 필요",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.UNAUTHORIZED,
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.FORBIDDEN,
+                            name = "GUEST 권한 없음 (MEMBER 토큰으로 호출 불가)",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.FORBIDDEN,
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.CONFLICT,
+                            name = "이미 사용 중인 닉네임",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.CONFLICT,
+                                    detail = "이미 사용 중인 닉네임입니다.",
+                                ),
+                        )
                     }
 
                 handlerMethod.binds(DevAuthController::issueTokenForUser) ->
@@ -177,6 +202,22 @@ class AuthApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.CONFLICT,
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.UNAUTHORIZED,
+                            name = "인증 필요",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.UNAUTHORIZED,
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.FORBIDDEN,
+                            name = "GUEST 권한 없음 (MEMBER 토큰으로 호출 불가)",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.FORBIDDEN,
                                 ),
                         )
                     }
