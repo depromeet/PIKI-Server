@@ -84,4 +84,33 @@ class DocsAccessIntegrationTest : IntegrationTestSupport() {
             // 보호: operation 에 security 명시 없음 → 최상위 글로벌 Bearer 상속 (문서 UI 에 자물쇠 표시).
             .andExpect(jsonPath("$.paths['/api/v1/dev/users'].post.security").doesNotExist())
     }
+
+    @Test
+    fun `GET v3 api-docs - 선언된 실패 응답에 example payload 가 빠짐없이 부착된다 (응답 전수 문서화 회귀 가드)`() {
+        // OperationExamples.add 는 @ApiResponse 가 선언된 status 에만 example 을 붙인다(없으면 조용히 무시).
+        // 과거 401·일부 4xx 응답에 example 이 통째로 누락돼 있었다. 선언과 example 이 짝을 이루는지 회귀 가드.
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+
+        mockMvc
+            .perform(get("/v3/api-docs"))
+            .andExpect(status().isOk)
+            // wishlist: 모든 메서드에 누락돼 있던 401 (Security MEMBER 요구) example 부착.
+            .andExpect(
+                jsonPath("$.paths['/api/v1/wishlists'].post.responses['401'].content['application/json'].examples").exists(),
+            )
+            // tournament 시작: 실패 example 이 전무했던 409 (상태 충돌) example 부착.
+            .andExpect(
+                jsonPath(
+                    "$.paths['/api/v1/tournaments/{tournamentId}/start'].post.responses['409'].content['application/json'].examples",
+                ).exists(),
+            )
+            // dev 단건 유저: 신규 DevUserApiExamples 빈의 404 example 부착.
+            .andExpect(
+                jsonPath("$.paths['/api/v1/dev/users/{userId}'].get.responses['404'].content['application/json'].examples").exists(),
+            )
+    }
 }
