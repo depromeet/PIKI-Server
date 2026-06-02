@@ -15,8 +15,6 @@ interface TournamentItemRepository {
 
     fun findById(id: Long): TournamentItem?
 
-    fun delete(tournamentItem: TournamentItem)
-
     fun softDeleteIfPending(
         id: Long,
         tournamentId: Long,

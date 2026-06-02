@@ -23,8 +23,6 @@ class TournamentItemRepositoryImpl(
 
     override fun findById(id: Long): TournamentItem? = tournamentItemJpaRepository.findByIdAndDeletedAtIsNull(id)
 
-    override fun delete(tournamentItem: TournamentItem) = tournamentItemJpaRepository.delete(tournamentItem)
-
     override fun softDeleteIfPending(
         id: Long,
         tournamentId: Long,

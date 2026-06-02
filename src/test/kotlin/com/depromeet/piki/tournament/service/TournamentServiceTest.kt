@@ -194,10 +194,6 @@ class TournamentServiceTest {
 
         override fun findById(id: Long): TournamentItem? = items.find { it.getId() == id }
 
-        override fun delete(tournamentItem: TournamentItem) {
-            items.remove(tournamentItem)
-        }
-
         override fun softDeleteIfPending(
             id: Long,
             tournamentId: Long,
