@@ -53,6 +53,35 @@ class TournamentItemPersistenceService(
         }
     }
 
+    // FAILED item 의 수동 보정 영속화 — S3 업로드(외부 호출)는 호출부가 트랜잭션 바깥에서 끝내고,
+    // 여기선 권한·상태 검증 + recover(값 변경 + FAILED→READY 전이)만 짧은 트랜잭션으로 묶는다(dirty checking).
+    @Transactional
+    fun recoverItem(
+        userId: UUID,
+        tournamentId: Long,
+        tournamentItemId: Long,
+        name: String?,
+        price: Int?,
+        imageUrl: String?,
+        currency: String?,
+    ) {
+        val tournament =
+            tournamentRepository.findTournamentById(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        if (!tournament.isPending()) throw TournamentException.notPendingTournament()
+        tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+            ?: throw TournamentException.forbiddenTournament()
+        val tournamentItem =
+            tournamentItemRepository.findById(tournamentItemId)
+                ?: throw TournamentException.notFoundTournamentItem()
+        if (tournamentItem.tournamentId != tournamentId) throw TournamentException.notFoundTournamentItem()
+        if (tournamentItem.userId != userId) throw TournamentException.forbiddenTournament()
+        val item =
+            itemRepository.findById(tournamentItem.itemId)
+                ?: error("item 없음 — tournamentItemId=$tournamentItemId, itemId=${tournamentItem.itemId}")
+        item.recover(name = name, currentPrice = price, imageUrl = imageUrl, currency = currency)
+    }
+
     private fun validateAndCheckCapacity(
         userId: UUID,
         tournamentId: Long,
