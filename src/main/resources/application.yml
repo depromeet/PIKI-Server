@@ -60,6 +60,13 @@ oauth:
     client-id: ${GOOGLE_CLIENT_ID:}
     client-secret: ${GOOGLE_CLIENT_SECRET:}
     redirect-uri: ${GOOGLE_REDIRECT_URI:}
+  apple:
+    team-id: ${APPLE_TEAM_ID:}
+    key-id: ${APPLE_KEY_ID:}
+    client-id: ${APPLE_CLIENT_ID:}
+    bundle-id: ${APPLE_BUNDLE_ID:}
+    private-key: ${APPLE_PRIVATE_KEY:}
+    redirect-uri: ${APPLE_REDIRECT_URI:}
 
 gemini:
   api-key: ${GEMINI_API_KEY:}

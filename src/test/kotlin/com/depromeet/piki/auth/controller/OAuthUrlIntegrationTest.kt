@@ -61,9 +61,18 @@ class OAuthUrlIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `GET auth url - 미지원 provider 는 400`() {
+    fun `GET auth url - apple 인가 URL 과 state 를 반환한다`() {
         mockMvc()
             .perform(get("/api/v1/auth/apple/url"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.url").isString)
+            .andExpect(jsonPath("$.data.state").isString)
+    }
+
+    @Test
+    fun `GET auth url - 미지원 provider 는 400`() {
+        mockMvc()
+            .perform(get("/api/v1/auth/facebook/url"))
             .andExpect(status().isBadRequest)
     }
 
