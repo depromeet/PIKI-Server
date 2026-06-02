@@ -19,7 +19,7 @@ import org.springframework.http.MediaType
 import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
-@Tag(name = "Tournament", description = "토너먼트 아이템 API")
+@Tag(name = "Tournament Item", description = "토너먼트 아이템 API")
 interface TournamentItemApi {
     @Operation(
         summary = "위시에서 토너먼트 아이템 추가",
