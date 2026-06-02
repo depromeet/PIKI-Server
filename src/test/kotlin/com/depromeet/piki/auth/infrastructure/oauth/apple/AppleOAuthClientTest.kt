@@ -2,6 +2,7 @@ package com.depromeet.piki.auth.infrastructure.oauth.apple
 
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthException
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthProvider
+import com.depromeet.piki.auth.infrastructure.oauth.OAuthUserInfo
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Jwks
 import org.junit.jupiter.api.Nested
@@ -13,7 +14,6 @@ import java.security.interfaces.ECPublicKey
 import java.security.spec.ECGenParameterSpec
 import java.util.Base64
 import java.util.Date
-import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
@@ -42,6 +42,18 @@ class AppleOAuthClientTest {
         privateKey = privateKey,
         redirectUri = redirectUri,
     )
+
+    @Nested
+    inner class PropertiesToString {
+        @Test
+        fun `toString 은 privateKey 를 마스킹한다 - 부팅 로그·BindException 으로 누출 방지`() {
+            val p = props(privateKey = "-----BEGIN PRIVATE KEY-----\nSUPER_SECRET\n-----END PRIVATE KEY-----")
+            val str = p.toString()
+            assertTrue("***MASKED***" in str, "privateKey 자리에 마스킹 마커가 있어야 한다: $str")
+            assertTrue("SUPER_SECRET" !in str, "privateKey 평문이 toString 에 노출되면 안 된다: $str")
+            assertTrue("BEGIN PRIVATE KEY" !in str, "PEM 헤더도 노출되면 안 된다: $str")
+        }
+    }
 
     @Nested
     inner class ParseEcPrivateKey {
@@ -106,14 +118,14 @@ class AppleOAuthClientTest {
     }
 
     @Nested
-    inner class VerifyWithJwks {
+    inner class VerifyIdToken {
         @Test
         fun `v1 - aud 가 clientId 와 일치하면 OAuthUserInfo 를 반환한다`() {
             val client = AppleOAuthClient(props())
             val sub = "001234.abcdef.5678"
             val idToken = signAppleIdToken(audience = "com.test.service", subject = sub)
 
-            val result = client.verifyWithJwks(idToken, expectedAud = "com.test.service", jwksJson = testJwksJson)
+            val result = verifyIntegrated(client, idToken, expectedAud = "com.test.service", jwksJson = testJwksJson)
 
             assertEquals(OAuthProvider.APPLE, result.provider)
             assertEquals(sub, result.socialId)
@@ -126,9 +138,36 @@ class AppleOAuthClientTest {
             val sub = "002345.bcdefg.6789"
             val idToken = signAppleIdToken(audience = "com.test.app", subject = sub)
 
-            val result = client.verifyWithJwks(idToken, expectedAud = "com.test.app", jwksJson = testJwksJson)
+            val result = verifyIntegrated(client, idToken, expectedAud = "com.test.app", jwksJson = testJwksJson)
 
             assertEquals(sub, result.socialId)
+        }
+
+        @Test
+        fun `sub 누락 - OAuthException providerError 를 던진다 (500 누출 방지)`() {
+            val client = AppleOAuthClient(props())
+            val now = Date()
+            val idTokenWithoutSub =
+                Jwts
+                    .builder()
+                    .header()
+                    .add("kid", testKid)
+                    .and()
+                    .issuer("https://appleid.apple.com")
+                    // subject 생략 — Apple 비정상 응답·공격성 JWT 시뮬레이션
+                    .audience()
+                    .add("com.test.service")
+                    .and()
+                    .issuedAt(now)
+                    .expiration(Date(now.time + 60_000))
+                    .signWith(testKeyPair.private)
+                    .compact()
+
+            val ex =
+                assertFailsWith<OAuthException> {
+                    verifyIntegrated(client, idTokenWithoutSub, expectedAud = "com.test.service", jwksJson = testJwksJson)
+                }
+            assertEquals(502, ex.httpStatus.value())
         }
 
         @Test
@@ -138,7 +177,7 @@ class AppleOAuthClientTest {
 
             val ex =
                 assertFailsWith<OAuthException> {
-                    client.verifyWithJwks(idToken, expectedAud = "com.test.service", jwksJson = testJwksJson)
+                    verifyIntegrated(client, idToken, expectedAud = "com.test.service", jwksJson = testJwksJson)
                 }
             assertEquals(502, ex.httpStatus.value())
         }
@@ -154,7 +193,7 @@ class AppleOAuthClientTest {
                 )
 
             assertFailsWith<OAuthException> {
-                client.verifyWithJwks(idToken, expectedAud = "com.test.service", jwksJson = testJwksJson)
+                verifyIntegrated(client, idToken, expectedAud = "com.test.service", jwksJson = testJwksJson)
             }
         }
 
@@ -181,7 +220,7 @@ class AppleOAuthClientTest {
                     .compact()
 
             assertFailsWith<OAuthException> {
-                client.verifyWithJwks(idToken, expectedAud = "com.test.service", jwksJson = testJwksJson)
+                verifyIntegrated(client, idToken, expectedAud = "com.test.service", jwksJson = testJwksJson)
             }
         }
 
@@ -208,7 +247,7 @@ class AppleOAuthClientTest {
                     .compact()
 
             assertFailsWith<OAuthException> {
-                client.verifyWithJwks(idToken, expectedAud = "com.test.service", jwksJson = testJwksJson)
+                verifyIntegrated(client, idToken, expectedAud = "com.test.service", jwksJson = testJwksJson)
             }
         }
     }
@@ -260,6 +299,21 @@ class AppleOAuthClientTest {
         return "-----BEGIN PRIVATE KEY-----\n$b64\n-----END PRIVATE KEY-----"
     }
 
-    // 컴파일러 안 쓰이는 unused 경고 회피
-    private val unused = UUID.randomUUID()
+    // production 의 verifyIdTokenAndExtract 와 동일한 wrap 흐름을 흉내내는 테스트 통합 호출.
+    // 외부 호출(getJwks) 우회를 위해 jwksJson 을 직접 받는다. parse 실패는 OAuthException 으로 wrap 되고,
+    // claim 검증 실패(aud/sub) 는 verifyClaimsAndExtract 가 직접 OAuthException 을 던진다.
+    private fun verifyIntegrated(
+        client: AppleOAuthClient,
+        idToken: String,
+        expectedAud: String,
+        jwksJson: String,
+    ): OAuthUserInfo {
+        val claims =
+            try {
+                client.parseIdToken(idToken, jwksJson)
+            } catch (e: Exception) {
+                throw OAuthException.providerError(e)
+            }
+        return client.verifyClaimsAndExtract(claims, expectedAud)
+    }
 }

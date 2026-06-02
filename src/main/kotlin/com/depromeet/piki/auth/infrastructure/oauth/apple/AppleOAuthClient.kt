@@ -88,27 +88,30 @@ class AppleOAuthClient(
         idToken: String,
         expectedAud: String,
     ): OAuthUserInfo {
-        val firstResult = runCatching { verifyWithJwks(idToken, expectedAud, getJwks()) }
-        if (firstResult.isSuccess) return firstResult.getOrThrow()
-        // JWKS 키 교체 직후 kid 불일치 가능성 → 캐시 무효화 후 1회 재시도
-        log.warn("Apple id_token 파싱 실패, JWKS 캐시 무효화 후 재시도: {}", firstResult.exceptionOrNull()?.message)
-        jwksCachedAt = 0L
-        return verifyWithJwks(idToken, expectedAud, getJwks())
+        // parse(서명·issuer 검증)만 재시도한다. aud/sub 같은 클레임 검증 실패는 JWKS refresh 로 복구되지 않으므로
+        // 재시도에 포함시키면 잘못된 토큰이 몰릴 때 /auth/keys 호출이 self-amplifying 으로 증폭된다.
+        val claims =
+            runCatching { parseIdToken(idToken, getJwks()) }
+                .getOrElse { firstError ->
+                    // JWKS 키 교체 직후 kid 불일치·서명 검증 실패 가능성 → 캐시 무효화 후 1회 재시도
+                    log.warn("Apple id_token parse 실패, JWKS 캐시 무효화 후 재시도: {}", firstError.message)
+                    jwksCachedAt = 0L
+                    try {
+                        parseIdToken(idToken, getJwks())
+                    } catch (e: Exception) {
+                        throw OAuthException.providerError(e)
+                    }
+                }
+        return verifyClaimsAndExtract(claims, expectedAud)
     }
 
-    // 외부 호출(JWKS fetch) 없이 검증·추출만 수행하는 순수 함수. 단위 테스트가 직접 호출한다.
-    internal fun verifyWithJwks(
-        idToken: String,
+    // JWKS fetch / parse 와 분리된 순수 클레임 검증. 외부 호출 없이 단위 테스트가 직접 호출한다.
+    // parse 가 끝난 claims 를 받아 aud · sub 만 본다 — 검증 실패는 JWKS refresh 로 복구되지 않으므로
+    // 재시도 경로에 포함시키지 않는다.
+    internal fun verifyClaimsAndExtract(
+        claims: Claims,
         expectedAud: String,
-        jwksJson: String,
     ): OAuthUserInfo {
-        val claims =
-            try {
-                parseIdToken(idToken, jwksJson)
-            } catch (e: Exception) {
-                throw OAuthException.providerError(e)
-            }
-
         // aud 는 string 또는 array — JJWT 가 Set<String> 으로 정규화
         val aud = claims.audience ?: emptySet()
         if (!aud.contains(expectedAud)) {
@@ -116,9 +119,14 @@ class AppleOAuthClient(
             throw OAuthException.providerError(IllegalArgumentException("Apple id_token audience mismatch"))
         }
 
-        val sub = claims.subject ?: error("Apple id_token sub 가 없음")
+        // sub 누락은 Apple 의 비정상 응답·공격성 JWT 가능성. 외부 입력 검증 실패이므로 500 이 아닌
+        // OAuthException.providerError(502) 로 매핑해 contract 일관성을 유지한다.
+        val sub =
+            claims.subject
+                ?: throw OAuthException.providerError(IllegalArgumentException("Apple id_token sub missing"))
         return OAuthUserInfo(provider = OAuthProvider.APPLE, socialId = sub, profileImage = null)
     }
+
 
     internal fun parseIdToken(
         idToken: String,

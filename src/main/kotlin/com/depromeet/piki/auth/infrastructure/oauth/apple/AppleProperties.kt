@@ -23,4 +23,10 @@ data class AppleProperties(
     val privateKey: String,
     @field:NotBlank(message = "Apple redirect-uri 는 비어 있을 수 없다.")
     val redirectUri: String,
-)
+) {
+    // data class 의 자동 toString() 은 .p8 평문을 그대로 노출시킨다. 부팅 로그·BindException·디버그
+    // 로그에 새지 않도록 오버라이드해 privateKey 만 마스킹한다 (equals/hashCode 는 data class 기본 유지).
+    override fun toString(): String =
+        "AppleProperties(teamId=$teamId, keyId=$keyId, clientId=$clientId, bundleId=$bundleId, " +
+            "privateKey=***MASKED***, redirectUri=$redirectUri)"
+}
