@@ -16,6 +16,7 @@ import java.util.Base64
 import java.util.Date
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -249,6 +250,46 @@ class AppleOAuthClientTest {
             assertFailsWith<OAuthException> {
                 verifyIntegrated(client, idToken, expectedAud = "com.test.service", jwksJson = testJwksJson)
             }
+        }
+    }
+
+    @Nested
+    inner class KidRotationRetryTrigger {
+        // JWKS refresh+재시도는 "kid 가 현재 JWKS 에 없음"(=Apple 키 회전) 일 때만 일어난다.
+        // isKidRotation 이 그 판별이라, 키 회전과 그 외 실패(서명 위조 등)를 구분하는지 검증한다.
+
+        @Test
+        fun `JWKS 에 없는 kid 는 키 회전으로 보고 재시도 트리거다`() {
+            val client = AppleOAuthClient(props())
+            val foreign = generateEcKeyPair()
+            val unknownKidToken =
+                signAppleIdToken(
+                    audience = "com.test.service",
+                    subject = "001234.xx",
+                    kid = "UNKNOWN_KID",
+                    privateKey = foreign.private,
+                )
+
+            val ex = assertFailsWith<Exception> { client.parseIdToken(unknownKidToken, testJwksJson) }
+            assertTrue(client.isKidRotation(ex), "kid 불일치는 JWKS 재조회 재시도 트리거여야 한다: $ex")
+        }
+
+        @Test
+        fun `kid 는 맞지만 서명이 위조된 경우는 재시도 트리거가 아니다`() {
+            val client = AppleOAuthClient(props())
+            val foreign = generateEcKeyPair()
+            // kid 는 JWKS 에 있는 testKid 지만 다른 키로 서명 → 서명 검증 실패(키 회전 아님).
+            // JWKS 를 다시 받아도 복구되지 않으므로 재시도하면 안 된다.
+            val forgedToken =
+                signAppleIdToken(
+                    audience = "com.test.service",
+                    subject = "001234.xx",
+                    kid = testKid,
+                    privateKey = foreign.private,
+                )
+
+            val ex = assertFailsWith<Exception> { client.parseIdToken(forgedToken, testJwksJson) }
+            assertFalse(client.isKidRotation(ex), "서명 위조는 JWKS refresh 로 복구 안 되므로 재시도 트리거가 아니어야 한다: $ex")
         }
     }
 
