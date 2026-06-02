@@ -12,6 +12,10 @@ interface OAuthClient {
     // redirectUri 가 null 이면 provider 별 properties 기본값을 사용한다.
     fun buildAuthUrl(state: String, redirectUri: String? = null): String
 
+    // 허용된 redirect_uri 목록. OAuthUrlService 가 검증에 사용한다.
+    // 기본 redirectUri 는 항상 포함. 추가 허용 URI 는 properties.allowedRedirectUris 로 주입.
+    val allowedRedirectUris: List<String>
+
     fun fetchUserInfoByCode(
         code: String,
         redirectUri: String,

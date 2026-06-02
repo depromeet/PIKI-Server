@@ -1,6 +1,7 @@
 package com.depromeet.piki.auth.service
 
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthClientRegistry
+import com.depromeet.piki.auth.infrastructure.oauth.OAuthException
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthProvider
 import com.depromeet.piki.auth.infrastructure.redis.OAuthStateStore
 import com.depromeet.piki.auth.service.dto.OAuthUrlResult
@@ -15,6 +16,9 @@ class OAuthUrlService(
     fun buildUrl(provider: OAuthProvider, redirectUri: String? = null): OAuthUrlResult {
         val state = UUID.randomUUID().toString()
         val client = oAuthClientRegistry.resolve(provider)
+        redirectUri?.let { uri ->
+            if (uri !in client.allowedRedirectUris) throw OAuthException.invalidRedirectUri()
+        }
         val url = client.buildAuthUrl(state, redirectUri)
         oAuthStateStore.store(state)
         return OAuthUrlResult(url = url, state = state)

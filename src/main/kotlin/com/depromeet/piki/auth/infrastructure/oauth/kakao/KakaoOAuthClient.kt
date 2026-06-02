@@ -17,6 +17,8 @@ class KakaoOAuthClient(
     private val kakaoProperties: KakaoProperties,
 ) : OAuthClient {
     override val provider = OAuthProvider.KAKAO
+    override val allowedRedirectUris: List<String>
+        get() = listOf(kakaoProperties.redirectUri) + kakaoProperties.allowedRedirectUris
 
     private val authClient = OAuthRestClient.create(AUTH_BASE_URL)
     private val apiClient = OAuthRestClient.create(API_BASE_URL)
