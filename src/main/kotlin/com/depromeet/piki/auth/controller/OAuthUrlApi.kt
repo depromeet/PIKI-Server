@@ -36,7 +36,7 @@ interface OAuthUrlApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (지원하지 않는 provider · 허용되지 않은 redirect_uri)",
+                description = "잘못된 요청 (지원하지 않는 provider)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

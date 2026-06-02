@@ -143,9 +143,8 @@ class OAuthUrlIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `GET auth url - 허용된 redirectUri 를 넘기면 반환된 URL 에 해당 값이 반영된다`() {
+    fun `GET auth url - redirectUri 를 넘기면 반환된 URL 에 해당 값이 반영된다`() {
         val customRedirectUri = "http://localhost:3000/auth/callback/google"
-        googleOAuthClient.allowedRedirectUrisStub = listOf(customRedirectUri)
 
         val response =
             mockMvc()
@@ -157,16 +156,6 @@ class OAuthUrlIntegrationTest : IntegrationTestSupport() {
 
         val url = objectMapper.readTree(response).at("/data/url").asText()
         assert(url.contains(customRedirectUri)) { "반환된 URL 에 customRedirectUri 가 포함되어야 한다: $url" }
-    }
-
-    @Test
-    fun `GET auth url - 허용 목록에 없는 redirectUri 는 400`() {
-        googleOAuthClient.allowedRedirectUrisStub = listOf("https://allowed.example.com/callback")
-
-        mockMvc()
-            .perform(get("/api/v1/auth/google/url").param("redirectUri", "https://evil.example.com/steal"))
-            .andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value("허용되지 않은 redirect_uri 입니다."))
     }
 
     @Test
