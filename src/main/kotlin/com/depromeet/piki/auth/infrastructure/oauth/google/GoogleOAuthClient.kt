@@ -30,6 +30,7 @@ class GoogleOAuthClient(
             .queryParam(OAuthParams.SCOPE, "email profile")
             .queryParam(OAuthParams.STATE, state)
             .build()
+            .encode()
             .toUriString()
 
     // v1 — 백엔드가 code → access_token 교환 후 v2 메서드를 재사용해 user_info 조회.
