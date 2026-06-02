@@ -33,7 +33,8 @@ class OAuthLoginService(
         val client = oAuthClientRegistry.resolve(provider)
         val userInfo = fetchUserInfo(client, command) // 외부 호출, tx 밖
         val user = socialAccountService.resolveUser(userInfo, currentUserId) // 영속화, 짧은 tx
-        return authService.issueTokensFor(user)
+        val tokenPair = authService.createTokensForUser(user)
+        return SignupResult(tokenPair = tokenPair, user = user)
     }
 
     // accessToken(v2) 이 있으면 SDK 흐름, 아니면 code+redirectUri(v1) 흐름. 둘 다 없으면 400.
