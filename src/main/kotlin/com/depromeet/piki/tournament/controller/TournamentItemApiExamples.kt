@@ -1,5 +1,6 @@
 package com.depromeet.piki.tournament.controller
 
+import com.depromeet.piki.common.exception.ErrorCategory
 import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
@@ -61,6 +62,14 @@ class TournamentItemApiExamples(
                             status = HttpStatus.OK,
                             name = "수정 성공 (FAILED → READY)",
                             payload = ApiResponseBody.ok<Unit>(),
+                        )
+                        add(
+                            status = HttpStatus.BAD_GATEWAY,
+                            name = "이미지 저장 실패 (S3 업로드 오류)",
+                            payload = ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.RETRYABLE,
+                                detail = "이미지 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+                            ),
                         )
                     }
 
