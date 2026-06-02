@@ -8,6 +8,7 @@ import com.depromeet.piki.item.service.ItemParsingService
 import com.depromeet.piki.item.service.ItemParsingWorker
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
+import com.depromeet.piki.tournament.repository.TournamentRepository
 import org.slf4j.LoggerFactory
 import org.springframework.core.task.TaskRejectedException
 import org.springframework.stereotype.Service
@@ -21,6 +22,7 @@ class TournamentItemService(
     private val itemParsingService: ItemParsingService,
     private val tournamentItemPersistenceService: TournamentItemPersistenceService,
     private val imageStorage: ImageStorage,
+    private val tournamentRepository: TournamentRepository,
     private val tournamentItemRepository: TournamentItemRepository,
     private val itemRepository: ItemRepository,
 ) {
@@ -81,6 +83,10 @@ class TournamentItemService(
         image: MultipartFile?,
     ) {
         val productImage = image?.let { ProductImage.of(it.bytes, it.contentType) }
+        val tournament =
+            tournamentRepository.findTournamentById(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        if (!tournament.isPending()) throw TournamentException.notPendingTournament()
         val tournamentItem =
             tournamentItemRepository.findById(tournamentItemId)
                 ?: throw TournamentException.notFoundTournamentItem()
