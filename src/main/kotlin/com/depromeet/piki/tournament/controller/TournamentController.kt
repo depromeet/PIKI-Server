@@ -40,6 +40,35 @@ class TournamentController(
     private val tournamentService: TournamentService,
     private val tournamentItemService: TournamentItemService,
 ) : TournamentApi {
+
+    @GetMapping
+    override fun getTournaments(
+        @AuthenticationPrincipal userId: UUID,
+        @RequestParam(required = false) status: List<TournamentStatus>?,
+    ): ApiResponseBody<List<TournamentSummaryResponse>> {
+        val summaries = tournamentService.getTournaments(userId, status)
+        return ApiResponseBody.ok(summaries.map(TournamentSummaryResponse::from))
+    }
+
+    @GetMapping("/{tournamentId}")
+    override fun getTournamentById(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+    ): ApiResponseBody<TournamentDetailResponse> {
+        val detail = tournamentService.getTournamentById(tournamentId, userId)
+        return ApiResponseBody.ok(TournamentDetailResponse.from(detail))
+    }
+
+    @GetMapping("/{tournamentId}/items/{tournamentItemId}")
+    override fun getTournamentItem(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+        @PathVariable tournamentItemId: Long,
+    ): ApiResponseBody<TournamentItemDetailResponse> {
+        val detail = tournamentService.getTournamentItem(userId, tournamentId, tournamentItemId)
+        return ApiResponseBody.ok(TournamentItemDetailResponse.from(detail))
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     override fun create(
@@ -82,6 +111,25 @@ class TournamentController(
         return ApiResponseBody.ok(AddTournamentItemsFromImagesResponse(tournamentItemIds))
     }
 
+    @PostMapping("/{tournamentId}/start")
+    override fun start(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+    ): ApiResponseBody<TournamentStartResponse> {
+        val result = tournamentService.start(userId, tournamentId)
+        return ApiResponseBody.ok(TournamentStartResponse.from(result))
+    }
+
+    @PostMapping("/{tournamentId}/matches")
+    override fun recordMatch(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+        @Valid @RequestBody request: RecordMatchRequest,
+    ): ApiResponseBody<TournamentDetailResponse.CompletedData?> {
+        val result = tournamentService.recordMatch(userId, request.toRecordMatch(tournamentId))
+        return ApiResponseBody.ok(result?.let { TournamentDetailResponse.CompletedData.from(it) })
+    }
+
     @PatchMapping("/{tournamentId}/items/{tournamentItemId}")
     override fun updateItem(
         @AuthenticationPrincipal userId: UUID,
@@ -110,52 +158,5 @@ class TournamentController(
     ): ApiResponseBody<Unit> {
         tournamentService.deleteItem(userId, tournamentId, tournamentItemId)
         return ApiResponseBody.ok()
-    }
-
-    @PostMapping("/{tournamentId}/start")
-    override fun start(
-        @AuthenticationPrincipal userId: UUID,
-        @PathVariable tournamentId: Long,
-    ): ApiResponseBody<TournamentStartResponse> {
-        val result = tournamentService.start(userId, tournamentId)
-        return ApiResponseBody.ok(TournamentStartResponse.from(result))
-    }
-
-    @PostMapping("/{tournamentId}/matches")
-    override fun recordMatch(
-        @AuthenticationPrincipal userId: UUID,
-        @PathVariable tournamentId: Long,
-        @Valid @RequestBody request: RecordMatchRequest,
-    ): ApiResponseBody<TournamentDetailResponse.CompletedData?> {
-        val result = tournamentService.recordMatch(userId, request.toRecordMatch(tournamentId))
-        return ApiResponseBody.ok(result?.let { TournamentDetailResponse.CompletedData.from(it) })
-    }
-
-    @GetMapping
-    override fun getTournaments(
-        @AuthenticationPrincipal userId: UUID,
-        @RequestParam(required = false) status: List<TournamentStatus>?,
-    ): ApiResponseBody<List<TournamentSummaryResponse>> {
-        val summaries = tournamentService.getTournaments(userId, status)
-        return ApiResponseBody.ok(summaries.map(TournamentSummaryResponse::from))
-    }
-
-    @GetMapping("/{tournamentId}")
-    override fun getTournamentById(
-        @AuthenticationPrincipal userId: UUID,
-        @PathVariable tournamentId: Long,
-    ): ApiResponseBody<TournamentDetailResponse> {
-        val detail = tournamentService.getTournamentById(tournamentId, userId)
-        return ApiResponseBody.ok(TournamentDetailResponse.from(detail))
-    }
-
-    @GetMapping("/{tournamentId}/items/{tournamentItemId}")
-    override fun getTournamentItem(
-        @AuthenticationPrincipal userId: UUID,
-        @PathVariable tournamentId: Long,
-        @PathVariable tournamentItemId: Long,
-    ): ApiResponseBody<TournamentItemDetailResponse> {
-        val detail = tournamentService.getTournamentItem(userId, tournamentId, tournamentItemId)
-        return ApiResponseBody.ok(TournamentItemDetailResponse.from(detail))
     }
 }
