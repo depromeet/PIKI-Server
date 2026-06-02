@@ -7,6 +7,10 @@ package com.depromeet.piki.auth.infrastructure.oauth
 interface OAuthClient {
     val provider: OAuthProvider
 
+    // RFC 6749 §4.1 Authorization Code Grant — provider 인가 URL 생성.
+    // state 는 CSRF 방지용 (RFC 6749 §10.12). 호출자가 Redis 에 저장 후 사용자를 이 URL 로 redirect.
+    fun buildAuthUrl(state: String): String
+
     fun fetchUserInfoByCode(
         code: String,
         redirectUri: String,
