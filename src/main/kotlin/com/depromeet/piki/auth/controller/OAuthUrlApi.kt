@@ -47,7 +47,7 @@ interface OAuthUrlApi {
         ],
     )
     fun getAuthUrl(
-        @Parameter(description = "소셜 제공자", example = "kakao", schema = Schema(allowableValues = ["kakao", "google"]))
+        @Parameter(description = "소셜 제공자", example = "kakao", schema = Schema(allowableValues = ["kakao", "google", "apple"]))
         provider: String,
         @Parameter(
             description = "redirect_uri 동적 지정 (생략 시 서버 기본값 사용). 로컬 개발 등 프로덕션과 다른 콜백 URL 이 필요할 때 사용.",

@@ -42,11 +42,14 @@ class IntegrationStubs {
     fun imageParsingWorker(asyncImageParsingWorker: AsyncImageParsingWorker): StubImageParsingWorker =
         StubImageParsingWorker(asyncImageParsingWorker)
 
-    // OAuth client 는 운영에서 아직 Bean 으로 등록되지 않은 상태 (Task 6 에서 OAuthClient
-    // Bean 등록 예정 — epic #122). 주입 후보가 stub 하나뿐이라 @Primary 불필요.
+    // oauth.client.enabled=false 로 운영 OAuthClientConfig 를 비활성화해 실제 외부 호출을 막는다.
+    // stub 빈이 유일한 OAuthClient 라 @Primary 불필요.
     @Bean
     fun kakaoOAuthClient(): StubOAuthClient = StubOAuthClient(OAuthProvider.KAKAO)
 
     @Bean
     fun googleOAuthClient(): StubOAuthClient = StubOAuthClient(OAuthProvider.GOOGLE)
+
+    @Bean
+    fun appleOAuthClient(): StubOAuthClient = StubOAuthClient(OAuthProvider.APPLE)
 }
