@@ -8,6 +8,8 @@ sealed class TournamentDetail {
     data class Pending(
         val tournamentId: Long,
         val name: String,
+                                                                                                                                        val inviteCode: String,
+        val inviteExpiresAt: java.time.LocalDateTime,
         val items: List<ItemDetail>,
         val participants: List<ParticipantDetail>,
     ) : TournamentDetail()
@@ -24,6 +26,7 @@ sealed class TournamentDetail {
         val tournamentId: Long,
         val name: String,
         val result: List<RankedItem>,
+        val hasGroupResult: Boolean,
     ) : TournamentDetail()
 
     data class ItemDetail(

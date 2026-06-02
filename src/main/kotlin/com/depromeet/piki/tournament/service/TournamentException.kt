@@ -156,5 +156,54 @@ class TournamentException private constructor(
                 ErrorCategory.SERVER_ERROR,
                 HttpStatus.NOT_IMPLEMENTED,
             )
+
+        fun invalidInviteCode(): TournamentException =
+            TournamentException(
+                "초대 코드가 올바르지 않습니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
+
+        fun inviteExpired(): TournamentException =
+            TournamentException(
+                "초대 링크가 만료되었습니다.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
+
+        fun alreadyParticipant(): TournamentException =
+            TournamentException(
+                "이미 해당 토너먼트에 참여 중입니다.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
+
+        fun notCompletedTournament(): TournamentException =
+            TournamentException(
+                "완료된 토너먼트에만 수행할 수 있습니다.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
+
+        fun playLinkNotCreated(): TournamentException =
+            TournamentException(
+                "플레이 링크가 생성되지 않은 토너먼트입니다.",
+                ErrorCategory.NOT_FOUND,
+                HttpStatus.NOT_FOUND,
+            )
+
+        fun playLinkExpired(): TournamentException =
+            TournamentException(
+                "플레이 링크가 만료되었습니다.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
+
+        fun groupResultNotAvailable(): TournamentException =
+            TournamentException(
+                "그룹 결과를 조회할 수 없습니다. 완료된 토너먼트만 가능합니다.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
     }
 }

@@ -70,6 +70,15 @@ class SecurityConfig(
                     .permitAll()
                     .requestMatchers("/api/v1/wishlists/**")
                     .hasAuthority(IdentityType.MEMBER.name)
+                    // 소셜 토너먼트 게스트 합류: 계정 없이 초대 코드 + 닉네임으로 가입과 동시에 참여
+                    .requestMatchers(HttpMethod.POST, "/api/v1/tournaments/*/join/guest")
+                    .permitAll()
+                    // 초대 코드 검증 미리보기: 미인증 상태에서 토너먼트 참여 전 정보 확인
+                    .requestMatchers(HttpMethod.GET, "/api/v1/tournaments/*/invite-preview")
+                    .permitAll()
+                    // 플레이 링크 정보 조회: 미인증 상태에서 링크 진입 시 토너먼트 정보 확인
+                    .requestMatchers(HttpMethod.GET, "/api/v1/tournaments/*/play-link-info")
+                    .permitAll()
                     // 토너먼트 플레이는 GUEST 도 허용
                     .requestMatchers("/api/v1/tournaments/**")
                     .authenticated()

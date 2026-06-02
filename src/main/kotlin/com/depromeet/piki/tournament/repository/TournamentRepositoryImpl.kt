@@ -40,4 +40,7 @@ class TournamentRepositoryImpl(
             ?.let { tournamentJpaRepository.findByIdInAndStatusInAndDeletedAtIsNullOrderByCreatedAtDesc(ids, it) }
             ?: tournamentJpaRepository.findByIdInAndDeletedAtIsNullOrderByCreatedAtDesc(ids)
     }
+
+    override fun findBySourceTournamentId(sourceTournamentId: Long): List<Tournament> =
+        tournamentJpaRepository.findBySourceTournamentIdAndDeletedAtIsNull(sourceTournamentId)
 }
