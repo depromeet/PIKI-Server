@@ -29,5 +29,9 @@ class OAuthException private constructor(
         // 지원하지 않는 provider (미구현 apple · 오타 등) → 400.
         fun unsupportedProvider(): OAuthException =
             OAuthException("지원하지 않는 소셜 로그인 제공자입니다.", ErrorCategory.INVALID_INPUT, HttpStatus.BAD_REQUEST)
+
+        // state 없음 · 만료 · 이미 소비됨 → 401. CSRF 방지용 state 불일치로 요청을 거부.
+        fun invalidState(): OAuthException =
+            OAuthException("유효하지 않은 state 파라미터입니다. 인가 URL 을 새로 발급받아 다시 시도하세요.", ErrorCategory.UNAUTHORIZED, HttpStatus.UNAUTHORIZED)
     }
 }

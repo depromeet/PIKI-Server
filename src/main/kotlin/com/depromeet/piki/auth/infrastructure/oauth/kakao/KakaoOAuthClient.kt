@@ -11,6 +11,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.util.LinkedMultiValueMap
 import org.springframework.web.client.body
+import org.springframework.web.util.UriComponentsBuilder
 
 class KakaoOAuthClient(
     private val kakaoProperties: KakaoProperties,
@@ -19,6 +20,16 @@ class KakaoOAuthClient(
 
     private val authClient = OAuthRestClient.create(AUTH_BASE_URL)
     private val apiClient = OAuthRestClient.create(API_BASE_URL)
+
+    override fun buildAuthUrl(state: String): String =
+        UriComponentsBuilder
+            .fromUriString("$AUTH_BASE_URL/oauth/authorize")
+            .queryParam(OAuthParams.CLIENT_ID, kakaoProperties.clientId)
+            .queryParam(OAuthParams.REDIRECT_URI, kakaoProperties.redirectUri)
+            .queryParam(OAuthParams.RESPONSE_TYPE, OAuthParams.RESPONSE_TYPE_CODE)
+            .queryParam(OAuthParams.STATE, state)
+            .build()
+            .toUriString()
 
     // v1 — 백엔드가 code → access_token 교환 후 v2 메서드를 재사용해 user_info 조회.
     override fun fetchUserInfoByCode(

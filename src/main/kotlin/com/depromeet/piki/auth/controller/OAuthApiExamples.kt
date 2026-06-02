@@ -55,6 +55,15 @@ class OAuthApiExamples(
                             ),
                     )
                     add(
+                        status = HttpStatus.UNAUTHORIZED,
+                        name = "state 검증 실패 (만료 또는 미발급)",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.UNAUTHORIZED,
+                                detail = "유효하지 않은 state 파라미터입니다. 인가 URL 을 새로 발급받아 다시 시도하세요.",
+                            ),
+                    )
+                    add(
                         status = HttpStatus.BAD_GATEWAY,
                         name = "소셜 제공자 호출 실패",
                         payload =

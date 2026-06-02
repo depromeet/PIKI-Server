@@ -11,6 +11,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.util.LinkedMultiValueMap
 import org.springframework.web.client.body
+import org.springframework.web.util.UriComponentsBuilder
 
 class GoogleOAuthClient(
     private val googleProperties: GoogleProperties,
@@ -19,6 +20,18 @@ class GoogleOAuthClient(
 
     private val tokenClient = OAuthRestClient.create(TOKEN_BASE_URL)
     private val userInfoClient = OAuthRestClient.create(USER_INFO_BASE_URL)
+
+    override fun buildAuthUrl(state: String): String =
+        UriComponentsBuilder
+            .fromUriString(AUTH_URL)
+            .queryParam(OAuthParams.CLIENT_ID, googleProperties.clientId)
+            .queryParam(OAuthParams.REDIRECT_URI, googleProperties.redirectUri)
+            .queryParam(OAuthParams.RESPONSE_TYPE, OAuthParams.RESPONSE_TYPE_CODE)
+            .queryParam(OAuthParams.SCOPE, "email profile")
+            .queryParam(OAuthParams.STATE, state)
+            .build()
+            .encode()
+            .toUriString()
 
     // v1 — 백엔드가 code → access_token 교환 후 v2 메서드를 재사용해 user_info 조회.
     override fun fetchUserInfoByCode(
@@ -78,6 +91,7 @@ class GoogleOAuthClient(
     companion object {
         private const val TOKEN_BASE_URL = "https://oauth2.googleapis.com"
         private const val USER_INFO_BASE_URL = "https://www.googleapis.com"
+        private const val AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
         private const val TOKEN_PATH = "/token"
         private const val USER_INFO_PATH = "/oauth2/v2/userinfo"
         private const val BEARER_PREFIX = "Bearer "
