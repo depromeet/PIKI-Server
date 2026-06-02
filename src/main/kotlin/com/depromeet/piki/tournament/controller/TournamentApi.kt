@@ -28,6 +28,172 @@ import java.util.UUID
 
 @Tag(name = "Tournament", description = "토너먼트 API")
 interface TournamentApi {
+
+    @Operation(
+        summary = "토너먼트 목록 조회",
+        description = """
+            내 토너먼트 목록을 최근 생성 순으로 조회한다.
+            status 파라미터로 상태 필터링 가능하며 여러 값을 중복 전달할 수 있다(예: ?status=PENDING&status=IN_PROGRESS).
+            생략 시 전체 반환. status 값은 대문자(PENDING/IN_PROGRESS/COMPLETED)로 전달해야 한다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "목록 조회 성공 (참여 토너먼트 없으면 빈 배열 반환)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun getTournaments(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "상태 필터 (복수 전달 가능, 생략 시 전체)", example = "PENDING")
+        status: List<TournamentStatus>?,
+    ): ApiResponseBody<List<TournamentSummaryResponse>>
+
+    @Operation(
+        summary = "토너먼트 단건 조회",
+        description = """
+            토너먼트 ID로 상태에 따른 상세 정보를 조회한다.
+            응답의 status 필드에 따라 포함되는 데이터가 달라진다.
+            - PENDING: pending 필드 (아이템 목록, 참여자 목록)
+              - 각 아이템에 status 포함 (READY / PROCESSING / FAILED). PROCESSING 이면 name·price·imageUrl 은 null 이라 응답에서 제외됨
+            - IN_PROGRESS: inProgress 필드
+              - currentRound: 다음에 진행할 라운드 번호
+              - lastHistory: 가장 최근에 기록된 매치 결과. 라운드 전환 직후에는 currentRound와 다른 라운드의 매치일 수 있음. 매치 기록이 없으면 null
+              - remainingItems: 현재 라운드에서 아직 대결하지 않은 생존 아이템 목록, 가격 오름차순. 이 순서가 클라이언트의 매치 페어링 순서([0]vs[1], [2]vs[3] …)를 결정함. 각 아이템에 status 포함
+            - COMPLETED: completed 필드 (result — 1위부터 최대 4위까지 순위 아이템 목록)
+            나머지 필드는 응답에 포함되지 않는다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "토너먼트 조회 성공",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "권한 없음 (토너먼트 참여자가 아님)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "토너먼트를 찾을 수 없음",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun getTournamentById(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
+    ): ApiResponseBody<TournamentDetailResponse>
+
+    @Operation(
+        summary = "토너먼트 아이템 단건 조회",
+        description = """
+            토너먼트 아이템의 상세 정보와 파싱 상태를 조회한다.
+            링크·이미지로 아이템을 추가하면 비동기 파싱이 진행되므로,
+            클라이언트가 status 필드를 폴링해 PROCESSING → READY/FAILED 전환을 감지할 수 있다.
+            - PROCESSING: 파싱 진행 중 (name·price·imageUrl 은 null)
+            - READY: 파싱 완료 (모든 필드 채워짐)
+            - FAILED: 파싱 실패 (상품 페이지 아님 또는 추출 불가)
+            sourceUrl: 등록 시 입력한 원본 링크. 이미지로 등록한 경우 null.
+            토너먼트 참여자만 조회할 수 있다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "아이템 조회 성공",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "권한 없음 (토너먼트 참여자가 아님)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "토너먼트를 찾을 수 없음 · 토너먼트 아이템을 찾을 수 없음 · 아이템이 해당 토너먼트에 속하지 않음",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun getTournamentItem(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
+        @Parameter(description = "토너먼트 아이템 ID", example = "10") tournamentItemId: Long,
+    ): ApiResponseBody<TournamentItemDetailResponse>
+
     @Operation(
         summary = "토너먼트 생성",
         description = "이름으로 PENDING 상태의 토너먼트를 생성한다.",
@@ -308,151 +474,6 @@ interface TournamentApi {
     ): ApiResponseBody<AddTournamentItemsFromImagesResponse>
 
     @Operation(
-        summary = "토너먼트 아이템 수정",
-        description = """
-            파싱 실패(FAILED) 상태인 토너먼트 아이템을 유저가 직접 보정한다.
-            수정 성공 시 아이템 상태가 FAILED → READY 로 전환된다.
-            수정 가능 필드: 이름, 가격, 가격 단위, 이미지 URL (null 이면 기존 값 유지).
-            READY·PROCESSING 아이템은 수정 불가(409). 아이템을 등록한 본인만 수정 가능.
-            이름은 수정 후에도 반드시 존재해야 한다 — 기존 이름이 없고 name 도 미입력이면 400.
-        """,
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "수정 성공 (FAILED → READY 전환)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "400",
-                description = "잘못된 요청 (이름 없이 수정 시도 · 이름 1자 미만 512자 초과 · 가격 음수 · 가격단위 8자 초과 · 이미지 URL 2048자 초과)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "401",
-                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "403",
-                description = "권한 없음 (토너먼트 참여자가 아님 · 아이템을 등록한 본인이 아님)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "404",
-                description = "토너먼트를 찾을 수 없음 · 토너먼트 아이템을 찾을 수 없음",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "409",
-                description = "상태 충돌 (PENDING이 아닌 토너먼트 · READY 또는 PROCESSING 상태 아이템)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun updateItem(
-        @Parameter(hidden = true) userId: UUID,
-        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
-        @Parameter(description = "토너먼트 아이템 ID", example = "10") tournamentItemId: Long,
-        request: UpdateTournamentItemRequest,
-    ): ApiResponseBody<Unit>
-
-    @Operation(
-        summary = "토너먼트 아이템 삭제",
-        description = "PENDING 상태의 토너먼트에서 아이템을 제거한다. 아이템을 추가한 본인 또는 토너먼트 소유자만 삭제할 수 있다.",
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "아이템 삭제 성공",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "401",
-                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "403",
-                description = "권한 없음 (아이템을 추가한 본인도 아니고 토너먼트 소유자도 아님)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "404",
-                description = "토너먼트를 찾을 수 없음 · 토너먼트 아이템을 찾을 수 없음",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "409",
-                description = "상태 충돌 (PENDING이 아닌 토너먼트)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun deleteItem(
-        @Parameter(hidden = true) userId: UUID,
-        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
-        @Parameter(description = "토너먼트 아이템 ID", example = "10") tournamentItemId: Long,
-    ): ApiResponseBody<Unit>
-
-    @Operation(
         summary = "토너먼트 시작",
         description = "PENDING 상태의 토너먼트를 IN_PROGRESS 상태로 전환하고, 참여 아이템 목록을 가격 오름차순으로 정렬해 반환한다.",
     )
@@ -606,18 +627,20 @@ interface TournamentApi {
     ): ApiResponseBody<TournamentDetailResponse.CompletedData?>
 
     @Operation(
-        summary = "토너먼트 목록 조회",
+        summary = "토너먼트 아이템 수정",
         description = """
-            내 토너먼트 목록을 최근 생성 순으로 조회한다.
-            status 파라미터로 상태 필터링 가능하며 여러 값을 중복 전달할 수 있다(예: ?status=PENDING&status=IN_PROGRESS).
-            생략 시 전체 반환. status 값은 대문자(PENDING/IN_PROGRESS/COMPLETED)로 전달해야 한다.
+            파싱 실패(FAILED) 상태인 토너먼트 아이템을 유저가 직접 보정한다.
+            수정 성공 시 아이템 상태가 FAILED → READY 로 전환된다.
+            수정 가능 필드: 이름, 가격, 가격 단위, 이미지 URL (null 이면 기존 값 유지).
+            READY·PROCESSING 아이템은 수정 불가(409). 아이템을 등록한 본인만 수정 가능.
+            이름은 수정 후에도 반드시 존재해야 한다 — 기존 이름이 없고 name 도 미입력이면 400.
         """,
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "목록 조회 성공 (참여 토너먼트 없으면 빈 배열 반환)",
+                description = "수정 성공 (FAILED → READY 전환)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -626,43 +649,8 @@ interface TournamentApi {
                 ],
             ),
             ApiResponse(
-                responseCode = "401",
-                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun getTournaments(
-        @Parameter(hidden = true) userId: UUID,
-        @Parameter(description = "상태 필터 (복수 전달 가능, 생략 시 전체)", example = "PENDING")
-        status: List<TournamentStatus>?,
-    ): ApiResponseBody<List<TournamentSummaryResponse>>
-
-    @Operation(
-        summary = "토너먼트 단건 조회",
-        description = """
-            토너먼트 ID로 상태에 따른 상세 정보를 조회한다.
-            응답의 status 필드에 따라 포함되는 데이터가 달라진다.
-            - PENDING: pending 필드 (아이템 목록, 참여자 목록)
-              - 각 아이템에 status 포함 (READY / PROCESSING / FAILED). PROCESSING 이면 name·price·imageUrl 은 null 이라 응답에서 제외됨
-            - IN_PROGRESS: inProgress 필드
-              - currentRound: 다음에 진행할 라운드 번호
-              - lastHistory: 가장 최근에 기록된 매치 결과. 라운드 전환 직후에는 currentRound와 다른 라운드의 매치일 수 있음. 매치 기록이 없으면 null
-              - remainingItems: 현재 라운드에서 아직 대결하지 않은 생존 아이템 목록, 가격 오름차순. 이 순서가 클라이언트의 매치 페어링 순서([0]vs[1], [2]vs[3] …)를 결정함. 각 아이템에 status 포함
-            - COMPLETED: completed 필드 (result — 1위부터 최대 4위까지 순위 아이템 목록)
-            나머지 필드는 응답에 포함되지 않는다.
-        """,
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "토너먼트 조회 성공",
+                responseCode = "400",
+                description = "잘못된 요청 (이름 없이 수정 시도 · 이름 1자 미만 512자 초과 · 가격 음수 · 가격단위 8자 초과 · 이미지 URL 2048자 초과)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -682,7 +670,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "403",
-                description = "권한 없음 (토너먼트 참여자가 아님)",
+                description = "권한 없음 (토너먼트 참여자가 아님 · 아이템을 등록한 본인이 아님)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -692,7 +680,17 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "토너먼트를 찾을 수 없음",
+                description = "토너먼트를 찾을 수 없음 · 토너먼트 아이템을 찾을 수 없음",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트 · READY 또는 PROCESSING 상태 아이템)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -702,71 +700,74 @@ interface TournamentApi {
             ),
         ],
     )
-    fun getTournamentById(
-        @Parameter(hidden = true) userId: UUID,
-        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
-    ): ApiResponseBody<TournamentDetailResponse>
-
-    @Operation(
-        summary = "토너먼트 아이템 단건 조회",
-        description = """
-            토너먼트 아이템의 상세 정보와 파싱 상태를 조회한다.
-            링크·이미지로 아이템을 추가하면 비동기 파싱이 진행되므로,
-            클라이언트가 status 필드를 폴링해 PROCESSING → READY/FAILED 전환을 감지할 수 있다.
-            - PROCESSING: 파싱 진행 중 (name·price·imageUrl 은 null)
-            - READY: 파싱 완료 (모든 필드 채워짐)
-            - FAILED: 파싱 실패 (상품 페이지 아님 또는 추출 불가)
-            sourceUrl: 등록 시 입력한 원본 링크. 이미지로 등록한 경우 null.
-            토너먼트 참여자만 조회할 수 있다.
-        """,
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "아이템 조회 성공",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "401",
-                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "403",
-                description = "권한 없음 (토너먼트 참여자가 아님)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "404",
-                description = "토너먼트를 찾을 수 없음 · 토너먼트 아이템을 찾을 수 없음 · 아이템이 해당 토너먼트에 속하지 않음",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun getTournamentItem(
+    fun updateItem(
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
         @Parameter(description = "토너먼트 아이템 ID", example = "10") tournamentItemId: Long,
-    ): ApiResponseBody<TournamentItemDetailResponse>
+        request: UpdateTournamentItemRequest,
+    ): ApiResponseBody<Unit>
+
+    @Operation(
+        summary = "토너먼트 아이템 삭제",
+        description = "PENDING 상태의 토너먼트에서 아이템을 제거한다. 아이템을 추가한 본인 또는 토너먼트 소유자만 삭제할 수 있다.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "아이템 삭제 성공",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "권한 없음 (아이템을 추가한 본인도 아니고 토너먼트 소유자도 아님)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "토너먼트를 찾을 수 없음 · 토너먼트 아이템을 찾을 수 없음",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun deleteItem(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
+        @Parameter(description = "토너먼트 아이템 ID", example = "10") tournamentItemId: Long,
+    ): ApiResponseBody<Unit>
 }
