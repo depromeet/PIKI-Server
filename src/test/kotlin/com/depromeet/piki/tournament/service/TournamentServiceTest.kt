@@ -1158,6 +1158,7 @@ class TournamentServiceTest {
         service.deleteTournament(userId, tournamentId)
 
         assertNotNull(repository.tournaments[tournamentId]!!.deletedAt)
+        assertTrue(repository.histories.filter { it.tournamentId == tournamentId }.all { it.deletedAt?.let { true } ?: false })
     }
 
     @Test
