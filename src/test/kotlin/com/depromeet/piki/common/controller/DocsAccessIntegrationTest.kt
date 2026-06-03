@@ -84,4 +84,27 @@ class DocsAccessIntegrationTest : IntegrationTestSupport() {
             // 보호: operation 에 security 명시 없음 → 최상위 글로벌 Bearer 상속 (문서 UI 에 자물쇠 표시).
             .andExpect(jsonPath("$.paths['/api/v1/dev/users'].post.security").doesNotExist())
     }
+
+    @Test
+    fun `GET v3 api-docs - OAuth 로그인 선언 실패 응답에 example payload 가 부착된다 (회귀 가드)`() {
+        // OperationExamples.add 는 @ApiResponse 가 선언된 status 에만 example 을 붙인다(없으면 조용히 무시).
+        // #313 에서 OAuth 로그인 실패 응답을 400/401/502 로 정밀화하며 example 도 함께 붙였다 — 선언↔example
+        // 짝이 유지되는지 회귀 가드 (특히 500→502 로 바꾼 502: 우리 설정오류·provider 장애 두 example).
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+
+        mockMvc
+            .perform(get("/v3/api-docs"))
+            .andExpect(status().isOk)
+            .andExpect(
+                jsonPath("$.paths['/api/v1/auth/login/{provider}'].post.responses['400'].content['application/json'].examples").exists(),
+            ).andExpect(
+                jsonPath("$.paths['/api/v1/auth/login/{provider}'].post.responses['401'].content['application/json'].examples").exists(),
+            ).andExpect(
+                jsonPath("$.paths['/api/v1/auth/login/{provider}'].post.responses['502'].content['application/json'].examples").exists(),
+            )
+    }
 }
