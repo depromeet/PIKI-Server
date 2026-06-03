@@ -232,10 +232,14 @@ jobs:
             # 외부에서 직접 scrape 되는 우회 경로를 구조적으로 차단한다 (nginx /actuator 차단의 보강).
             # 주의: 별도 PR 의 Grafana Alloy 는 같은 호스트의 컨테이너이므로 --network host 로 띄워 localhost 를 scrape 해야 한다
             #       (redis 가 쓰는 172.17.0.1 bridge 바인딩 방식으로는 127.0.0.1 바인딩 포트에 닿지 못한다).
+            # LOG_STRUCTURED=ecs: 운영 로그를 ECS JSON 으로 출력해 Alloy 가 trace 를 Loki structured
+            # metadata 로 승격하게 한다(#364). 값 고정 평문이라 Secrets 불필요. 로컬은 이 변수 미설정이라
+            # application.yml 의 평문 콘솔 패턴(#361)을 그대로 쓴다.
             docker run -d \
               --name "team3-$INACTIVE" \
               -p "127.0.0.1:$INACTIVE_PORT:8080" \
               -e JAVA_TOOL_OPTIONS="-Xmx256m -Xms64m" \
+              -e LOG_STRUCTURED="ecs" \
               -e GEMINI_API_KEY="$GEMINI_API_KEY" \
               -e DB_HOST="$DB_HOST" \
               -e DB_PORT="$DB_PORT" \
