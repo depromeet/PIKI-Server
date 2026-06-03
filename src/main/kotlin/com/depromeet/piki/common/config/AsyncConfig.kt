@@ -3,6 +3,7 @@ package com.depromeet.piki.common.config
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.task.support.ContextPropagatingTaskDecorator
 import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 import java.util.concurrent.Executor
@@ -21,6 +22,11 @@ class AsyncConfig {
             maxPoolSize = 8
             queueCapacity = 100
             setThreadNamePrefix("item-parsing-")
+            // 부모(톰캣) 스레드의 trace context·MDC·observation 을 워커 스레드로 전파한다. trace context 는
+            // ThreadLocal 기반이라 이게 없으면 @Async 경계에서 끊겨, 워커 로그에 traceId 가 빈 채로 찍혀
+            // 한 요청의 전체 로그를 Loki 에서 traceId 로 추적할 수 없다. context-propagation(micrometer) 의
+            // ContextSnapshot 으로 등록된 모든 ThreadLocalAccessor(brave trace context·MDC 등)를 전파한다.
+            setTaskDecorator(ContextPropagatingTaskDecorator())
             // 포화 시 기본 AbortPolicy 로 거부한다. 호출 스레드(톰캣)에서 동기 실행하는 CallerRunsPolicy 는
             // 외부 LLM 호출(최대 60s)로 톰캣 워커 풀을 고갈시켜 무관한 API 까지 번지므로 쓰지 않는다.
             // 거부는 호출부(WishlistService.register, TournamentItemService.addItemsFromImages 등)가 잡아
@@ -45,6 +51,8 @@ class AsyncConfig {
             maxPoolSize = 4
             queueCapacity = 200
             setThreadNamePrefix("notification-")
+            // itemParsingExecutor 와 같은 이유로 trace context·MDC 를 워커 스레드로 전파해 알림 로그를 원 요청과 묶는다.
+            setTaskDecorator(ContextPropagatingTaskDecorator())
             setRejectedExecutionHandler { _, executor ->
                 log.warn(
                     "알림 executor 포화로 태스크 거부 — 알림 1건 유실 (activeCount={}, queueSize={})",
