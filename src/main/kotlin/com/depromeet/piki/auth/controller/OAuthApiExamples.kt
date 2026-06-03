@@ -55,12 +55,48 @@ class OAuthApiExamples(
                             ),
                     )
                     add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "인가코드(code) 만료/재사용/무효",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.INVALID_INPUT,
+                                detail = "소셜 로그인 인가 정보가 만료되었거나 유효하지 않습니다. 다시 시도해 주세요.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.UNAUTHORIZED,
+                        name = "state 검증 실패 (만료 또는 미발급)",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.UNAUTHORIZED,
+                                detail = "유효하지 않은 state 파라미터입니다. 인가 URL 을 새로 발급받아 다시 시도하세요.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.UNAUTHORIZED,
+                        name = "provider access token 무효/만료 (재로그인 필요)",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.UNAUTHORIZED,
+                                detail = "소셜 로그인 토큰이 유효하지 않습니다. 다시 로그인해 주세요.",
+                            ),
+                    )
+                    add(
                         status = HttpStatus.BAD_GATEWAY,
-                        name = "소셜 제공자 호출 실패",
+                        name = "소셜 제공자 장애 (RETRYABLE — 재시도 가능)",
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.RETRYABLE,
                                 detail = "소셜 로그인 제공자 호출에 실패했습니다.",
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.BAD_GATEWAY,
+                        name = "우리 OAuth 설정/요청 오류 (SERVER_ERROR — 재시도 무의미)",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.SERVER_ERROR,
+                                detail = "소셜 로그인 설정 오류가 발생했습니다.",
                             ),
                     )
                 }

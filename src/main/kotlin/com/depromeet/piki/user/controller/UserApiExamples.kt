@@ -29,12 +29,13 @@ class UserApiExamples(
                             name = "내 정보 조회 성공",
                             payload = ApiResponseBody.ok(sampleUser()),
                         )
+                        unauthorized()
                         add(
-                            status = HttpStatus.UNAUTHORIZED,
-                            name = "인증 필요",
+                            status = HttpStatus.NOT_FOUND,
+                            name = "유저 없음 (JWT 유효하나 DB에 없음)",
                             payload =
                                 ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.UNAUTHORIZED,
+                                    category = ErrorCategory.NOT_FOUND,
                                 ),
                         )
                     }
@@ -64,6 +65,15 @@ class UserApiExamples(
                                     detail = "이미 사용 중인 닉네임입니다.",
                                 ),
                         )
+                        unauthorized()
+                        add(
+                            status = HttpStatus.NOT_FOUND,
+                            name = "유저 없음 (JWT 유효하나 DB에 없음)",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.NOT_FOUND,
+                                ),
+                        )
                     }
 
                 handlerMethod.binds(UserController::checkNickname) ->
@@ -87,6 +97,7 @@ class UserApiExamples(
                                     detail = "nickname 은 10자 이하여야 한다.",
                                 ),
                         )
+                        unauthorized()
                     }
             }
             operation

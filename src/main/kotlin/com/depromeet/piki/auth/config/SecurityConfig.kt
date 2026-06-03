@@ -50,6 +50,9 @@ class SecurityConfig(
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/guest")
                     .permitAll()
+                    // OAuth 인가 URL 생성 — state 발급 포함. 미인증으로 호출 (로그인 전 단계).
+                    .requestMatchers(HttpMethod.GET, "/api/v1/auth/*/url")
+                    .permitAll()
                     // 소셜 로그인 진입점 — 미인증으로 호출(게스트 토큰은 선택). 게스트 토큰을 보내면 필터가 principal 을 채워 게스트-연결로 동작.
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/login/*")
                     .permitAll()

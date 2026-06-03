@@ -28,6 +28,7 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -56,6 +57,10 @@ class TournamentServiceTest {
 
         override fun findByTournamentIds(tournamentIds: List<Long>): List<TournamentUser> =
             users.filter { it.tournamentId in tournamentIds }
+
+        override fun softDeleteAllByTournamentId(tournamentId: Long) {
+            users.filter { it.tournamentId == tournamentId }.forEach { it.softDelete() }
+        }
 
         private fun setEntityId(
             entity: LongBaseEntity,
@@ -175,30 +180,32 @@ class TournamentServiceTest {
                 item
             }
 
-        override fun countByTournamentId(tournamentId: Long): Int = items.count { it.tournamentId == tournamentId }
+        override fun countByTournamentId(tournamentId: Long): Int =
+            items.count { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }
 
         override fun findIdsByTournamentId(tournamentId: Long): List<Long> =
-            items.filter { it.tournamentId == tournamentId }.map { it.getId() }
+            items.filter { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }.map { it.getId() }
 
         override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
-            items.filter { it.tournamentId == tournamentId }
+            items.filter { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }
 
         override fun findByIds(ids: List<Long>): List<TournamentItem> =
             items.filter { it.getId() in ids }
 
         override fun findById(id: Long): TournamentItem? = items.find { it.getId() == id }
 
-        override fun delete(tournamentItem: TournamentItem) {
-            items.remove(tournamentItem)
-        }
-
-        override fun deleteIfPending(
+        override fun softDeleteIfPending(
             id: Long,
             tournamentId: Long,
         ): Int {
             val item = items.find { it.getId() == id && it.tournamentId == tournamentId } ?: return 0
-            items.remove(item)
+            item.deletedAt?.let { return 0 }
+            item.softDelete()
             return 1
+        }
+
+        override fun softDeleteAllByTournamentId(tournamentId: Long) {
+            items.filter { it.tournamentId == tournamentId }.forEach { it.softDelete() }
         }
 
         private fun setEntityId(
@@ -229,9 +236,17 @@ class TournamentServiceTest {
             histories.add(history)
         }
 
-        override fun findTournamentById(tournamentId: Long): Tournament? = tournaments[tournamentId]
+        override fun findTournamentById(tournamentId: Long): Tournament? {
+            val tournament = tournaments[tournamentId] ?: return null
+            tournament.deletedAt ?: return tournament
+            return null
+        }
 
-        override fun findTournamentByIdForUpdate(tournamentId: Long): Tournament? = tournaments[tournamentId]
+        override fun findTournamentByIdForUpdate(tournamentId: Long): Tournament? {
+            val tournament = tournaments[tournamentId] ?: return null
+            tournament.deletedAt ?: return tournament
+            return null
+        }
 
         override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
             histories.filter { it.tournamentId == tournamentId }
@@ -244,6 +259,10 @@ class TournamentServiceTest {
                 .filter { it.getId() in ids }
                 .filter { statuses.isNullOrEmpty() || it.status in statuses }
                 .sortedByDescending { it.createdAt }
+
+        override fun softDeleteHistoriesByTournamentId(tournamentId: Long) {
+            histories.filter { it.tournamentId == tournamentId }.forEach { it.softDelete() }
+        }
 
         private fun setEntityId(
             entity: LongBaseEntity,
@@ -1110,5 +1129,67 @@ class TournamentServiceTest {
                 service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
             }
         assertEquals(HttpStatus.FORBIDDEN, ex.httpStatus)
+    }
+
+    @Test
+    fun `deleteTournament 는 PENDING 토너먼트를 소유자가 소프트 딜리트하고 연관 데이터도 함께 소프트 딜리트한다`() {
+        val tournamentId = service.create(userId, CreateTournament("삭제 대상"))
+        testWishRepository.addWish(userId, 1L, 2L)
+        service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
+
+        service.deleteTournament(userId, tournamentId)
+
+        assertNotNull(repository.tournaments[tournamentId]!!.deletedAt)
+        assertTrue(tournamentItemRepository.items.filter { it.tournamentId == tournamentId }.all { it.deletedAt?.let { true } ?: false })
+        assertTrue(tournamentUserRepository.users.filter { it.tournamentId == tournamentId }.all { it.deletedAt?.let { true } ?: false })
+        // 소프트 딜리트 후 findTournamentById 는 null 을 반환한다
+        assertNull(repository.findTournamentById(tournamentId))
+    }
+
+    @Test
+    fun `deleteTournament 는 COMPLETED 토너먼트도 소프트 딜리트할 수 있다`() {
+        val tournamentId = createAndStart(listOf(1L, 2L))
+        val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
+        service.recordMatch(
+            userId,
+            RecordMatch(tournamentId, 2, items[0].getId(), items[1].getId(), items[0].getId()),
+        )
+
+        service.deleteTournament(userId, tournamentId)
+
+        assertNotNull(repository.tournaments[tournamentId]!!.deletedAt)
+        assertTrue(repository.histories.filter { it.tournamentId == tournamentId }.all { it.deletedAt?.let { true } ?: false })
+    }
+
+    @Test
+    fun `deleteTournament 는 IN_PROGRESS 토너먼트 삭제 시 409 예외가 발생한다`() {
+        val tournamentId = createAndStart(listOf(1L, 2L))
+
+        val ex = assertFailsWith<TournamentException> { service.deleteTournament(userId, tournamentId) }
+        assertEquals(HttpStatus.CONFLICT, ex.httpStatus)
+    }
+
+    @Test
+    fun `deleteTournament 는 참가자이지만 소유자가 아니면 403 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        // otherUserId 를 참가자로 추가 (소유자는 userId)
+        tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
+
+        val ex = assertFailsWith<TournamentException> { service.deleteTournament(otherUserId, tournamentId) }
+        assertEquals(HttpStatus.FORBIDDEN, ex.httpStatus)
+    }
+
+    @Test
+    fun `deleteTournament 는 소유자가 아니면 403 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+
+        val ex = assertFailsWith<TournamentException> { service.deleteTournament(otherUserId, tournamentId) }
+        assertEquals(HttpStatus.FORBIDDEN, ex.httpStatus)
+    }
+
+    @Test
+    fun `deleteTournament 는 존재하지 않는 토너먼트면 404 예외가 발생한다`() {
+        val ex = assertFailsWith<TournamentException> { service.deleteTournament(userId, 999L) }
+        assertEquals(HttpStatus.NOT_FOUND, ex.httpStatus)
     }
 }

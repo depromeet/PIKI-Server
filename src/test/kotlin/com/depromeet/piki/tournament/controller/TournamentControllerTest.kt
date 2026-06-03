@@ -21,6 +21,7 @@ import com.depromeet.piki.wishlist.service.WishPersistenceService
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
@@ -28,6 +29,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -282,7 +284,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             post("/api/v1/tournaments/$tournamentId/start")
                 .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
         )
-        val items = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
+        val items = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId)
         val ti1 = items[0].getId()
         val ti2 = items[1].getId()
         val ti3 = items[2].getId()
@@ -439,7 +441,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
         )
         // start 는 가격 오름차순 반환 → ti1~ti4 순 — 클라이언트 페어링: [0]vs[1], [2]vs[3]
-        val items = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
+        val items = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId)
         val ti1 = items[0].getId()
         val ti2 = items[1].getId()
         val ti3 = items[2].getId()
@@ -526,7 +528,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
         )
 
-        val allItems = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
+        val allItems = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId)
         // 6번의 매치 기록 — 1라운드(currentRound=32), 각 2개씩 소진 → ti[0]~ti[11] 등장
         repeat(6) { i ->
             val first = allItems[i * 2].getId()
@@ -573,7 +575,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             post("/api/v1/tournaments/$tournamentId/start")
                 .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
         )
-        val items = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
+        val items = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId)
         val ti1 = items[0].getId()
         val ti2 = items[1].getId()
 
@@ -754,7 +756,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem(), saveWishItem())
-        val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+        val itemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc
             .perform(
@@ -762,7 +764,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
 
-        val remaining = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
+        val remaining = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId)
         assertEquals(1, remaining.size)
         assertTrue(remaining.none { it.getId() == itemId })
     }
@@ -784,7 +786,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem(), saveWishItem())
-        val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+        val itemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc
             .perform(
@@ -799,7 +801,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val tournamentId = createTournament(mockMvc)
         tournamentUserJpaRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
         addItemsToTournament(mockMvc, tournamentId, otherUserId, saveWishItem(otherUserId), saveWishItem(otherUserId))
-        val itemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+        val itemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc
             .perform(
@@ -808,7 +810,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             ).andExpect(status().isOk)
 
         assertTrue(
-            tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).none { it.getId() == itemId },
+            tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).none { it.getId() == itemId },
         )
     }
 
@@ -843,6 +845,135 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `PATCH tournaments-id-items-itemId 는 FAILED 아이템을 수정하고 READY 로 전환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val failedItem = itemJpaRepository.save(Item(status = ItemStatus.FAILED))
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .param("name", "수정된 이름")
+                    .param("price", "50000")
+                    .param("currency", "KRW")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+
+        val updated = itemJpaRepository.findById(failedItem.getId()).get()
+        assertEquals("수정된 이름", updated.name)
+        assertEquals(50000, updated.currentPrice)
+        assertEquals("KRW", updated.currency)
+        assertEquals(ItemStatus.READY, updated.status)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-items-itemId 에서 READY 아이템이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val readyItemId = saveWishItem()
+        addItemsToTournament(mockMvc, tournamentId, userId, readyItemId)
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .param("name", "수정 시도")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-items-itemId 에서 PROCESSING 아이템이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val processingItem = itemJpaRepository.save(Item(status = ItemStatus.PROCESSING))
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = processingItem.getId(), userId = userId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .param("name", "수정 시도")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-items-itemId 에서 IN_PROGRESS 토너먼트이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, item1Id) = startTournamentWith2Items(mockMvc)
+        val failedItem = itemJpaRepository.save(Item(status = ItemStatus.FAILED))
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).last().getId()
+
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .param("name", "수정 시도")
+                    .param("price", "10000")
+                    .param("currency", "KRW")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-items-itemId 에서 아이템 등록자가 아니면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        tournamentUserJpaRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
+        val failedItem = itemJpaRepository.save(Item(status = ItemStatus.FAILED))
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = otherUserId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .param("name", "수정 시도")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-items-itemId 는 이름이 있는 FAILED 아이템에 가격만 보내면 이름을 유지하며 200 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val failedItem = itemJpaRepository.save(Item(name = "기존 이름", status = ItemStatus.FAILED))
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .param("price", "50000")
+                    .param("currency", "KRW")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+
+        val updated = itemJpaRepository.findById(failedItem.getId()).get()
+        assertEquals("기존 이름", updated.name)
+        assertEquals(50000, updated.currentPrice)
+        assertEquals(ItemStatus.READY, updated.status)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-items-itemId 에서 이름 없이 수정하면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val failedItem = itemJpaRepository.save(Item(status = ItemStatus.FAILED))
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId))
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
+
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .param("price", "50000")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
     fun `POST tournaments-id-items-link 는 참여자이면 PROCESSING 아이템을 생성하고 tournamentItemId 를 반환한다`() {
         stubItemParsingWorker.enabled = false
         try {
@@ -861,7 +992,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .andReturn()
 
             val tournamentItemId = objectMapper.readTree(result.response.contentAsString)["data"]["tournamentItemId"].asLong()
-            val tournamentItem = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).also {
+            val tournamentItem = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).also {
                 assertEquals(1, it.size)
             }.first()
             assertEquals(tournamentItemId, tournamentItem.getId())
@@ -931,7 +1062,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 .andExpect(jsonPath("$.data.tournamentItemIds").isArray)
                 .andExpect(jsonPath("$.data.tournamentItemIds.length()").value(2))
 
-            assertEquals(2, tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).size)
+            assertEquals(2, tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).size)
         } finally {
             stubImageParsingWorker.enabled = true
         }
@@ -1090,7 +1221,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val tournamentId = createTournament(mockMvc)
         val itemId = saveWishItem(name = "나이키 에어맥스", price = 129_000)
         addItemsToTournament(mockMvc, tournamentId, userId, itemId)
-        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc
             .perform(
@@ -1121,7 +1252,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             ),
         )
         tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = linkItem.getId(), userId = userId))
-        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc
             .perform(
@@ -1138,7 +1269,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val tournamentId = createTournament(mockMvc)
         val processingItemId = itemJpaRepository.save(Item(status = ItemStatus.PROCESSING)).getId()
         tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = processingItemId, userId = userId))
-        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc
             .perform(
@@ -1156,7 +1287,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem())
-        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId).first().getId()
+        val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc
             .perform(
@@ -1194,11 +1325,74 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val tournamentId1 = createTournament(mockMvc, "토너먼트1")
         val tournamentId2 = createTournament(mockMvc, "토너먼트2")
         addItemsToTournament(mockMvc, tournamentId2, userId, saveWishItem())
-        val itemOfTournament2 = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId2).first().getId()
+        val itemOfTournament2 = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId2).first().getId()
 
         mockMvc
             .perform(
                 get("/api/v1/tournaments/$tournamentId1/items/$itemOfTournament2")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `DELETE tournaments-id 는 소유자가 PENDING 토너먼트를 삭제하면 200 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+    }
+
+    @Test
+    fun `DELETE tournaments-id 에서 IN_PROGRESS 토너먼트 삭제 시도 시 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId) = startTournamentWith2Items(mockMvc)
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `DELETE tournaments-id 에서 소유자가 아닌 사용자가 요청하면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `DELETE tournaments-id 에서 존재하지 않는 토너먼트이면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+
+        mockMvc
+            .perform(
+                delete("/api/v1/tournaments/999999")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `DELETE tournaments-id 소프트 딜리트 후 조회하면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        mockMvc.perform(
+            delete("/api/v1/tournaments/$tournamentId")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isNotFound)
     }
@@ -1210,7 +1404,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             post("/api/v1/tournaments/$tournamentId/start")
                 .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
         )
-        val items = tournamentItemJpaRepository.findAllByTournamentIdOrderByIdAsc(tournamentId)
+        val items = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId)
         return TournamentStart(
             tournamentId = tournamentId,
             item1Id = items[0].getId(),

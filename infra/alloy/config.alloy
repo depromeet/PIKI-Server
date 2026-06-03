@@ -58,6 +58,54 @@ discovery.relabel "team3" {
 loki.source.docker "containers" {
   host       = "unix:///var/run/docker.sock"
   targets    = discovery.relabel.team3.output
+  forward_to = [loki.process.app_logs.receiver]
+}
+
+// ── ECS JSON 파싱: trace 를 structured metadata 로 승격, 본문은 message 만 (#364) ──
+// 앱이 LOG_STRUCTURED=ecs 로 내보내는 ECS JSON 한 줄(예:
+//   {"@timestamp":...,"log":{"level":"INFO","logger":"...EntryPoint"},"message":"GET / ...",
+//    "traceId":"6a1f...","spanId":"2ca4...","ecs":{"version":"8.11"}})
+// 을 받아 다음을 한다:
+//  - traceId·spanId·logger 를 structured metadata 층으로 올린다. label 이 아니라 metadata 라
+//    traceId 의 고카디널리티가 스트림을 쪼개지 않으면서 Grafana 에서 필드로 필터·표시된다.
+//  - 라인 본문을 message 로 교체해 Loki 에서 줄에 메시지만 깔끔히 남게 한다(가독성, 이 이슈의 목적).
+// 키는 로컬 ecs 부팅 실측(2026-06-03)으로 확정: Spring Boot ECS formatter 는 micrometer MDC 키를
+// 그대로 top-level 로 둔다 → traceId·spanId(camelCase). log.level·log.logger 는 nested 라 점 경로.
+loki.process "app_logs" {
+  // 비-JSON 라인(구버전 컨테이너의 평문 셧다운 로그 등)은 stage.json 이 조용히 무시하고 라인을 보존한다.
+  stage.json {
+    expressions = {
+      msg      = "message",
+      trace_id = "traceId",
+      span_id  = "spanId",
+      logger   = "log.logger",
+      level    = "log.level",
+    }
+  }
+
+  // 고카디널리티(trace_id)·중카디널리티(logger)는 인덱스 없는 structured metadata 로.
+  // 빈 문자열 = 위 stage.json 이 추출한 동명 변수를 그대로 쓴다.
+  stage.structured_metadata {
+    values = {
+      trace_id = "",
+      span_id  = "",
+      logger   = "",
+    }
+  }
+
+  // level 은 저카디널리티(INFO/WARN/ERROR 등)라 label 로 — Grafana Explore 의 레벨 필터·색상이 동작한다.
+  // 라인을 message 로 줄이면 본문에 레벨 문자열이 없어 Loki 자동 detect 가 놓치므로 명시적으로 올린다.
+  stage.labels {
+    values = {
+      level = "",
+    }
+  }
+
+  // 저장 라인 본문을 message 로 교체 — 줄에 메시지만 남는다.
+  stage.output {
+    source = "msg"
+  }
+
   forward_to = [loki.write.grafana_cloud.receiver]
 }
 
