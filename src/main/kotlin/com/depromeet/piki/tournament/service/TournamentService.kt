@@ -47,13 +47,14 @@ class TournamentService(
         command: CreateTournament,
     ): CreateTournamentResult {
         val inviteCode = Tournament.generateInviteCode()
+        val inviteExpiresAt = LocalDateTime.now().plusMinutes(command.inviteDurationMinutes)
         val tournament =
             tournamentRepository.saveTournament(
                 Tournament(
                     ownerTournamentUserId = 0L,
                     name = command.name,
                     inviteCode = inviteCode,
-                    inviteExpiresAt = command.inviteExpiresAt,
+                    inviteExpiresAt = inviteExpiresAt,
                 ),
             )
         val tournamentUser =
@@ -64,7 +65,7 @@ class TournamentService(
         return CreateTournamentResult(
             tournamentId = tournament.getId(),
             inviteCode = inviteCode,
-            inviteExpiresAt = command.inviteExpiresAt,
+            inviteExpiresAt = inviteExpiresAt,
         )
     }
 

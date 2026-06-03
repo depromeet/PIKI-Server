@@ -1,8 +1,8 @@
 package com.depromeet.piki.tournament.service.dto
 
-import java.time.LocalDateTime
+import com.depromeet.piki.tournament.service.TOURNAMENT_INVITE_DEFAULT_DURATION_MINUTES
 
 data class CreateTournament(
     val name: String,
-    val inviteExpiresAt: LocalDateTime = LocalDateTime.now().plusMinutes(30),
+    val inviteDurationMinutes: Long = TOURNAMENT_INVITE_DEFAULT_DURATION_MINUTES,
 )
