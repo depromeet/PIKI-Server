@@ -16,6 +16,7 @@ CREATE TABLE item_snapshots (
     updated_at    DATETIME(6)   NOT NULL,
     deleted_at    DATETIME(6)   NULL,
     PRIMARY KEY (id),
-    -- 한 item 의 버전들 조회(가격 히스토리) + 최신 버전 조회. (item_id) 단독 조회는 leftmost prefix 로 커버.
-    KEY idx_item_snapshots_item_id_version (item_id, version)
+    -- (item_id, version) 은 한 item 의 버전 자연키 — UNIQUE 로 같은 version 중복·동시 갱신 race 의 재삽입을 DB 가 차단한다.
+    -- 겸하여 버전 조회·가격 히스토리 인덱스이며, (item_id) 단독 조회는 leftmost prefix 로 커버. (UNIQUE 는 FK 가 아니므로 프로젝트 FK 금지 정책과 무관)
+    UNIQUE KEY uq_item_snapshots_item_id_version (item_id, version)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
