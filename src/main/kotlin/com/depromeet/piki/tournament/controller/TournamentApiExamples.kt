@@ -1,5 +1,6 @@
 package com.depromeet.piki.tournament.controller
 
+import com.depromeet.piki.common.exception.ErrorCategory
 import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
@@ -48,6 +49,7 @@ class TournamentApiExamples(
                                     ),
                                 ),
                         )
+                        unauthorized()
                     }
 
                 handlerMethod.binds(TournamentController::create) ->
@@ -57,6 +59,16 @@ class TournamentApiExamples(
                             name = "생성 성공",
                             payload = ApiResponseBody.created(CreateTournamentResponse(tournamentId = 1)),
                         )
+                        add(
+                            status = HttpStatus.BAD_REQUEST,
+                            name = "이름 미입력",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.INVALID_INPUT,
+                                    detail = "name: 토너먼트 이름은 필수입니다.",
+                                ),
+                        )
+                        unauthorized()
                     }
 
                 handlerMethod.binds(TournamentController::start) ->
@@ -98,6 +110,43 @@ class TournamentApiExamples(
                                     ),
                                 ),
                             ),
+                        )
+                        add(
+                            status = HttpStatus.BAD_REQUEST,
+                            name = "아이템 수 미충족 (2~32개)",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.INVALID_INPUT,
+                                    detail = "토너먼트 아이템은 최소 2개, 최대 32개여야 합니다.",
+                                ),
+                        )
+                        unauthorized()
+                        add(
+                            status = HttpStatus.FORBIDDEN,
+                            name = "토너먼트 권한 없음",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.FORBIDDEN,
+                                    detail = "해당 토너먼트에 대한 권한이 없습니다.",
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.NOT_FOUND,
+                            name = "토너먼트를 찾을 수 없음",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.NOT_FOUND,
+                                    detail = "토너먼트를 찾을 수 없습니다.",
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.CONFLICT,
+                            name = "PENDING 상태 아님",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.CONFLICT,
+                                    detail = "PENDING 상태인 토너먼트에만 수행할 수 있습니다.",
+                                ),
                         )
                     }
 
@@ -153,6 +202,43 @@ class TournamentApiExamples(
                                     ),
                                 ),
                             ),
+                        )
+                        add(
+                            status = HttpStatus.BAD_REQUEST,
+                            name = "승자가 대결 아이템이 아님",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.INVALID_INPUT,
+                                    detail = "승자는 대결한 두 아이템 중 하나여야 합니다.",
+                                ),
+                        )
+                        unauthorized()
+                        add(
+                            status = HttpStatus.FORBIDDEN,
+                            name = "토너먼트 권한 없음",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.FORBIDDEN,
+                                    detail = "해당 토너먼트에 대한 권한이 없습니다.",
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.NOT_FOUND,
+                            name = "토너먼트를 찾을 수 없음",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.NOT_FOUND,
+                                    detail = "토너먼트를 찾을 수 없습니다.",
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.CONFLICT,
+                            name = "진행 중 토너먼트 아님",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.CONFLICT,
+                                    detail = "진행 중인 토너먼트에만 수행할 수 있습니다.",
+                                ),
                         )
                     }
 
@@ -306,6 +392,25 @@ class TournamentApiExamples(
                                     ),
                                 ),
                         )
+                        unauthorized()
+                        add(
+                            status = HttpStatus.FORBIDDEN,
+                            name = "토너먼트 권한 없음",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.FORBIDDEN,
+                                    detail = "해당 토너먼트에 대한 권한이 없습니다.",
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.NOT_FOUND,
+                            name = "토너먼트를 찾을 수 없음",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.NOT_FOUND,
+                                    detail = "토너먼트를 찾을 수 없습니다.",
+                                ),
+                        )
                     }
 
                 handlerMethod.binds(TournamentController::deleteTournament) ->
@@ -314,6 +419,34 @@ class TournamentApiExamples(
                             status = HttpStatus.OK,
                             name = "토너먼트 삭제 성공",
                             payload = ApiResponseBody.ok<Unit>(),
+                        )
+                        unauthorized()
+                        add(
+                            status = HttpStatus.FORBIDDEN,
+                            name = "토너먼트 권한 없음",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.FORBIDDEN,
+                                    detail = "해당 토너먼트에 대한 권한이 없습니다.",
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.NOT_FOUND,
+                            name = "토너먼트를 찾을 수 없음",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.NOT_FOUND,
+                                    detail = "토너먼트를 찾을 수 없습니다.",
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.CONFLICT,
+                            name = "진행 중 토너먼트 삭제 불가",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.CONFLICT,
+                                    detail = "진행 중인 토너먼트는 삭제할 수 없습니다.",
+                                ),
                         )
                     }
             }
