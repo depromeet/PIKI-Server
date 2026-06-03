@@ -78,4 +78,13 @@ class ItemSnapshotTest {
         assertEquals(8, snapshot.currency?.length)
         assertEquals(0, snapshot.currentPrice)
     }
+
+    @Test
+    fun `version 은 생성자에서 검증하지 않는다 — 검증은 후속 단계 팩토리 책임`() {
+        // version 필수값 불변식을 init 에 두지 않는다 — plugin.jpa no-arg 생성자가 하이드레이션 시 init 을 실행하는데
+        // 그 순간 version 이 0(Int 기본값)이라 require 가 깨지기 때문. version 유효성(>=1)·유일성은 DB UNIQUE(item_id, version)
+        // 와 후속 단계 팩토리가 책임지고, 생성자는 raw 로 통과시킨다. 이 동작을 테스트로 박아 후속 작업자의 혼란을 막는다.
+        assertEquals(0, ItemSnapshot(itemId = 1L, version = 0).version)
+        assertEquals(-1, ItemSnapshot(itemId = 1L, version = -1).version)
+    }
 }
