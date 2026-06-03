@@ -29,14 +29,7 @@ class UserApiExamples(
                             name = "내 정보 조회 성공",
                             payload = ApiResponseBody.ok(sampleUser()),
                         )
-                        add(
-                            status = HttpStatus.UNAUTHORIZED,
-                            name = "인증 필요",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.UNAUTHORIZED,
-                                ),
-                        )
+                        unauthorized()
                         add(
                             status = HttpStatus.NOT_FOUND,
                             name = "유저 없음 (JWT 유효하나 DB에 없음)",
@@ -72,14 +65,7 @@ class UserApiExamples(
                                     detail = "이미 사용 중인 닉네임입니다.",
                                 ),
                         )
-                        add(
-                            status = HttpStatus.UNAUTHORIZED,
-                            name = "인증 필요",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.UNAUTHORIZED,
-                                ),
-                        )
+                        unauthorized()
                         add(
                             status = HttpStatus.NOT_FOUND,
                             name = "유저 없음 (JWT 유효하나 DB에 없음)",
@@ -111,14 +97,7 @@ class UserApiExamples(
                                     detail = "nickname 은 10자 이하여야 한다.",
                                 ),
                         )
-                        add(
-                            status = HttpStatus.UNAUTHORIZED,
-                            name = "인증 필요",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.UNAUTHORIZED,
-                                ),
-                        )
+                        unauthorized()
                     }
             }
             operation

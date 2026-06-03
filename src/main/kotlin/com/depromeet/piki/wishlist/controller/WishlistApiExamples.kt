@@ -38,22 +38,8 @@ class WishlistApiExamples(
                                 detail = "지원하지 않는 URL 형식입니다.",
                             ),
                     )
-                    add(
-                        status = HttpStatus.UNAUTHORIZED,
-                        name = "인증 필요",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.UNAUTHORIZED,
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.FORBIDDEN,
-                        name = "권한 없음 (MEMBER 필요)",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.FORBIDDEN,
-                            ),
-                    )
+                    unauthorized()
+                    forbidden("권한 없음 (MEMBER 필요)")
                 }
             }
             if (handlerMethod.binds(WishlistController::getWishlist)) {
@@ -94,22 +80,8 @@ class WishlistApiExamples(
                                 detail = "유효하지 않은 cursor 입니다.",
                             ),
                     )
-                    add(
-                        status = HttpStatus.UNAUTHORIZED,
-                        name = "인증 필요",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.UNAUTHORIZED,
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.FORBIDDEN,
-                        name = "권한 없음 (MEMBER 필요)",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.FORBIDDEN,
-                            ),
-                    )
+                    unauthorized()
+                    forbidden("권한 없음 (MEMBER 필요)")
                 }
             }
             if (handlerMethod.binds(WishlistController::getWish)) {
@@ -137,14 +109,7 @@ class WishlistApiExamples(
                                 detail = "존재하지 않는 위시리스트 항목입니다.",
                             ),
                     )
-                    add(
-                        status = HttpStatus.UNAUTHORIZED,
-                        name = "인증 필요",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.UNAUTHORIZED,
-                            ),
-                    )
+                    unauthorized()
                 }
             }
             if (handlerMethod.binds(WishlistController::recoverWishItem)) {
@@ -217,14 +182,7 @@ class WishlistApiExamples(
                                 detail = "이미지 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.",
                             ),
                     )
-                    add(
-                        status = HttpStatus.UNAUTHORIZED,
-                        name = "인증 필요",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.UNAUTHORIZED,
-                            ),
-                    )
+                    unauthorized()
                 }
             }
             if (handlerMethod.binds(WishlistController::deleteWish)) {
@@ -243,14 +201,7 @@ class WishlistApiExamples(
                                 detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
-                    add(
-                        status = HttpStatus.UNAUTHORIZED,
-                        name = "인증 필요",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.UNAUTHORIZED,
-                            ),
-                    )
+                    unauthorized()
                 }
             }
             if (handlerMethod.binds(WishlistController::deleteWishes)) {
@@ -278,14 +229,7 @@ class WishlistApiExamples(
                                 detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
-                    add(
-                        status = HttpStatus.UNAUTHORIZED,
-                        name = "인증 필요",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.UNAUTHORIZED,
-                            ),
-                    )
+                    unauthorized()
                 }
             }
             if (handlerMethod.binds(WishlistController::registerFromImages)) {
@@ -313,22 +257,8 @@ class WishlistApiExamples(
                                 detail = ProductImage.unsupportedMimeTypeMessage("image/gif"),
                             ),
                     )
-                    add(
-                        status = HttpStatus.UNAUTHORIZED,
-                        name = "인증 필요",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.UNAUTHORIZED,
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.FORBIDDEN,
-                        name = "권한 없음 (MEMBER 필요)",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.FORBIDDEN,
-                            ),
-                    )
+                    unauthorized()
+                    forbidden("권한 없음 (MEMBER 필요)")
                 }
             }
             operation

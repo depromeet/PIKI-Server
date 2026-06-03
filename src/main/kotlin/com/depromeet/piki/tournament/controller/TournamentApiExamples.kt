@@ -49,14 +49,7 @@ class TournamentApiExamples(
                                     ),
                                 ),
                         )
-                        add(
-                            status = HttpStatus.UNAUTHORIZED,
-                            name = "인증 필요",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.UNAUTHORIZED,
-                                ),
-                        )
+                        unauthorized()
                     }
 
                 handlerMethod.binds(TournamentController::create) ->
@@ -72,17 +65,10 @@ class TournamentApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    detail = "name: must not be blank",
+                                    detail = "name: 토너먼트 이름은 필수입니다.",
                                 ),
                         )
-                        add(
-                            status = HttpStatus.UNAUTHORIZED,
-                            name = "인증 필요",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.UNAUTHORIZED,
-                                ),
-                        )
+                        unauthorized()
                     }
 
                 handlerMethod.binds(TournamentController::start) ->
@@ -134,14 +120,7 @@ class TournamentApiExamples(
                                     detail = "토너먼트 아이템은 최소 2개, 최대 32개여야 합니다.",
                                 ),
                         )
-                        add(
-                            status = HttpStatus.UNAUTHORIZED,
-                            name = "인증 필요",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.UNAUTHORIZED,
-                                ),
-                        )
+                        unauthorized()
                         add(
                             status = HttpStatus.FORBIDDEN,
                             name = "토너먼트 권한 없음",
@@ -233,14 +212,7 @@ class TournamentApiExamples(
                                     detail = "승자는 대결한 두 아이템 중 하나여야 합니다.",
                                 ),
                         )
-                        add(
-                            status = HttpStatus.UNAUTHORIZED,
-                            name = "인증 필요",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.UNAUTHORIZED,
-                                ),
-                        )
+                        unauthorized()
                         add(
                             status = HttpStatus.FORBIDDEN,
                             name = "토너먼트 권한 없음",
@@ -420,14 +392,7 @@ class TournamentApiExamples(
                                     ),
                                 ),
                         )
-                        add(
-                            status = HttpStatus.UNAUTHORIZED,
-                            name = "인증 필요",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.UNAUTHORIZED,
-                                ),
-                        )
+                        unauthorized()
                         add(
                             status = HttpStatus.FORBIDDEN,
                             name = "토너먼트 권한 없음",
@@ -455,14 +420,7 @@ class TournamentApiExamples(
                             name = "토너먼트 삭제 성공",
                             payload = ApiResponseBody.ok<Unit>(),
                         )
-                        add(
-                            status = HttpStatus.UNAUTHORIZED,
-                            name = "인증 필요",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.UNAUTHORIZED,
-                                ),
-                        )
+                        unauthorized()
                         add(
                             status = HttpStatus.FORBIDDEN,
                             name = "토너먼트 권한 없음",
