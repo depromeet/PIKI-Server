@@ -21,6 +21,8 @@ interface TournamentUserJpaRepository : JpaRepository<TournamentUser, Long> {
 
     fun findByTournamentIdAndDeletedAtIsNull(tournamentId: Long): List<TournamentUser>
 
+    fun countByTournamentIdAndDeletedAtIsNull(tournamentId: Long): Int
+
     @Query("SELECT tu FROM TournamentUser tu WHERE tu.tournamentId IN :tournamentIds AND tu.deletedAt IS NULL")
     fun findByTournamentIdInAndNotDeleted(
         @Param("tournamentIds") tournamentIds: Collection<Long>,

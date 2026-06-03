@@ -55,6 +55,9 @@ class TournamentServiceTest {
         override fun findByTournamentId(tournamentId: Long): List<TournamentUser> =
             users.filter { it.tournamentId == tournamentId }
 
+        override fun countByTournamentId(tournamentId: Long): Int =
+            users.count { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }
+
         override fun findByTournamentIds(tournamentIds: List<Long>): List<TournamentUser> =
             users.filter { it.tournamentId in tournamentIds }
 

@@ -26,10 +26,7 @@ class TournamentSocialPersistenceService(
         val tournament =
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
-        if (!tournament.isPending()) throw TournamentException.notPendingTournament()
-        if (!tournament.isInviteValid()) throw TournamentException.inviteExpired()
-        // 코드가 제공된 경우에만 검증 (링크 직접 접근은 코드 불필요)
-        inviteCode?.let { if (tournament.inviteCode != it) throw TournamentException.invalidInviteCode() }
+        tournament.checkJoinable(inviteCode)
         val user = userService.createGuestWithNickname(nickname)
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = user.id))
         return user

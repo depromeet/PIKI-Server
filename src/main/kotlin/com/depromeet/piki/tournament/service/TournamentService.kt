@@ -77,10 +77,7 @@ class TournamentService(
         val tournament =
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
-        if (!tournament.isPending()) throw TournamentException.notPendingTournament()
-        if (!tournament.isInviteValid()) throw TournamentException.inviteExpired()
-        // 코드가 제공된 경우에만 검증 (링크 직접 접근은 코드 불필요)
-        inviteCode?.let { if (tournament.inviteCode != it) throw TournamentException.invalidInviteCode() }
+        tournament.checkJoinable(inviteCode)
         tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?.let { throw TournamentException.alreadyParticipant() }
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = userId))
@@ -251,7 +248,7 @@ class TournamentService(
 
             TournamentStatus.COMPLETED -> {
                 val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
-                val participantCount = tournamentUserRepository.findByTournamentId(tournamentId).size
+                val participantCount = tournamentUserRepository.countByTournamentId(tournamentId)
                 buildCompleted(tournament, histories, participantCount)
             }
         }
@@ -360,7 +357,7 @@ class TournamentService(
         if (!tournament.isFinalRound(command.currentRound)) return null
 
         tournament.complete()
-        val participantCount = tournamentUserRepository.findByTournamentId(command.tournamentId).size
+        val participantCount = tournamentUserRepository.countByTournamentId(command.tournamentId)
         return buildCompleted(tournament, histories + newHistory, participantCount)
     }
 
@@ -424,12 +421,9 @@ class TournamentService(
         val tournament =
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
-        if (!tournament.isPending()) throw TournamentException.notPendingTournament()
-        if (!tournament.isInviteValid()) throw TournamentException.inviteExpired()
-        // 코드가 제공된 경우에만 검증 (링크 직접 접근은 코드 불필요)
-        inviteCode?.let { if (tournament.inviteCode != it) throw TournamentException.invalidInviteCode() }
+        tournament.checkJoinable(inviteCode)
         val itemCount = tournamentItemRepository.countByTournamentId(tournamentId)
-        val participantCount = tournamentUserRepository.findByTournamentId(tournamentId).size
+        val participantCount = tournamentUserRepository.countByTournamentId(tournamentId)
         return TournamentInvitePreview(
             tournamentId = tournamentId,
             tournamentName = tournament.name,
@@ -483,6 +477,14 @@ class TournamentService(
         sourceTournament.playLinkExpiresAt ?: throw TournamentException.playLinkNotCreated()
         if (!sourceTournament.isPlayLinkValid()) throw TournamentException.playLinkExpired()
 
+        val existingTournamentIds = tournamentUserRepository.findTournamentIdsByUserId(userId).toSet()
+        val alreadyCloned = tournamentRepository.findBySourceTournamentId(sourceTournamentId)
+            .any { it.getId() in existingTournamentIds }
+        if (alreadyCloned) throw TournamentException.alreadyCloned()
+
+        val sourceItems = tournamentItemRepository.findAllByTournamentId(sourceTournamentId)
+        require(sourceItems.isNotEmpty()) { "플레이 링크 복제 시 원본 아이템 없음 — sourceTournamentId=$sourceTournamentId" }
+
         val inviteCode = Tournament.generateInviteCode()
         val newTournament = tournamentRepository.saveTournament(
             Tournament(
@@ -498,12 +500,9 @@ class TournamentService(
         )
         newTournament.assignOwner(tournamentUser.getId())
 
-        val sourceItems = tournamentItemRepository.findAllByTournamentId(sourceTournamentId)
-        if (sourceItems.isNotEmpty()) {
-            tournamentItemRepository.saveAll(
-                sourceItems.map { TournamentItem(tournamentId = newTournament.getId(), itemId = it.itemId, userId = userId) },
-            )
-        }
+        tournamentItemRepository.saveAll(
+            sourceItems.map { TournamentItem(tournamentId = newTournament.getId(), itemId = it.itemId, userId = userId) },
+        )
         return newTournament.getId()
     }
 
@@ -548,7 +547,7 @@ class TournamentService(
         for (t in allRelated) {
             val histories = tournamentRepository.findTournamentHistoriesByTournamentId(t.getId())
             if (histories.isEmpty()) continue
-            val ranked = runCatching { computeRanking(histories) }.getOrNull() ?: continue
+            val ranked = computeRanking(histories)
             val tItemById = tournamentItemRepository.findByIds(ranked.map { it.first }).associateBy { it.getId() }
             val itemById = itemRepository.findByIds(tItemById.values.map { it.itemId }).associate { it.getId() to it }
 
@@ -715,4 +714,12 @@ class TournamentService(
         // 모든 라운드가 완료됐는데 isInProgress() 인 상태 — tournament.complete() 누락 버그
         error("모든 라운드가 완료됐는데 IN_PROGRESS 상태임 tournamentId=${histories.firstOrNull()?.tournamentId}")
     }
+}
+
+// 두 서비스(TournamentService.join, TournamentSocialPersistenceService.createGuestAndJoin)가
+// 공유하는 초대 참여 검증. 링크 접근은 inviteCode=null, 코드 입력 경로는 inviteCode 포함.
+internal fun Tournament.checkJoinable(inviteCode: String?) {
+    if (!isPending()) throw TournamentException.notPendingTournament()
+    if (!isInviteValid()) throw TournamentException.inviteExpired()
+    inviteCode?.let { if (this.inviteCode != it) throw TournamentException.invalidInviteCode() }
 }

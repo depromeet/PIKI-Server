@@ -656,7 +656,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "플레이 링크 만료",
+                description = "상태 충돌 (플레이 링크 만료 · 이미 해당 플레이 링크로 토너먼트를 생성한 경우)",
                 content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
         ],

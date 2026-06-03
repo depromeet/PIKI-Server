@@ -43,14 +43,14 @@ class TournamentException private constructor(
         fun notPendingTournament(): TournamentException =
             TournamentException(
                 "PENDING 상태인 토너먼트에만 수행할 수 있습니다.",
-                ErrorCategory.INVALID_INPUT,
+                ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )
 
         fun notInProgressTournament(): TournamentException =
             TournamentException(
                 "진행 중인 토너먼트에만 수행할 수 있습니다.",
-                ErrorCategory.INVALID_INPUT,
+                ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )
 
@@ -202,6 +202,13 @@ class TournamentException private constructor(
         fun groupResultNotAvailable(): TournamentException =
             TournamentException(
                 "그룹 결과를 조회할 수 없습니다. 완료된 토너먼트만 가능합니다.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
+
+        fun alreadyCloned(): TournamentException =
+            TournamentException(
+                "이미 해당 플레이 링크로 토너먼트를 생성하셨습니다.",
                 ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )
