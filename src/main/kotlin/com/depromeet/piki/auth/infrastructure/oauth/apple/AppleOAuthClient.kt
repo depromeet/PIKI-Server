@@ -7,6 +7,7 @@ import com.depromeet.piki.auth.infrastructure.oauth.OAuthProvider
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthRestClient
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthUserInfo
 import com.depromeet.piki.auth.infrastructure.oauth.apple.dto.AppleTokenResponse
+import com.depromeet.piki.auth.infrastructure.oauth.logOAuthProviderError
 import io.jsonwebtoken.Claims
 import io.jsonwebtoken.Header
 import io.jsonwebtoken.Jwts
@@ -15,6 +16,7 @@ import io.jsonwebtoken.security.Jwks
 import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
 import org.springframework.util.LinkedMultiValueMap
+import org.springframework.web.client.RestClientResponseException
 import org.springframework.web.client.body
 import org.springframework.web.util.UriComponentsBuilder
 import java.security.Key
@@ -74,6 +76,11 @@ class AppleOAuthClient(
                     .retrieve()
                     .body<AppleTokenResponse>()
                     ?: error("Apple token response body is null")
+            } catch (e: RestClientResponseException) {
+                // token 교환 HTTP 에러 응답은 시맨틱 기반으로 분류한다 (invalid_grant→400 · 설정오류→502/SERVER_ERROR · 그 외→502).
+                val exception = AppleOAuthErrorClassifier.classify(e.statusCode, e.responseBodyAsString, e)
+                logOAuthProviderError(log, "Apple", "token", e.statusCode.value(), e.responseBodyAsString, exception.category)
+                throw exception
             } catch (e: Exception) {
                 throw OAuthException.providerError(e)
             }

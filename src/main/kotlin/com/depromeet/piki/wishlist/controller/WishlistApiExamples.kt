@@ -38,6 +38,8 @@ class WishlistApiExamples(
                                 detail = "지원하지 않는 URL 형식입니다.",
                             ),
                     )
+                    unauthorized()
+                    forbidden("권한 없음 (MEMBER 필요)")
                 }
             }
             if (handlerMethod.binds(WishlistController::getWishlist)) {
@@ -69,6 +71,17 @@ class WishlistApiExamples(
                                 pageResponse = PageResponse(nextCursor = null, hasNext = false),
                             ),
                     )
+                    add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "유효하지 않은 cursor",
+                        payload =
+                            ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.INVALID_INPUT,
+                                detail = "유효하지 않은 cursor 입니다.",
+                            ),
+                    )
+                    unauthorized()
+                    forbidden("권한 없음 (MEMBER 필요)")
                 }
             }
             if (handlerMethod.binds(WishlistController::getWish)) {
@@ -96,6 +109,7 @@ class WishlistApiExamples(
                                 detail = "존재하지 않는 위시리스트 항목입니다.",
                             ),
                     )
+                    unauthorized()
                 }
             }
             if (handlerMethod.binds(WishlistController::recoverWishItem)) {
@@ -168,6 +182,7 @@ class WishlistApiExamples(
                                 detail = "이미지 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.",
                             ),
                     )
+                    unauthorized()
                 }
             }
             if (handlerMethod.binds(WishlistController::deleteWish)) {
@@ -186,6 +201,7 @@ class WishlistApiExamples(
                                 detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
+                    unauthorized()
                 }
             }
             if (handlerMethod.binds(WishlistController::deleteWishes)) {
@@ -213,6 +229,7 @@ class WishlistApiExamples(
                                 detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
                             ),
                     )
+                    unauthorized()
                 }
             }
             if (handlerMethod.binds(WishlistController::registerFromImages)) {
@@ -240,6 +257,8 @@ class WishlistApiExamples(
                                 detail = ProductImage.unsupportedMimeTypeMessage("image/gif"),
                             ),
                     )
+                    unauthorized()
+                    forbidden("권한 없음 (MEMBER 필요)")
                 }
             }
             operation

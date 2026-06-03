@@ -94,14 +94,7 @@ class AuthApiExamples(
                             name = "로그아웃 성공",
                             payload = ApiResponseBody.ok(LogoutResponse()),
                         )
-                        add(
-                            status = HttpStatus.UNAUTHORIZED,
-                            name = "인증 필요",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.UNAUTHORIZED,
-                                ),
-                        )
+                        unauthorized()
                     }
 
                 handlerMethod.binds(DevAuthController::createDevUser) ->
@@ -134,7 +127,18 @@ class AuthApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    detail = "nickname: must not be blank",
+                                    detail = "nickname: 닉네임은 필수입니다.",
+                                ),
+                        )
+                        unauthorized()
+                        forbidden("GUEST 권한 없음 (MEMBER 토큰으로 호출 불가)")
+                        add(
+                            status = HttpStatus.CONFLICT,
+                            name = "이미 사용 중인 닉네임",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.CONFLICT,
+                                    detail = "이미 사용 중인 닉네임입니다.",
                                 ),
                         )
                     }
@@ -179,6 +183,8 @@ class AuthApiExamples(
                                     category = ErrorCategory.CONFLICT,
                                 ),
                         )
+                        unauthorized()
+                        forbidden("GUEST 권한 없음 (MEMBER 토큰으로 호출 불가)")
                     }
             }
             operation
