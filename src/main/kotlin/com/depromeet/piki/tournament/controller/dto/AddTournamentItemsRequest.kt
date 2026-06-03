@@ -4,7 +4,7 @@ import com.depromeet.piki.tournament.service.dto.AddTournamentItemsFromWish
 import jakarta.validation.constraints.Size
 
 data class AddTournamentItemsRequest(
-    @field:Size(min = 1, max = 32)
+    @field:Size(min = 1, max = 32, message = "아이템은 1개 이상 32개 이하여야 합니다.")
     val itemIds: List<Long>,
 ) {
     fun toAddTournamentItemsFromWish(tournamentId: Long): AddTournamentItemsFromWish =
