@@ -86,6 +86,30 @@ class DocsAccessIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `GET v3 api-docs - OAuth 로그인 선언 실패 응답에 example payload 가 부착된다 (회귀 가드)`() {
+        // OperationExamples.add 는 @ApiResponse 가 선언된 status 에만 example 을 붙인다(없으면 조용히 무시).
+        // #313 에서 OAuth 로그인 실패 응답을 400/401/502 로 정밀화하며 example 도 함께 붙였다 — 선언↔example
+        // 짝이 유지되는지 회귀 가드. 특히 502 는 이번 변경의 핵심인 RETRYABLE(provider 장애)·SERVER_ERROR(우리
+        // 설정) 두 example 이 각각 붙어야 분리가 잠긴다 — examples 맵 존재만 보면 둘 중 하나가 사라져도 통과한다.
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+
+        val login502 = "$.paths['/api/v1/auth/login/{provider}'].post.responses['502'].content['application/json'].examples"
+        mockMvc
+            .perform(get("/v3/api-docs"))
+            .andExpect(status().isOk)
+            .andExpect(
+                jsonPath("$.paths['/api/v1/auth/login/{provider}'].post.responses['400'].content['application/json'].examples").exists(),
+            ).andExpect(
+                jsonPath("$.paths['/api/v1/auth/login/{provider}'].post.responses['401'].content['application/json'].examples").exists(),
+            ).andExpect(jsonPath("$login502['소셜 제공자 장애 (RETRYABLE — 재시도 가능)']").exists())
+            .andExpect(jsonPath("$login502['우리 OAuth 설정/요청 오류 (SERVER_ERROR — 재시도 무의미)']").exists())
+    }
+
+    @Test
     fun `GET v3 api-docs - 대표 실패 응답에 example payload 가 부착된다 (회귀 가드)`() {
         // OperationExamples.add 는 @ApiResponse 가 선언된 status 에만 example 을 붙인다(없으면 조용히 무시).
         // 과거 401·일부 4xx 응답에 example 이 통째로 누락돼 있었다. 선언과 example 이 짝을 이루는지 회귀 가드.
@@ -105,7 +129,7 @@ class DocsAccessIntegrationTest : IntegrationTestSupport() {
                     "$.paths['/api/v1/wishlists'].post.responses['401'].content['application/json'].examples",
                 ).exists(),
             )
-            // tournament 시작: 실패 example 이 전무했던 409 (상태 충돌) example 부착.
+            // tournament 시작: 실패 example 이 전무였던 409 (상태 충돌) example 부착.
             .andExpect(
                 jsonPath(
                     "$.paths['/api/v1/tournaments/{tournamentId}/start'].post.responses['409'].content['application/json'].examples",

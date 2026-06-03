@@ -50,7 +50,9 @@ interface OAuthApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (code+redirectUri 도 accessToken 도 없음 · accessToken 과 code 를 동시 전달 · 지원하지 않는 provider)",
+                description =
+                    "잘못된 요청 (code+redirectUri 도 accessToken 도 없음 · accessToken 과 code 를 동시 전달 · 지원하지 않는 provider · " +
+                        "provider 인가코드(code) 가 만료/재사용/무효 — 재로그인으로 새 code 를 받아 재시도)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -60,7 +62,9 @@ interface OAuthApi {
             ),
             ApiResponse(
                 responseCode = "401",
-                description = "state 검증 실패 (만료·미발급·이미 소비된 state — GET /auth/{provider}/url 로 재발급 필요)",
+                description =
+                    "인증 실패 (state 검증 실패: 만료·미발급·이미 소비된 state — GET /auth/{provider}/url 로 재발급 필요 · " +
+                        "provider access token 무효/만료 — 재로그인으로 새 토큰을 받아 재시도)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -70,7 +74,10 @@ interface OAuthApi {
             ),
             ApiResponse(
                 responseCode = "502",
-                description = "소셜 제공자(Kakao/Google) 호출 실패 (네트워크·토큰 교환 실패·user_info 조회 실패 등)",
+                description =
+                    "소셜 제공자 호출 경계 실패 (응답 body 의 category 로 구분) — " +
+                        "(1) provider 장애(네트워크·5xx·점검·user_info 조회 실패·미지 에러코드 fallback): RETRYABLE, 동일 요청으로 재시도 가능 / " +
+                        "(2) 우리 OAuth 설정·요청 오류(client_id/secret·client_secret JWT·필수 인자 누락 등): SERVER_ERROR, 재시도 무의미·서버 설정 수정 필요",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

@@ -1,5 +1,6 @@
 package com.depromeet.piki.auth.controller
 
+import com.depromeet.piki.auth.infrastructure.oauth.OAuthException
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthProvider
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthUserInfo
 import com.depromeet.piki.support.IntegrationTestSupport
@@ -276,6 +277,62 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
                     ),
                 ),
             ).andExpect(status().isBadGateway)
+            .andExpect(jsonPath("$.detail").value("소셜 로그인 제공자 호출에 실패했습니다."))
+            .andExpect(jsonPath("$.data").value(nullValue()))
+    }
+
+    @Test
+    fun `provider access token 무효 - invalidProviderToken 은 401 로 매핑된다`() {
+        googleOAuthClient.fetchByAccessTokenStub = { throw OAuthException.invalidProviderToken() }
+
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/google").contentType(MediaType.APPLICATION_JSON).content(
+                    loginBody(
+                        "accessToken" to "t",
+                    ),
+                ),
+            ).andExpect(status().isUnauthorized)
+            .andExpect(jsonPath("$.detail").value("소셜 로그인 토큰이 유효하지 않습니다. 다시 로그인해 주세요."))
+            .andExpect(jsonPath("$.data").value(nullValue()))
+    }
+
+    @Test
+    fun `인가 정보 만료-무효 - invalidGrant 는 400 으로 매핑된다`() {
+        // invalidGrant 는 access token 실패가 아니라 인가코드(code) 교환 실패다 —
+        // v1 code+redirectUri 경로(fetchUserInfoByCode)로 실제 분기를 태워 검증한다.
+        googleOAuthClient.fetchByCodeStub = { _, _ -> throw OAuthException.invalidGrant() }
+
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/google").contentType(MediaType.APPLICATION_JSON).content(
+                    loginBody(
+                        "code" to "expired-code",
+                        "redirectUri" to "https://app/callback",
+                    ),
+                ),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.detail").value("소셜 로그인 인가 정보가 만료되었거나 유효하지 않습니다. 다시 시도해 주세요."))
+            .andExpect(jsonPath("$.data").value(nullValue()))
+    }
+
+    @Test
+    fun `OAuth 설정 오류 - misconfigured 는 502 로 매핑된다 (provider 장애 502 와 detail 로 구분)`() {
+        // 우리 OAuth 설정 오류(invalid_client 등)는 외부 호출 경계 실패라 502 + SERVER_ERROR 로 내려간다
+        // (GeminiApiException.clientError 와 같은 결). RETRYABLE 502(provider 장애)와는 detail 로 구분된다.
+        googleOAuthClient.fetchByAccessTokenStub =
+            { throw OAuthException.misconfigured(RuntimeException("client secret invalid")) }
+
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/google").contentType(MediaType.APPLICATION_JSON).content(
+                    loginBody(
+                        "accessToken" to "t",
+                    ),
+                ),
+            ).andExpect(status().isBadGateway)
+            .andExpect(jsonPath("$.detail").value("소셜 로그인 설정 오류가 발생했습니다."))
+            .andExpect(jsonPath("$.data").value(nullValue()))
     }
 
     @Test
