@@ -89,8 +89,8 @@ class GoogleOAuthErrorClassifierTest {
             Stream.of(
                 // 401: access_token 무효/만료 — 클라가 정상 요청으로 도달 가능(계약).
                 Arguments.of(HttpStatus.UNAUTHORIZED, ErrorCategory.UNAUTHORIZED, "HTTP 401 → 401", 401),
-                // 502 RETRYABLE fallback — 그 외(403 scope 부족 판단은 별도 후속 / 5xx Google 장애).
-                Arguments.of(HttpStatus.BAD_GATEWAY, ErrorCategory.RETRYABLE, "HTTP 403 → 502/RETRYABLE", 403),
+                // 403(scope 부족 등 우리 권한/설정 문제) → 502/SERVER_ERROR (재시도 무의미). 5xx 는 provider 장애 → RETRYABLE.
+                Arguments.of(HttpStatus.BAD_GATEWAY, ErrorCategory.SERVER_ERROR, "HTTP 403 → 502/SERVER_ERROR", 403),
                 Arguments.of(HttpStatus.BAD_GATEWAY, ErrorCategory.RETRYABLE, "HTTP 500 → 502/RETRYABLE", 500),
                 Arguments.of(HttpStatus.BAD_GATEWAY, ErrorCategory.RETRYABLE, "HTTP 503 → 502/RETRYABLE", 503),
             )

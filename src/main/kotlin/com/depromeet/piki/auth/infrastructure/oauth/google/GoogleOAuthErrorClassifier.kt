@@ -35,6 +35,9 @@ object GoogleOAuthErrorClassifier {
     // userinfo 에서 access_token 무효/만료를 가리키는 HTTP status (매직넘버 대신 의미로 분기).
     private val USER_INFO_UNAUTHORIZED_STATUS = HttpStatus.UNAUTHORIZED.value()
 
+    // userinfo 403(PERMISSION_DENIED) — scope 부족 등 우리 OAuth 권한/설정 문제. 재시도 무의미 → SERVER_ERROR.
+    private val USER_INFO_FORBIDDEN_STATUS = HttpStatus.FORBIDDEN.value()
+
     /**
      * @param endpoint 호출 종류 (token 교환 vs userinfo). 같은 status·바디라도 해석이 다르다.
      * @param statusCode provider 가 내려준 HTTP status (4xx/5xx).
@@ -65,14 +68,17 @@ object GoogleOAuthErrorClassifier {
         }
     }
 
-    // userinfo: access_token 무효/만료는 HTTP 401 로 온다 — status 401 을 1차 신호로 → 401.
-    // 그 외(403/5xx/연결실패 등)는 502 fallback 으로 둔다 (403 scope 부족 케이스 판단은 별도 후속).
+    // userinfo: access_token 무효/만료는 HTTP 401 로 온다 — status 401 을 1차 신호로 → 401(클라).
+    // 403(PERMISSION_DENIED)은 scope 부족 등 우리 OAuth 권한/설정 문제라 재시도해도 소용없으므로
+    // misconfigured(502 SERVER_ERROR)로 분리해 잘못된 재시도를 막고 서버 설정 오류 알림이 가게 한다.
+    // 그 외(5xx·연결실패 등)는 provider 장애로 보고 502 RETRYABLE fallback.
     private fun classifyUserInfo(
         statusCode: Int,
         cause: Throwable?,
     ): OAuthException =
         when (statusCode) {
             USER_INFO_UNAUTHORIZED_STATUS -> OAuthException.invalidProviderToken()
+            USER_INFO_FORBIDDEN_STATUS -> OAuthException.misconfigured(toCause(cause))
             else -> OAuthException.providerError(toCause(cause))
         }
 

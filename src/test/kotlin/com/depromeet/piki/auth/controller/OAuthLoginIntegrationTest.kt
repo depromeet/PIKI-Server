@@ -299,13 +299,16 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
 
     @Test
     fun `인가 정보 만료-무효 - invalidGrant 는 400 으로 매핑된다`() {
-        googleOAuthClient.fetchByAccessTokenStub = { throw OAuthException.invalidGrant() }
+        // invalidGrant 는 access token 실패가 아니라 인가코드(code) 교환 실패다 —
+        // v1 code+redirectUri 경로(fetchUserInfoByCode)로 실제 분기를 태워 검증한다.
+        googleOAuthClient.fetchByCodeStub = { _, _ -> throw OAuthException.invalidGrant() }
 
         mockMvc()
             .perform(
                 post("/api/v1/auth/login/google").contentType(MediaType.APPLICATION_JSON).content(
                     loginBody(
-                        "accessToken" to "t",
+                        "code" to "expired-code",
+                        "redirectUri" to "https://app/callback",
                     ),
                 ),
             ).andExpect(status().isBadRequest)

@@ -15,8 +15,10 @@ import org.slf4j.Logger
 //   - 우리 설정/요청 오류·provider 장애·미지 코드 fallback(SERVER_ERROR·RETRYABLE): 외부 호출 실패 → warn.
 //
 // body 는 provider 의 "에러 응답" 이라 access token 등 자격증명을 echo 하지 않아(요청이 아니라 응답) 로깅이 안전하다.
-// 다만 로그 폭주를 막기 위해 길이를 제한한다.
+// 다만 (1) 로그 폭주를 막기 위해 길이를 제한하고, (2) provider·프록시가 개행 섞인 HTML 에러 페이지를 주면
+// 로그 한 줄이 여러 줄로 찢어져 운영 파서·알람이 깨지므로(log injection) 제어문자를 공백으로 정규화한다.
 private const val MAX_BODY_LOG_LENGTH = 500
+private val CONTROL_CHARS = Regex("[\\p{Cntrl}]")
 
 fun logOAuthProviderError(
     log: Logger,
@@ -26,7 +28,7 @@ fun logOAuthProviderError(
     body: String,
     category: ErrorCategory,
 ) {
-    val snippet = body.take(MAX_BODY_LOG_LENGTH)
+    val snippet = body.replace(CONTROL_CHARS, " ").take(MAX_BODY_LOG_LENGTH)
     when (category) {
         ErrorCategory.INVALID_INPUT, ErrorCategory.UNAUTHORIZED ->
             log.info("[OAuth {} {}] 클라 자격/요청 오류 status={} category={} body={}", provider, endpoint, status, category, snippet)
