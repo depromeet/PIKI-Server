@@ -50,6 +50,7 @@ class Tournament(
     }
 
     fun createPlayLink(expiresAt: LocalDateTime) {
+        check(isCompleted()) { "createPlayLink는 COMPLETED 상태에서만 호출 가능" }
         playLinkExpiresAt = expiresAt
     }
 
