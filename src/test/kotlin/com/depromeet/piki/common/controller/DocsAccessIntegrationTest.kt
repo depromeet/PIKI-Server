@@ -86,9 +86,10 @@ class DocsAccessIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `GET v3 api-docs - 선언된 실패 응답에 example payload 가 빠짐없이 부착된다 (응답 전수 문서화 회귀 가드)`() {
+    fun `GET v3 api-docs - 대표 실패 응답에 example payload 가 부착된다 (회귀 가드)`() {
         // OperationExamples.add 는 @ApiResponse 가 선언된 status 에만 example 을 붙인다(없으면 조용히 무시).
         // 과거 401·일부 4xx 응답에 example 이 통째로 누락돼 있었다. 선언과 example 이 짝을 이루는지 회귀 가드.
+        // 전 엔드포인트 전수가 아니라, 광범위 누락이던 대표 케이스(401·409·404)만 spot 검증한다.
         val mockMvc =
             MockMvcBuilders
                 .webAppContextSetup(webApplicationContext)
@@ -100,7 +101,9 @@ class DocsAccessIntegrationTest : IntegrationTestSupport() {
             .andExpect(status().isOk)
             // wishlist: 모든 메서드에 누락돼 있던 401 (Security MEMBER 요구) example 부착.
             .andExpect(
-                jsonPath("$.paths['/api/v1/wishlists'].post.responses['401'].content['application/json'].examples").exists(),
+                jsonPath(
+                    "$.paths['/api/v1/wishlists'].post.responses['401'].content['application/json'].examples",
+                ).exists(),
             )
             // tournament 시작: 실패 example 이 전무했던 409 (상태 충돌) example 부착.
             .andExpect(
@@ -110,7 +113,9 @@ class DocsAccessIntegrationTest : IntegrationTestSupport() {
             )
             // dev 단건 유저: 신규 DevUserApiExamples 빈의 404 example 부착.
             .andExpect(
-                jsonPath("$.paths['/api/v1/dev/users/{userId}'].get.responses['404'].content['application/json'].examples").exists(),
+                jsonPath(
+                    "$.paths['/api/v1/dev/users/{userId}'].get.responses['404'].content['application/json'].examples",
+                ).exists(),
             )
     }
 }
