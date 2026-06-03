@@ -30,4 +30,7 @@ interface WishRepository {
     // 삭제되지 않은 위시들을 id 목록으로 조회. 존재하는 것만 반환하므로(없는 id 는 빠진다)
     // 호출부가 반환 개수로 누락 여부를 판단한다.
     fun findAllByIds(ids: List<Long>): List<Wish>
+
+    // 이 아이템을 위시에 담은 유저들 (알림 수신자 역조회). 같은 아이템을 여러 유저가 담을 수 있다.
+    fun findUserIdsByItemId(itemId: Long): List<UUID>
 }

@@ -142,6 +142,9 @@ class TournamentServiceTest {
         override fun findById(id: Long): Wish? = null
 
         override fun findAllByIds(ids: List<Long>): List<Wish> = emptyList()
+
+        override fun findUserIdsByItemId(itemId: Long): List<UUID> =
+            wishItemIdsByUser.filterValues { itemId in it }.keys.toList()
     }
 
     private class TestUserRepository : UserRepository {
@@ -185,6 +188,12 @@ class TournamentServiceTest {
 
         override fun findIdsByTournamentId(tournamentId: Long): List<Long> =
             items.filter { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }.map { it.getId() }
+
+        override fun findUserIdsByItemId(itemId: Long): List<UUID> =
+            items
+                .filter { it.itemId == itemId && (it.deletedAt?.let { false } ?: true) }
+                .map { it.userId }
+                .distinct()
 
         override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
             items.filter { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }

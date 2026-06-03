@@ -5,16 +5,14 @@ import com.depromeet.piki.notification.domain.NotificationType
 import org.springframework.stereotype.Component
 import java.util.UUID
 
-// 아이템 파싱 완료 알림. itemId 역조회로 수신자를 정한다.
+// 아이템 파싱 완료 알림. 위시·토너먼트 어느 쪽으로 올린 아이템이든 동일하게 "파싱 완료" 를 알린다 —
+// 수신자는 itemId 를 역조회해 위시 주인 ∪ 토너먼트 참가자로 모은다(ItemParsingRecipientResolver, 실패 알림과 공유).
+// 변수 없는 고정 문구라 resolveVariables 는 베이스 기본값(emptyMap)을 그대로 쓴다.
 @Component
-class ItemParsingCompletedHandler :
-    NotificationEventHandler<ItemParsingCompleted>(NotificationType.ITEM_PARSING_COMPLETED) {
+class ItemParsingCompletedHandler(
+    private val recipientResolver: ItemParsingRecipientResolver,
+) : NotificationEventHandler<ItemParsingCompleted>(NotificationType.ITEM_PARSING_COMPLETED) {
     override fun resolveRefId(event: ItemParsingCompleted): Long = event.itemId
 
-    // TODO(#236 수신자 정책 합의): itemId 역조회로 수신자 결정 후 구현.
-    // owner-only / 참가자 fan-out / 파싱 요청자 본인 중 어느 정책인지 Epic·#212 와 충돌 상태라 보류한다.
-    // 정책 미확정이라 현재는 빈 리스트 — 발행돼도 Dispatcher 가 빈 결과면 조용히 종료해 알림이 생기지 않는다.
-    override fun resolveRecipients(event: ItemParsingCompleted): Set<UUID> = emptySet()
-
-    // 변수 없는 알림 — resolveVariables 는 베이스 기본값(emptyMap)을 그대로 쓴다.
+    override fun resolveRecipients(event: ItemParsingCompleted): Set<UUID> = recipientResolver.resolve(event.itemId)
 }
