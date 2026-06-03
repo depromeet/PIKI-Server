@@ -934,8 +934,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `DELETE tournaments-id-items-itemId 에서 소유자는 다른 참가자가 추가한 아이템도 삭제할 수 있다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
+        val otherItem = saveWishItem(otherUserId)
         tournamentUserJpaRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
-        addItemsToTournament(mockMvc, tournamentId, otherUserId, saveWishItem(otherUserId), saveWishItem(otherUserId))
+        // 위시 추가는 소유자 전용이므로 DB에 직접 삽입해 다른 유저가 추가한 상황을 구성
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = otherItem, userId = otherUserId))
         val itemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc

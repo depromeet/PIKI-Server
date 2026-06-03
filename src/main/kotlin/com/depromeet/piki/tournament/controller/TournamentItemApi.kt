@@ -24,7 +24,7 @@ interface TournamentItemApi {
     @Operation(
         summary = "위시에서 토너먼트 아이템 추가",
         description = """
-            PENDING 상태의 토너먼트에 위시리스트에 있는 아이템을 추가한다. 토너먼트 참여자만 추가할 수 있다.
+            PENDING 상태의 토너먼트에 위시리스트에 있는 아이템을 추가한다. 토너먼트 소유자만 호출 가능.
             itemIds 중 하나라도 조건에 맞지 않으면 요청 전체가 실패한다(부분 성공 없음).
             응답의 tournamentItemIds 는 요청 itemIds 와 동일한 순서로 대응된다.
         """,
@@ -63,7 +63,7 @@ interface TournamentItemApi {
             ),
             ApiResponse(
                 responseCode = "403",
-                description = "권한 없음 (토너먼트 참여자가 아님 · 위시리스트에 없는 아이템 포함)",
+                description = "권한 없음 (토너먼트 소유자가 아님 · 위시리스트에 없는 아이템 포함)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

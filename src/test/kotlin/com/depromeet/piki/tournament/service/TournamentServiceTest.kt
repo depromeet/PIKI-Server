@@ -1061,8 +1061,8 @@ class TournamentServiceTest {
     fun `deleteItem 에서 토너먼트 소유자도 다른 사람이 추가한 아이템을 삭제할 수 있다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
-        testWishRepository.addWish(otherUserId, 1L)
-        service.addItemsFromWish(otherUserId, AddTournamentItemsFromWish(tournamentId, listOf(1L)))
+        // 위시 추가는 소유자 전용이므로 DB에 직접 삽입해 다른 유저가 추가한 상황을 구성
+        tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId = tournamentId, itemId = 1L, userId = otherUserId)))
         val item = tournamentItemRepository.findAllByTournamentId(tournamentId).first()
 
         service.deleteItem(userId, tournamentId, item.getId())

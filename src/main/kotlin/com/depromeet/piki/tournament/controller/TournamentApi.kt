@@ -304,7 +304,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료 · 이미 참여 중)",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료 · 이미 참여 중 · 참여 인원 초과(최대 9명))",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -364,7 +364,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료 · 닉네임 중복)",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료 · 닉네임 중복 · 참여 인원 초과(최대 9명))",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

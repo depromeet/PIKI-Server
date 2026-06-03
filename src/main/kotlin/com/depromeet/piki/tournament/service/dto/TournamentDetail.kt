@@ -8,10 +8,11 @@ sealed class TournamentDetail {
     data class Pending(
         val tournamentId: Long,
         val name: String,
-                                                                                                                                        val inviteCode: String,
+        val inviteCode: String,
         val inviteExpiresAt: java.time.LocalDateTime,
         val items: List<ItemDetail>,
         val participants: List<ParticipantDetail>,
+        val isOwner: Boolean,
     ) : TournamentDetail()
 
     data class InProgress(
@@ -20,6 +21,7 @@ sealed class TournamentDetail {
         val currentRound: Int,
         val lastHistory: HistoryEntry?,
         val remainingItems: List<ItemDetail>,
+        val isOwner: Boolean,
     ) : TournamentDetail()
 
     data class Completed(
@@ -27,6 +29,7 @@ sealed class TournamentDetail {
         val name: String,
         val result: List<RankedItem>,
         val hasGroupResult: Boolean,
+        val isOwner: Boolean,
     ) : TournamentDetail()
 
     data class ItemDetail(

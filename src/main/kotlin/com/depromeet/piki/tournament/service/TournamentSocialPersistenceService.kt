@@ -27,6 +27,9 @@ class TournamentSocialPersistenceService(
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         tournament.checkJoinable(inviteCode)
+        if (tournamentUserRepository.countByTournamentId(tournamentId) >= TOURNAMENT_MAX_PARTICIPANT_COUNT) {
+            throw TournamentException.participantLimitExceeded()
+        }
         val user = userService.createGuestWithNickname(nickname)
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = user.id))
         return user

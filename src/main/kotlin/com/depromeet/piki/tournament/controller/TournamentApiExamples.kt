@@ -205,6 +205,7 @@ class TournamentApiExamples(
                                         tournamentId = 1,
                                         name = "내 토너먼트",
                                         status = TournamentStatus.PENDING,
+                                        isOwner = true,
                                         pending =
                                             TournamentDetailResponse.PendingData(
                                                 inviteCode = "ABC123",
@@ -253,6 +254,7 @@ class TournamentApiExamples(
                                         tournamentId = 1,
                                         name = "내 토너먼트",
                                         status = TournamentStatus.IN_PROGRESS,
+                                        isOwner = false,
                                         pending = null,
                                         inProgress =
                                             TournamentDetailResponse.InProgressData(
@@ -299,6 +301,7 @@ class TournamentApiExamples(
                                         tournamentId = 1,
                                         name = "내 토너먼트",
                                         status = TournamentStatus.COMPLETED,
+                                        isOwner = true,
                                         pending = null,
                                         inProgress = null,
                                         completed =

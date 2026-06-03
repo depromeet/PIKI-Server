@@ -12,6 +12,7 @@ data class TournamentDetailResponse(
     val tournamentId: Long,
     val name: String,
     val status: TournamentStatus,
+    val isOwner: Boolean,
     val pending: PendingData?,
     val inProgress: InProgressData?,
     val completed: CompletedData?,
@@ -94,6 +95,7 @@ data class TournamentDetailResponse(
                         tournamentId = detail.tournamentId,
                         name = detail.name,
                         status = TournamentStatus.PENDING,
+                        isOwner = detail.isOwner,
                         pending =
                             PendingData(
                                 inviteCode = detail.inviteCode,
@@ -110,6 +112,7 @@ data class TournamentDetailResponse(
                         tournamentId = detail.tournamentId,
                         name = detail.name,
                         status = TournamentStatus.IN_PROGRESS,
+                        isOwner = detail.isOwner,
                         pending = null,
                         inProgress =
                             InProgressData(
@@ -125,6 +128,7 @@ data class TournamentDetailResponse(
                         tournamentId = detail.tournamentId,
                         name = detail.name,
                         status = TournamentStatus.COMPLETED,
+                        isOwner = detail.isOwner,
                         pending = null,
                         inProgress = null,
                         completed = CompletedData.from(detail),

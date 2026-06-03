@@ -212,5 +212,12 @@ class TournamentException private constructor(
                 ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )
+
+        fun participantLimitExceeded(): TournamentException =
+            TournamentException(
+                "토너먼트 참여 인원이 가득 찼습니다.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
     }
 }

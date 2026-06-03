@@ -80,6 +80,9 @@ class TournamentService(
         tournament.checkJoinable(inviteCode)
         tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?.let { throw TournamentException.alreadyParticipant() }
+        if (tournamentUserRepository.countByTournamentId(tournamentId) >= TOURNAMENT_MAX_PARTICIPANT_COUNT) {
+            throw TournamentException.participantLimitExceeded()
+        }
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = userId))
     }
 
@@ -92,8 +95,9 @@ class TournamentService(
             tournamentRepository.findTournamentById(command.tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
-        tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)
+        val tournamentUser = tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
+        if (tournamentUser.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
         val existingItemIds =
             tournamentItemRepository
                 .findAllByTournamentId(command.tournamentId)
@@ -174,8 +178,9 @@ class TournamentService(
         val tournament =
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
-        tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+        val currentUser = tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
+        val isOwner = currentUser.getId() == tournament.ownerTournamentUserId
 
         return when (tournament.status) {
             TournamentStatus.PENDING -> {
@@ -208,6 +213,7 @@ class TournamentService(
                                 )
                             }
                         },
+                    isOwner = isOwner,
                 )
             }
 
@@ -243,13 +249,14 @@ class TournamentService(
                     currentRound = currentRound,
                     lastHistory = lastHistory,
                     remainingItems = remainingItems,
+                    isOwner = isOwner,
                 )
             }
 
             TournamentStatus.COMPLETED -> {
                 val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
                 val participantCount = tournamentUserRepository.countByTournamentId(tournamentId)
-                buildCompleted(tournament, histories, participantCount)
+                buildCompleted(tournament, histories, participantCount, isOwner)
             }
         }
     }
@@ -358,13 +365,17 @@ class TournamentService(
 
         tournament.complete()
         val participantCount = tournamentUserRepository.countByTournamentId(command.tournamentId)
-        return buildCompleted(tournament, histories + newHistory, participantCount)
+        val tournamentUser = tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)
+            ?: error("recordMatch 권한 확인 후 tournamentUser 없음 — tournamentId=${command.tournamentId}")
+        val isOwner = tournamentUser.getId() == tournament.ownerTournamentUserId
+        return buildCompleted(tournament, histories + newHistory, participantCount, isOwner)
     }
 
     private fun buildCompleted(
         tournament: Tournament,
         histories: List<TournamentHistory>,
         participantCount: Int,
+        isOwner: Boolean,
     ): TournamentDetail.Completed {
         val rankedPairs = computeRanking(histories)
         val tournamentItemById = tournamentItemRepository
@@ -391,6 +402,7 @@ class TournamentService(
                 )
             },
             hasGroupResult = participantCount >= 2,
+            isOwner = isOwner,
         )
     }
 
