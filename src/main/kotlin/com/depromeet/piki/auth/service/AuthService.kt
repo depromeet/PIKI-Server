@@ -50,7 +50,10 @@ class AuthService(
         refreshTokenStore.delete(userId)
     }
 
-    fun createTokensForUser(user: User): TokenPair = issueTokenPair(user)
+    fun createTokensForUser(user: User): TokenPair {
+        user.deletedAt?.let { throw AuthException.invalidToken() }
+        return issueTokenPair(user)
+    }
 
     private fun issueTokenPair(user: User): TokenPair {
         val accessToken = jwtProvider.generateAccessToken(user.id, user.identityType)
