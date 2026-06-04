@@ -90,6 +90,7 @@ else
     -v /proc:/host/proc:ro,rslave \
     -v /sys:/host/sys:ro,rslave \
     -v /:/host/root:ro,rslave \
+    -e ENVIRONMENT="${ENVIRONMENT:-}" \
     -e GRAFANA_METRICS_URL="${GRAFANA_METRICS_URL:-}" \
     -e GRAFANA_METRICS_USER="${GRAFANA_METRICS_USER:-}" \
     -e GRAFANA_LOGS_URL="${GRAFANA_LOGS_URL:-}" \
