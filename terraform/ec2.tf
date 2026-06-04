@@ -73,8 +73,33 @@ resource "aws_instance" "dev_app" {
   subnet_id              = aws_subnet.public.id
   availability_zone      = var.azs[0]
   vpc_security_group_ids = [aws_security_group.ec2.id]
-  key_name               = "team3-SE-1"
-  iam_instance_profile   = aws_iam_instance_profile.app.name
+  # dev 전용 키페어 — prod(team3-SE-1)와 분리해 dev 키 유출이 prod 접근으로 번지지 않게 한다.
+  # AWS 콘솔에서 미리 생성(.pem 다운로드)해 두고 이름으로 참조. 개인키는 dev env EC2_SSH_KEY 로 주입.
+  key_name             = "team3-dev-SE-1"
+  iam_instance_profile = aws_iam_instance_profile.app.name
+
+  # cloud-init 부트스트랩 — 빈 우분투에 배포에 필요한 base 소프트웨어(docker·nginx·certbot)를
+  # 첫 부팅 때 자동 설치한다. prod EC2 는 과거 수동 설치라 이 user_data 가 없지만, dev 는 신규라 필요.
+  # cert 발급은 여기 안 함(부팅 시점엔 EIP 연결·DNS 전파가 끝났다는 보장이 없어 HTTP-01 이 실패할 수 있음).
+  # cert 는 deploy.yml 의 idempotent "ensure cert" 스텝이 인스턴스가 확실히 닿을 때 발급한다.
+  # user_data 는 첫 부팅에만 실행되므로, 기존(이미 부팅된) 인스턴스엔 `terraform apply -replace=aws_instance.dev_app` 로 적용한다.
+  user_data = <<-EOF
+    #!/bin/bash
+    set -eux
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y ca-certificates curl nginx certbot python3-certbot-nginx
+    # Docker 공식 저장소 (arm64/t4g)
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    usermod -aG docker ubuntu
+    systemctl enable --now docker
+    systemctl enable --now nginx
+  EOF
 
   metadata_options {
     http_endpoint               = "enabled"

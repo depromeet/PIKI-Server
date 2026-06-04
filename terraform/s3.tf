@@ -49,3 +49,51 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "images" {
     }
   }
 }
+
+# -----------------------------------------------------------------------------
+# 개발(dev) 전용 이미지 버킷 — prod 버킷(var.image_bucket_name)과 분리해 dev 업로드가
+# 운영 버킷을 더럽히지 않게 한다. 이름은 dev-<기존 버킷명>. 위 prod 버킷의 4개 리소스를 그대로 미러한다.
+# 앱은 dev env 의 S3_BUCKET / S3_PUBLIC_BASE_URL 로 이 버킷을 가리킨다.
+# -----------------------------------------------------------------------------
+resource "aws_s3_bucket" "dev_images" {
+  bucket = "dev-${var.image_bucket_name}"
+
+  tags = {
+    Name = "dev-${var.image_bucket_name}"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "dev_images" {
+  bucket = aws_s3_bucket.dev_images.id
+
+  block_public_acls       = true
+  ignore_public_acls      = true
+  block_public_policy     = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_policy" "dev_images_public_read" {
+  bucket     = aws_s3_bucket.dev_images.id
+  depends_on = [aws_s3_bucket_public_access_block.dev_images]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "PublicReadGetObject"
+      Effect    = "Allow"
+      Principal = "*"
+      Action    = "s3:GetObject"
+      Resource  = "${aws_s3_bucket.dev_images.arn}/*"
+    }]
+  })
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "dev_images" {
+  bucket = aws_s3_bucket.dev_images.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}

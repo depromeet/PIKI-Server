@@ -44,11 +44,21 @@ output "rds_address" {
 }
 
 output "image_bucket_name" {
-  description = "크롭 상품 이미지 저장 버킷명 (앱 S3_BUCKET)"
+  description = "운영(prod) 이미지 버킷명 (prod S3_BUCKET)"
   value       = aws_s3_bucket.images.id
 }
 
 output "image_public_base_url" {
-  description = "이미지 버킷 공개 베이스 URL (앱 S3_PUBLIC_BASE_URL)"
+  description = "운영(prod) 이미지 버킷 공개 베이스 URL (prod S3_PUBLIC_BASE_URL)"
   value       = "https://${aws_s3_bucket.images.bucket_regional_domain_name}"
+}
+
+output "dev_image_bucket_name" {
+  description = "개발(dev) 이미지 버킷명 — dev env S3_BUCKET 에 넣을 값"
+  value       = aws_s3_bucket.dev_images.id
+}
+
+output "dev_image_public_base_url" {
+  description = "개발(dev) 이미지 버킷 공개 베이스 URL — dev env S3_PUBLIC_BASE_URL 에 넣을 값"
+  value       = "https://${aws_s3_bucket.dev_images.bucket_regional_domain_name}"
 }
