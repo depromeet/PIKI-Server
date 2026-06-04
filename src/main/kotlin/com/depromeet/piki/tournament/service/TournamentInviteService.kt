@@ -23,7 +23,12 @@ class TournamentInviteService(
         nickname: String,
     ): JoinTournamentAsGuestResult {
         val user = persistenceService.createGuestAndJoin(tournamentId, inviteCode, nickname)
-        val tokenPair = authService.createTokensForUser(user)
+        val tokenPair = try {
+            authService.createTokensForUser(user)
+        } catch (e: Exception) {
+            persistenceService.compensateGuestJoin(tournamentId, user.id)
+            throw e
+        }
         return JoinTournamentAsGuestResult(
             tokenPair = tokenPair,
             user = user,

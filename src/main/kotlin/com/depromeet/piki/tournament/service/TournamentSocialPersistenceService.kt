@@ -5,6 +5,7 @@ import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.user.domain.User
 import com.depromeet.piki.user.service.UserService
+import java.util.UUID
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -33,5 +34,11 @@ class TournamentSocialPersistenceService(
         val user = userService.createGuestWithNickname(nickname)
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = user.id))
         return user
+    }
+
+    @Transactional
+    fun compensateGuestJoin(tournamentId: Long, userId: UUID) {
+        tournamentUserRepository.softDeleteByTournamentIdAndUserId(tournamentId, userId)
+        userService.softDelete(userId)
     }
 }

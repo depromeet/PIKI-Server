@@ -8,6 +8,7 @@ import com.depromeet.piki.item.repository.ItemJpaRepository
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubImageParsingWorker
 import com.depromeet.piki.support.StubItemParsingWorker
+import com.depromeet.piki.support.StubRefreshTokenStore
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.repository.TournamentItemJpaRepository
@@ -68,6 +69,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
     @Autowired private lateinit var stubItemParsingWorker: StubItemParsingWorker
 
     @Autowired private lateinit var stubImageParsingWorker: StubImageParsingWorker
+
+    @Autowired private lateinit var stubRefreshTokenStore: StubRefreshTokenStore
 
     private val userId: UUID = UUID.fromString("11111111-2222-3333-4444-555555555555")
     private val otherUserId: UUID = UUID.fromString("99999999-8888-7777-6666-555555555555")
@@ -224,6 +227,25 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"inviteCode":"$inviteCode","nickname":""}"""),
             ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `POST tournaments-id-join-guest 는 토큰 발급 실패 시 게스트 계정과 참여 레코드를 보상 삭제한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+        stubRefreshTokenStore.onSave = { _, _ -> throw RuntimeException("Redis 장애 시뮬레이션") }
+        try {
+            mockMvc
+                .perform(
+                    post("/api/v1/tournaments/$tournamentId/join/guest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"inviteCode":"$inviteCode","nickname":"유령친구"}"""),
+                ).andExpect(status().isInternalServerError)
+        } finally {
+            stubRefreshTokenStore.reset()
+        }
+
+        assertEquals(1, tournamentUserJpaRepository.countByTournamentIdAndDeletedAtIsNull(tournamentId))
     }
 
     @Test

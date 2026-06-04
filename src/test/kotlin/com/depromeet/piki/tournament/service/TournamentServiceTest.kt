@@ -65,6 +65,10 @@ class TournamentServiceTest {
             users.filter { it.tournamentId == tournamentId }.forEach { it.softDelete() }
         }
 
+        override fun softDeleteByTournamentIdAndUserId(tournamentId: Long, userId: UUID) {
+            users.find { it.tournamentId == tournamentId && it.userId == userId }?.softDelete()
+        }
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,

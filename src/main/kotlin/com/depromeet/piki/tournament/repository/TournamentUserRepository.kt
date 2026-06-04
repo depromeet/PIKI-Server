@@ -20,4 +20,6 @@ interface TournamentUserRepository {
     fun findByTournamentIds(tournamentIds: List<Long>): List<TournamentUser>
 
     fun softDeleteAllByTournamentId(tournamentId: Long)
+
+    fun softDeleteByTournamentIdAndUserId(tournamentId: Long, userId: UUID)
 }
