@@ -56,16 +56,20 @@ jobs:
       # 잘못된 것(예: dev env EC2_HOST 누락 → repo prod 값으로 fallback). 하드코딩 IP 대신 DNS 를
       # source of truth 로 동적 검증해, dev 코드가 엉뚱한(특히 prod) 서버로 나가는 걸 SSH/docker 전에 끊는다.
       - name: Guard — 배포 대상이 환경 도메인 DNS 와 일치하는지
+        id: guard
         env:
           DOMAIN: ${{ needs.resolve.outputs.domain }}
           TARGET: ${{ secrets.EC2_HOST }}
+          ENVIRONMENT: ${{ needs.resolve.outputs.environment }}
         run: |
           # 양쪽을 IP 로 정규화해 비교한다 — EC2_HOST 가 IP 든 hostname(EC2 public DNS 등)이든
           # getent 가 IP 로 풀어주므로, 형식 차이로 인한 false-abort 없이 "같은 호스트냐"만 본다.
           EXPECTED=$(getent hosts "$DOMAIN" | awk '{print $1}' | head -1)
           ACTUAL=$(getent hosts "$TARGET"  | awk '{print $1}' | head -1)
-          echo "environment=${{ needs.resolve.outputs.environment }} domain=$DOMAIN domainIP=$EXPECTED target=$TARGET targetIP=$ACTUAL"
+          echo "environment=$ENVIRONMENT domain=$DOMAIN domainIP=$EXPECTED target=$TARGET targetIP=$ACTUAL"
           if [ -n "$EXPECTED" ] && [ -n "$ACTUAL" ] && [ "$EXPECTED" != "$ACTUAL" ]; then
+            # 실패 사유를 step output 으로 남겨 요약·Slack 이 정확한 원인을 표시하게 한다(exit 전 기록).
+            echo "reason=[$ENVIRONMENT] 배포 대상 EC2_HOST($ACTUAL) 가 $DOMAIN(→$EXPECTED) 와 다른 호스트 — 환경 secret 오설정(dev/prod 교차배선) 의심" >> "$GITHUB_OUTPUT"
             echo "::error::배포 대상 EC2_HOST(${TARGET}→${ACTUAL}) 가 ${DOMAIN}(→${EXPECTED}) 와 다른 호스트 — 환경 secret 오설정 의심, 중단."
             exit 1
           fi
@@ -426,6 +430,8 @@ jobs:
 
           if [ "${{ steps.health.outcome }}" = "success" ]; then
             STATUS="✅ 성공"
+          elif [ "${{ steps.guard.outcome }}" = "failure" ]; then
+            STATUS="❌ 중단 (환경↔호스트 불일치 가드)"
           elif [ "${{ steps.health.outcome }}" = "failure" ]; then
             STATUS="❌ 실패 (헬스체크)"
           elif [ "${{ steps.deploy.outcome }}" = "failure" ]; then
@@ -437,6 +443,7 @@ jobs:
           else
             STATUS="⚠️ 알 수 없음"
           fi
+          GUARD_REASON="${{ steps.guard.outputs.reason }}"
 
           {
             echo "## 배포 결과: $STATUS"
@@ -450,6 +457,7 @@ jobs:
             echo "| Docker 푸시 | ${{ steps.docker_push.outcome }} |"
             echo "| EC2 배포 | ${{ steps.deploy.outcome }} |"
             echo "| 헬스체크 & 전환 | ${{ steps.health.outcome }} |"
+            [ -n "$GUARD_REASON" ] && echo "| 중단 사유 | $GUARD_REASON |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Notify Slack on success
@@ -495,7 +503,10 @@ jobs:
           COMMIT_MSG=$(jq -r '(.workflow_run.head_commit.message // .head_commit.message // "")' "$GITHUB_EVENT_PATH" | head -n 1)
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-          if [ "${{ steps.build.outcome }}" = "failure" ]; then
+          if [ "${{ steps.guard.outcome }}" = "failure" ]; then
+            CAUSE="${{ steps.guard.outputs.reason }}"
+            CAUSE="${CAUSE:-환경 도메인↔EC2_HOST 불일치 (secret 오설정 — dev/prod 교차배선)}"
+          elif [ "${{ steps.build.outcome }}" = "failure" ]; then
             CAUSE="Gradle 빌드 실패 (Build JAR)"
           elif [ "${{ steps.docker_login.outcome }}" = "failure" ]; then
             CAUSE="Docker Hub 로그인 실패"
