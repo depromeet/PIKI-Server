@@ -138,10 +138,12 @@ jobs:
               echo "[certbot] $DOMAIN cert 이미 존재 — skip"
             else
               echo "[certbot] $DOMAIN cert 발급 (standalone)"
-              sudo systemctl stop nginx || true
+              # --pre-hook/--post-hook 는 발급 시점뿐 아니라 certbot 갱신 타이머가 쓰는 renewal 설정에도
+              # 저장된다. standalone 은 :80 을 직접 잡으므로 nginx 와 충돌 → 90일 뒤 자동 갱신이 깨진다.
+              # hook 으로 갱신 시 nginx 를 잠깐 stop/start 하게 해 자동 갱신이 무인으로 성공하도록 한다.
               sudo certbot certonly --standalone --non-interactive --agree-tos \
-                --register-unsafely-without-email -d "$DOMAIN"
-              sudo systemctl start nginx || true
+                --register-unsafely-without-email -d "$DOMAIN" \
+                --pre-hook "systemctl stop nginx" --post-hook "systemctl start nginx"
             fi
 
       - name: Apply nginx config
