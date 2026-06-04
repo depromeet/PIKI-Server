@@ -596,7 +596,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "상태 충돌 (COMPLETED가 아닌 토너먼트)",
+                description = "상태 충돌 (COMPLETED가 아닌 토너먼트 · 플레이 링크가 이미 생성됨)",
                 content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
         ],

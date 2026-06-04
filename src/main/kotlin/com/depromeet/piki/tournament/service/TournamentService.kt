@@ -463,6 +463,7 @@ class TournamentService(
             tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
                 ?: throw TournamentException.forbiddenTournament()
         if (tournamentUser.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
+        tournament.playLinkExpiresAt?.let { throw TournamentException.playLinkAlreadyCreated() }
         val expiresAt = LocalDateTime.now().plusDays(PLAY_LINK_DURATION_DAYS)
         tournament.createPlayLink(expiresAt)
         return expiresAt

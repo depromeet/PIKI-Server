@@ -1645,6 +1645,26 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `POST play-link 는 이미 생성된 경우 재생성 시 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/play-link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}"),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
     fun `POST play-link 는 PENDING 토너먼트에는 409 를 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)

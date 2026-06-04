@@ -185,6 +185,13 @@ class TournamentException private constructor(
                 HttpStatus.CONFLICT,
             )
 
+        fun playLinkAlreadyCreated(): TournamentException =
+            TournamentException(
+                "플레이 링크가 이미 생성된 토너먼트입니다.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
+
         fun playLinkNotCreated(): TournamentException =
             TournamentException(
                 "플레이 링크가 생성되지 않은 토너먼트입니다.",

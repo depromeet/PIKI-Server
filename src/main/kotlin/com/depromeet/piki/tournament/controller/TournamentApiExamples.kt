@@ -517,6 +517,14 @@ class TournamentApiExamples(
                             name = "플레이 링크 생성 성공",
                             payload = ApiResponseBody.ok(LocalDateTime.of(2026, 6, 9, 22, 0, 0)),
                         )
+                        add(
+                            status = HttpStatus.CONFLICT,
+                            name = "플레이 링크 이미 생성됨",
+                            payload = ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.CONFLICT,
+                                detail = "플레이 링크가 이미 생성된 토너먼트입니다.",
+                            ),
+                        )
                     }
 
                 handlerMethod.binds(TournamentController::getPlayLinkInfo) ->
