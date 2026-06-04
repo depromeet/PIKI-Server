@@ -363,8 +363,9 @@ jobs:
               ACTIVE="green" INACTIVE="blue" INACTIVE_PORT=8080
             fi
 
-            # 새로 뜬 컨테이너(INACTIVE) 헬스체크
-            for i in $(seq 1 12); do
+            # 새로 뜬 컨테이너(INACTIVE) 헬스체크 — 첫 배포(콜드 JVM + 빈 DB Flyway)는 60초가 빠듯해
+            # 120초(24×5s)로 둔다. 200 받으면 즉시 빠져나가므로 정상 배포 속도엔 영향 없다.
+            for i in $(seq 1 24); do
               STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$INACTIVE_PORT/health || echo "000")
               if [ "$STATUS" = "200" ]; then
                 echo "================================================"

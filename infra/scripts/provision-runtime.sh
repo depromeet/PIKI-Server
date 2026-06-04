@@ -52,6 +52,19 @@ if [ "${ENVIRONMENT:-}" = "dev" ]; then
       -e MYSQL_ROOT_PASSWORD="${DB_PASSWORD}" \
       mysql:8.4
   fi
+
+  # MySQL readiness 대기 — docker run 직후엔 init(첫 기동 시 DB/user 생성 + 재시작) 중이라,
+  # 바로 앱이 붙으면 연결/Flyway 가 실패해 헬스체크가 깨진다. 막 떴든 이미 있든(재배포) 앱 기동 전에
+  # ping 으로 준비를 확인해 race 를 제거한다. ping 은 서버가 응답하면 성공(인증과 무관).
+  echo "[mysql] readiness 대기"
+  for i in $(seq 1 30); do
+    if docker exec team3-mysql mysqladmin ping -h 127.0.0.1 --silent 2>/dev/null; then
+      echo "[mysql] ready (attempt $i)"
+      break
+    fi
+    sleep 2
+    [ "$i" -eq 30 ] && { echo "[mysql] readiness timeout (60s)"; exit 1; }
+  done
 else
   echo "[mysql] prod 환경 — skip (RDS 사용)"
 fi
