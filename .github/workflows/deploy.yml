@@ -246,12 +246,17 @@ jobs:
           GRAFANA_METRICS_USER: ${{ secrets.GRAFANA_METRICS_USER }}
           GRAFANA_LOGS_URL: ${{ secrets.GRAFANA_LOGS_URL }}
           GRAFANA_LOGS_USER: ${{ secrets.GRAFANA_LOGS_USER }}
+          # Tempo(OTLP) 자격증명 — Alloy otelcol.exporter.otlp 가 GC Traces 로 보낼 endpoint·instance ID(#380).
+          # token 은 metrics·logs 와 공유(GRAFANA_CLOUD_TOKEN, traces:write scope 필요). 미등록이면 config.alloy 가
+          # 더미로 fallback 해 trace 만 비활성(메트릭·로그는 정상) — Alloy 기동은 GRAFANA_METRICS_URL 기준으로만 skip 된다.
+          GRAFANA_TRACES_URL: ${{ secrets.GRAFANA_TRACES_URL }}
+          GRAFANA_TRACES_USER: ${{ secrets.GRAFANA_TRACES_USER }}
           GRAFANA_CLOUD_TOKEN: ${{ secrets.GRAFANA_CLOUD_TOKEN }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: ENVIRONMENT,DB_NAME,DB_USERNAME,DB_PASSWORD,GRAFANA_METRICS_URL,GRAFANA_METRICS_USER,GRAFANA_LOGS_URL,GRAFANA_LOGS_USER,GRAFANA_CLOUD_TOKEN
+          envs: ENVIRONMENT,DB_NAME,DB_USERNAME,DB_PASSWORD,GRAFANA_METRICS_URL,GRAFANA_METRICS_USER,GRAFANA_LOGS_URL,GRAFANA_LOGS_USER,GRAFANA_TRACES_URL,GRAFANA_TRACES_USER,GRAFANA_CLOUD_TOKEN
           script: |
             chmod +x /tmp/team3-provision/provision-runtime.sh
             /tmp/team3-provision/provision-runtime.sh
@@ -347,11 +352,17 @@ jobs:
             # LOG_STRUCTURED=ecs: 운영 로그를 ECS JSON 으로 출력해 Alloy 가 trace 를 Loki structured
             # metadata 로 승격하게 한다(#364). 값 고정 평문이라 Secrets 불필요. 로컬은 이 변수 미설정이라
             # application.yml 의 평문 콘솔 패턴(#361)을 그대로 쓴다.
+            # TRACING_OTLP_ENABLED=true + --add-host: span 을 OTLP 로 Alloy(otelcol.receiver.otlp)에 push 한다(#380).
+            # 앱 컨테이너는 bridge 네트워크라 컨테이너 안 localhost 가 --network host 인 Alloy 에 안 닿으므로,
+            # --add-host=host.docker.internal:host-gateway 로 호스트 게이트웨이를 잡고 application.yml 의 OTLP
+            # endpoint(host.docker.internal:4318)로 보낸다. 값 고정 평문이라 Secrets 불필요(로컬 미설정 → export off).
             docker run -d \
               --name "team3-$INACTIVE" \
               -p "127.0.0.1:$INACTIVE_PORT:8080" \
+              --add-host=host.docker.internal:host-gateway \
               -e JAVA_TOOL_OPTIONS="-Xmx256m -Xms64m" \
               -e LOG_STRUCTURED="ecs" \
+              -e TRACING_OTLP_ENABLED="true" \
               -e SPRING_PROFILES_ACTIVE="$SPRING_PROFILES_ACTIVE" \
               -e GEMINI_API_KEY="$GEMINI_API_KEY" \
               -e DB_HOST="$DB_HOST" \
