@@ -52,6 +52,22 @@ class ActuatorIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `GET actuator loggers - 인증 없이 200, 런타임 로그 레벨 변경 엔드포인트가 노출돼야 한다`() {
+        // 평소 DEBUG 인 비-API 인증 로그를 조사 시 런타임에 켜려면 loggers 가 exposure.include + permitAll 이어야 한다.
+        // (외부 도달은 nginx 가 /actuator/ 403 으로 차단하므로, permitAll 은 localhost 한정 도달을 전제로 한다.)
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+
+        mockMvc
+            .perform(get("/actuator/loggers"))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("DEBUG")))
+    }
+
+    @Test
     fun `GET actuator metrics - 미노출 경로라 인증 없이 접근 시 401 (노출 정책 회귀 가드)`() {
         // metrics 엔드포인트는 application.yml exposure.include 에서 제외했고 SecurityConfig
         // permitAll 에도 없다. permitAll 이 아니므로 anyRequest().authenticated() 에 걸려 인증 없이는 401.
