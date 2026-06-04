@@ -2,6 +2,7 @@ package com.depromeet.piki.tournament.repository
 
 import com.depromeet.piki.tournament.domain.TournamentItem
 import java.time.LocalDateTime
+import java.util.UUID
 import org.springframework.stereotype.Repository
 
 @Repository
@@ -15,6 +16,9 @@ class TournamentItemRepositoryImpl(
 
     override fun findIdsByTournamentId(tournamentId: Long): List<Long> =
         tournamentItemJpaRepository.findIdsByTournamentId(tournamentId)
+
+    override fun findUserIdsByItemId(itemId: Long): List<UUID> =
+        tournamentItemJpaRepository.findUserIdsByItemId(itemId)
 
     override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
         tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId)
