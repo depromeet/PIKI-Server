@@ -13,8 +13,9 @@ import java.time.LocalDateTime
 // itemId 는 정체성(items) 을 raw 로 참조한다 (FK 제약 없음 — 프로젝트 정책). 같은 item 의 여러 버전이 1:N.
 // 버전 순서는 id(단조증가)로 충분해 별도 version 컬럼을 두지 않는다.
 //
-// 2단계(쓰기 이중화)에선 snapshot 이 item 의 생애주기를 1:1 평행 추적한다 — 등록 시 PROCESSING 으로 함께 생기고,
-// 추출 성공/실패/보정에 맞춰 item 과 같이 전이한다. item 당 snapshot 1행이며, 진짜 여러 버전은 5단계 갱신부터 쌓인다.
+// 구조상 snapshot 은 item 과 N:1(위 1:N — 한 item 에 여러 버전)이다. 다만 2단계(쓰기 이중화)에선 갱신 전이라 item 당
+// snapshot 이 아직 1행이고, 그 행이 item 의 생애주기를 평행하게 따라간다 — 등록 시 PROCESSING 으로 함께 생기고,
+// 추출 성공/실패/보정에 맞춰 item 과 같이 전이한다. 여러 버전(v2·v3)은 5단계 갱신부터 쌓인다.
 // 전이의 계약 검증(이미 READY 등 클라이언트 도달 가능 예외)은 item 이 책임지고, snapshot 은 item 이 같은 전이를
 // 통과한 뒤 호출되므로 check 불변식(상태 가정)만 둔다.
 @Entity
