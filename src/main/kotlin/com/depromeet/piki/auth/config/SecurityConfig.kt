@@ -68,6 +68,11 @@ class SecurityConfig(
                     // (/v3/api-docs/**, springdoc 제공). Swagger UI 는 사용하지 않음.
                     .requestMatchers("/docs/**", "/v3/api-docs/**")
                     .permitAll()
+                    // 파비콘 — 브라우저가 모든 페이지에서 자동 요청하는 사이트 전역 정적 자산.
+                    // admin 체인(/admin/**)이 안 잡고 이 체인으로 떨어지므로 여기서 permit 해야
+                    // docs·admin 어디서든 401 없이 뜬다. 민감정보 없는 공개 파일.
+                    .requestMatchers(HttpMethod.GET, "/favicon.ico")
+                    .permitAll()
                     .requestMatchers("/api/v1/wishlists/**")
                     .hasAuthority(IdentityType.MEMBER.name)
                     // 토너먼트 플레이는 GUEST 도 허용
