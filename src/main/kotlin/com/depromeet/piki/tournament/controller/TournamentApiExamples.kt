@@ -7,8 +7,12 @@ import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
+import com.depromeet.piki.tournament.controller.dto.GroupResultResponse
+import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestResponse
+import com.depromeet.piki.tournament.controller.dto.PlayLinkInfoResponse
 import com.depromeet.piki.tournament.controller.dto.RankedItemResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
+import com.depromeet.piki.tournament.controller.dto.TournamentInvitePreviewResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
@@ -57,7 +61,40 @@ class TournamentApiExamples(
                         add(
                             status = HttpStatus.CREATED,
                             name = "생성 성공",
-                            payload = ApiResponseBody.created(CreateTournamentResponse(tournamentId = 1)),
+                            payload = ApiResponseBody.created(
+                                CreateTournamentResponse(
+                                    tournamentId = 1,
+                                    inviteCode = "ABC123",
+                                    inviteExpiresAt = LocalDateTime.of(2026, 5, 30, 15, 0, 0),
+                                ),
+                            ),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::join) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "참여 성공",
+                            payload = ApiResponseBody.ok<Unit>(),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::joinAsGuest) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.CREATED,
+                            name = "게스트 참여 성공",
+                            payload = ApiResponseBody.created(
+                                JoinTournamentAsGuestResponse(
+                                    accessToken = "eyJhbGciOiJIUzI1NiJ9.example",
+                                    refreshToken = "eyJhbGciOiJIUzI1NiJ9.refresh",
+                                    userId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+                                    nickname = "멋진친구",
+                                    profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
+                                    tournamentId = 1,
+                                ),
+                            ),
                         )
                         add(
                             status = HttpStatus.BAD_REQUEST,
@@ -200,6 +237,7 @@ class TournamentApiExamples(
                                             imageUrl = null,
                                         ),
                                     ),
+                                    hasGroupResult = true,
                                 ),
                             ),
                         )
@@ -253,8 +291,11 @@ class TournamentApiExamples(
                                         tournamentId = 1,
                                         name = "내 토너먼트",
                                         status = TournamentStatus.PENDING,
+                                        isOwner = true,
                                         pending =
                                             TournamentDetailResponse.PendingData(
+                                                inviteCode = "ABC123",
+                                                inviteExpiresAt = LocalDateTime.of(2026, 5, 30, 15, 0, 0),
                                                 items =
                                                     listOf(
                                                         TournamentDetailResponse.ItemDetailResponse(
@@ -299,6 +340,7 @@ class TournamentApiExamples(
                                         tournamentId = 1,
                                         name = "내 토너먼트",
                                         status = TournamentStatus.IN_PROGRESS,
+                                        isOwner = false,
                                         pending = null,
                                         inProgress =
                                             TournamentDetailResponse.InProgressData(
@@ -345,6 +387,7 @@ class TournamentApiExamples(
                                         tournamentId = 1,
                                         name = "내 토너먼트",
                                         status = TournamentStatus.COMPLETED,
+                                        isOwner = true,
                                         pending = null,
                                         inProgress = null,
                                         completed =
@@ -388,6 +431,7 @@ class TournamentApiExamples(
                                                             imageUrl = null,
                                                         ),
                                                     ),
+                                                hasGroupResult = true,
                                             ),
                                     ),
                                 ),
@@ -447,6 +491,121 @@ class TournamentApiExamples(
                                     category = ErrorCategory.CONFLICT,
                                     detail = "진행 중인 토너먼트는 삭제할 수 없습니다.",
                                 ),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::getInvitePreview) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "초대 코드 검증 성공",
+                            payload = ApiResponseBody.ok(
+                                TournamentInvitePreviewResponse(
+                                    tournamentId = 1,
+                                    tournamentName = "내 토너먼트",
+                                    itemCount = 8,
+                                    participantCount = 2,
+                                ),
+                            ),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::createPlayLink) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "플레이 링크 생성 성공",
+                            payload = ApiResponseBody.ok(LocalDateTime.of(2026, 6, 9, 22, 0, 0)),
+                        )
+                        add(
+                            status = HttpStatus.FORBIDDEN,
+                            name = "플레이 링크로 참여한 토너먼트 (재공유 불가)",
+                            payload = ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.FORBIDDEN,
+                                detail = "플레이 링크로 참여한 토너먼트는 플레이 링크를 생성할 수 없습니다.",
+                            ),
+                        )
+                        add(
+                            status = HttpStatus.CONFLICT,
+                            name = "플레이 링크 이미 생성됨",
+                            payload = ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.CONFLICT,
+                                detail = "플레이 링크가 이미 생성된 토너먼트입니다.",
+                            ),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::getPlayLinkInfo) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "플레이 링크 정보 조회 성공",
+                            payload = ApiResponseBody.ok(
+                                PlayLinkInfoResponse(
+                                    sourceTournamentId = 1,
+                                    tournamentName = "내 토너먼트",
+                                    itemCount = 8,
+                                    playLinkExpiresAt = LocalDateTime.of(2026, 6, 9, 22, 0, 0),
+                                ),
+                            ),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::createFromPlayLink) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.CREATED,
+                            name = "복제 토너먼트 생성 성공",
+                            payload = ApiResponseBody.created(42L),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::getGroupResult) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "그룹 결과 조회 성공",
+                            payload = ApiResponseBody.ok(
+                                GroupResultResponse(
+                                    items = listOf(
+                                        GroupResultResponse.GroupResultItemResponse(
+                                            rank = 1,
+                                            itemId = 10,
+                                            name = "나이키 에어맥스",
+                                            price = 129_000,
+                                            currency = "KRW",
+                                            imageUrl = "https://cdn.example.com/items/1.jpg",
+                                            chosenBy = listOf(
+                                                GroupResultResponse.ParticipantSummaryResponse(
+                                                    userId = UUID.fromString("11111111-2222-3333-4444-555555555555"),
+                                                    nickname = "참여자A",
+                                                    profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
+                                                ),
+                                                GroupResultResponse.ParticipantSummaryResponse(
+                                                    userId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+                                                    nickname = "참여자B",
+                                                    profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=bbbbbbbb",
+                                                ),
+                                            ),
+                                        ),
+                                        GroupResultResponse.GroupResultItemResponse(
+                                            rank = 2,
+                                            itemId = 20,
+                                            name = "아디다스 울트라부스트",
+                                            price = 189_000,
+                                            currency = "KRW",
+                                            imageUrl = "https://cdn.example.com/items/2.jpg",
+                                            chosenBy = listOf(
+                                                GroupResultResponse.ParticipantSummaryResponse(
+                                                    userId = UUID.fromString("11111111-2222-3333-4444-555555555555"),
+                                                    nickname = "참여자A",
+                                                    profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
                         )
                     }
             }

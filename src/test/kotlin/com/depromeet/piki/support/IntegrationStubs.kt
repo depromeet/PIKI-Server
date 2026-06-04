@@ -1,6 +1,7 @@
 package com.depromeet.piki.support
 
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthProvider
+import com.depromeet.piki.auth.infrastructure.redis.RefreshTokenStore
 import com.depromeet.piki.item.service.AsyncImageParsingWorker
 import com.depromeet.piki.item.service.AsyncItemParsingWorker
 import org.springframework.boot.test.context.TestConfiguration
@@ -41,6 +42,10 @@ class IntegrationStubs {
     @Primary
     fun imageParsingWorker(asyncImageParsingWorker: AsyncImageParsingWorker): StubImageParsingWorker =
         StubImageParsingWorker(asyncImageParsingWorker)
+
+    @Bean
+    @Primary
+    fun refreshTokenStore(): StubRefreshTokenStore = StubRefreshTokenStore()
 
     // oauth.client.enabled=false 로 운영 OAuthClientConfig 를 비활성화해 실제 외부 호출을 막는다.
     // stub 빈이 유일한 OAuthClient 라 @Primary 불필요.
