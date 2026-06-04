@@ -18,6 +18,10 @@ import java.time.LocalDateTime
 // 추출 성공/실패/보정에 맞춰 item 과 같이 전이한다. 여러 버전(v2·v3)은 5단계 갱신부터 쌓인다.
 // 전이의 계약 검증(이미 READY 등 클라이언트 도달 가능 예외)은 item 이 책임지고, snapshot 은 item 이 같은 전이를
 // 통과한 뒤 호출되므로 check 불변식(상태 가정)만 둔다.
+//
+// 기존 items 백필은 하지 않는다 — 현재 dev 서버만 열려 있어 보존할 운영 데이터가 없기 때문. 필요해지면 idempotent
+// 백필 마이그레이션(INSERT INTO item_snapshots ... SELECT ... FROM items WHERE NOT EXISTS(같은 item_id 의 snapshot))을
+// 추가하면 된다. 그래서 쓰기 이중화 배포 전 등록된 기존 items 는 snapshot 이 없으며, 그 처리는 3단계(참조 이전)에서 정한다.
 @Entity
 @Table(name = "item_snapshots")
 class ItemSnapshot(
