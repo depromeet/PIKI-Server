@@ -19,7 +19,7 @@ class SecurityConfig(
     private val accessDeniedHandler: ApiResponseAccessDeniedHandler,
 ) {
     // @Order(2): admin 백오피스 체인(AdminSecurityConfig, @Order(1))이 /admin/** 를 먼저 잡고,
-    // 나머지 모든 요청은 이 기존 JWT(stateless) 체인이 처리한다. admin.enabled=false 면 admin 체인이
+    // 나머지 모든 요청은 이 기존 JWT(stateless) 체인이 처리한다. prod 환경에서는 admin 체인이
     // 아예 없어 이 체인만 단독으로 동작한다.
     @Bean
     @Order(2)
@@ -48,11 +48,11 @@ class SecurityConfig(
                     // metrics·env 등 나머지 actuator 엔드포인트는 application.yml 에서 애초에 노출하지 않는다.
                     .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/prometheus")
                     .permitAll()
-                    // 브라우저·크롤러가 자동으로 치는 기본 경로(루트·파비콘)는 우리 API 표면이 아니다.
-                    // 보호 리소스가 아닌데 anyRequest().authenticated() 에 걸려 401 + 인증실패 로그(노이즈)를
-                    // 남기던 것을 막기 위해 인증 대상에서 제외한다. 루트는 WebConfig 가 /docs/index.html 로
-                    // 리다이렉트하고, /favicon.ico 는 static 리소스로 서빙되어 둘 다 깔끔한 응답을 낸다.
-                    .requestMatchers(HttpMethod.GET, "/", "/favicon.ico")
+                    // 루트(/)는 우리 API 표면이 아닌데 anyRequest().authenticated() 에 걸려 401 +
+                    // 인증실패 로그(노이즈)를 남기던 것을 막기 위해 인증 대상에서 제외한다.
+                    // WebConfig 가 /docs/index.html 로 리다이렉트해 깔끔한 응답을 낸다.
+                    // (/favicon.ico 는 아래 별도 permitAll 로 처리 — 사이트 전역 정적 자산.)
+                    .requestMatchers(HttpMethod.GET, "/")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/guest")
                     .permitAll()
@@ -74,8 +74,22 @@ class SecurityConfig(
                     // (/v3/api-docs/**, springdoc 제공). Swagger UI 는 사용하지 않음.
                     .requestMatchers("/docs/**", "/v3/api-docs/**")
                     .permitAll()
+                    // 파비콘 — 브라우저가 모든 페이지에서 자동 요청하는 사이트 전역 정적 자산.
+                    // admin 체인(/admin/**)이 안 잡고 이 체인으로 떨어지므로 여기서 permit 해야
+                    // docs·admin 어디서든 401 없이 뜬다. 민감정보 없는 공개 파일.
+                    .requestMatchers(HttpMethod.GET, "/favicon.ico")
+                    .permitAll()
                     .requestMatchers("/api/v1/wishlists/**")
                     .hasAuthority(IdentityType.MEMBER.name)
+                    // 소셜 토너먼트 게스트 합류: 계정 없이 초대 코드 + 닉네임으로 가입과 동시에 참여
+                    .requestMatchers(HttpMethod.POST, "/api/v1/tournaments/*/join/guest")
+                    .permitAll()
+                    // 초대 코드 검증 미리보기: 미인증 상태에서 토너먼트 참여 전 정보 확인
+                    .requestMatchers(HttpMethod.GET, "/api/v1/tournaments/*/invite-preview")
+                    .permitAll()
+                    // 플레이 링크 정보 조회: 미인증 상태에서 링크 진입 시 토너먼트 정보 확인
+                    .requestMatchers(HttpMethod.GET, "/api/v1/tournaments/*/play-link-info")
+                    .permitAll()
                     // 토너먼트 플레이는 GUEST 도 허용
                     .requestMatchers("/api/v1/tournaments/**")
                     .authenticated()

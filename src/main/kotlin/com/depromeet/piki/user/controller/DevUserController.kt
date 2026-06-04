@@ -7,6 +7,7 @@ import com.depromeet.piki.common.response.PageResponse
 import com.depromeet.piki.user.controller.dto.DevUserSummaryResponse
 import com.depromeet.piki.user.repository.UserJpaRepository
 import org.springframework.data.domain.PageRequest
+import org.springframework.context.annotation.Profile
 import org.springframework.data.domain.Sort
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -18,6 +19,7 @@ import java.util.UUID
 // dev 전용 컨트롤러라 UserJpaRepository 를 직접 주입한다.
 // UserRepository 인터페이스에 findAll() 을 추가하면 이 파일을 걷어낼 때
 // 인터페이스·impl·service·stub 네 곳을 함께 정리해야 해서 삭제 비용이 커진다.
+@Profile("!prod")
 @RestController
 @RequestMapping("/api/v1/dev/users")
 class DevUserController(

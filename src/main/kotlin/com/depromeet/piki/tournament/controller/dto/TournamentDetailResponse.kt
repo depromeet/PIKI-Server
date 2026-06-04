@@ -4,6 +4,7 @@ import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.service.dto.TournamentDetail
 import com.fasterxml.jackson.annotation.JsonInclude
+import java.time.LocalDateTime
 import java.util.UUID
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -11,6 +12,7 @@ data class TournamentDetailResponse(
     val tournamentId: Long,
     val name: String,
     val status: TournamentStatus,
+    val isOwner: Boolean,
     val pending: PendingData?,
     val inProgress: InProgressData?,
     val completed: CompletedData?,
@@ -58,6 +60,8 @@ data class TournamentDetailResponse(
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     data class PendingData(
+        val inviteCode: String,
+        val inviteExpiresAt: LocalDateTime,
         val items: List<ItemDetailResponse>,
         val participants: List<ParticipantResponse>,
     )
@@ -70,10 +74,16 @@ data class TournamentDetailResponse(
     )
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    data class CompletedData(val result: List<RankedItemResponse>) {
+    data class CompletedData(
+        val result: List<RankedItemResponse>,
+        val hasGroupResult: Boolean,
+    ) {
         companion object {
             fun from(completed: TournamentDetail.Completed): CompletedData =
-                CompletedData(completed.result.map { RankedItemResponse.from(it) })
+                CompletedData(
+                    result = completed.result.map { RankedItemResponse.from(it) },
+                    hasGroupResult = completed.hasGroupResult,
+                )
         }
     }
 
@@ -85,8 +95,11 @@ data class TournamentDetailResponse(
                         tournamentId = detail.tournamentId,
                         name = detail.name,
                         status = TournamentStatus.PENDING,
+                        isOwner = detail.isOwner,
                         pending =
                             PendingData(
+                                inviteCode = detail.inviteCode,
+                                inviteExpiresAt = detail.inviteExpiresAt,
                                 items = detail.items.map { ItemDetailResponse.from(it) },
                                 participants = detail.participants.map { ParticipantResponse.from(it) },
                             ),
@@ -99,6 +112,7 @@ data class TournamentDetailResponse(
                         tournamentId = detail.tournamentId,
                         name = detail.name,
                         status = TournamentStatus.IN_PROGRESS,
+                        isOwner = detail.isOwner,
                         pending = null,
                         inProgress =
                             InProgressData(
@@ -114,9 +128,10 @@ data class TournamentDetailResponse(
                         tournamentId = detail.tournamentId,
                         name = detail.name,
                         status = TournamentStatus.COMPLETED,
+                        isOwner = detail.isOwner,
                         pending = null,
                         inProgress = null,
-                        completed = CompletedData(detail.result.map { RankedItemResponse.from(it) }),
+                        completed = CompletedData.from(detail),
                     )
             }
     }

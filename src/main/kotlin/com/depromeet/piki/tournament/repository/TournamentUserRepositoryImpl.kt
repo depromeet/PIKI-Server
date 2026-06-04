@@ -22,6 +22,9 @@ class TournamentUserRepositoryImpl(
     override fun findByTournamentId(tournamentId: Long): List<TournamentUser> =
         tournamentUserJpaRepository.findByTournamentIdAndDeletedAtIsNull(tournamentId)
 
+    override fun countByTournamentId(tournamentId: Long): Int =
+        tournamentUserJpaRepository.countByTournamentIdAndDeletedAtIsNull(tournamentId)
+
     override fun findByTournamentIds(tournamentIds: List<Long>): List<TournamentUser> =
         if (tournamentIds.isEmpty()) {
             emptyList()
@@ -31,5 +34,9 @@ class TournamentUserRepositoryImpl(
 
     override fun softDeleteAllByTournamentId(tournamentId: Long) {
         tournamentUserJpaRepository.softDeleteAllByTournamentId(tournamentId, LocalDateTime.now())
+    }
+
+    override fun softDeleteByTournamentIdAndUserId(tournamentId: Long, userId: UUID) {
+        tournamentUserJpaRepository.softDeleteByTournamentIdAndUserId(tournamentId, userId, LocalDateTime.now())
     }
 }

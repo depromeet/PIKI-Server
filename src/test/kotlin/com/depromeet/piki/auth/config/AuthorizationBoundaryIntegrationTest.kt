@@ -41,8 +41,8 @@ class AuthorizationBoundaryIntegrationTest : IntegrationTestSupport() {
             .andExpect(status().isUnauthorized)
     }
 
-    // 브라우저·크롤러가 자동으로 치는 기본 경로(루트·파비콘)는 우리 API 표면이 아니다. 보호 리소스가 아닌데
-    // 인증 벽에 걸려 401 + 인증실패 로그(노이즈)를 남기던 회귀를 막는다. 루트는 /docs 로 리다이렉트, 파비콘은 200.
+    // 루트(/)는 우리 API 표면이 아닌데 인증 벽에 걸려 401 + 인증실패 로그(노이즈)를 남기던 회귀를 막는다.
+    // WebConfig 가 /docs 로 리다이렉트한다. (/favicon.ico 의 공개 서빙은 #373 의 DocsAccessIntegrationTest 가 검증)
     @Test
     fun `루트는 인증 없이 API 문서로 리다이렉트된다`() {
         val mockMvc =
@@ -55,19 +55,6 @@ class AuthorizationBoundaryIntegrationTest : IntegrationTestSupport() {
             .perform(request(HttpMethod.GET, "/"))
             .andExpect(status().is3xxRedirection)
             .andExpect(redirectedUrl("/docs/index.html"))
-    }
-
-    @Test
-    fun `favicon 은 인증 없이 200 으로 서빙된다`() {
-        val mockMvc =
-            MockMvcBuilders
-                .webAppContextSetup(webApplicationContext)
-                .apply<DefaultMockMvcBuilder>(springSecurity())
-                .build()
-
-        mockMvc
-            .perform(request(HttpMethod.GET, "/favicon.ico"))
-            .andExpect(status().isOk)
     }
 
     companion object {
