@@ -255,8 +255,7 @@ class TournamentService(
 
             TournamentStatus.COMPLETED -> {
                 val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
-                val participantCount = tournamentUserRepository.countByTournamentId(tournamentId)
-                buildCompleted(tournament, histories, participantCount, isOwner)
+                buildCompleted(tournament, histories, computeHasGroupResult(tournament), isOwner)
             }
         }
     }
@@ -364,17 +363,24 @@ class TournamentService(
         if (!tournament.isFinalRound(command.currentRound)) return null
 
         tournament.complete()
-        val participantCount = tournamentUserRepository.countByTournamentId(command.tournamentId)
         val tournamentUser = tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)
             ?: error("recordMatch 권한 확인 후 tournamentUser 없음 — tournamentId=${command.tournamentId}")
         val isOwner = tournamentUser.getId() == tournament.ownerTournamentUserId
-        return buildCompleted(tournament, histories + newHistory, participantCount, isOwner)
+        return buildCompleted(tournament, histories + newHistory, computeHasGroupResult(tournament), isOwner)
+    }
+
+    private fun computeHasGroupResult(tournament: Tournament): Boolean {
+        val rootId = tournament.sourceTournamentId ?: tournament.getId()
+        val completedClones = tournamentRepository.findBySourceTournamentId(rootId).count { it.isCompleted() }
+        tournament.sourceTournamentId ?: return completedClones >= 1
+        val rootCompleted = tournamentRepository.findTournamentById(rootId)?.isCompleted() == true
+        return rootCompleted || completedClones >= 2
     }
 
     private fun buildCompleted(
         tournament: Tournament,
         histories: List<TournamentHistory>,
-        participantCount: Int,
+        hasGroupResult: Boolean,
         isOwner: Boolean,
     ): TournamentDetail.Completed {
         val rankedPairs = computeRanking(histories)
@@ -401,7 +407,7 @@ class TournamentService(
                     imageUrl = item.imageUrl,
                 )
             },
-            hasGroupResult = participantCount >= 2,
+            hasGroupResult = hasGroupResult,
             isOwner = isOwner,
         )
     }
