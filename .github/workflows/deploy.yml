@@ -52,12 +52,18 @@ jobs:
       cancel-in-progress: false
 
     steps:
-      # dev 배포인데 EC2_HOST 가 prod IP 면 = dev env override 누락 → repo(prod) fallback 사고.
-      # 실제 배포(SSH/docker) 전에 끊어 dev 코드가 prod 서버로 나가는 걸 차단한다.
-      - name: Guard — dev 가 prod 호스트로 새지 않는지
+      # 배포 대상(EC2_HOST)이 그 환경의 도메인이 가리키는 IP 와 다르면, 환경 secret override 가
+      # 잘못된 것(예: dev env EC2_HOST 누락 → repo prod 값으로 fallback). 하드코딩 IP 대신 DNS 를
+      # source of truth 로 동적 검증해, dev 코드가 엉뚱한(특히 prod) 서버로 나가는 걸 SSH/docker 전에 끊는다.
+      - name: Guard — 배포 대상이 환경 도메인 DNS 와 일치하는지
+        env:
+          DOMAIN: ${{ needs.resolve.outputs.domain }}
+          TARGET: ${{ secrets.EC2_HOST }}
         run: |
-          if [ "${{ needs.resolve.outputs.environment }}" != "prod" ] && [ "${{ secrets.EC2_HOST }}" = "3.37.220.241" ]; then
-            echo "::error::dev 배포인데 EC2_HOST 가 prod IP(3.37.220.241). dev environment override 누락 의심 — 중단."
+          EXPECTED=$(getent hosts "$DOMAIN" | awk '{print $1}' | head -1)
+          echo "environment=${{ needs.resolve.outputs.environment }} domain=$DOMAIN dns=$EXPECTED target=$TARGET"
+          if [ -n "$EXPECTED" ] && [ "$EXPECTED" != "$TARGET" ]; then
+            echo "::error::배포 대상 EC2_HOST 가 ${DOMAIN} 의 DNS(${EXPECTED}) 와 불일치 — 환경 secret 오설정 의심, 중단."
             exit 1
           fi
 
@@ -142,7 +148,7 @@ jobs:
               # 저장된다. standalone 은 :80 을 직접 잡으므로 nginx 와 충돌 → 90일 뒤 자동 갱신이 깨진다.
               # hook 으로 갱신 시 nginx 를 잠깐 stop/start 하게 해 자동 갱신이 무인으로 성공하도록 한다.
               sudo certbot certonly --standalone --non-interactive --agree-tos \
-                --register-unsafely-without-email -d "$DOMAIN" \
+                --email depromeet18.3@gmail.com -d "$DOMAIN" \
                 --pre-hook "systemctl stop nginx" --post-hook "systemctl start nginx"
             fi
 
