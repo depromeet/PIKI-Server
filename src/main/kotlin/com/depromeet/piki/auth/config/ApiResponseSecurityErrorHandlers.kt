@@ -32,8 +32,18 @@ class ApiResponseAuthenticationEntryPoint(
         response: HttpServletResponse,
         authException: AuthenticationException,
     ) {
-        log.info("[AuthenticationEntryPoint] {} {} - {}", request.method, request.requestURI, authException.message)
+        // 미인증 401 은 클라이언트 계약 위반이라 INFO 로 남긴다(로깅 정책). 단 우리 API 표면(/api/**)에 한정한다.
+        // 우리가 인증을 요구하는 경로는 전부 /api/v1/** 라, 정상 클라이언트가 비-API 경로로 401 을 받을 일이 없다 —
+        // 루트·favicon·인터넷 스캐너 probe(/test/.git/config·/.env 등)가 만드는 노이즈일 뿐이라 기록하지 않는다.
+        // 거절(401 응답)은 그대로 유지하고 로그만 끄는 것 — 보안 경계는 바뀌지 않는다.
+        if (request.requestURI.startsWith(API_PATH_PREFIX)) {
+            log.info("[AuthenticationEntryPoint] {} {} - {}", request.method, request.requestURI, authException.message)
+        }
         writeApiResponseBody(response, HttpStatus.UNAUTHORIZED, ErrorCategory.UNAUTHORIZED, objectMapper)
+    }
+
+    private companion object {
+        const val API_PATH_PREFIX = "/api/"
     }
 }
 

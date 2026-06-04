@@ -48,6 +48,12 @@ class SecurityConfig(
                     // metrics·env 등 나머지 actuator 엔드포인트는 application.yml 에서 애초에 노출하지 않는다.
                     .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/prometheus")
                     .permitAll()
+                    // 브라우저·크롤러가 자동으로 치는 기본 경로(루트·파비콘)는 우리 API 표면이 아니다.
+                    // 보호 리소스가 아닌데 anyRequest().authenticated() 에 걸려 401 + 인증실패 로그(노이즈)를
+                    // 남기던 것을 막기 위해 인증 대상에서 제외한다. 루트는 WebConfig 가 /docs/index.html 로
+                    // 리다이렉트하고, /favicon.ico 는 static 리소스로 서빙되어 둘 다 깔끔한 응답을 낸다.
+                    .requestMatchers(HttpMethod.GET, "/", "/favicon.ico")
+                    .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/guest")
                     .permitAll()
                     // OAuth 인가 URL 생성 — state 발급 포함. 미인증으로 호출 (로그인 전 단계).
