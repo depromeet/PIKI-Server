@@ -10,7 +10,6 @@ import com.depromeet.piki.wishlist.repository.WishRepository
 import com.depromeet.piki.wishlist.service.dto.WishWithItem
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.LocalDateTime
 import java.util.UUID
 
 // WishlistService 의 registerFromUrl 가 외부 LLM 호출을 트랜잭션 바깥에 두도록
@@ -68,7 +67,7 @@ class WishPersistenceService(
         val item = itemRepository.findById(itemId) ?: error("item $itemId 가 없다")
         item.recover(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
         itemSnapshotRepository.findLatestByItemId(itemId)
-            ?.recover(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency, extractedAt = LocalDateTime.now())
+            ?.recover(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
         return item
     }
 }

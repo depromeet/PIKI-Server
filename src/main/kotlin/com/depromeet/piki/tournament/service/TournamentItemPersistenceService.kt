@@ -13,7 +13,6 @@ import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.tournament.service.dto.PersistedTournamentItem
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.LocalDateTime
 import java.util.UUID
 
 // TournamentItemService 의 외부 호출(링크 추출·이미지 추출)이 트랜잭션 밖에 있도록
@@ -90,7 +89,7 @@ class TournamentItemPersistenceService(
                 ?: error("item 없음 — tournamentItemId=$tournamentItemId, itemId=${tournamentItem.itemId}")
         item.recover(name = name, currentPrice = price, imageUrl = imageUrl, currency = currency)
         itemSnapshotRepository.findLatestByItemId(tournamentItem.itemId)
-            ?.recover(name = name, currentPrice = price, imageUrl = imageUrl, currency = currency, extractedAt = LocalDateTime.now())
+            ?.recover(name = name, currentPrice = price, imageUrl = imageUrl, currency = currency)
     }
 
     private fun validateAndCheckCapacity(

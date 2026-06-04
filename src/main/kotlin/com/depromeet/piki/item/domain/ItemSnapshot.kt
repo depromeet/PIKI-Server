@@ -89,11 +89,8 @@ class ItemSnapshot(
     }
 
     // PROCESSING → READY. item.markReady 와 평행. 추출 결과(snapshot)를 채우며 전이한다.
-    // extractedAt 은 호출자(서비스)가 주입한다 — 도메인이 now() 를 만들지 않아 시간 의존을 피한다.
-    fun markReady(
-        snapshot: ProductSnapshot,
-        extractedAt: LocalDateTime,
-    ) {
+    // extractedAt 은 전이 시점의 now() — Wish.delete() 등 도메인이 시간을 만드는 프로젝트 관례를 따른다.
+    fun markReady(snapshot: ProductSnapshot) {
         check(status == ItemStatus.PROCESSING) { "PROCESSING 이 아닌 snapshot(status=$status)은 READY 로 전이할 수 없다" }
         apply(
             name = snapshot.name,
@@ -103,7 +100,7 @@ class ItemSnapshot(
         )
         requireReadyInvariant()
         status = ItemStatus.READY
-        this.extractedAt = extractedAt
+        this.extractedAt = LocalDateTime.now()
     }
 
     // PROCESSING → FAILED. 파싱 실패를 상태로 남긴다. item.markFailed 와 평행.
@@ -119,13 +116,12 @@ class ItemSnapshot(
         currentPrice: Int?,
         imageUrl: String?,
         currency: String?,
-        extractedAt: LocalDateTime,
     ) {
         check(status == ItemStatus.FAILED) { "FAILED 가 아닌 snapshot(status=$status)은 recover 로 전이할 수 없다" }
         apply(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
         requireReadyInvariant()
         status = ItemStatus.READY
-        this.extractedAt = extractedAt
+        this.extractedAt = LocalDateTime.now()
     }
 
     // READY 불변식 — "쓸 수 있는 버전"은 최소한 이름이 있어야 한다. Item.requireReadyInvariant 와 동형.
