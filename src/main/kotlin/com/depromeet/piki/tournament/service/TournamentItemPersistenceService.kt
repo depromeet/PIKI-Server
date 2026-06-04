@@ -1,8 +1,10 @@
 package com.depromeet.piki.tournament.service
 
 import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemRepository
+import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
@@ -11,17 +13,21 @@ import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.tournament.service.dto.PersistedTournamentItem
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDateTime
 import java.util.UUID
 
 // TournamentItemService 의 외부 호출(링크 추출·이미지 추출)이 트랜잭션 밖에 있도록
 // 아이템 저장과 토너먼트 아이템 등록만 별도 빈으로 분리한다.
 // 같은 빈에서 @Transactional 메서드를 직접 호출하면 Spring AOP proxy 를 거치지 않아 트랜잭션이 무력화된다.
+//
+// 2단계 쓰기 이중화: item 을 저장/전이하는 곳마다 같은 트랜잭션에서 대응 ItemSnapshot 도 평행하게 처리한다.
 @Service
 class TournamentItemPersistenceService(
     private val tournamentRepository: TournamentRepository,
     private val tournamentUserRepository: TournamentUserRepository,
     private val tournamentItemRepository: TournamentItemRepository,
     private val itemRepository: ItemRepository,
+    private val itemSnapshotRepository: ItemSnapshotRepository,
 ) {
     @Transactional
     fun persistLinkItem(
@@ -31,6 +37,7 @@ class TournamentItemPersistenceService(
     ): PersistedTournamentItem {
         validateAndCheckCapacity(userId, tournamentId, 1)
         val item = itemRepository.save(Item.processing(link))
+        itemSnapshotRepository.save(ItemSnapshot.forItem(item))
         val tournamentItem = tournamentItemRepository.saveAll(
             listOf(TournamentItem(tournamentId = tournamentId, itemId = item.getId(), userId = userId)),
         ).first()
@@ -45,6 +52,7 @@ class TournamentItemPersistenceService(
     ): List<PersistedTournamentItem> {
         validateAndCheckCapacity(userId, tournamentId, count)
         val items = itemRepository.saveAll(List(count) { Item(status = ItemStatus.PROCESSING) })
+        itemSnapshotRepository.saveAll(items.map { ItemSnapshot.forItem(it) })
         val tournamentItems = tournamentItemRepository.saveAll(
             items.map { TournamentItem(tournamentId = tournamentId, itemId = it.getId(), userId = userId) },
         )
@@ -55,6 +63,7 @@ class TournamentItemPersistenceService(
 
     // FAILED item 의 수동 보정 영속화 — S3 업로드(외부 호출)는 호출부가 트랜잭션 바깥에서 끝내고,
     // 여기선 권한·상태 검증 + recover(값 변경 + FAILED→READY 전이)만 짧은 트랜잭션으로 묶는다(dirty checking).
+    // recover 게이트를 통과한 뒤 같은 item 의 snapshot 도 평행하게 보정한다(전환기엔 snapshot 이 없을 수 있어 null-safe).
     @Transactional
     fun recoverItem(
         userId: UUID,
@@ -80,6 +89,8 @@ class TournamentItemPersistenceService(
             itemRepository.findById(tournamentItem.itemId)
                 ?: error("item 없음 — tournamentItemId=$tournamentItemId, itemId=${tournamentItem.itemId}")
         item.recover(name = name, currentPrice = price, imageUrl = imageUrl, currency = currency)
+        itemSnapshotRepository.findLatestByItemId(tournamentItem.itemId)
+            ?.recover(name = name, currentPrice = price, imageUrl = imageUrl, currency = currency, extractedAt = LocalDateTime.now())
     }
 
     private fun validateAndCheckCapacity(
