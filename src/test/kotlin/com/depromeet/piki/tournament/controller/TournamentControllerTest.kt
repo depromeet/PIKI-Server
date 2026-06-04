@@ -40,6 +40,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -98,15 +100,22 @@ class TournamentControllerTest : IntegrationTestSupport() {
     @Test
     fun `POST tournaments 에서 inviteDurationMinutes 를 지정하면 해당 시간으로 만료 시각이 설정된다`() {
         val mockMvc = buildMockMvc()
+        val before = LocalDateTime.now()
 
-        mockMvc
+        val result = mockMvc
             .perform(
                 post("/api/v1/tournaments")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"name":"테스트 토너먼트","inviteDurationMinutes":60}"""),
             ).andExpect(status().isCreated)
-            .andExpect(jsonPath("$.data.inviteCode").isString)
+            .andReturn()
+
+        val expiresAtStr = objectMapper.readTree(result.response.contentAsString)["data"]["inviteExpiresAt"].asText()
+        val expiresAt = LocalDateTime.parse(expiresAtStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        val expectedMin = before.plusMinutes(60)
+        val expectedMax = LocalDateTime.now().plusMinutes(60)
+        assertTrue(expiresAt >= expectedMin && expiresAt <= expectedMax)
     }
 
     @Test
