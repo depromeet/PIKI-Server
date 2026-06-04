@@ -2,9 +2,11 @@ package com.depromeet.piki.tournament.controller
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.item.repository.ItemJpaRepository
+import com.depromeet.piki.item.repository.ItemSnapshotJpaRepository
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubImageParsingWorker
 import com.depromeet.piki.support.StubItemParsingWorker
@@ -61,6 +63,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
     @Autowired private lateinit var userJpaRepository: UserJpaRepository
 
     @Autowired private lateinit var itemJpaRepository: ItemJpaRepository
+
+    @Autowired private lateinit var itemSnapshotJpaRepository: ItemSnapshotJpaRepository
 
     @Autowired private lateinit var jwtProvider: JwtProvider
 
@@ -839,8 +843,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `GET tournaments-id 는 PENDING 상태에서 PROCESSING 아이템이 status=PROCESSING 으로 목록에 포함되고 name·price·imageUrl 은 없다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        val processingItemId = itemJpaRepository.save(Item(status = ItemStatus.PROCESSING)).getId()
-        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = processingItemId, userId = userId))
+        val processingItem = itemJpaRepository.save(Item(status = ItemStatus.PROCESSING))
+        saveTournamentItemFor(tournamentId, processingItem)
 
         mockMvc
             .perform(
@@ -850,7 +854,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.status").value("PENDING"))
             .andExpect(jsonPath("$.data.pending.items.length()").value(1))
             .andExpect(jsonPath("$.data.pending.items[0].status").value("PROCESSING"))
-            .andExpect(jsonPath("$.data.pending.items[0].itemId").value(processingItemId))
+            .andExpect(jsonPath("$.data.pending.items[0].itemId").value(processingItem.getId()))
             .andExpect(jsonPath("$.data.pending.items[0].name").doesNotExist())
             .andExpect(jsonPath("$.data.pending.items[0].price").doesNotExist())
             .andExpect(jsonPath("$.data.pending.items[0].imageUrl").doesNotExist())
@@ -1399,6 +1403,25 @@ class TournamentControllerTest : IntegrationTestSupport() {
     private fun saveItem(name: String = "테스트 아이템"): Long =
         itemJpaRepository.save(Item(name = name)).getId()
 
+    // 직접 저장하는 tournament_item 에 3단계 쓰기 계약(고정 snapshot)을 맞춰준다 — item 의 현재 상태를 미러링한
+    // snapshot 을 만들고 그 id 를 박아 저장한다. 조회 경로(getTournamentById·getTournamentItem)가 snapshot 을 읽기 때문이다.
+    // (서비스 경유 시딩 saveWishItem+addItemsToTournament 은 엔드포인트가 이미 snapshotId 를 채운다.)
+    private fun saveTournamentItemFor(
+        tournamentId: Long,
+        item: Item,
+        owner: UUID = userId,
+    ): TournamentItem {
+        val snapshot = itemSnapshotJpaRepository.save(ItemSnapshot.forItem(item))
+        return tournamentItemJpaRepository.save(
+            TournamentItem(
+                tournamentId = tournamentId,
+                itemId = item.getId(),
+                userId = owner,
+                snapshotId = snapshot.getId(),
+            ),
+        )
+    }
+
     // 위시리스트에도 등록된 READY 아이템 생성 — /items/wish 엔드포인트용
     private fun saveWishItem(owner: UUID = userId, name: String = "테스트 아이템", price: Int = 10_000): Long =
         wishPersistenceService.persist(owner, Item(name = name, currentPrice = price, currency = "KRW")).item.getId()
@@ -1439,7 +1462,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 currency = "KRW",
             ),
         )
-        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = linkItem.getId(), userId = userId))
+        saveTournamentItemFor(tournamentId, linkItem)
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc
@@ -1455,8 +1478,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `GET tournaments-id-items-tournamentItemId 는 PROCESSING 아이템이면 name·price·imageUrl 이 응답에 없고 status 가 PROCESSING 이다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        val processingItemId = itemJpaRepository.save(Item(status = ItemStatus.PROCESSING)).getId()
-        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = processingItemId, userId = userId))
+        val processingItem = itemJpaRepository.save(Item(status = ItemStatus.PROCESSING))
+        saveTournamentItemFor(tournamentId, processingItem)
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc

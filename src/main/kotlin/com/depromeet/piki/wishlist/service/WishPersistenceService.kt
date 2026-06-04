@@ -32,9 +32,10 @@ class WishPersistenceService(
         item: Item,
     ): WishWithItem {
         val saved = itemRepository.save(item)
-        itemSnapshotRepository.save(ItemSnapshot.forItem(saved))
-        val wish = wishRepository.save(Wish(userId = userId, itemId = saved.getId()))
-        return WishWithItem(wish = wish, item = saved)
+        // 3단계: 저장한 snapshot 의 id 를 wish 의 활성 포인터(snapshotId)로 박는다. 5단계 갱신에서 새 버전으로 스왑된다.
+        val snapshot = itemSnapshotRepository.save(ItemSnapshot.forItem(saved))
+        val wish = wishRepository.save(Wish(userId = userId, itemId = saved.getId(), snapshotId = snapshot.getId()))
+        return WishWithItem(wish = wish, item = saved, snapshot = snapshot)
     }
 
     // 이미지 다건 등록용 — link 없는 PROCESSING item 을 count 만큼 배치 저장하고, 각각에 snapshot·wish 를 건다.
@@ -45,10 +46,11 @@ class WishPersistenceService(
         count: Int,
     ): List<WishWithItem> {
         val items = itemRepository.saveAll(List(count) { Item(status = ItemStatus.PROCESSING) })
-        itemSnapshotRepository.saveAll(items.map { ItemSnapshot.forItem(it) })
-        return items.map { item ->
-            val wish = wishRepository.save(Wish(userId = userId, itemId = item.getId()))
-            WishWithItem(wish = wish, item = item)
+        // saveAll 은 입력 순서를 보존하므로 items[i] 와 snapshots[i] 가 같은 상품을 가리킨다.
+        val snapshots = itemSnapshotRepository.saveAll(items.map { ItemSnapshot.forItem(it) })
+        return items.zip(snapshots) { item, snapshot ->
+            val wish = wishRepository.save(Wish(userId = userId, itemId = item.getId(), snapshotId = snapshot.getId()))
+            WishWithItem(wish = wish, item = item, snapshot = snapshot)
         }
     }
 

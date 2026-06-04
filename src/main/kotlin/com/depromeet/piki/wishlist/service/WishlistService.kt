@@ -4,6 +4,7 @@ import com.depromeet.piki.common.storage.ImageStorage
 import com.depromeet.piki.image.domain.ProductImage
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.repository.ItemRepository
+import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.item.service.ImageParsingWorker
 import com.depromeet.piki.item.service.ItemParsingService
 import com.depromeet.piki.item.service.ItemParsingWorker
@@ -31,6 +32,7 @@ class WishlistService(
     private val imageStorage: ImageStorage,
     private val wishRepository: WishRepository,
     private val itemRepository: ItemRepository,
+    private val itemSnapshotRepository: ItemSnapshotRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -93,11 +95,17 @@ class WishlistService(
         val pageWishes = fetched.take(size)
 
         val itemsById = itemRepository.findByIds(pageWishes.map { it.itemId }).associateBy { it.getId() }
+        // 표시값은 wish 의 활성 snapshot 에서 읽는다. snapshot 은 등록 시 함께 생기고 wish.snapshotId 로 고정된다.
+        val snapshotsById =
+            itemSnapshotRepository.findByIds(pageWishes.mapNotNull { it.snapshotId }).associateBy { it.getId() }
         val entries =
             pageWishes.map { wish ->
-                // item 은 wish 와 함께 영속화되며 별도 삭제 경로가 없다. 없으면 영속화 경로가 깨진 코드 버그다.
+                // item·snapshot 은 wish 와 함께 영속화되며 별도 삭제 경로가 없다. 없으면 영속화 경로가 깨진 코드 버그다.
                 val item = itemsById[wish.itemId] ?: error("wish ${wish.getId()} 의 item ${wish.itemId} 가 없다")
-                WishWithItem(wish = wish, item = item)
+                val snapshot =
+                    wish.snapshotId?.let { snapshotsById[it] }
+                        ?: error("wish ${wish.getId()} 의 snapshot ${wish.snapshotId} 가 없다")
+                WishWithItem(wish = wish, item = item, snapshot = snapshot)
             }
 
         val nextCursor =
@@ -118,9 +126,12 @@ class WishlistService(
     ): WishWithItem {
         val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
         wish.verifyOwnedBy(userId)
-        // wish 가 가리키는 item 은 반드시 존재한다. 없으면 영속화 경로가 깨진 코드 버그다.
+        // wish 가 가리키는 item·snapshot 은 반드시 존재한다. 없으면 영속화 경로가 깨진 코드 버그다.
         val item = itemRepository.findById(wish.itemId) ?: error("wish ${wish.getId()} 의 item ${wish.itemId} 가 없다")
-        return WishWithItem(wish = wish, item = item)
+        val snapshot =
+            wish.snapshotId?.let { itemSnapshotRepository.findById(it) }
+                ?: error("wish ${wish.getId()} 의 snapshot ${wish.snapshotId} 가 없다")
+        return WishWithItem(wish = wish, item = item, snapshot = snapshot)
     }
 
     // 추출 실패(FAILED) item 을 사용자가 직접 보정해 READY 로 복구한다. 이미지를 함께 주면 그대로 S3 에 올려
@@ -149,7 +160,11 @@ class WishlistService(
                 imageStorage.upload(it.bytes, "items/${UUID.randomUUID()}.${it.extension}", it.mimeType)
             }
         val recovered = wishPersistenceService.recoverItem(wish.itemId, name, currentPrice, imageUrl, currency)
-        return WishWithItem(wish = wish, item = recovered)
+        // recoverItem 이 같은 트랜잭션에서 활성 snapshot 도 보정해 두었다. 응답 표시값은 그 snapshot 에서 읽는다.
+        val snapshot =
+            wish.snapshotId?.let { itemSnapshotRepository.findById(it) }
+                ?: error("wish ${wish.getId()} 의 snapshot ${wish.snapshotId} 가 없다")
+        return WishWithItem(wish = wish, item = recovered, snapshot = snapshot)
     }
 
     // 멱등 삭제: 없거나 이미 삭제됐으면 "이미 목표 상태(없음)"이므로 성공으로 본다(no-op).

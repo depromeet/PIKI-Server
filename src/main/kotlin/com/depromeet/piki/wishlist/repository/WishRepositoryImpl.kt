@@ -39,4 +39,9 @@ class WishRepositoryImpl(
     override fun findById(id: Long): Wish? = wishJpaRepository.findByIdAndDeletedAtIsNull(id)
 
     override fun findAllByIds(ids: List<Long>): List<Wish> = wishJpaRepository.findByIdInAndDeletedAtIsNull(ids)
+
+    override fun findByItemIdsAndUserId(
+        itemIds: List<Long>,
+        userId: UUID,
+    ): List<Wish> = wishJpaRepository.findByItemIdInAndUserIdAndDeletedAtIsNull(itemIds, userId)
 }

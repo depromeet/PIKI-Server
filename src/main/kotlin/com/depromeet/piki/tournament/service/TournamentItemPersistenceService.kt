@@ -36,9 +36,17 @@ class TournamentItemPersistenceService(
     ): PersistedTournamentItem {
         validateAndCheckCapacity(userId, tournamentId, 1)
         val item = itemRepository.save(Item.processing(link))
-        itemSnapshotRepository.save(ItemSnapshot.forItem(item))
+        // 3단계: 저장한 snapshot 의 id 를 tournament_item 에 고정한다. 출전 시점 버전이 박혀 위시 갱신과 격리된다.
+        val snapshot = itemSnapshotRepository.save(ItemSnapshot.forItem(item))
         val tournamentItem = tournamentItemRepository.saveAll(
-            listOf(TournamentItem(tournamentId = tournamentId, itemId = item.getId(), userId = userId)),
+            listOf(
+                TournamentItem(
+                    tournamentId = tournamentId,
+                    itemId = item.getId(),
+                    userId = userId,
+                    snapshotId = snapshot.getId(),
+                ),
+            ),
         ).first()
         return PersistedTournamentItem(itemId = item.getId(), tournamentItemId = tournamentItem.getId())
     }
@@ -51,9 +59,17 @@ class TournamentItemPersistenceService(
     ): List<PersistedTournamentItem> {
         validateAndCheckCapacity(userId, tournamentId, count)
         val items = itemRepository.saveAll(List(count) { Item(status = ItemStatus.PROCESSING) })
-        itemSnapshotRepository.saveAll(items.map { ItemSnapshot.forItem(it) })
+        // saveAll 은 입력 순서를 보존하므로 items[i] 와 snapshots[i] 가 같은 상품이다. 각 tournament_item 에 그 snapshot 을 고정한다.
+        val snapshots = itemSnapshotRepository.saveAll(items.map { ItemSnapshot.forItem(it) })
         val tournamentItems = tournamentItemRepository.saveAll(
-            items.map { TournamentItem(tournamentId = tournamentId, itemId = it.getId(), userId = userId) },
+            items.zip(snapshots) { item, snapshot ->
+                TournamentItem(
+                    tournamentId = tournamentId,
+                    itemId = item.getId(),
+                    userId = userId,
+                    snapshotId = snapshot.getId(),
+                )
+            },
         )
         return items.zip(tournamentItems) { item, tournamentItem ->
             PersistedTournamentItem(itemId = item.getId(), tournamentItemId = tournamentItem.getId())
