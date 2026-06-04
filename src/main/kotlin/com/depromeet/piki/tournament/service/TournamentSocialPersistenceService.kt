@@ -24,7 +24,7 @@ class TournamentSocialPersistenceService(
         nickname: String,
     ): User {
         val tournament =
-            tournamentRepository.findTournamentById(tournamentId)
+            tournamentRepository.findTournamentByIdForUpdate(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         tournament.checkJoinable(inviteCode)
         if (tournamentUserRepository.countByTournamentId(tournamentId) >= TOURNAMENT_MAX_PARTICIPANT_COUNT) {

@@ -75,7 +75,7 @@ class TournamentService(
         inviteCode: String?,
     ) {
         val tournament =
-            tournamentRepository.findTournamentById(tournamentId)
+            tournamentRepository.findTournamentByIdForUpdate(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         tournament.checkJoinable(inviteCode)
         tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
