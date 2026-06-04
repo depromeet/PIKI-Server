@@ -10,15 +10,34 @@
 resource "aws_eip" "app" {
   domain = "vpc"
 
-  # IGW 생성 이전에 EIP 를 할당하려 하면 에러가 나므로 명시적 의존성 선언.
   depends_on = [aws_internet_gateway.main]
 
   tags = {
-    Name = "${local.name_prefix}-app-eip"
+    Name = "team3-prod-app-eip"
   }
 }
 
 resource "aws_eip_association" "app" {
   instance_id   = aws_instance.app.id
   allocation_id = aws_eip.app.id
+}
+
+# -----------------------------------------------------------------------------
+# 개발(dev) EC2 용 EIP — prod EIP 와 별도로 할당해 도메인 A 레코드를 분리한다.
+# apply 후 표시되는 dev_ec2_public_ip 를 가비아(또는 DNS 콘솔)의
+# dev.* 서브도메인 A 레코드에 수동으로 등록할 것.
+# -----------------------------------------------------------------------------
+resource "aws_eip" "dev_app" {
+  domain = "vpc"
+
+  depends_on = [aws_internet_gateway.main]
+
+  tags = {
+    Name = "team3-dev-app-eip"
+  }
+}
+
+resource "aws_eip_association" "dev_app" {
+  instance_id   = aws_instance.dev_app.id
+  allocation_id = aws_eip.dev_app.id
 }

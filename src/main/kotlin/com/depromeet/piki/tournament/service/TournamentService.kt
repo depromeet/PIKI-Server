@@ -12,9 +12,15 @@ import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.tournament.service.dto.AddTournamentItemsFromWish
 import com.depromeet.piki.tournament.service.dto.CreateTournament
+import com.depromeet.piki.tournament.service.dto.CreateTournamentResult
+import com.depromeet.piki.tournament.service.dto.GroupResult
+import com.depromeet.piki.tournament.service.dto.GroupResultItem
+import com.depromeet.piki.tournament.service.dto.ParticipantSummary
+import com.depromeet.piki.tournament.service.dto.PlayLinkInfo
 import com.depromeet.piki.tournament.service.dto.RankedItem
 import com.depromeet.piki.tournament.service.dto.RecordMatch
 import com.depromeet.piki.tournament.service.dto.TournamentDetail
+import com.depromeet.piki.tournament.service.dto.TournamentInvitePreview
 import com.depromeet.piki.tournament.service.dto.TournamentItemDetail
 import com.depromeet.piki.tournament.service.dto.TournamentStartResult
 import com.depromeet.piki.tournament.service.dto.TournamentSummary
@@ -22,6 +28,7 @@ import com.depromeet.piki.user.repository.UserRepository
 import com.depromeet.piki.wishlist.repository.WishRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDateTime
 import java.util.UUID
 
 @Service
@@ -37,17 +44,46 @@ class TournamentService(
     fun create(
         userId: UUID,
         command: CreateTournament,
-    ): Long {
+    ): CreateTournamentResult {
+        val inviteCode = Tournament.generateInviteCode()
+        val inviteExpiresAt = LocalDateTime.now().plusMinutes(command.inviteDurationMinutes)
         val tournament =
             tournamentRepository.saveTournament(
-                Tournament(ownerTournamentUserId = 0L, name = command.name),
+                Tournament(
+                    ownerTournamentUserId = 0L,
+                    name = command.name,
+                    inviteCode = inviteCode,
+                    inviteExpiresAt = inviteExpiresAt,
+                ),
             )
         val tournamentUser =
             tournamentUserRepository.save(
                 TournamentUser(tournamentId = tournament.getId(), userId = userId),
             )
         tournament.assignOwner(tournamentUser.getId())
-        return tournament.getId()
+        return CreateTournamentResult(
+            tournamentId = tournament.getId(),
+            inviteCode = inviteCode,
+            inviteExpiresAt = inviteExpiresAt,
+        )
+    }
+
+    @Transactional
+    fun join(
+        userId: UUID,
+        tournamentId: Long,
+        inviteCode: String?,
+    ) {
+        val tournament =
+            tournamentRepository.findTournamentByIdForUpdate(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        tournament.checkJoinable(inviteCode)
+        tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+            ?.let { throw TournamentException.alreadyParticipant() }
+        if (tournamentUserRepository.countByTournamentId(tournamentId) >= TOURNAMENT_MAX_PARTICIPANT_COUNT) {
+            throw TournamentException.participantLimitExceeded()
+        }
+        tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = userId))
     }
 
     @Transactional
@@ -141,8 +177,9 @@ class TournamentService(
         val tournament =
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
-        tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+        val currentUser = tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
+        val isOwner = currentUser.getId() == tournament.ownerTournamentUserId
 
         return when (tournament.status) {
             TournamentStatus.PENDING -> {
@@ -162,6 +199,8 @@ class TournamentService(
                 TournamentDetail.Pending(
                     tournamentId = tournament.getId(),
                     name = tournament.name,
+                    inviteCode = tournament.inviteCode,
+                    inviteExpiresAt = tournament.inviteExpiresAt,
                     items = tournamentItems.map { toItemDetail(it, itemById) },
                     participants =
                         tournamentUsers.mapNotNull { tu ->
@@ -173,6 +212,7 @@ class TournamentService(
                                 )
                             }
                         },
+                    isOwner = isOwner,
                 )
             }
 
@@ -208,12 +248,13 @@ class TournamentService(
                     currentRound = currentRound,
                     lastHistory = lastHistory,
                     remainingItems = remainingItems,
+                    isOwner = isOwner,
                 )
             }
 
             TournamentStatus.COMPLETED -> {
                 val histories = tournamentRepository.findTournamentHistoriesByTournamentId(tournamentId)
-                buildCompleted(tournament, histories)
+                buildCompleted(tournament, histories, computeHasGroupResult(tournament), isOwner)
             }
         }
     }
@@ -321,12 +362,25 @@ class TournamentService(
         if (!tournament.isFinalRound(command.currentRound)) return null
 
         tournament.complete()
-        return buildCompleted(tournament, histories + newHistory)
+        val tournamentUser = tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)
+            ?: error("recordMatch 권한 확인 후 tournamentUser 없음 — tournamentId=${command.tournamentId}")
+        val isOwner = tournamentUser.getId() == tournament.ownerTournamentUserId
+        return buildCompleted(tournament, histories + newHistory, computeHasGroupResult(tournament), isOwner)
+    }
+
+    private fun computeHasGroupResult(tournament: Tournament): Boolean {
+        val rootId = tournament.sourceTournamentId ?: tournament.getId()
+        val completedClones = tournamentRepository.findBySourceTournamentId(rootId).count { it.isCompleted() }
+        tournament.sourceTournamentId ?: return completedClones >= 1
+        val rootCompleted = tournamentRepository.findTournamentById(rootId)?.isCompleted() == true
+        return rootCompleted || completedClones >= 2
     }
 
     private fun buildCompleted(
         tournament: Tournament,
         histories: List<TournamentHistory>,
+        hasGroupResult: Boolean,
+        isOwner: Boolean,
     ): TournamentDetail.Completed {
         val rankedPairs = computeRanking(histories)
         val tournamentItemById = tournamentItemRepository
@@ -352,6 +406,8 @@ class TournamentService(
                     imageUrl = item.imageUrl,
                 )
             },
+            hasGroupResult = hasGroupResult,
+            isOwner = isOwner,
         )
     }
 
@@ -372,6 +428,190 @@ class TournamentService(
         tournamentItemRepository.softDeleteAllByTournamentId(tournamentId)
         tournamentUserRepository.softDeleteAllByTournamentId(tournamentId)
         tournament.softDelete()
+    }
+
+    @Transactional(readOnly = true)
+    fun getInvitePreview(
+        tournamentId: Long,
+        inviteCode: String?,
+    ): TournamentInvitePreview {
+        val tournament =
+            tournamentRepository.findTournamentById(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        tournament.checkJoinable(inviteCode)
+        val itemCount = tournamentItemRepository.countByTournamentId(tournamentId)
+        val participantCount = tournamentUserRepository.countByTournamentId(tournamentId)
+        return TournamentInvitePreview(
+            tournamentId = tournamentId,
+            tournamentName = tournament.name,
+            itemCount = itemCount,
+            participantCount = participantCount,
+        )
+    }
+
+    @Transactional
+    fun createPlayLink(
+        userId: UUID,
+        tournamentId: Long,
+    ): LocalDateTime {
+        val tournament =
+            tournamentRepository.findTournamentByIdForUpdate(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        if (!tournament.isCompleted()) throw TournamentException.notCompletedTournament()
+        val tournamentUser =
+            tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+                ?: throw TournamentException.forbiddenTournament()
+        if (tournamentUser.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
+        tournament.sourceTournamentId?.let { throw TournamentException.clonedTournamentCannotSharePlayLink() }
+        tournament.playLinkExpiresAt?.let { throw TournamentException.playLinkAlreadyCreated() }
+        val expiresAt = LocalDateTime.now().plusDays(PLAY_LINK_DURATION_DAYS)
+        tournament.createPlayLink(expiresAt)
+        return expiresAt
+    }
+
+    @Transactional(readOnly = true)
+    fun getPlayLinkInfo(tournamentId: Long): PlayLinkInfo {
+        val tournament =
+            tournamentRepository.findTournamentById(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        val expiresAt = tournament.playLinkExpiresAt ?: throw TournamentException.playLinkNotCreated()
+        if (!tournament.isPlayLinkValid()) throw TournamentException.playLinkExpired()
+        val itemCount = tournamentItemRepository.countByTournamentId(tournamentId)
+        return PlayLinkInfo(
+            sourceTournamentId = tournamentId,
+            tournamentName = tournament.name,
+            itemCount = itemCount,
+            playLinkExpiresAt = expiresAt,
+        )
+    }
+
+    @Transactional
+    fun createFromPlayLink(
+        userId: UUID,
+        sourceTournamentId: Long,
+    ): Long {
+        val sourceTournament =
+            tournamentRepository.findTournamentByIdForUpdate(sourceTournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        sourceTournament.playLinkExpiresAt ?: throw TournamentException.playLinkNotCreated()
+        if (!sourceTournament.isPlayLinkValid()) throw TournamentException.playLinkExpired()
+
+        val existingTournamentIds = tournamentUserRepository.findTournamentIdsByUserId(userId).toSet()
+        val alreadyCloned = tournamentRepository.findBySourceTournamentId(sourceTournamentId)
+            .any { it.getId() in existingTournamentIds }
+        if (alreadyCloned) throw TournamentException.alreadyCloned()
+
+        val sourceItems = tournamentItemRepository.findAllByTournamentId(sourceTournamentId)
+        require(sourceItems.isNotEmpty()) { "플레이 링크 복제 시 원본 아이템 없음 — sourceTournamentId=$sourceTournamentId" }
+
+        val inviteCode = Tournament.generateInviteCode()
+        val newTournament = tournamentRepository.saveTournament(
+            Tournament(
+                ownerTournamentUserId = 0L,
+                name = sourceTournament.name,
+                inviteCode = inviteCode,
+                inviteExpiresAt = LocalDateTime.now().plusMinutes(TOURNAMENT_INVITE_DEFAULT_DURATION_MINUTES),
+                sourceTournamentId = sourceTournamentId,
+            ),
+        )
+        val tournamentUser = tournamentUserRepository.save(
+            TournamentUser(tournamentId = newTournament.getId(), userId = userId),
+        )
+        newTournament.assignOwner(tournamentUser.getId())
+
+        tournamentItemRepository.saveAll(
+            sourceItems.map { TournamentItem(tournamentId = newTournament.getId(), itemId = it.itemId, userId = userId) },
+        )
+        return newTournament.getId()
+    }
+
+    @Transactional(readOnly = true)
+    fun getGroupResult(
+        userId: UUID,
+        tournamentId: Long,
+    ): GroupResult {
+        val tournament =
+            tournamentRepository.findTournamentById(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        if (!tournament.isCompleted()) throw TournamentException.groupResultNotAvailable()
+        tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+            ?: throw TournamentException.forbiddenTournament()
+
+        val rootId = tournament.sourceTournamentId ?: tournamentId
+        val allRelated = buildList {
+            tournament.sourceTournamentId
+                ?.let { tournamentRepository.findTournamentById(rootId)?.let { root -> add(root) } }
+                ?: add(tournament)
+            addAll(tournamentRepository.findBySourceTournamentId(rootId))
+        }.filter { it.isCompleted() }
+
+        val ownerByTournamentId: Map<Long, UUID> = run {
+            val ownerTuIds = allRelated.map { it.ownerTournamentUserId }.toSet()
+            tournamentUserRepository
+                .findByTournamentIds(allRelated.map { it.getId() })
+                .filter { it.getId() in ownerTuIds }
+                .associate { it.tournamentId to it.userId }
+        }
+        val userById = userRepository
+            .findByIds(ownerByTournamentId.values.toSet())
+            .associateBy { it.id }
+
+        // 각 토너먼트의 결과를 itemId + rank 로 집계
+        data class RankKey(val itemId: Long, val rank: Int)
+        val chosenByMap = mutableMapOf<RankKey, MutableList<ParticipantSummary>>()
+
+        // 원본 토너먼트의 아이템 정보를 기준으로 결과 표시
+        val referenceItemsById: MutableMap<Long, RankedItem> = mutableMapOf()
+
+        val allRelatedIds = allRelated.map { it.getId() }
+        val historiesByTournamentId = tournamentRepository.findHistoriesByTournamentIds(allRelatedIds)
+            .groupBy { it.tournamentId }
+        val rankedByTournamentId = historiesByTournamentId
+            .mapValues { (_, histories) -> computeRanking(histories) }
+        val allTournamentItemIds = rankedByTournamentId.values.flatten().map { it.first }
+        val tItemById = tournamentItemRepository.findByIds(allTournamentItemIds).associateBy { it.getId() }
+        val itemById = itemRepository.findByIds(tItemById.values.map { it.itemId }).associate { it.getId() to it }
+
+        for (t in allRelated) {
+            val ranked = rankedByTournamentId[t.getId()] ?: continue
+            val ownerUserId = ownerByTournamentId[t.getId()] ?: continue
+            val user = userById[ownerUserId] ?: continue
+            val participant = ParticipantSummary(userId = user.id, nickname = user.nickname, profileImage = user.profileImage)
+
+            for ((tournamentItemId, rank) in ranked) {
+                val tItem = tItemById[tournamentItemId] ?: continue
+                val item = itemById[tItem.itemId] ?: continue
+                val key = RankKey(tItem.itemId, rank)
+                chosenByMap.getOrPut(key) { mutableListOf() }.add(participant)
+                if (t.getId() == rootId) {
+                    referenceItemsById[tItem.itemId] = RankedItem(
+                        rank = rank,
+                        tournamentItemId = tournamentItemId,
+                        itemId = tItem.itemId,
+                        name = item.name,
+                        price = item.currentPrice,
+                        currency = item.currency,
+                        imageUrl = item.imageUrl,
+                    )
+                }
+            }
+        }
+
+        val items = referenceItemsById.values
+            .sortedBy { it.rank }
+            .map { ref ->
+                val key = RankKey(ref.itemId, ref.rank)
+                GroupResultItem(
+                    rank = ref.rank,
+                    itemId = ref.itemId,
+                    name = ref.name,
+                    price = ref.price,
+                    currency = ref.currency,
+                    imageUrl = ref.imageUrl,
+                    chosenBy = chosenByMap[key] ?: emptyList(),
+                )
+            }
+        return GroupResult(items = items)
     }
 
     @Transactional
@@ -470,4 +710,12 @@ class TournamentService(
         // 모든 라운드가 완료됐는데 isInProgress() 인 상태 — tournament.complete() 누락 버그
         error("모든 라운드가 완료됐는데 IN_PROGRESS 상태임 tournamentId=${histories.firstOrNull()?.tournamentId}")
     }
+}
+
+// 두 서비스(TournamentService.join, TournamentSocialPersistenceService.createGuestAndJoin)가
+// 공유하는 초대 참여 검증. 링크 접근은 inviteCode=null, 코드 입력 경로는 inviteCode 포함.
+internal fun Tournament.checkJoinable(inviteCode: String?) {
+    if (!isPending()) throw TournamentException.notPendingTournament()
+    if (!isInviteValid()) throw TournamentException.inviteExpired()
+    inviteCode?.let { if (this.inviteCode != it) throw TournamentException.invalidInviteCode() }
 }

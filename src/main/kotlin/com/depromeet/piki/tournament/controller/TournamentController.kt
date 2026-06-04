@@ -3,11 +3,19 @@ package com.depromeet.piki.tournament.controller
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
+import com.depromeet.piki.tournament.controller.dto.GroupResultResponse
+import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestRequest
+import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestResponse
+import com.depromeet.piki.tournament.controller.dto.JoinTournamentRequest
+import com.depromeet.piki.tournament.controller.dto.PlayLinkInfoResponse
 import com.depromeet.piki.tournament.controller.dto.RecordMatchRequest
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse
+import com.depromeet.piki.tournament.controller.dto.TournamentInvitePreviewResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
+import com.depromeet.piki.tournament.service.TournamentInviteService
+import com.depromeet.piki.tournament.service.TournamentItemService
 import com.depromeet.piki.tournament.service.TournamentService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
@@ -21,12 +29,15 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import java.time.LocalDateTime
 import java.util.UUID
 
 @RestController
 @RequestMapping("/api/v1/tournaments")
 class TournamentController(
     private val tournamentService: TournamentService,
+    private val tournamentItemService: TournamentItemService,
+    private val tournamentInviteService: TournamentInviteService,
 ) : TournamentApi {
 
     @GetMapping
@@ -53,8 +64,28 @@ class TournamentController(
         @AuthenticationPrincipal userId: UUID,
         @Valid @RequestBody request: CreateTournamentRequest,
     ): ApiResponseBody<CreateTournamentResponse> {
-        val tournamentId = tournamentService.create(userId, request.toCreateTournament())
-        return ApiResponseBody.created(CreateTournamentResponse(tournamentId))
+        val result = tournamentService.create(userId, request.toCreateTournament())
+        return ApiResponseBody.created(CreateTournamentResponse.from(result))
+    }
+
+    @PostMapping("/{tournamentId}/join")
+    override fun join(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+        @Valid @RequestBody request: JoinTournamentRequest,
+    ): ApiResponseBody<Unit> {
+        tournamentInviteService.join(userId, tournamentId, request.inviteCode)
+        return ApiResponseBody.ok()
+    }
+
+    @PostMapping("/{tournamentId}/join/guest")
+    @ResponseStatus(HttpStatus.CREATED)
+    override fun joinAsGuest(
+        @PathVariable tournamentId: Long,
+        @Valid @RequestBody request: JoinTournamentAsGuestRequest,
+    ): ApiResponseBody<JoinTournamentAsGuestResponse> {
+        val result = tournamentInviteService.joinAsGuest(tournamentId, request.inviteCode, request.nickname)
+        return ApiResponseBody.created(JoinTournamentAsGuestResponse.from(result))
     }
 
     @PostMapping("/{tournamentId}/start")
@@ -83,5 +114,50 @@ class TournamentController(
     ): ApiResponseBody<Unit> {
         tournamentService.deleteTournament(userId, tournamentId)
         return ApiResponseBody.ok()
+    }
+
+    @GetMapping("/{tournamentId}/invite-preview")
+    override fun getInvitePreview(
+        @PathVariable tournamentId: Long,
+        @RequestParam(required = false) inviteCode: String?,
+    ): ApiResponseBody<TournamentInvitePreviewResponse> {
+        val preview = tournamentService.getInvitePreview(tournamentId, inviteCode)
+        return ApiResponseBody.ok(TournamentInvitePreviewResponse.from(preview))
+    }
+
+    @PostMapping("/{tournamentId}/play-link")
+    override fun createPlayLink(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+    ): ApiResponseBody<LocalDateTime> {
+        val expiresAt = tournamentService.createPlayLink(userId, tournamentId)
+        return ApiResponseBody.ok(expiresAt)
+    }
+
+    @GetMapping("/{tournamentId}/play-link-info")
+    override fun getPlayLinkInfo(
+        @PathVariable tournamentId: Long,
+    ): ApiResponseBody<PlayLinkInfoResponse> {
+        val info = tournamentService.getPlayLinkInfo(tournamentId)
+        return ApiResponseBody.ok(PlayLinkInfoResponse.from(info))
+    }
+
+    @PostMapping("/{sourceTournamentId}/from-play-link")
+    @ResponseStatus(HttpStatus.CREATED)
+    override fun createFromPlayLink(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable sourceTournamentId: Long,
+    ): ApiResponseBody<Long> {
+        val newTournamentId = tournamentService.createFromPlayLink(userId, sourceTournamentId)
+        return ApiResponseBody.created(newTournamentId)
+    }
+
+    @GetMapping("/{tournamentId}/group-result")
+    override fun getGroupResult(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+    ): ApiResponseBody<GroupResultResponse> {
+        val result = tournamentService.getGroupResult(userId, tournamentId)
+        return ApiResponseBody.ok(GroupResultResponse.from(result))
     }
 }

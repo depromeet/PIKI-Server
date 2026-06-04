@@ -32,6 +32,10 @@ data "aws_ami" "ubuntu_2404_arm64" {
   }
 }
 
+# -----------------------------------------------------------------------------
+# 운영(prod) EC2 — 기존 인스턴스. Name 태그만 prod 로 명시.
+# var.environment 기본값(dev)이 바뀌어도 이 태그는 영향 받지 않도록 하드코딩.
+# -----------------------------------------------------------------------------
 resource "aws_instance" "app" {
   ami                    = var.ec2_ami_id != null ? var.ec2_ami_id : data.aws_ami.ubuntu_2404_arm64[0].id
   instance_type          = var.ec2_instance_type
@@ -41,11 +45,6 @@ resource "aws_instance" "app" {
   key_name               = "team3-SE-1"
   iam_instance_profile   = aws_iam_instance_profile.app.name
 
-  # IMDSv2 강제 — 2019 Capital One 사태의 원인이었던 IMDSv1 SSRF 취약점 방어.
-  # http_tokens = "required" 로 두면 메타데이터 조회 시 토큰 세션이 필수가 된다.
-  # hop_limit = 2 — 앱이 Docker bridge 컨테이너에서 돌아 IMDS(169.254.169.254)까지
-  # "컨테이너 → 호스트" 1홉이 더 필요하다. 1 이면 컨테이너 안 앱이 instance role
-  # 자격증명을 못 받아 S3 업로드가 실패한다. 2 는 컨테이너 한 단계까지만 허용해 여전히 안전.
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
@@ -60,6 +59,62 @@ resource "aws_instance" "app" {
   }
 
   tags = {
-    Name = "${local.name_prefix}-app"
+    Name = "team3-prod-app"
+  }
+}
+
+# -----------------------------------------------------------------------------
+# 개발(dev) EC2 — 신규 인스턴스.
+# 동일 VPC/서브넷/SG 를 공유하며, 별도 EIP 와 도메인(dev.*)으로 분리.
+# -----------------------------------------------------------------------------
+resource "aws_instance" "dev_app" {
+  ami                    = var.ec2_ami_id != null ? var.ec2_ami_id : data.aws_ami.ubuntu_2404_arm64[0].id
+  instance_type          = var.ec2_instance_type
+  subnet_id              = aws_subnet.public.id
+  availability_zone      = var.azs[0]
+  vpc_security_group_ids = [aws_security_group.ec2.id]
+  # dev 전용 키페어 — prod(team3-SE-1)와 분리해 dev 키 유출이 prod 접근으로 번지지 않게 한다.
+  # AWS 콘솔에서 미리 생성(.pem 다운로드)해 두고 이름으로 참조. 개인키는 dev env EC2_SSH_KEY 로 주입.
+  key_name             = "team3-dev-SE-1"
+  iam_instance_profile = aws_iam_instance_profile.app.name
+
+  # cloud-init 부트스트랩 — 빈 우분투에 배포에 필요한 base 소프트웨어(docker·nginx·certbot)를
+  # 첫 부팅 때 자동 설치한다. prod EC2 는 과거 수동 설치라 이 user_data 가 없지만, dev 는 신규라 필요.
+  # cert 발급은 여기 안 함(부팅 시점엔 EIP 연결·DNS 전파가 끝났다는 보장이 없어 HTTP-01 이 실패할 수 있음).
+  # cert 는 deploy.yml 의 idempotent "ensure cert" 스텝이 인스턴스가 확실히 닿을 때 발급한다.
+  # user_data 는 첫 부팅에만 실행되므로, 기존(이미 부팅된) 인스턴스엔 `terraform apply -replace=aws_instance.dev_app` 로 적용한다.
+  user_data = <<-EOF
+    #!/bin/bash
+    set -eux
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y ca-certificates curl nginx certbot python3-certbot-nginx
+    # Docker 공식 저장소 (arm64/t4g)
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    usermod -aG docker ubuntu
+    systemctl enable --now docker
+    systemctl enable --now nginx
+  EOF
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
+  root_block_device {
+    volume_size           = 20
+    volume_type           = "gp3"
+    encrypted             = true
+    delete_on_termination = true
+  }
+
+  tags = {
+    Name = "team3-dev-app"
   }
 }

@@ -55,11 +55,18 @@ class TournamentServiceTest {
         override fun findByTournamentId(tournamentId: Long): List<TournamentUser> =
             users.filter { it.tournamentId == tournamentId }
 
+        override fun countByTournamentId(tournamentId: Long): Int =
+            users.count { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }
+
         override fun findByTournamentIds(tournamentIds: List<Long>): List<TournamentUser> =
             users.filter { it.tournamentId in tournamentIds }
 
         override fun softDeleteAllByTournamentId(tournamentId: Long) {
             users.filter { it.tournamentId == tournamentId }.forEach { it.softDelete() }
+        }
+
+        override fun softDeleteByTournamentIdAndUserId(tournamentId: Long, userId: UUID) {
+            users.find { it.tournamentId == tournamentId && it.userId == userId }?.softDelete()
         }
 
         private fun setEntityId(
@@ -198,6 +205,9 @@ class TournamentServiceTest {
         override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
             items.filter { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }
 
+        override fun findAllByTournamentIds(ids: List<Long>): List<TournamentItem> =
+            items.filter { it.tournamentId in ids && (it.deletedAt?.let { false } ?: true) }
+
         override fun findByIds(ids: List<Long>): List<TournamentItem> =
             items.filter { it.getId() in ids }
 
@@ -260,6 +270,9 @@ class TournamentServiceTest {
         override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
             histories.filter { it.tournamentId == tournamentId }
 
+        override fun findHistoriesByTournamentIds(ids: List<Long>): List<TournamentHistory> =
+            histories.filter { it.tournamentId in ids }
+
         override fun findByIdsAndStatuses(
             ids: List<Long>,
             statuses: List<TournamentStatus>?,
@@ -272,6 +285,9 @@ class TournamentServiceTest {
         override fun softDeleteHistoriesByTournamentId(tournamentId: Long) {
             histories.filter { it.tournamentId == tournamentId }.forEach { it.softDelete() }
         }
+
+        override fun findBySourceTournamentId(sourceTournamentId: Long): List<Tournament> =
+            tournaments.values.filter { it.sourceTournamentId == sourceTournamentId && (it.deletedAt?.let { false } ?: true) }
 
         private fun setEntityId(
             entity: LongBaseEntity,
@@ -305,7 +321,7 @@ class TournamentServiceTest {
         itemIds: List<Long>,
         name: String = "토너먼트",
     ): Long {
-        val tournamentId = service.create(userId, CreateTournament(name))
+        val tournamentId = service.create(userId, CreateTournament(name)).tournamentId
         testWishRepository.addWish(userId, *itemIds.toLongArray())
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, itemIds))
         service.start(userId, tournamentId)
@@ -314,15 +330,17 @@ class TournamentServiceTest {
 
     @Test
     fun `create 는 PENDING 상태로 토너먼트를 생성하고 ID 를 반환한다`() {
-        val id = service.create(userId, CreateTournament("내 토너먼트"))
+        val result = service.create(userId, CreateTournament("내 토너먼트"))
+        val id = result.tournamentId
 
         assertEquals(1L, id)
+        assertTrue(result.inviteCode.matches(Regex("[A-Z]{3}\\d{3}")))
         assertEquals(TournamentStatus.PENDING, repository.tournaments[id]!!.status)
     }
 
     @Test
     fun `addItems 는 PENDING 토너먼트에 아이템을 추가한다`() {
-        val tournamentId = service.create(userId, CreateTournament("내 토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("내 토너먼트")).tournamentId
         testWishRepository.addWish(userId, *(1L..8L).toList().toLongArray())
 
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, (1L..8L).toList()))
@@ -332,7 +350,7 @@ class TournamentServiceTest {
 
     @Test
     fun `addItems 에서 토너먼트 참여자가 아니면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
 
         val ex =
             assertFailsWith<TournamentException> {
@@ -343,7 +361,7 @@ class TournamentServiceTest {
 
     @Test
     fun `addItems 에서 토너먼트 참여자가 아니면 중복 아이템이어도 권한 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, 1L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L)))
 
@@ -356,7 +374,7 @@ class TournamentServiceTest {
 
     @Test
     fun `addItems 에서 기존 아이템과 합산해 32개를 초과하면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, *(1L..33L).toList().toLongArray())
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, (1L..32L).toList()))
 
@@ -378,7 +396,7 @@ class TournamentServiceTest {
 
     @Test
     fun `addItems 에서 요청 내 동일한 itemId 가 중복되면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
 
         assertFailsWith<TournamentException> {
             service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 1L, 2L)))
@@ -387,7 +405,7 @@ class TournamentServiceTest {
 
     @Test
     fun `addItems 에서 이미 등록된 itemId 를 다시 추가하면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
 
@@ -400,7 +418,7 @@ class TournamentServiceTest {
     fun `addItems 에서 존재하지 않는 itemId 이면 예외가 발생한다`() {
         testItemRepository.validIds = setOf(1L, 2L)
         testWishRepository.addWish(userId, 1L, 999L)
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
 
         val ex =
             assertFailsWith<TournamentException> {
@@ -411,7 +429,7 @@ class TournamentServiceTest {
 
     @Test
     fun `start 는 PENDING 토너먼트를 IN_PROGRESS 로 전환한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
 
@@ -422,7 +440,7 @@ class TournamentServiceTest {
 
     @Test
     fun `start 에서 소유자가 아니면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
 
@@ -442,7 +460,7 @@ class TournamentServiceTest {
 
     @Test
     fun `start 에서 PROCESSING 아이템이 있으면 409 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
         testItemRepository.statusOverrides[1L] = ItemStatus.PROCESSING
@@ -453,7 +471,7 @@ class TournamentServiceTest {
 
     @Test
     fun `start 에서 FAILED 아이템이 있으면 409 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
         testItemRepository.statusOverrides[1L] = ItemStatus.FAILED
@@ -464,7 +482,7 @@ class TournamentServiceTest {
 
     @Test
     fun `start 에서 가격이 없는 아이템이 있으면 409 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
         testItemRepository.priceOverrides[1L] = null
@@ -475,7 +493,7 @@ class TournamentServiceTest {
 
     @Test
     fun `start 에서 아이템이 없으면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
 
         assertFailsWith<TournamentException> {
             service.start(userId, tournamentId)
@@ -484,7 +502,7 @@ class TournamentServiceTest {
 
     @Test
     fun `start 에서 아이템이 1개면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, 1L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L)))
 
@@ -495,7 +513,7 @@ class TournamentServiceTest {
 
     @Test
     fun `start 에서 아이템이 32개면 정상적으로 시작된다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, *(1L..32L).toList().toLongArray())
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, (1L..32L).toList()))
 
@@ -655,7 +673,7 @@ class TournamentServiceTest {
 
     @Test
     fun `recordMatch 에서 PENDING 토너먼트면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
 
@@ -832,7 +850,7 @@ class TournamentServiceTest {
 
     @Test
     fun `getTournamentById 는 PENDING 토너먼트의 아이템 목록을 반환한다`() {
-        val tournamentId = service.create(userId, CreateTournament("빈 토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("빈 토너먼트")).tournamentId
 
         val detail = assertIs<TournamentDetail.Pending>(service.getTournamentById(tournamentId, userId))
 
@@ -850,7 +868,7 @@ class TournamentServiceTest {
                 identityType = IdentityType.MEMBER,
             ),
         )
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
 
         val detail = assertIs<TournamentDetail.Pending>(service.getTournamentById(tournamentId, userId))
 
@@ -921,7 +939,7 @@ class TournamentServiceTest {
 
     @Test
     fun `getTournamentById 에서 참가자가 아니면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
 
         assertFailsWith<TournamentException> {
             service.getTournamentById(tournamentId, otherUserId)
@@ -989,7 +1007,7 @@ class TournamentServiceTest {
     @Test
     fun `getTournaments 에서 status 필터가 주어지면 해당 상태만 반환한다`() {
         service.create(userId, CreateTournament("대기중"))
-        val startedId = service.create(userId, CreateTournament("진행중"))
+        val startedId = service.create(userId, CreateTournament("진행중")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(startedId, listOf(1L, 2L)))
         service.start(userId, startedId)
@@ -1003,11 +1021,11 @@ class TournamentServiceTest {
     @Test
     fun `getTournaments 에서 복수 status 필터가 주어지면 해당 상태들만 반환한다`() {
         service.create(userId, CreateTournament("대기중"))
-        val startedId = service.create(userId, CreateTournament("진행중"))
+        val startedId = service.create(userId, CreateTournament("진행중")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L, 3L, 4L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(startedId, listOf(1L, 2L)))
         service.start(userId, startedId)
-        val completedId = service.create(userId, CreateTournament("완료됨"))
+        val completedId = service.create(userId, CreateTournament("완료됨")).tournamentId
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(completedId, listOf(3L, 4L)))
         service.start(userId, completedId)
         val completedItems = tournamentItemRepository.findAllByTournamentId(completedId)
@@ -1048,7 +1066,7 @@ class TournamentServiceTest {
 
     @Test
     fun `deleteItem 은 PENDING 토너먼트에서 아이템을 삭제한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
         val item = tournamentItemRepository.findAllByTournamentId(tournamentId).first()
@@ -1060,10 +1078,10 @@ class TournamentServiceTest {
 
     @Test
     fun `deleteItem 에서 토너먼트 소유자도 다른 사람이 추가한 아이템을 삭제할 수 있다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
-        testWishRepository.addWish(otherUserId, 1L)
-        service.addItemsFromWish(otherUserId, AddTournamentItemsFromWish(tournamentId, listOf(1L)))
+        // 위시 추가는 소유자 전용이므로 DB에 직접 삽입해 다른 유저가 추가한 상황을 구성
+        tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId = tournamentId, itemId = 1L, userId = otherUserId)))
         val item = tournamentItemRepository.findAllByTournamentId(tournamentId).first()
 
         service.deleteItem(userId, tournamentId, item.getId())
@@ -1083,7 +1101,7 @@ class TournamentServiceTest {
 
     @Test
     fun `deleteItem 에서 존재하지 않는 tournamentItemId 면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
 
         assertFailsWith<TournamentException> {
             service.deleteItem(userId, tournamentId, 999L)
@@ -1092,8 +1110,8 @@ class TournamentServiceTest {
 
     @Test
     fun `deleteItem 에서 다른 토너먼트 아이템이면 예외가 발생한다`() {
-        val tournamentId1 = service.create(userId, CreateTournament("토너먼트1"))
-        val tournamentId2 = service.create(userId, CreateTournament("토너먼트2"))
+        val tournamentId1 = service.create(userId, CreateTournament("토너먼트1")).tournamentId
+        val tournamentId2 = service.create(userId, CreateTournament("토너먼트2")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId1, listOf(1L)))
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId2, listOf(2L)))
@@ -1106,7 +1124,7 @@ class TournamentServiceTest {
 
     @Test
     fun `deleteItem 에서 아이템을 추가하지 않은 타인이면 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, 1L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L)))
         val item = tournamentItemRepository.findAllByTournamentId(tournamentId).first()
@@ -1118,7 +1136,7 @@ class TournamentServiceTest {
 
     @Test
     fun `addItems 에서 위시에 없는 아이템이면 403 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         // 위시에 1L만 등록하고 2L은 없는 상태
 
         val ex =
@@ -1131,7 +1149,7 @@ class TournamentServiceTest {
     @Test
     fun `addItems 에서 일부 아이템이 위시에 없으면 403 예외가 발생한다`() {
         testWishRepository.addWish(userId, 1L) // 1L만 위시에 있음
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
 
         val ex =
             assertFailsWith<TournamentException> {
@@ -1142,7 +1160,7 @@ class TournamentServiceTest {
 
     @Test
     fun `deleteTournament 는 PENDING 토너먼트를 소유자가 소프트 딜리트하고 연관 데이터도 함께 소프트 딜리트한다`() {
-        val tournamentId = service.create(userId, CreateTournament("삭제 대상"))
+        val tournamentId = service.create(userId, CreateTournament("삭제 대상")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
 
@@ -1180,7 +1198,7 @@ class TournamentServiceTest {
 
     @Test
     fun `deleteTournament 는 참가자이지만 소유자가 아니면 403 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         // otherUserId 를 참가자로 추가 (소유자는 userId)
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
 
@@ -1190,7 +1208,7 @@ class TournamentServiceTest {
 
     @Test
     fun `deleteTournament 는 소유자가 아니면 403 예외가 발생한다`() {
-        val tournamentId = service.create(userId, CreateTournament("토너먼트"))
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
 
         val ex = assertFailsWith<TournamentException> { service.deleteTournament(otherUserId, tournamentId) }
         assertEquals(HttpStatus.FORBIDDEN, ex.httpStatus)

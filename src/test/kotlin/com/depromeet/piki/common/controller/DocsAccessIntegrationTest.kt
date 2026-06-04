@@ -31,6 +31,22 @@ class DocsAccessIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `GET favicon ico - 인증 없이 200 응답이 와야 한다 (브라우저 자동 요청 401 회귀 가드)`() {
+        // /favicon.ico 는 브라우저가 모든 페이지에서 자동 요청하는 사이트 전역 자산이다.
+        // permitAll 명시가 빠지면 anyRequest().authenticated() 에 잡혀 401 이 되어 docs·admin
+        // 어느 탭에서도 favicon 이 안 뜬다 (과거 admin 이 data:, 로 우회하던 결함). 회귀 가드.
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+
+        mockMvc
+            .perform(get("/favicon.ico"))
+            .andExpect(status().isOk)
+    }
+
+    @Test
     fun `GET v3 api-docs - 인증 없이 200 응답이 와야 한다 (Stoplight 가 fetch 하는 OpenAPI spec)`() {
         // Stoplight UI 가 동작하려면 spec endpoint 도 인증 없이 접근 가능해야 한다.
         val mockMvc =

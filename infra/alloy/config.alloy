@@ -19,6 +19,12 @@ prometheus.scrape "app" {
 }
 
 prometheus.remote_write "grafana_cloud" {
+  // dev/prod EC2 가 같은 Grafana Cloud 로 push 하므로 environment 라벨로 시계열을 가른다.
+  // 없으면 instance=team3-blue/green 이 양쪽 동일해 dev·prod 메트릭이 한 시계열로 충돌한다.
+  // ENVIRONMENT 는 provision-runtime.sh 가 alloy 컨테이너에 -e 로 주입(배포 워크플로가 derive).
+  external_labels = {
+    environment = sys.env("ENVIRONMENT"),
+  }
   endpoint {
     url = sys.env("GRAFANA_METRICS_URL")
     basic_auth {
@@ -98,6 +104,14 @@ loki.process "app_logs" {
   stage.labels {
     values = {
       level = "",
+    }
+  }
+
+  // dev/prod 로그를 가르는 environment 라벨(메트릭 external_labels 와 같은 결). container 라벨이
+  // 양쪽 EC2 에서 team3-blue/green 으로 동일해 로그가 뒤섞이는 걸 막는다. sys.env 는 config 로드 시 평가.
+  stage.static_labels {
+    values = {
+      environment = sys.env("ENVIRONMENT"),
     }
   }
 

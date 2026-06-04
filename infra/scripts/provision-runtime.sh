@@ -33,7 +33,43 @@ else
     redis:7-alpine
 fi
 
-# 3) nginx default 사이트 — 불필요한 stock catch-all 노출. 있으면 제거하고 reload.
+# 3) mysql (dev 전용) — prod 는 RDS 를 쓰므로 ENVIRONMENT=dev 일 때만 기동.
+#    redis 와 동일하게 named 볼륨 + 있으면 skip 패턴. 앱의 DB_* 환경변수와 같은 값으로 초기화.
+#    포트는 172.17.0.1:3306 바인딩 — 앱 컨테이너가 docker bridge 를 통해 접근하고 외부엔 노출 안 함.
+if [ "${ENVIRONMENT:-}" = "dev" ]; then
+  if docker ps -a --format '{{.Names}}' | grep -qx 'team3-mysql'; then
+    echo "[mysql] team3-mysql 이미 존재 — skip"
+  else
+    echo "[mysql] team3-mysql named 볼륨으로 기동"
+    docker run -d \
+      --name team3-mysql \
+      --restart unless-stopped \
+      -p 172.17.0.1:3306:3306 \
+      -v team3-mysql-data:/var/lib/mysql \
+      -e MYSQL_DATABASE="${DB_NAME}" \
+      -e MYSQL_USER="${DB_USERNAME}" \
+      -e MYSQL_PASSWORD="${DB_PASSWORD}" \
+      -e MYSQL_ROOT_PASSWORD="${DB_PASSWORD}" \
+      mysql:8.4
+  fi
+
+  # MySQL readiness 대기 — docker run 직후엔 init(첫 기동 시 DB/user 생성 + 재시작) 중이라,
+  # 바로 앱이 붙으면 연결/Flyway 가 실패해 헬스체크가 깨진다. 막 떴든 이미 있든(재배포) 앱 기동 전에
+  # ping 으로 준비를 확인해 race 를 제거한다. ping 은 서버가 응답하면 성공(인증과 무관).
+  echo "[mysql] readiness 대기"
+  for i in $(seq 1 30); do
+    if docker exec team3-mysql mysqladmin ping -h 127.0.0.1 --silent 2>/dev/null; then
+      echo "[mysql] ready (attempt $i)"
+      break
+    fi
+    sleep 2
+    [ "$i" -eq 30 ] && { echo "[mysql] readiness timeout (60s)"; exit 1; }
+  done
+else
+  echo "[mysql] prod 환경 — skip (RDS 사용)"
+fi
+
+# 4) nginx default 사이트 — 불필요한 stock catch-all 노출. 있으면 제거하고 reload.
 if [ -e /etc/nginx/sites-enabled/default ]; then
   echo "[nginx] sites-enabled/default 제거"
   sudo rm -f /etc/nginx/sites-enabled/default
@@ -67,6 +103,7 @@ else
     -v /proc:/host/proc:ro,rslave \
     -v /sys:/host/sys:ro,rslave \
     -v /:/host/root:ro,rslave \
+    -e ENVIRONMENT="${ENVIRONMENT:-}" \
     -e GRAFANA_METRICS_URL="${GRAFANA_METRICS_URL:-}" \
     -e GRAFANA_METRICS_USER="${GRAFANA_METRICS_USER:-}" \
     -e GRAFANA_LOGS_URL="${GRAFANA_LOGS_URL:-}" \

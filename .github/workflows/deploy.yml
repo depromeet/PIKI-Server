@@ -1,30 +1,85 @@
-name: Deploy to EC2
+name: Deploy
 
 on:
   workflow_run:
     workflows: [CI]
-    branches: [dev]
+    branches: [dev, main]
     types: [completed]
   workflow_dispatch:
 
-concurrency:
-  group: deploy-ec2-dev
-  cancel-in-progress: false
-
 jobs:
-  deploy:
+  # 트리거 브랜치 → 배포 환경(dev/prod)·도메인·nginx conf 를 한 곳에서 결정한다.
+  # workflow_run: github.event.workflow_run.head_branch / workflow_dispatch: github.ref_name
+  # dev EC2 와 prod EC2 는 같은 워크플로 코드를 쓰되, deploy job 의 environment 키로 secret 이 갈린다.
+  resolve:
     runs-on: ubuntu-latest
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    outputs:
+      environment: ${{ steps.r.outputs.environment }}
+      ref: ${{ steps.r.outputs.ref }}
+      domain: ${{ steps.r.outputs.domain }}
+      nginx_conf: ${{ steps.r.outputs.nginx_conf }}
+      branch: ${{ steps.r.outputs.branch }}
+    steps:
+      - id: r
+        run: |
+          BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+          REF="${{ github.event.workflow_run.head_sha || github.sha }}"
+          if [ "$BRANCH" = "main" ]; then
+            echo "environment=prod" >> "$GITHUB_OUTPUT"
+            echo "domain=api.depromeet18team3.cloud" >> "$GITHUB_OUTPUT"
+            echo "nginx_conf=api.depromeet18team3.cloud.conf" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=dev" >> "$GITHUB_OUTPUT"
+            echo "domain=dev.api.depromeet18team3.cloud" >> "$GITHUB_OUTPUT"
+            echo "nginx_conf=dev.api.depromeet18team3.cloud.conf" >> "$GITHUB_OUTPUT"
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: resolve
+    runs-on: ubuntu-latest
+    # GitHub Environment — secret 해석을 환경별로 가른다. dev env override / prod 는 repo 상속.
+    environment: ${{ needs.resolve.outputs.environment }}
     permissions:
       contents: read
+    # dev/prod 가 서로 배포를 막지 않도록 환경별 동시성 그룹. 같은 환경 내 재배포는 직렬화(취소 안 함).
+    # 그룹은 브랜치명이 아니라 "환경"으로 묶어야 한다 — feature 브랜치 수동배포(dispatch)도 dev EC2 로
+    # 가므로 dev 자동배포와 같은 그룹이어야 같은 박스에서 동시 blue-green 조작 레이스를 막는다.
+    concurrency:
+      group: deploy-${{ (github.event.workflow_run.head_branch || github.ref_name) == 'main' && 'prod' || 'dev' }}
+      cancel-in-progress: false
 
     steps:
+      # 배포 대상(EC2_HOST)이 그 환경의 도메인이 가리키는 IP 와 다르면, 환경 secret override 가
+      # 잘못된 것(예: dev env EC2_HOST 누락 → repo prod 값으로 fallback). 하드코딩 IP 대신 DNS 를
+      # source of truth 로 동적 검증해, dev 코드가 엉뚱한(특히 prod) 서버로 나가는 걸 SSH/docker 전에 끊는다.
+      - name: Guard — 배포 대상이 환경 도메인 DNS 와 일치하는지
+        id: guard
+        env:
+          DOMAIN: ${{ needs.resolve.outputs.domain }}
+          TARGET: ${{ secrets.EC2_HOST }}
+          ENVIRONMENT: ${{ needs.resolve.outputs.environment }}
+        run: |
+          # 양쪽을 IP 로 정규화해 비교한다 — EC2_HOST 가 IP 든 hostname(EC2 public DNS 등)이든
+          # getent 가 IP 로 풀어주므로, 형식 차이로 인한 false-abort 없이 "같은 호스트냐"만 본다.
+          EXPECTED=$(getent hosts "$DOMAIN" | awk '{print $1}' | head -1)
+          ACTUAL=$(getent hosts "$TARGET"  | awk '{print $1}' | head -1)
+          echo "environment=$ENVIRONMENT domain=$DOMAIN domainIP=$EXPECTED target=$TARGET targetIP=$ACTUAL"
+          if [ -n "$EXPECTED" ] && [ -n "$ACTUAL" ] && [ "$EXPECTED" != "$ACTUAL" ]; then
+            # 실패 사유를 step output 으로 남겨 요약·Slack 이 정확한 원인을 표시하게 한다(exit 전 기록).
+            echo "reason=[$ENVIRONMENT] 배포 대상 EC2_HOST($ACTUAL) 가 $DOMAIN(→$EXPECTED) 와 다른 호스트 — 환경 secret 오설정(dev/prod 교차배선) 의심" >> "$GITHUB_OUTPUT"
+            echo "::error::배포 대상 EC2_HOST(${TARGET}→${ACTUAL}) 가 ${DOMAIN}(→${EXPECTED}) 와 다른 호스트 — 환경 secret 오설정 의심, 중단."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ needs.resolve.outputs.ref }}
 
       - name: Set up JDK 25
         uses: actions/setup-java@v4
@@ -68,34 +123,82 @@ jobs:
           platforms: linux/arm64
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/team3-server:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/team3-server:${{ github.event.workflow_run.head_sha || github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/team3-server:${{ needs.resolve.outputs.ref }}
 
       - name: Upload nginx config
+        id: upload_nginx
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "infra/nginx/api.depromeet18team3.cloud.conf"
+          source: "infra/nginx/${{ needs.resolve.outputs.nginx_conf }}"
           target: "/tmp/team3-nginx"
           strip_components: 2
 
-      - name: Apply nginx config
+      # TLS 인증서 보장 — cert 가 없을 때만 발급(idempotent). dev 첫 배포에서만 동작하고,
+      # prod 는 cert 가 이미 있어 통째로 skip(=nginx 안 멈춤, 다운타임 0).
+      # certonly --standalone 은 nginx 와 무관하게 :80 을 잠깐 점유해 발급하므로, SSL 을 참조하는
+      # nginx conf 적용(다음 스텝)보다 먼저여야 nginx -t 가 통과한다.
+      - name: Ensure TLS cert (certbot if missing)
+        id: cert
         uses: appleboy/ssh-action@v1
+        env:
+          DOMAIN: ${{ needs.resolve.outputs.domain }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: DOMAIN
           script: |
-            SRC=/tmp/team3-nginx/api.depromeet18team3.cloud.conf
-            DST=/etc/nginx/sites-available/api.depromeet18team3.cloud
+            if [ -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+              echo "[certbot] $DOMAIN cert 이미 존재 — skip"
+            else
+              echo "[certbot] $DOMAIN cert 발급 (standalone)"
+              # --pre-hook/--post-hook 는 발급 시점뿐 아니라 certbot 갱신 타이머가 쓰는 renewal 설정에도
+              # 저장된다. standalone 은 :80 을 직접 잡으므로 nginx 와 충돌 → 90일 뒤 자동 갱신이 깨진다.
+              # hook 으로 갱신 시 nginx 를 잠깐 stop/start 하게 해 자동 갱신이 무인으로 성공하도록 한다.
+              sudo certbot certonly --standalone --non-interactive --agree-tos \
+                --email depromeet18.3@gmail.com -d "$DOMAIN" \
+                --pre-hook "systemctl stop nginx" --post-hook "systemctl start nginx"
+            fi
+            # nginx conf 가 include 하는 certbot 권장 SSL 파일은 certonly --standalone 로는 안 깔린다
+            # (certbot --nginx 설치 경로에서만 생성). 누락 시 nginx -t 가 깨지므로, certbot 패키지가
+            # 번들한 원본을 /etc/letsencrypt/ 로 복사한다(없을 때만 — prod 는 이미 있어 no-op, 동일 SSL 유지).
+            if [ ! -f /etc/letsencrypt/options-ssl-nginx.conf ]; then
+              SRC=$(find /usr -name options-ssl-nginx.conf 2>/dev/null | head -1)
+              [ -n "$SRC" ] && sudo cp "$SRC" /etc/letsencrypt/options-ssl-nginx.conf && echo "[certbot] options-ssl-nginx.conf 복사"
+            fi
+            if [ ! -f /etc/letsencrypt/ssl-dhparams.pem ]; then
+              SRC=$(find /usr -name ssl-dhparams.pem 2>/dev/null | head -1)
+              [ -n "$SRC" ] && sudo cp "$SRC" /etc/letsencrypt/ssl-dhparams.pem && echo "[certbot] ssl-dhparams.pem 복사"
+            fi
+
+      - name: Apply nginx config
+        id: nginx
+        uses: appleboy/ssh-action@v1
+        env:
+          NGINX_CONF: ${{ needs.resolve.outputs.nginx_conf }}
+          DOMAIN: ${{ needs.resolve.outputs.domain }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: NGINX_CONF,DOMAIN
+          script: |
+            SRC="/tmp/team3-nginx/$NGINX_CONF"
+            DST="/etc/nginx/sites-available/$DOMAIN"
             # api conf 가 include 하는 team3-upstream.conf 가 없으면(새 인스턴스) nginx -t 가 깨진다.
             # blue-green 전환 전이라도 include 대상이 존재하도록 기본값(8080)으로 초기화한다.
             # 실제 active 포트 전환은 blue-green(Health check)이 담당하므로 이미 있으면 건드리지 않는다.
             [ -f /etc/nginx/team3-upstream.conf ] || echo "server localhost:8080;" | sudo tee /etc/nginx/team3-upstream.conf
+            # 새 인스턴스(cloud-init nginx)는 stock default 사이트가 켜져 있어 catch-all 로 충돌 → 제거.
+            sudo rm -f /etc/nginx/sites-enabled/default
             # 현재 설정 백업 후 교체. nginx -t 검증 실패 시 이전 설정으로 롤백하고 배포를 중단한다.
             sudo cp "$DST" "${DST}.bak" 2>/dev/null || true
             sudo cp "$SRC" "$DST"
+            # 사이트 활성화(idempotent) — 새 dev 인스턴스는 symlink 가 없어 명시적으로 enable.
+            sudo ln -sf "$DST" "/etc/nginx/sites-enabled/$DOMAIN"
             if sudo nginx -t; then
               sudo nginx -s reload
               echo "nginx config 적용 + reload 완료"
@@ -106,6 +209,7 @@ jobs:
             fi
 
       - name: Upload provisioning script
+        id: upload_provision
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -116,6 +220,7 @@ jobs:
           strip_components: 2
 
       - name: Upload Alloy config
+        id: upload_alloy
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -125,9 +230,16 @@ jobs:
           target: "/tmp/team3-alloy"
           strip_components: 2
 
-      - name: Provision runtime (swap·redis·nginx·alloy)
+      - name: Provision runtime (swap·redis·mysql·nginx·alloy)
+        id: provision
         uses: appleboy/ssh-action@v1
         env:
+          # 환경은 트리거 브랜치에서 derive — dev MySQL 기동/Alloy environment 라벨을 가른다.
+          # provision-runtime.sh 는 ENVIRONMENT=dev 일 때만 MySQL 컨테이너를 기동(prod 는 RDS).
+          ENVIRONMENT: ${{ needs.resolve.outputs.environment }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           # Alloy 가 Grafana Cloud 로 remote-write 할 자격증명. 미등록(빈 값)이면 provision-runtime.sh 가
           # Alloy 기동을 skip 한다. token 1개를 metrics·logs 가 공유, URL·USER 는 Prometheus/Loki 각각.
           GRAFANA_METRICS_URL: ${{ secrets.GRAFANA_METRICS_URL }}
@@ -139,14 +251,12 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          # appleboy/ssh-action 이 envs 목록을 SSH 세션에 export 하므로, script 가 실행하는
-          # provision-runtime.sh 자식 프로세스도 이 값들을 상속한다.
-          envs: GRAFANA_METRICS_URL,GRAFANA_METRICS_USER,GRAFANA_LOGS_URL,GRAFANA_LOGS_USER,GRAFANA_CLOUD_TOKEN
+          envs: ENVIRONMENT,DB_NAME,DB_USERNAME,DB_PASSWORD,GRAFANA_METRICS_URL,GRAFANA_METRICS_USER,GRAFANA_LOGS_URL,GRAFANA_LOGS_USER,GRAFANA_CLOUD_TOKEN
           script: |
             chmod +x /tmp/team3-provision/provision-runtime.sh
             /tmp/team3-provision/provision-runtime.sh
 
-      - name: Deploy to EC2
+      - name: Deploy to ${{ needs.resolve.outputs.environment }}
         id: deploy
         uses: appleboy/ssh-action@v1
         env:
@@ -176,18 +286,20 @@ jobs:
           APPLE_REDIRECT_URI: ${{ secrets.APPLE_REDIRECT_URI }}
           S3_BUCKET: ${{ secrets.S3_BUCKET }}
           S3_PUBLIC_BASE_URL: ${{ secrets.S3_PUBLIC_BASE_URL }}
-          # admin 백오피스(dev 전용). ENABLED 만 평문(민감정보 아님)으로 두어 "dev 에 켰다"는 의도를 드러내고,
-          # 자격증명(ID·PW)은 Secrets 로만 주입해 워크플로 파일·git 히스토리에 평문이 남지 않게 한다.
-          ADMIN_ENABLED: "true"
+          # Spring 프로파일 — prod 에서만 'prod' 활성. @Profile("!prod") 의 dev 전용 빈(admin·DevAuth 등)이
+          # prod 에서 안 뜨게 하는 핵심. dev 는 'dev'(=!prod)라 그 빈들이 정상 로드된다.
+          SPRING_PROFILES_ACTIVE: ${{ needs.resolve.outputs.environment == 'prod' && 'prod' || 'dev' }}
+          # admin 백오피스 — dev 전용. prod 는 false(프로파일 게이팅과 이중 방어).
+          ADMIN_ENABLED: ${{ needs.resolve.outputs.environment == 'dev' && 'true' || 'false' }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          IMAGE_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
+          IMAGE_TAG: ${{ needs.resolve.outputs.ref }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: GEMINI_API_KEY,DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,JWT_SECRET,REDIS_HOST,REDIS_PORT,KAKAO_CLIENT_ID,KAKAO_CLIENT_SECRET,KAKAO_REDIRECT_URI,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,APPLE_TEAM_ID,APPLE_KEY_ID,APPLE_CLIENT_ID,APPLE_BUNDLE_ID,APPLE_PRIVATE_KEY,APPLE_REDIRECT_URI,S3_BUCKET,S3_PUBLIC_BASE_URL,ADMIN_ENABLED,ADMIN_USERNAME,ADMIN_PASSWORD,DOCKERHUB_USERNAME,IMAGE_TAG
+          envs: GEMINI_API_KEY,DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,JWT_SECRET,REDIS_HOST,REDIS_PORT,KAKAO_CLIENT_ID,KAKAO_CLIENT_SECRET,KAKAO_REDIRECT_URI,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,APPLE_TEAM_ID,APPLE_KEY_ID,APPLE_CLIENT_ID,APPLE_BUNDLE_ID,APPLE_PRIVATE_KEY,APPLE_REDIRECT_URI,S3_BUCKET,S3_PUBLIC_BASE_URL,SPRING_PROFILES_ACTIVE,ADMIN_ENABLED,ADMIN_USERNAME,ADMIN_PASSWORD,DOCKERHUB_USERNAME,IMAGE_TAG
           script: |
             IMAGE="$DOCKERHUB_USERNAME/team3-server:$IMAGE_TAG"
 
@@ -240,6 +352,7 @@ jobs:
               -p "127.0.0.1:$INACTIVE_PORT:8080" \
               -e JAVA_TOOL_OPTIONS="-Xmx256m -Xms64m" \
               -e LOG_STRUCTURED="ecs" \
+              -e SPRING_PROFILES_ACTIVE="$SPRING_PROFILES_ACTIVE" \
               -e GEMINI_API_KEY="$GEMINI_API_KEY" \
               -e DB_HOST="$DB_HOST" \
               -e DB_PORT="$DB_PORT" \
@@ -284,8 +397,9 @@ jobs:
               ACTIVE="green" INACTIVE="blue" INACTIVE_PORT=8080
             fi
 
-            # 새로 뜬 컨테이너(INACTIVE) 헬스체크
-            for i in $(seq 1 12); do
+            # 새로 뜬 컨테이너(INACTIVE) 헬스체크 — 첫 배포(콜드 JVM + 빈 DB Flyway)는 60초가 빠듯해
+            # 120초(24×5s)로 둔다. 200 받으면 즉시 빠져나가므로 정상 배포 속도엔 영향 없다.
+            for i in $(seq 1 24); do
               STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$INACTIVE_PORT/health || echo "000")
               if [ "$STATUS" = "200" ]; then
                 echo "================================================"
@@ -315,9 +429,9 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          SHORT_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          SHORT_SHA="${{ needs.resolve.outputs.ref }}"
           SHORT_SHA="${SHORT_SHA:0:7}"
-          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.event.workflow_run.head_sha || github.sha }}"
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ needs.resolve.outputs.ref }}"
 
           echo "${{ secrets.EC2_SSH_KEY }}" > /tmp/ec2_key && chmod 600 /tmp/ec2_key
           ACTIVE_PORT=$(ssh -i /tmp/ec2_key -o StrictHostKeyChecking=no \
@@ -335,29 +449,42 @@ jobs:
 
           if [ "${{ steps.health.outcome }}" = "success" ]; then
             STATUS="✅ 성공"
+          elif [ "${{ steps.guard.outcome }}" = "failure" ]; then
+            STATUS="❌ 중단 (환경↔호스트 불일치 가드)"
           elif [ "${{ steps.health.outcome }}" = "failure" ]; then
             STATUS="❌ 실패 (헬스체크)"
           elif [ "${{ steps.deploy.outcome }}" = "failure" ]; then
             STATUS="❌ 실패 (EC2 배포)"
           elif [ "${{ steps.docker_push.outcome }}" = "failure" ]; then
             STATUS="❌ 실패 (Docker 푸시)"
+          elif [ "${{ steps.upload_nginx.outcome }}" = "failure" ] || [ "${{ steps.upload_provision.outcome }}" = "failure" ] || [ "${{ steps.upload_alloy.outcome }}" = "failure" ]; then
+            STATUS="❌ 실패 (EC2 파일 업로드)"
+          elif [ "${{ steps.cert.outcome }}" = "failure" ]; then
+            STATUS="❌ 실패 (TLS 인증서 발급)"
+          elif [ "${{ steps.nginx.outcome }}" = "failure" ]; then
+            STATUS="❌ 실패 (nginx 설정 적용)"
+          elif [ "${{ steps.provision.outcome }}" = "failure" ]; then
+            STATUS="❌ 실패 (런타임 프로비저닝)"
           elif [ "${{ steps.build.outcome }}" = "failure" ]; then
             STATUS="❌ 실패 (Gradle 빌드)"
           else
             STATUS="⚠️ 알 수 없음"
           fi
+          GUARD_REASON="${{ steps.guard.outputs.reason }}"
 
           {
             echo "## 배포 결과: $STATUS"
             echo ""
             echo "| 항목 | 값 |"
             echo "|------|-----|"
+            echo "| 환경 | ${{ needs.resolve.outputs.environment }} |"
             echo "| 커밋 | [\`$SHORT_SHA\`]($COMMIT_URL) |"
             echo "| 현재 활성 슬롯 | $NOW |"
             echo "| Gradle 빌드 | ${{ steps.build.outcome }} |"
             echo "| Docker 푸시 | ${{ steps.docker_push.outcome }} |"
             echo "| EC2 배포 | ${{ steps.deploy.outcome }} |"
             echo "| 헬스체크 & 전환 | ${{ steps.health.outcome }} |"
+            [ -n "$GUARD_REASON" ] && echo "| 중단 사유 | $GUARD_REASON |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Notify Slack on success
@@ -371,14 +498,16 @@ jobs:
           ACTOR_MENTION="${SLACK_ID:+<@$SLACK_ID>}"
           ACTOR_MENTION="${ACTOR_MENTION:-$ACTOR}"
 
-          SHORT_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          SHORT_SHA="${{ needs.resolve.outputs.ref }}"
           SHORT_SHA="${SHORT_SHA:0:7}"
-          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.event.workflow_run.head_sha || github.sha }}"
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ needs.resolve.outputs.ref }}"
           COMMIT_MSG=$(jq -r '(.workflow_run.head_commit.message // .head_commit.message // "")' "$GITHUB_EVENT_PATH" | head -n 1)
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-          TEXT=$(printf '✅ `${{ github.ref_name }}` 배포 성공!  ✅\n• 배포자: %s\n• 커밋: <%s|%s>  %s\n• <%s|워크플로우 로그>' \
-            "$ACTOR_MENTION" "$COMMIT_URL" "$SHORT_SHA" "$COMMIT_MSG" "$RUN_URL")
+          # 배포 대상을 PiKi-Dev / PiKi-Prod 로 브랜딩 + 도메인까지 보여 "어디에 배포됐는지" 명확히.
+          if [ "${{ needs.resolve.outputs.environment }}" = "prod" ]; then TARGET="PiKi-Prod"; else TARGET="PiKi-Dev"; fi
+          TEXT=$(printf '✅ `%s` 배포 성공!  ✅\n• 경로: `%s` 브랜치 → %s (%s)\n• 배포자: %s\n• 커밋: <%s|%s>  %s\n• <%s|워크플로우 로그>' \
+            "$TARGET" "${{ needs.resolve.outputs.branch }}" "$TARGET" "${{ needs.resolve.outputs.domain }}" "$ACTOR_MENTION" "$COMMIT_URL" "$SHORT_SHA" "$COMMIT_MSG" "$RUN_URL")
 
           curl -s -X POST https://slack.com/api/chat.postMessage \
             -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
@@ -397,31 +526,71 @@ jobs:
           ACTOR_MENTION="${SLACK_ID:+<@$SLACK_ID>}"
           ACTOR_MENTION="${ACTOR_MENTION:-$ACTOR}"
 
-          SHORT_SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          SHORT_SHA="${{ needs.resolve.outputs.ref }}"
           SHORT_SHA="${SHORT_SHA:0:7}"
-          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ github.event.workflow_run.head_sha || github.sha }}"
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ needs.resolve.outputs.ref }}"
           COMMIT_MSG=$(jq -r '(.workflow_run.head_commit.message // .head_commit.message // "")' "$GITHUB_EVENT_PATH" | head -n 1)
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-          if [ "${{ steps.build.outcome }}" = "failure" ]; then
+          if [ "${{ steps.guard.outcome }}" = "failure" ]; then
+            CAUSE="${{ steps.guard.outputs.reason }}"
+            CAUSE="${CAUSE:-환경 도메인↔EC2_HOST 불일치 (secret 오설정 — dev/prod 교차배선)}"
+          elif [ "${{ steps.build.outcome }}" = "failure" ]; then
             CAUSE="Gradle 빌드 실패 (Build JAR)"
           elif [ "${{ steps.docker_login.outcome }}" = "failure" ]; then
             CAUSE="Docker Hub 로그인 실패"
           elif [ "${{ steps.docker_push.outcome }}" = "failure" ]; then
             CAUSE="Docker 이미지 빌드/푸시 실패"
+          elif [ "${{ steps.upload_nginx.outcome }}" = "failure" ] || [ "${{ steps.upload_provision.outcome }}" = "failure" ] || [ "${{ steps.upload_alloy.outcome }}" = "failure" ]; then
+            CAUSE="EC2 파일 업로드 실패 (SSH/scp 연결 — EC2_HOST/SSH_KEY 확인)"
+          elif [ "${{ steps.cert.outcome }}" = "failure" ]; then
+            CAUSE="TLS 인증서 발급 실패 (certbot — DNS 미전파 / 80포트 / Let's Encrypt rate limit)"
+          elif [ "${{ steps.nginx.outcome }}" = "failure" ]; then
+            CAUSE="nginx 설정 적용 실패 (nginx -t 검증 실패)"
+          elif [ "${{ steps.provision.outcome }}" = "failure" ]; then
+            CAUSE="런타임 프로비저닝 실패 (swap / redis / MySQL readiness / alloy)"
           elif [ "${{ steps.deploy.outcome }}" = "failure" ]; then
-            CAUSE="EC2 배포 실패 (SSH/Docker)"
+            CAUSE="EC2 배포 실패 (docker pull/run · blue-green)"
           elif [ "${{ steps.health.outcome }}" = "failure" ]; then
-            CAUSE="헬스체크 실패 (서버 미응답)"
+            CAUSE="헬스체크 실패 (서버 미응답 — 앱 부팅/DB 연결 확인)"
           else
             CAUSE="알 수 없음 (환경 설정 단계)"
           fi
 
-          TEXT=$(printf '❌ `${{ github.ref_name }}` 배포 실패! ❌\n• 배포자: %s\n• 커밋: <%s|%s>  %s\n• 원인: %s\n• <%s|워크플로우 로그 확인>' \
-            "$ACTOR_MENTION" "$COMMIT_URL" "$SHORT_SHA" "$COMMIT_MSG" "$CAUSE" "$RUN_URL")
+          if [ "${{ needs.resolve.outputs.environment }}" = "prod" ]; then TARGET="PiKi-Prod"; else TARGET="PiKi-Dev"; fi
+          TEXT=$(printf '❌ `%s` 배포 실패! ❌\n• 경로: `%s` 브랜치 → %s (%s)\n• 배포자: %s\n• 커밋: <%s|%s>  %s\n• 원인: %s\n• <%s|워크플로우 로그 확인>' \
+            "$TARGET" "${{ needs.resolve.outputs.branch }}" "$TARGET" "${{ needs.resolve.outputs.domain }}" "$ACTOR_MENTION" "$COMMIT_URL" "$SHORT_SHA" "$COMMIT_MSG" "$CAUSE" "$RUN_URL")
 
           curl -s -X POST https://slack.com/api/chat.postMessage \
             -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
             -H "Content-Type: application/json; charset=utf-8" \
             --data "$(jq -n --arg channel "${{ secrets.SLACK_CHANNEL_ID }}" --arg text "$TEXT" \
               '{channel:$channel,text:$text,unfurl_links:false,unfurl_media:false}')"
+
+  # main(prod) 배포 성공 후에만 GitHub Release 자동 생성 — 릴리스 = 실제로 라이브된 버전.
+  # 배포 실패 시 release 가 needs(deploy) 실패로 skip 되어 "안 뜬 버전의 릴리스"가 안 남는다.
+  release:
+    needs: [resolve, deploy]
+    if: needs.resolve.outputs.environment == 'prod'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
+          fetch-depth: 0
+      - name: Create GitHub Release (auto notes)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="release-$(echo '${{ needs.resolve.outputs.ref }}' | cut -c1-7)"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG 이미 존재 — skip"
+          else
+            gh release create "$TAG" \
+              --target "${{ needs.resolve.outputs.ref }}" \
+              --title "Production $TAG" \
+              --generate-notes
+          fi

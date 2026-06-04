@@ -23,6 +23,10 @@ class TournamentItemRepositoryImpl(
     override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
         tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId)
 
+    override fun findAllByTournamentIds(ids: List<Long>): List<TournamentItem> =
+        if (ids.isEmpty()) emptyList()
+        else tournamentItemJpaRepository.findAllByTournamentIdInAndNotDeleted(ids)
+
     override fun findByIds(ids: List<Long>): List<TournamentItem> = tournamentItemJpaRepository.findAllById(ids)
 
     override fun findById(id: Long): TournamentItem? = tournamentItemJpaRepository.findByIdAndDeletedAtIsNull(id)

@@ -19,7 +19,7 @@ class SecurityConfig(
     private val accessDeniedHandler: ApiResponseAccessDeniedHandler,
 ) {
     // @Order(2): admin 백오피스 체인(AdminSecurityConfig, @Order(1))이 /admin/** 를 먼저 잡고,
-    // 나머지 모든 요청은 이 기존 JWT(stateless) 체인이 처리한다. admin.enabled=false 면 admin 체인이
+    // 나머지 모든 요청은 이 기존 JWT(stateless) 체인이 처리한다. prod 환경에서는 admin 체인이
     // 아예 없어 이 체인만 단독으로 동작한다.
     @Bean
     @Order(2)
@@ -68,8 +68,22 @@ class SecurityConfig(
                     // (/v3/api-docs/**, springdoc 제공). Swagger UI 는 사용하지 않음.
                     .requestMatchers("/docs/**", "/v3/api-docs/**")
                     .permitAll()
+                    // 파비콘 — 브라우저가 모든 페이지에서 자동 요청하는 사이트 전역 정적 자산.
+                    // admin 체인(/admin/**)이 안 잡고 이 체인으로 떨어지므로 여기서 permit 해야
+                    // docs·admin 어디서든 401 없이 뜬다. 민감정보 없는 공개 파일.
+                    .requestMatchers(HttpMethod.GET, "/favicon.ico")
+                    .permitAll()
                     .requestMatchers("/api/v1/wishlists/**")
                     .hasAuthority(IdentityType.MEMBER.name)
+                    // 소셜 토너먼트 게스트 합류: 계정 없이 초대 코드 + 닉네임으로 가입과 동시에 참여
+                    .requestMatchers(HttpMethod.POST, "/api/v1/tournaments/*/join/guest")
+                    .permitAll()
+                    // 초대 코드 검증 미리보기: 미인증 상태에서 토너먼트 참여 전 정보 확인
+                    .requestMatchers(HttpMethod.GET, "/api/v1/tournaments/*/invite-preview")
+                    .permitAll()
+                    // 플레이 링크 정보 조회: 미인증 상태에서 링크 진입 시 토너먼트 정보 확인
+                    .requestMatchers(HttpMethod.GET, "/api/v1/tournaments/*/play-link-info")
+                    .permitAll()
                     // 토너먼트 플레이는 GUEST 도 허용
                     .requestMatchers("/api/v1/tournaments/**")
                     .authenticated()
