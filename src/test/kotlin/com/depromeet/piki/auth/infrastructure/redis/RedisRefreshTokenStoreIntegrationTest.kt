@@ -11,7 +11,7 @@ import kotlin.test.assertNull
 
 class RedisRefreshTokenStoreIntegrationTest : IntegrationTestSupport() {
     @Autowired
-    private lateinit var store: RefreshTokenStore
+    private lateinit var store: RedisRefreshTokenStore
 
     @Autowired
     private lateinit var redisTemplate: StringRedisTemplate

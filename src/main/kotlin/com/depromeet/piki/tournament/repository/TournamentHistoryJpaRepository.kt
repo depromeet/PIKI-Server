@@ -10,6 +10,8 @@ import org.springframework.data.repository.query.Param
 interface TournamentHistoryJpaRepository : JpaRepository<TournamentHistory, Long> {
     fun findAllByTournamentIdAndDeletedAtIsNullOrderByCurrentRoundAscIdAsc(tournamentId: Long): List<TournamentHistory>
 
+    fun findAllByTournamentIdInAndDeletedAtIsNull(tournamentIds: List<Long>): List<TournamentHistory>
+
     @Modifying
     @Query("UPDATE TournamentHistory h SET h.deletedAt = :now WHERE h.tournamentId = :tournamentId AND h.deletedAt IS NULL")
     fun softDeleteAllByTournamentId(@Param("tournamentId") tournamentId: Long, @Param("now") now: LocalDateTime)

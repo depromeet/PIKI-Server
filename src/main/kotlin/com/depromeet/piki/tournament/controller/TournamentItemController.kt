@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
@@ -81,9 +80,8 @@ class TournamentItemController(
         @PathVariable tournamentId: Long,
         @PathVariable tournamentItemId: Long,
         @Valid @ModelAttribute request: UpdateTournamentItemRequest,
-        @RequestPart("image", required = false) image: MultipartFile?,
     ): ApiResponseBody<Unit> {
-        tournamentItemService.updateItem(userId, tournamentId, tournamentItemId, request.name, request.price, request.currency, image)
+        tournamentItemService.updateItem(userId, tournamentId, tournamentItemId, request.name, request.price, request.currency, request.image)
         return ApiResponseBody.ok()
     }
 
