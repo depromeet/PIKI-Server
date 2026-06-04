@@ -262,7 +262,7 @@ interface TournamentItemApi {
         description = """
             파싱 실패(FAILED) 상태인 토너먼트 아이템을 유저가 직접 보정한다.
             수정 성공 시 아이템 상태가 FAILED → READY 로 전환된다.
-            수정 가능 필드: 이름, 가격, 가격 단위, 이미지 파일 (null 이면 기존 값 유지).
+            수정 가능 필드: 이름, 가격, 가격 단위, 이미지(multipart/form-data 의 image 파트) — null 이면 기존 값 유지.
             이미지는 파일로 업로드하며 서버가 S3 에 저장한 URL 로 item.imageUrl 을 갱신한다.
             READY·PROCESSING 아이템은 수정 불가(409). 아이템을 등록한 본인만 수정 가능.
             이름은 수정 후에도 반드시 존재해야 한다 — 기존 이름이 없고 name 도 미입력이면 400.
@@ -347,7 +347,6 @@ interface TournamentItemApi {
         @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
         @Parameter(description = "토너먼트 아이템 ID", example = "10") tournamentItemId: Long,
         request: UpdateTournamentItemRequest,
-        image: MultipartFile?,
     ): ApiResponseBody<Unit>
 
     @Operation(
