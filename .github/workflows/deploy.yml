@@ -477,8 +477,10 @@ jobs:
           COMMIT_MSG=$(jq -r '(.workflow_run.head_commit.message // .head_commit.message // "")' "$GITHUB_EVENT_PATH" | head -n 1)
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-          TEXT=$(printf '✅ `%s` 배포 성공!  ✅\n• 배포자: %s\n• 커밋: <%s|%s>  %s\n• <%s|워크플로우 로그>' \
-            "${{ needs.resolve.outputs.environment }}" "$ACTOR_MENTION" "$COMMIT_URL" "$SHORT_SHA" "$COMMIT_MSG" "$RUN_URL")
+          # 배포 대상을 PiKi-Dev / PiKi-Prod 로 브랜딩 + 도메인까지 보여 "어디에 배포됐는지" 명확히.
+          if [ "${{ needs.resolve.outputs.environment }}" = "prod" ]; then TARGET="PiKi-Prod"; else TARGET="PiKi-Dev"; fi
+          TEXT=$(printf '✅ `%s` 배포 성공!  ✅\n• 환경: %s (%s)\n• 배포자: %s\n• 커밋: <%s|%s>  %s\n• <%s|워크플로우 로그>' \
+            "$TARGET" "$TARGET" "${{ needs.resolve.outputs.domain }}" "$ACTOR_MENTION" "$COMMIT_URL" "$SHORT_SHA" "$COMMIT_MSG" "$RUN_URL")
 
           curl -s -X POST https://slack.com/api/chat.postMessage \
             -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
@@ -520,8 +522,9 @@ jobs:
             CAUSE="알 수 없음 (환경 설정 단계)"
           fi
 
-          TEXT=$(printf '❌ `%s` 배포 실패! ❌\n• 배포자: %s\n• 커밋: <%s|%s>  %s\n• 원인: %s\n• <%s|워크플로우 로그 확인>' \
-            "${{ needs.resolve.outputs.environment }}" "$ACTOR_MENTION" "$COMMIT_URL" "$SHORT_SHA" "$COMMIT_MSG" "$CAUSE" "$RUN_URL")
+          if [ "${{ needs.resolve.outputs.environment }}" = "prod" ]; then TARGET="PiKi-Prod"; else TARGET="PiKi-Dev"; fi
+          TEXT=$(printf '❌ `%s` 배포 실패! ❌\n• 환경: %s (%s)\n• 배포자: %s\n• 커밋: <%s|%s>  %s\n• 원인: %s\n• <%s|워크플로우 로그 확인>' \
+            "$TARGET" "$TARGET" "${{ needs.resolve.outputs.domain }}" "$ACTOR_MENTION" "$COMMIT_URL" "$SHORT_SHA" "$COMMIT_MSG" "$CAUSE" "$RUN_URL")
 
           curl -s -X POST https://slack.com/api/chat.postMessage \
             -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
