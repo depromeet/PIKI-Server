@@ -1,5 +1,7 @@
 package com.depromeet.piki.common.openapi
 
+import com.depromeet.piki.common.exception.ErrorCategory
+import com.depromeet.piki.common.response.ApiResponseBody
 import io.swagger.v3.oas.models.Operation
 import io.swagger.v3.oas.models.examples.Example
 import io.swagger.v3.oas.models.media.Content
@@ -42,4 +44,13 @@ class OperationExamples(
         val example = Example().value(objectMapper.convertValue(payload, Any::class.java))
         mediaType.examples = (mediaType.examples ?: linkedMapOf()).apply { put(name, example) }
     }
+
+    // Security 필터 단(ApiResponseSecurityErrorHandlers)이 내려보내는 401/403 은 detail 없이 fail(category) 라
+    // 전 엔드포인트에 같은 example 이 반복된다. 그 보일러플레이트를 한 자리로 모은다.
+    // (도메인 예외 403 처럼 detail 이 있는 응답은 그대로 add 를 직접 쓴다.)
+    fun unauthorized(name: String = "인증 필요") =
+        add(HttpStatus.UNAUTHORIZED, name, ApiResponseBody.fail<Unit>(category = ErrorCategory.UNAUTHORIZED))
+
+    fun forbidden(name: String) =
+        add(HttpStatus.FORBIDDEN, name, ApiResponseBody.fail<Unit>(category = ErrorCategory.FORBIDDEN))
 }

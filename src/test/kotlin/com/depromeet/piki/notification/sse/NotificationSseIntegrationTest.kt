@@ -1,0 +1,167 @@
+package com.depromeet.piki.notification.sse
+
+import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.piki.notification.controller.dto.NotificationSsePayload
+import com.depromeet.piki.notification.domain.Notification
+import com.depromeet.piki.notification.domain.NotificationType
+import com.depromeet.piki.notification.repository.NotificationRepository
+import com.depromeet.piki.notification.service.NotificationChannel
+import com.depromeet.piki.support.IntegrationTestSupport
+import com.depromeet.piki.user.domain.IdentityType
+import org.hamcrest.Matchers.notNullValue
+import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.http.HttpHeaders
+import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.request
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
+import org.springframework.test.web.servlet.setup.MockMvcBuilders
+import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.context.WebApplicationContext
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import java.util.UUID
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+// 구독 엔드포인트 contract 와 채널 전달을 실제 빈으로 검증한다.
+// 도메인 publish -> AFTER_COMMIT -> dispatcher -> 채널 리스트 순회는 토대(PR #288)의 통합 테스트가 이미 덮으므로,
+// 여기서는 SseNotificationChannel 이 그 리스트에 합류하는지 + 채널이 등록 emitter 에 올바로 전달하는지에 집중한다.
+// 레지스트리는 인메모리 싱글톤이라 @Transactional 롤백 대상이 아니므로, 각 테스트가 랜덤 userId 를 쓰고 자기 등록분을 정리한다.
+@Transactional
+class NotificationSseIntegrationTest : IntegrationTestSupport() {
+    @Autowired private lateinit var webApplicationContext: WebApplicationContext
+
+    @Autowired private lateinit var jwtProvider: JwtProvider
+
+    @Autowired private lateinit var registry: SseEmitterRegistry
+
+    @Autowired private lateinit var sseNotificationChannel: SseNotificationChannel
+
+    @Autowired private lateinit var channels: List<NotificationChannel>
+
+    @Autowired private lateinit var notificationRepository: NotificationRepository
+
+    private fun authHeader(userId: UUID): String = "Bearer ${jwtProvider.generateAccessToken(userId, IdentityType.MEMBER)}"
+
+    private fun buildMockMvc(): MockMvc =
+        MockMvcBuilders
+            .webAppContextSetup(webApplicationContext)
+            .apply<DefaultMockMvcBuilder>(springSecurity())
+            .build()
+
+    @Test
+    fun `토큰 없이 구독하면 401 이 ApiResponseBody contract 로 내려간다`() {
+        buildMockMvc()
+            .perform(get("/api/v1/notifications/subscribe"))
+            .andExpect(status().isUnauthorized)
+            .andExpect(content().contentTypeCompatibleWith("application/json"))
+            .andExpect(jsonPath("$.detail", notNullValue()))
+    }
+
+    @Test
+    fun `인증 유저가 구독하면 SSE 스트림이 시작되고 레지스트리에 emitter 가 등록된다`() {
+        val userId = UUID.randomUUID()
+        try {
+            buildMockMvc()
+                .perform(
+                    get("/api/v1/notifications/subscribe")
+                        .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+                ).andExpect(request().asyncStarted())
+
+            assertEquals(1, registry.emittersOf(userId).size)
+        } finally {
+            registry.emittersOf(userId).toList().forEach { registry.unregister(userId, it) }
+        }
+    }
+
+    @Test
+    fun `SseNotificationChannel 은 dispatcher 의 채널 리스트에 합류한다`() {
+        assertTrue(channels.any { it is SseNotificationChannel })
+    }
+
+    @Test
+    fun `채널로 보내면 그 유저의 등록된 emitter 가 notification 이벤트 payload 를 받는다`() {
+        val userId = UUID.randomUUID()
+        val emitter = RecordingSseEmitter()
+        registry.register(userId, emitter)
+        val notification =
+            notificationRepository.save(
+                Notification(
+                    userId = userId,
+                    type = NotificationType.TOURNAMENT_ITEM_ADDED,
+                    title = "새 아이템",
+                    body = "나이키 에어맥스가 추가됐어요",
+                    refId = 42L,
+                ),
+            )
+
+        try {
+            sseNotificationChannel.send(userId, notification)
+
+            val payloads = emitter.sentData.filterIsInstance<NotificationSsePayload>()
+            assertEquals(1, payloads.size)
+            val payload = payloads.first()
+            assertEquals(notification.getId(), payload.id)
+            assertEquals(NotificationType.TOURNAMENT_ITEM_ADDED, payload.type)
+            assertEquals(42L, payload.refId)
+            assertEquals("새 아이템", payload.title)
+            assertEquals("나이키 에어맥스가 추가됐어요", payload.body)
+            // SSE 이벤트 name 이 notification 으로 실린다.
+            assertTrue(emitter.sentData.any { it is String && it.contains("event:notification") })
+        } finally {
+            registry.unregister(userId, emitter)
+        }
+    }
+
+    @Test
+    fun `채널 전달은 수신자 본인의 emitter 에만 가고 다른 유저에게는 가지 않는다`() {
+        val userId = UUID.randomUUID()
+        val otherUserId = UUID.randomUUID()
+        val otherEmitter = RecordingSseEmitter()
+        registry.register(otherUserId, otherEmitter)
+        val notification =
+            notificationRepository.save(
+                Notification(userId, NotificationType.ITEM_PARSING_COMPLETED, "제목", "본문", 1L),
+            )
+
+        try {
+            sseNotificationChannel.send(userId, notification)
+
+            assertTrue(otherEmitter.sentData.none { it is NotificationSsePayload })
+        } finally {
+            registry.unregister(otherUserId, otherEmitter)
+        }
+    }
+
+    @Test
+    fun `write 가 실패하는 죽은 emitter 는 전달 시 레지스트리에서 정리된다`() {
+        val userId = UUID.randomUUID()
+        // 이미 complete 된 emitter 는 send 시 IllegalStateException 을 던져 "죽은 연결" 을 시뮬레이션한다.
+        val dead = SseEmitter().apply { complete() }
+        registry.register(userId, dead)
+        val notification =
+            notificationRepository.save(
+                Notification(userId, NotificationType.ITEM_PARSING_FAILED, "제목", "본문", 1L),
+            )
+
+        sseNotificationChannel.send(userId, notification)
+
+        assertTrue(registry.emittersOf(userId).isEmpty())
+    }
+}
+
+// send(SseEventBuilder) 를 가로채 실제 IO 없이 전송 내용을 기록한다. build() 가 내놓는 data 항목
+// (메타 라인 문자열 + payload 객체)을 그대로 모아, 테스트가 payload 와 이벤트 name 을 단언할 수 있게 한다.
+private class RecordingSseEmitter : SseEmitter() {
+    val sentData = CopyOnWriteArrayList<Any>()
+
+    override fun send(builder: SseEmitter.SseEventBuilder) {
+        builder.build().forEach { sentData.add(it.data) }
+    }
+}

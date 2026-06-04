@@ -21,6 +21,7 @@ import com.depromeet.piki.wishlist.service.WishPersistenceService
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
@@ -991,10 +992,11 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
-                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"name":"수정된 이름","price":50000,"currency":"KRW"}"""),
+                multipart(HttpMethod.PATCH, "/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .param("name", "수정된 이름")
+                    .param("price", "50000")
+                    .param("currency", "KRW")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
 
         val updated = itemJpaRepository.findById(failedItem.getId()).get()
@@ -1014,10 +1016,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
-                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"name":"수정 시도"}"""),
+                multipart(HttpMethod.PATCH, "/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .param("name", "수정 시도")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isConflict)
     }
 
@@ -1031,10 +1032,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
-                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"name":"수정 시도"}"""),
+                multipart(HttpMethod.PATCH, "/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .param("name", "수정 시도")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isConflict)
     }
 
@@ -1048,10 +1048,11 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
-                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"name":"수정 시도","price":10000,"currency":"KRW"}"""),
+                multipart(HttpMethod.PATCH, "/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .param("name", "수정 시도")
+                    .param("price", "10000")
+                    .param("currency", "KRW")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isConflict)
     }
 
@@ -1066,10 +1067,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
-                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"name":"수정 시도"}"""),
+                multipart(HttpMethod.PATCH, "/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .param("name", "수정 시도")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isForbidden)
     }
 
@@ -1083,10 +1083,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
-                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"price":50000,"currency":"KRW"}"""),
+                multipart(HttpMethod.PATCH, "/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .param("price", "50000")
+                    .param("currency", "KRW")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
 
         val updated = itemJpaRepository.findById(failedItem.getId()).get()
@@ -1105,10 +1105,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
 
         mockMvc
             .perform(
-                patch("/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
-                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"price":50000}"""),
+                multipart(HttpMethod.PATCH, "/api/v1/tournaments/$tournamentId/items/$tournamentItemId")
+                    .param("price", "50000")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isBadRequest)
     }
 

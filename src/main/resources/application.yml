@@ -60,6 +60,13 @@ oauth:
     client-id: ${GOOGLE_CLIENT_ID:}
     client-secret: ${GOOGLE_CLIENT_SECRET:}
     redirect-uri: ${GOOGLE_REDIRECT_URI:}
+  apple:
+    team-id: ${APPLE_TEAM_ID:}
+    key-id: ${APPLE_KEY_ID:}
+    client-id: ${APPLE_CLIENT_ID:}
+    bundle-id: ${APPLE_BUNDLE_ID:}
+    private-key: ${APPLE_PRIVATE_KEY:}
+    redirect-uri: ${APPLE_REDIRECT_URI:}
 
 gemini:
   api-key: ${GEMINI_API_KEY:}
@@ -109,3 +116,27 @@ management:
       # Zipkin 등 외부 export 가 없어 모든 요청을 추적해도 비용은 span 생성 + MDC put/remove 뿐.
       # 모든 응답·로그에 traceId 가 빠짐없이 찍히도록 1.0 으로 둔다 (기본 0.1 이면 일부 요청에 누락).
       probability: 1.0
+
+logging:
+  structured:
+    format:
+      # 운영은 Grafana(Loki)로 로그를 보낸다. ECS JSON 으로 출력하면 Alloy 가 trace.id·log.level·message 등
+      # 필드를 파싱해 trace 를 Loki structured metadata 로 승격하고 본문은 message 만 남길 수 있다(#364).
+      # 값이 있으면(ecs) 구조화 JSON 출력이 켜지고 아래 pattern.console(평문)은 무시된다.
+      # 로컬은 LOG_STRUCTURED 미설정(빈값)이라 구조화 off → pattern.console 평문 패턴이 적용된다.
+      # (운영 docker run 에만 -e LOG_STRUCTURED=ecs 를 준다. env override 패턴은 ADMIN_ENABLED 와 동일.)
+      console: ${LOG_STRUCTURED:}
+  pattern:
+    # 아래 평문 패턴은 구조화 off(로컬)일 때만 적용된다 — LOG_STRUCTURED=ecs 면 위 구조화 출력이 우선한다.
+    # 운영 로그는 Grafana(Loki)에서 본다. Grafana 가 줄 앞에 수집시각(KST)+레벨을 자동으로 붙이므로,
+    # Spring Boot 기본 콘솔 패턴의 시각·레벨과 겹쳐 한 줄에 시각·레벨이 두 번씩 나온다. 게다가 운영 컨테이너
+    # JVM 은 UTC 라 Spring 시각이 Grafana 의 KST 표시와 9시간 어긋나 더 헷갈린다.
+    #
+    # 그래서 콘솔 패턴을 직접 정의한다:
+    #  - 시각을 Asia/Seoul 로 고정해 Grafana 표시(KST)와 맞춘다 (JVM 타임존은 안 건드린다 — now() 등 도메인 시각에
+    #    영향 주지 않도록 로그 출력에서만 KST 로 포맷. DB 는 serverTimezone=UTC 유지).
+    #  - PID·--- ·application name([PIKI])을 뺀다. 단일 컨테이너라 PID 는 항상 1 이고, 서비스 구분은 Loki 의
+    #    container 라벨(team3-blue/green)이 이미 한다 — 줄마다 반복할 가치가 없다.
+    #  - traceId/spanId 는 한 요청의 전체 로그를 묶는 추적 키라 유지한다 (sampling 1.0 이라 항상 채워진다).
+    # 색상(%clr)은 쓰지 않는다 — non-TTY(컨테이너 stdout)에선 어차피 plain 이고, 로컬 콘솔 색상보다 패턴 단순함을 택한다.
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS, Asia/Seoul} %-5level [%thread] [%X{traceId:-},%X{spanId:-}] %logger{36} : %msg%n%wEx"

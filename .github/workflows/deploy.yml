@@ -168,6 +168,12 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REDIRECT_URI: ${{ secrets.GOOGLE_REDIRECT_URI }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+          APPLE_CLIENT_ID: ${{ secrets.APPLE_CLIENT_ID }}
+          APPLE_BUNDLE_ID: ${{ secrets.APPLE_BUNDLE_ID }}
+          APPLE_PRIVATE_KEY: ${{ secrets.APPLE_PRIVATE_KEY }}
+          APPLE_REDIRECT_URI: ${{ secrets.APPLE_REDIRECT_URI }}
           S3_BUCKET: ${{ secrets.S3_BUCKET }}
           S3_PUBLIC_BASE_URL: ${{ secrets.S3_PUBLIC_BASE_URL }}
           # admin 백오피스(dev 전용). ENABLED 만 평문(민감정보 아님)으로 두어 "dev 에 켰다"는 의도를 드러내고,
@@ -181,7 +187,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: GEMINI_API_KEY,DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,JWT_SECRET,REDIS_HOST,REDIS_PORT,KAKAO_CLIENT_ID,KAKAO_CLIENT_SECRET,KAKAO_REDIRECT_URI,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,S3_BUCKET,S3_PUBLIC_BASE_URL,ADMIN_ENABLED,ADMIN_USERNAME,ADMIN_PASSWORD,DOCKERHUB_USERNAME,IMAGE_TAG
+          envs: GEMINI_API_KEY,DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,JWT_SECRET,REDIS_HOST,REDIS_PORT,KAKAO_CLIENT_ID,KAKAO_CLIENT_SECRET,KAKAO_REDIRECT_URI,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,APPLE_TEAM_ID,APPLE_KEY_ID,APPLE_CLIENT_ID,APPLE_BUNDLE_ID,APPLE_PRIVATE_KEY,APPLE_REDIRECT_URI,S3_BUCKET,S3_PUBLIC_BASE_URL,ADMIN_ENABLED,ADMIN_USERNAME,ADMIN_PASSWORD,DOCKERHUB_USERNAME,IMAGE_TAG
           script: |
             IMAGE="$DOCKERHUB_USERNAME/team3-server:$IMAGE_TAG"
 
@@ -226,10 +232,14 @@ jobs:
             # 외부에서 직접 scrape 되는 우회 경로를 구조적으로 차단한다 (nginx /actuator 차단의 보강).
             # 주의: 별도 PR 의 Grafana Alloy 는 같은 호스트의 컨테이너이므로 --network host 로 띄워 localhost 를 scrape 해야 한다
             #       (redis 가 쓰는 172.17.0.1 bridge 바인딩 방식으로는 127.0.0.1 바인딩 포트에 닿지 못한다).
+            # LOG_STRUCTURED=ecs: 운영 로그를 ECS JSON 으로 출력해 Alloy 가 trace 를 Loki structured
+            # metadata 로 승격하게 한다(#364). 값 고정 평문이라 Secrets 불필요. 로컬은 이 변수 미설정이라
+            # application.yml 의 평문 콘솔 패턴(#361)을 그대로 쓴다.
             docker run -d \
               --name "team3-$INACTIVE" \
               -p "127.0.0.1:$INACTIVE_PORT:8080" \
               -e JAVA_TOOL_OPTIONS="-Xmx256m -Xms64m" \
+              -e LOG_STRUCTURED="ecs" \
               -e GEMINI_API_KEY="$GEMINI_API_KEY" \
               -e DB_HOST="$DB_HOST" \
               -e DB_PORT="$DB_PORT" \
@@ -245,6 +255,12 @@ jobs:
               -e GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
               -e GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET" \
               -e GOOGLE_REDIRECT_URI="$GOOGLE_REDIRECT_URI" \
+              -e APPLE_TEAM_ID="$APPLE_TEAM_ID" \
+              -e APPLE_KEY_ID="$APPLE_KEY_ID" \
+              -e APPLE_CLIENT_ID="$APPLE_CLIENT_ID" \
+              -e APPLE_BUNDLE_ID="$APPLE_BUNDLE_ID" \
+              -e APPLE_PRIVATE_KEY="$APPLE_PRIVATE_KEY" \
+              -e APPLE_REDIRECT_URI="$APPLE_REDIRECT_URI" \
               -e S3_BUCKET="$S3_BUCKET" \
               -e S3_PUBLIC_BASE_URL="$S3_PUBLIC_BASE_URL" \
               -e ADMIN_ENABLED="$ADMIN_ENABLED" \
