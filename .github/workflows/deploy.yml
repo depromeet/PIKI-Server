@@ -162,6 +162,17 @@ jobs:
                 --email depromeet18.3@gmail.com -d "$DOMAIN" \
                 --pre-hook "systemctl stop nginx" --post-hook "systemctl start nginx"
             fi
+            # nginx conf 가 include 하는 certbot 권장 SSL 파일은 certonly --standalone 로는 안 깔린다
+            # (certbot --nginx 설치 경로에서만 생성). 누락 시 nginx -t 가 깨지므로, certbot 패키지가
+            # 번들한 원본을 /etc/letsencrypt/ 로 복사한다(없을 때만 — prod 는 이미 있어 no-op, 동일 SSL 유지).
+            if [ ! -f /etc/letsencrypt/options-ssl-nginx.conf ]; then
+              SRC=$(find /usr -name options-ssl-nginx.conf 2>/dev/null | head -1)
+              [ -n "$SRC" ] && sudo cp "$SRC" /etc/letsencrypt/options-ssl-nginx.conf && echo "[certbot] options-ssl-nginx.conf 복사"
+            fi
+            if [ ! -f /etc/letsencrypt/ssl-dhparams.pem ]; then
+              SRC=$(find /usr -name ssl-dhparams.pem 2>/dev/null | head -1)
+              [ -n "$SRC" ] && sudo cp "$SRC" /etc/letsencrypt/ssl-dhparams.pem && echo "[certbot] ssl-dhparams.pem 복사"
+            fi
 
       - name: Apply nginx config
         id: nginx
