@@ -60,10 +60,13 @@ jobs:
           DOMAIN: ${{ needs.resolve.outputs.domain }}
           TARGET: ${{ secrets.EC2_HOST }}
         run: |
+          # 양쪽을 IP 로 정규화해 비교한다 — EC2_HOST 가 IP 든 hostname(EC2 public DNS 등)이든
+          # getent 가 IP 로 풀어주므로, 형식 차이로 인한 false-abort 없이 "같은 호스트냐"만 본다.
           EXPECTED=$(getent hosts "$DOMAIN" | awk '{print $1}' | head -1)
-          echo "environment=${{ needs.resolve.outputs.environment }} domain=$DOMAIN dns=$EXPECTED target=$TARGET"
-          if [ -n "$EXPECTED" ] && [ "$EXPECTED" != "$TARGET" ]; then
-            echo "::error::배포 대상 EC2_HOST 가 ${DOMAIN} 의 DNS(${EXPECTED}) 와 불일치 — 환경 secret 오설정 의심, 중단."
+          ACTUAL=$(getent hosts "$TARGET"  | awk '{print $1}' | head -1)
+          echo "environment=${{ needs.resolve.outputs.environment }} domain=$DOMAIN domainIP=$EXPECTED target=$TARGET targetIP=$ACTUAL"
+          if [ -n "$EXPECTED" ] && [ -n "$ACTUAL" ] && [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::배포 대상 EC2_HOST(${TARGET}→${ACTUAL}) 가 ${DOMAIN}(→${EXPECTED}) 와 다른 호스트 — 환경 secret 오설정 의심, 중단."
             exit 1
           fi
 
