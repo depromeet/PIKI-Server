@@ -1,5 +1,6 @@
 package com.depromeet.piki.item.domain
 
+import com.depromeet.piki.product.service.ProductSnapshot
 import java.time.LocalDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -74,5 +75,64 @@ class ItemSnapshotTest {
         assertEquals(512, snapshot.name?.length)
         assertEquals(8, snapshot.currency?.length)
         assertEquals(0, snapshot.currentPrice)
+    }
+
+    // --- 전이 (2단계: item 평행 추적) ---
+
+    @Test
+    fun `PROCESSING 스냅샷을 markReady 하면 추출 결과로 채워지고 READY 와 extractedAt 이 설정된다`() {
+        val snapshot = ItemSnapshot(itemId = 1L)
+        val extractedAt = LocalDateTime.of(2026, 6, 4, 10, 0)
+        snapshot.markReady(
+            ProductSnapshot(name = "나이키", imageUrl = "https://img.example.com/a.png", currentPrice = 99_000, currency = "KRW"),
+            extractedAt,
+        )
+        assertEquals(ItemStatus.READY, snapshot.status)
+        assertEquals("나이키", snapshot.name)
+        assertEquals(99_000, snapshot.currentPrice)
+        assertEquals(extractedAt, snapshot.extractedAt)
+    }
+
+    @Test
+    fun `markReady 시 추출 결과에 name 이 없으면 READY 불변식 위반으로 실패한다`() {
+        val snapshot = ItemSnapshot(itemId = 1L)
+        assertFailsWith<IllegalArgumentException> {
+            snapshot.markReady(ProductSnapshot(currentPrice = 1_000), LocalDateTime.of(2026, 6, 4, 10, 0))
+        }
+    }
+
+    @Test
+    fun `PROCESSING 스냅샷을 markFailed 하면 FAILED 가 된다`() {
+        val snapshot = ItemSnapshot(itemId = 1L)
+        snapshot.markFailed()
+        assertEquals(ItemStatus.FAILED, snapshot.status)
+    }
+
+    @Test
+    fun `FAILED 스냅샷을 recover 하면 채워지고 READY 와 extractedAt 이 설정된다`() {
+        val snapshot = ItemSnapshot(itemId = 1L)
+        snapshot.markFailed()
+        val at = LocalDateTime.of(2026, 6, 4, 11, 0)
+        snapshot.recover(name = "수동 보정", currentPrice = 5_000, imageUrl = null, currency = "KRW", extractedAt = at)
+        assertEquals(ItemStatus.READY, snapshot.status)
+        assertEquals("수동 보정", snapshot.name)
+        assertEquals(at, snapshot.extractedAt)
+    }
+
+    @Test
+    fun `PROCESSING 이 아닌 스냅샷을 markReady 하면 IllegalStateException`() {
+        val snapshot = ItemSnapshot(itemId = 1L)
+        snapshot.markFailed()
+        assertFailsWith<IllegalStateException> {
+            snapshot.markReady(ProductSnapshot(name = "x"), LocalDateTime.of(2026, 6, 4, 10, 0))
+        }
+    }
+
+    @Test
+    fun `FAILED 가 아닌 스냅샷을 recover 하면 IllegalStateException`() {
+        val snapshot = ItemSnapshot(itemId = 1L)
+        assertFailsWith<IllegalStateException> {
+            snapshot.recover(name = "x", currentPrice = null, imageUrl = null, currency = null, extractedAt = LocalDateTime.of(2026, 6, 4, 10, 0))
+        }
     }
 }
