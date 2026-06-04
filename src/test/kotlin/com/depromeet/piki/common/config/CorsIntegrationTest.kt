@@ -54,6 +54,26 @@ class CorsIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `dev 프론트 origin 의 preflight 도 허용된다`() {
+        // dev/prod 분리로 dev 프론트(dev.depromeet18team3.cloud)가 dev API 를 호출한다. 화이트리스트
+        // 누락 시 dev 에서 모든 인증/JSON 요청이 CORS 로 막힌다. 회귀 가드.
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+
+        mockMvc
+            .perform(
+                options("/api/v1/dev/users")
+                    .header(HttpHeaders.ORIGIN, "https://dev.depromeet18team3.cloud")
+                    .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"),
+            ).andExpect(status().isOk)
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://dev.depromeet18team3.cloud"))
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
+    }
+
+    @Test
     fun `화이트리스트에 없는 origin 의 preflight 는 403 으로 거부된다`() {
         // 허용 목록 검증이 실제로 동작함을 함께 단언해 테스트가 vacuous 하지 않도록 한다.
         val mockMvc =

@@ -18,7 +18,7 @@ import org.springframework.security.web.SecurityFilterChain
  *
  * 기존 앱 JWT(stateless) 체인과 완전히 분리된다 — securityMatcher 로 admin 경로만 관할하고
  * `@Order(1)` 로 기존 체인(@Order(2))보다 먼저 매칭된다. 인증은 세션 기반 form login + 환경변수로 주입한
- * 단일 admin 계정(InMemory). [ConditionalOnAdminEnabled] 로 게이팅되어 admin.enabled=true 일 때만 등록된다.
+ * 단일 admin 계정(InMemory). [ConditionalOnAdminEnabled](`@Profile("!prod")`) 로 게이팅되어 prod 서버에는 등록되지 않는다.
  *
  * UserDetailsService/Provider 를 체인-로컬(`authenticationProvider`)로 묶어, 전역 AuthenticationManager 에
  * admin 계정이 새어 기존 JWT 경로에 의도치 않은 인증 수단이 생기는 것을 막는다.
