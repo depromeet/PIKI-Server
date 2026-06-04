@@ -1,6 +1,6 @@
 // Grafana Alloy — PIKI 운영 박스(EC2) 단일 수집기.
-// 앱 prometheus 메트릭 scrape + team3-blue/green 컨테이너 로그 + 호스트 메트릭(node_exporter)을
-// Grafana Cloud 로 remote-write 한다.
+// 앱 prometheus 메트릭 scrape + team3-blue/green 컨테이너 로그 + 호스트 메트릭(node_exporter) +
+// 앱 OTLP 트레이스(otelcol)를 Grafana Cloud 로 보낸다.
 // 자격증명은 환경변수로 주입한다(provision-runtime.sh 의 docker run -e). secret 미등록 시
 // provision-runtime.sh 가 Alloy 기동 자체를 skip 하므로, 빈 endpoint 로 부팅해 crash loop 하는 일은 없다.
 
@@ -157,4 +157,43 @@ prometheus.scrape "host" {
   targets         = prometheus.exporter.unix.host.targets
   forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
   scrape_interval = "30s"
+}
+
+// ── 트레이스: 앱 OTLP push → Grafana Cloud (Tempo) (#380) ──
+// 앱(micrometer-tracing + opentelemetry-exporter-otlp)이 span 을 이 receiver 로 push 한다. 메트릭(Alloy→앱 scrape)·
+// 로그(컨테이너 stdout tail)와 달리 trace 는 앱이 능동적으로 push 하는 유일한 신호다. 앱 컨테이너는 bridge
+// 네트워크(-p 127.0.0.1:PORT:8080)라 컨테이너 안 localhost 는 자기 자신을 가리켜 --network host 인 이 Alloy 에
+// 안 닿는다. 그래서 deploy.yml 이 앱에 --add-host=host.docker.internal:host-gateway 를 주고 endpoint 를
+// host.docker.internal:4318 로 보낸다 → 아래 receiver 를 0.0.0.0 으로 bind 해 호스트 게이트웨이로 들어온 걸 받는다.
+otelcol.receiver.otlp "app" {
+  http { endpoint = "0.0.0.0:4318" }
+  grpc { endpoint = "0.0.0.0:4317" }
+  output {
+    traces = [otelcol.processor.batch.traces.input]
+  }
+}
+
+// 작은 박스라 span 을 모아 한 번에 보내 네트워크·CPU 를 아낀다.
+otelcol.processor.batch "traces" {
+  output {
+    traces = [otelcol.exporter.otlp.grafana_cloud.input]
+  }
+}
+
+// GC Tempo 로 OTLP export. endpoint·instance ID 는 secret, token 은 메트릭·로그와 공유(GRAFANA_CLOUD_TOKEN).
+// GRAFANA_TRACES_URL 미설정(traces secret 미등록) 시 더미로 fallback 해 Alloy 부팅을 살린다 — 메트릭·로그는 계속
+// 수집되고 trace export 만 연결 실패 로그를 남긴다(skip 가드는 GRAFANA_METRICS_URL 기준이라 traces 만 비면 여기 닿는다).
+// 더미는 receiver(4317/4318)와 안 겹쳐 self-loop 가 없다. secret 등록 후 다음 배포에 정상화된다.
+// dev/prod 구분(메트릭 external_labels·로그 static_labels 의 environment)은 trace 엔 아직 안 붙인다 — trace 는
+// traceId 단건 조회·service.name(piki)으로 우선 식별하고, 환경 필터가 필요하면 후속에 resource attribute 로 추가한다.
+otelcol.exporter.otlp "grafana_cloud" {
+  client {
+    endpoint = coalesce(sys.env("GRAFANA_TRACES_URL"), "tempo-unset.invalid:443")
+    auth     = otelcol.auth.basic.grafana_cloud.handler
+  }
+}
+
+otelcol.auth.basic "grafana_cloud" {
+  username = sys.env("GRAFANA_TRACES_USER")
+  password = sys.env("GRAFANA_CLOUD_TOKEN")
 }
