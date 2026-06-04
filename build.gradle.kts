@@ -58,11 +58,25 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
 
+    // 알림 템플릿 플레이스홀더 치환 (StringSubstitutor). Spring Boot BOM 미관리라 버전 명시 (Maven Central 최신 안정).
+    implementation("org.apache.commons:commons-text:1.15.0")
+
     // 옵저버빌리티: Actuator 로 health/metrics 노출 + Micrometer Prometheus 레지스트리로
     // /actuator/prometheus 텍스트 포맷 export. 수집은 EC2 의 Grafana Alloy → Grafana Cloud (별도 PR).
     // 버전은 Spring Boot BOM 이 관리한다.
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("io.micrometer:micrometer-registry-prometheus")
+
+    // 분산 추적: 요청마다 traceId/spanId 생성 → MDC·로그 correlation 패턴·응답 body(traceId)에 노출.
+    // Grafana Loki 에서 traceId 로 한 요청의 전체 로그를 추적한다. 버전은 Spring Boot BOM 이 관리.
+    //
+    // Spring Boot 4 는 autoconfigure 를 모듈로 쪼갰다. tracing 코어(spring-boot-micrometer-tracing)만 있으면
+    // NoopTracerAutoConfiguration 이 NOOP Tracer 를 등록해 traceId 가 비어 버린다. 둘 다 있어야 실제 Tracer 가 뜬다:
+    //  - spring-boot-micrometer-tracing-brave: Spring Boot 의 Brave autoconfig(@ConditionalOnClass(brave...))
+    //  - micrometer-tracing-bridge-brave: micrometer Tracer ↔ Brave 구현 + brave core(autoconfig 의 ConditionalOnClass 대상)
+    // Zipkin 등 외부 export 는 하지 않으므로 reporter(zipkin-reporter-brave)는 넣지 않는다 — traceId 생성·전파만 목적.
+    implementation("org.springframework.boot:spring-boot-micrometer-tracing-brave")
+    implementation("io.micrometer:micrometer-tracing-bridge-brave")
 
     // 크롭한 상품 이미지를 S3 에 업로드 (#144). 버전은 BOM 이 관리.
     implementation("software.amazon.awssdk:s3")

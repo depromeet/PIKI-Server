@@ -3,7 +3,7 @@ package com.depromeet.piki.tournament.repository
 import com.depromeet.piki.tournament.domain.Tournament
 import com.depromeet.piki.tournament.domain.TournamentHistory
 import com.depromeet.piki.tournament.domain.TournamentStatus
-import org.springframework.data.repository.findByIdOrNull
+import java.time.LocalDateTime
 import org.springframework.stereotype.Repository
 
 @Repository
@@ -18,13 +18,17 @@ class TournamentRepositoryImpl(
     }
 
     override fun findTournamentById(tournamentId: Long): Tournament? =
-        tournamentJpaRepository.findByIdOrNull(tournamentId)
+        tournamentJpaRepository.findByIdAndDeletedAtIsNull(tournamentId)
 
     override fun findTournamentByIdForUpdate(tournamentId: Long): Tournament? =
         tournamentJpaRepository.findByIdForUpdate(tournamentId)
 
     override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
-        tournamentHistoryJpaRepository.findAllByTournamentIdOrderByCurrentRoundAscIdAsc(tournamentId)
+        tournamentHistoryJpaRepository.findAllByTournamentIdAndDeletedAtIsNullOrderByCurrentRoundAscIdAsc(tournamentId)
+
+    override fun softDeleteHistoriesByTournamentId(tournamentId: Long) {
+        tournamentHistoryJpaRepository.softDeleteAllByTournamentId(tournamentId, LocalDateTime.now())
+    }
 
     override fun findByIdsAndStatuses(
         ids: List<Long>,
@@ -33,7 +37,7 @@ class TournamentRepositoryImpl(
         if (ids.isEmpty()) return emptyList()
         return statuses
             ?.takeIf { it.isNotEmpty() }
-            ?.let { tournamentJpaRepository.findByIdInAndStatusInOrderByCreatedAtDesc(ids, it) }
-            ?: tournamentJpaRepository.findByIdInOrderByCreatedAtDesc(ids)
+            ?.let { tournamentJpaRepository.findByIdInAndStatusInAndDeletedAtIsNullOrderByCreatedAtDesc(ids, it) }
+            ?: tournamentJpaRepository.findByIdInAndDeletedAtIsNullOrderByCreatedAtDesc(ids)
     }
 }

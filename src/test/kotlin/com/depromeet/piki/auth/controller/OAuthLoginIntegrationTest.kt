@@ -1,5 +1,6 @@
 package com.depromeet.piki.auth.controller
 
+import com.depromeet.piki.auth.infrastructure.oauth.OAuthException
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthProvider
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthUserInfo
 import com.depromeet.piki.support.IntegrationTestSupport
@@ -44,6 +45,10 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
     private lateinit var googleOAuthClient: StubOAuthClient
 
     @Autowired
+    @Qualifier("appleOAuthClient")
+    private lateinit var appleOAuthClient: StubOAuthClient
+
+    @Autowired
     private lateinit var wishRepository: WishRepository
 
     private fun mockMvc(): MockMvc =
@@ -86,6 +91,25 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.data.user.identityType").value("MEMBER"))
             .andExpect(jsonPath("$.data.user.profileImage").value("https://img/p.jpg"))
+            .andExpect(jsonPath("$.data.accessToken").isString)
+            .andExpect(jsonPath("$.data.refreshToken").isString)
+    }
+
+    @Test
+    fun `apple - app v2 로그인하면 provider 해석과 appleOAuthClient 빈 선택을 거쳐 MEMBER 로 가입된다`() {
+        // /login/{provider} 에 apple 을 넣어 OAuthProvider.APPLE 해석 → appleOAuthClient 빈 선택까지의
+        // 라우팅·와이어링을 실제로 태운다 (stub 으로 외부 Apple 호출만 격리).
+        appleOAuthClient.fetchByAccessTokenStub =
+            { OAuthUserInfo(OAuthProvider.APPLE, "apple_fresh", null) }
+
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/apple")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("X-Client-Type", "app")
+                    .content(loginBody("accessToken" to "apple-identity-token")),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.user.identityType").value("MEMBER"))
             .andExpect(jsonPath("$.data.accessToken").isString)
             .andExpect(jsonPath("$.data.refreshToken").isString)
     }
@@ -217,7 +241,6 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
             .perform(
                 post("/api/v1/auth/login/google").contentType(MediaType.APPLICATION_JSON).content("{}"),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test
@@ -228,14 +251,13 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(loginBody("accessToken" to "t", "code" to "c", "redirectUri" to "https://app/callback")),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
     }
 
     @Test
-    fun `미지원 provider - apple 은 400`() {
+    fun `미지원 provider - facebook 은 400`() {
         mockMvc()
             .perform(
-                post("/api/v1/auth/login/apple").contentType(MediaType.APPLICATION_JSON).content(
+                post("/api/v1/auth/login/facebook").contentType(MediaType.APPLICATION_JSON).content(
                     loginBody(
                         "accessToken" to "t",
                     ),
@@ -255,7 +277,62 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
                     ),
                 ),
             ).andExpect(status().isBadGateway)
-            .andExpect(jsonPath("$.status").value(502))
+            .andExpect(jsonPath("$.detail").value("소셜 로그인 제공자 호출에 실패했습니다."))
+            .andExpect(jsonPath("$.data").value(nullValue()))
+    }
+
+    @Test
+    fun `provider access token 무효 - invalidProviderToken 은 401 로 매핑된다`() {
+        googleOAuthClient.fetchByAccessTokenStub = { throw OAuthException.invalidProviderToken() }
+
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/google").contentType(MediaType.APPLICATION_JSON).content(
+                    loginBody(
+                        "accessToken" to "t",
+                    ),
+                ),
+            ).andExpect(status().isUnauthorized)
+            .andExpect(jsonPath("$.detail").value("소셜 로그인 토큰이 유효하지 않습니다. 다시 로그인해 주세요."))
+            .andExpect(jsonPath("$.data").value(nullValue()))
+    }
+
+    @Test
+    fun `인가 정보 만료-무효 - invalidGrant 는 400 으로 매핑된다`() {
+        // invalidGrant 는 access token 실패가 아니라 인가코드(code) 교환 실패다 —
+        // v1 code+redirectUri 경로(fetchUserInfoByCode)로 실제 분기를 태워 검증한다.
+        googleOAuthClient.fetchByCodeStub = { _, _ -> throw OAuthException.invalidGrant() }
+
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/google").contentType(MediaType.APPLICATION_JSON).content(
+                    loginBody(
+                        "code" to "expired-code",
+                        "redirectUri" to "https://app/callback",
+                    ),
+                ),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.detail").value("소셜 로그인 인가 정보가 만료되었거나 유효하지 않습니다. 다시 시도해 주세요."))
+            .andExpect(jsonPath("$.data").value(nullValue()))
+    }
+
+    @Test
+    fun `OAuth 설정 오류 - misconfigured 는 502 로 매핑된다 (provider 장애 502 와 detail 로 구분)`() {
+        // 우리 OAuth 설정 오류(invalid_client 등)는 외부 호출 경계 실패라 502 + SERVER_ERROR 로 내려간다
+        // (GeminiApiException.clientError 와 같은 결). RETRYABLE 502(provider 장애)와는 detail 로 구분된다.
+        googleOAuthClient.fetchByAccessTokenStub =
+            { throw OAuthException.misconfigured(RuntimeException("client secret invalid")) }
+
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/google").contentType(MediaType.APPLICATION_JSON).content(
+                    loginBody(
+                        "accessToken" to "t",
+                    ),
+                ),
+            ).andExpect(status().isBadGateway)
+            .andExpect(jsonPath("$.detail").value("소셜 로그인 설정 오류가 발생했습니다."))
+            .andExpect(jsonPath("$.data").value(nullValue()))
     }
 
     @Test

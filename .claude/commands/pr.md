@@ -12,6 +12,9 @@
 
 ```bash
 CURRENT_BRANCH=$(git branch --show-current)
+# 진입 정리: 7일 넘게 안 건드린 stale PR 본문 임시파일 제거 (session-close 를 안 거친 중단 작업의 누수를 회수 — mtime 기준이라 동시 세션의 최신 파일은 안 건드림). 임시파일은 지워져도 gh pr view 로 재생성돼 손실이 없으므로, 진행 중 장기 PR(리뷰 대기 등 며칠 걸침)을 절대 안 건드리도록 임계값을 넉넉히 7일로 둔다.
+# -mmin +10080 = 7일(10080분) 초과. -mtime 계열은 find 에서 +1일 반올림되니 -mmin 으로 명시. /tmp/ 의 trailing slash 필수 — macOS /tmp 는 /private/tmp symlink 라, 슬래시 없으면 find 가 symlink 를 안 따라가 0건(조용한 no-op)이 된다.
+find /tmp/ -maxdepth 1 -name 'pr_body_*.md' -mmin +10080 -delete 2>/dev/null
 # base 후보 (아래 0-B 의 $BASE 결정과 동일 우선순위: origin/dev → 레포 default → main)
 if git rev-parse --verify origin/dev >/dev/null 2>&1; then
   BASE_GUESS=dev
@@ -52,6 +55,8 @@ gh pr view --json url,number,body,baseRefName 2>/dev/null
   BASE=$(gh pr view --json baseRefName --jq '.baseRefName')
   ```
 - `$ARGUMENTS` 에 사용자가 base 명시한 경우 (`/pr main` 같은) 그 값을 우선 (create 모드 한정 — update 모드에서 base 변경하지 않는다).
+
+**임시파일 경로 규칙 (동시 세션 격리)** — PR 본문 임시파일은 고정 `/tmp/pr_body.md` 가 아니라 **브랜치별 경로** `/tmp/pr_body_$SLUG.md` 를 쓴다 (`SLUG` = 브랜치명의 `/` 를 `_` 로 치환, 예: `chore/skill-tmp` → `/tmp/pr_body_chore_skill-tmp.md`). 워크트리는 브랜치당 하나라(스택 금지) 브랜치별 경로면 두 워크트리 세션이 동시에 `/pr` 을 돌려도 본문 파일이 안 겹친다 — 고정 경로일 때 한 세션이 다른 세션의 본문을 덮어쓰던 race 를 막는다. 아래 3-A·3-B 의 본문 파일 경로는 모두 이 규칙을 따른다. **셸 변수는 bash 호출 간 유지되지 않으므로, 본문 파일을 다루는 각 bash 블록은 `SLUG=$(git branch --show-current | tr '/' '_')` 를 자기 안에서 다시 구한다.** (Write 도구로 본문을 저장할 때도 같은 경로를 쓴다 — Claude 가 현재 브랜치명으로 슬러그를 박는다.)
 
 ### 1단계: 정보 수집
 
@@ -100,7 +105,7 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
 - 대화에서 논의한 트레이드오프나 선택의 이유
 
 ## Result
-- 변경의 결과/효과
+- 변경의 결과/효과 (CI 가 보증하는 "테스트 통과" 류 자명한 사실은 적지 않음 — 아래 작성 지침)
 - 주의할 점이나 후속 작업이 있으면 언급
 
 ---
@@ -113,10 +118,12 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
 - 각 섹션은 bullet point(`-`)로 작성
 - 대화에서 나온 고민, 왜 이 방식을 선택했는지, 어떤 대안을 검토했는지를 우선 반영
 - diff에서만 보이는 기계적 변경 나열은 최소화
+- **섹션 간 재진술 금지 — 각 섹션은 자기 정보만 한 번.** 특히 Result 는 Situation/Task 에 이미 쓴 문제·과제를 "~문제가 해소됐다"로 다시 풀어 쓰지 않는다. Result 에는 새 정보만 — 결과 수치·효과·리스크·후속. (앞에서 깔고 → 과제로 다시 → 결과로 또 풀면 같은 내용이 본문에 세 번 실려 비대해진다.)
 - Task 섹션은 Slack PR 봇이 읽으므로, 핵심 작업을 간결하게 요약
 - 한국어로 작성, 기술 용어는 영어 허용
 - **본문에 `~` 를 쓰지 않는다** — GitHub-flavored markdown 이 `~text~` 를 취소선(strikethrough)으로 렌더링해, approximately/범위 의도로 쓴 물결이 두 개 사이 텍스트를 통째로 줄 그어버린다. approximately 는 "약", 범위는 en dash(–) 나 "에서"로 표현.
 - **1단계에서 수집한 `git log` 의 모든 커밋이 STAR(특히 Action)에 빠짐없이 반영됐는지 최종 점검한다.** 해시 명기는 update 모드 전용이지만, "누락된 커밋이 없는지" 점검은 create 모드도 같은 레벨로 거친다 — 기억·추측이 아니라 로그와 대조한다.
+- **CI 가 보증하는 자명한 결과는 본문에 적지 않는다.** "전체 테스트 통과"·"컴파일 성공"·"그린"·"전체 회귀 통과" 같은 머지 전제 사실은 리뷰어에게 새 정보가 0 이므로 Result 에서 뺀다. 검증은 **결과가 아니라 "무엇을·어떻게·왜 그렇게 확인했나"가 비자명할 때만** 적는다 — 동시성·negative control(임시 제거 시 FAIL 확인 등)·실측으로 확정한 가정·분기 망라의 폭(예: 케이스 N건)·검증의 한계와 후속 같은 것. 단순 통과 단언과 비자명한 검증 설명을 구분하라. 테스트 결과 XML·로그 전문을 `<details>` 로 덤프하지 않는다 (필요하면 한 줄로 요약).
 
 **Action 섹션 그룹화 가이드:**
 - bullet 이 6개 이상이거나 결이 다른 갈래(설계 / UX / 안전망 / 드라이푸딩 / 검토 후 채택 안 한 안 등)가 섞이면 sub-heading(`### 설계` 등)으로 그룹화한다.
@@ -131,12 +138,13 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
 ### 3-A. Create 모드 — PR 신규 생성
 
 1. 원격에 푸시되지 않았으면 `git push -u origin {브랜치명}`
-2. 사용자에게 PR 제목과 본문 초안을 보여주고 확인받는다
+2. PR 제목과 본문 초안을 작성해 **`/tmp/pr_body_$SLUG.md` 에 저장(Write)**한 뒤, 사용자에게 보여주고 확인받는다 (경로 규칙은 0단계 참조 — Claude 가 현재 브랜치 슬러그를 박는다).
 3. 확인 후 PR 생성 — assignee / 라벨을 함께 부여한다:
    ```bash
+   SLUG=$(git branch --show-current | tr '/' '_')
    gh pr create --base $BASE \
      --title "{제목}" \
-     --body-file /tmp/pr_body.md \
+     --body-file /tmp/pr_body_$SLUG.md \
      --assignee @me \
      ${ISSUE_LABELS:+--label "$ISSUE_LABELS"}
    ```
@@ -175,9 +183,10 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
 
 ### 3-B. Update 모드 — 기존 PR 본문 갱신
 
-1. 기존 본문 가져오기:
+1. 기존 본문 가져오기 (브랜치별 경로 — 0단계 규칙):
    ```bash
-   gh pr view --json body --jq '.body' > /tmp/pr_body.md
+   SLUG=$(git branch --show-current | tr '/' '_')
+   gh pr view --json body --jq '.body' > /tmp/pr_body_$SLUG.md
    ```
 2. **이번 추가 변경 내역을 `git log` 로 정확히 식별한다 — 기억·추측에 의존하지 않는다.**
    ```bash
@@ -195,7 +204,7 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
 5. **기존 본문은 절대 덮어쓰지 않는다.** 갱신본 = 기존 본문 + Updates 항목 추가만.
 6. **제목 변경 필요 검토**: 추가 변경으로 작업 의도/스코프가 바뀌었거나 기존 제목에 오타·부정확한 표현이 있으면 새 제목 제안. 그 외엔 제목 유지.
 7. 사용자에게 갱신본(필요시 새 제목 포함, 변경 이유 짚어서)을 보여주고 확인받는다.
-8. 확인 후 `gh pr edit --body-file /tmp/pr_body.md` 로 갱신. 제목 변경이 있으면 `--title "새 제목"` 추가.
+8. 확인 후 `gh pr edit --body-file /tmp/pr_body_$SLUG.md` 로 갱신 (1번과 같은 브랜치 경로 — 별도 bash 호출이라 `SLUG=$(git branch --show-current | tr '/' '_')` 를 다시 구한다). 제목 변경이 있으면 `--title "새 제목"` 추가.
 9. **CodeRabbit 리뷰 대응** — 이번 변경이 CodeRabbit 리뷰 대응이라면 commit + push 로 끝내지 않는다. CodeRabbit 리뷰(인라인 thread + review body nitpick) 조회·평가·reply·resolve 는 **`/coderabbit` 스킬**로 처리한다. 그 스킬이 author 매칭(GraphQL `reviewThreads` 는 `coderabbitai`, REST `reviews` 는 `coderabbitai[bot]` 이라 `coderabbitai` 로 시작하는지로 판별), nitpick 조회, accept/reject reply·resolve 정책을 담는다. (사람 리뷰 thread 는 작성자가 직접 답하므로 `/coderabbit` 도 건드리지 않는다.)
 
 10. **메타데이터 보정** — 이전 버전 스킬로 만든 PR 은 assignee / 라벨 / Project / Start date 가 비어 있을 수 있다. update 모드에서도 멱등하게 보정한다 (이미 설정돼 있으면 no-op). `item-add` 는 이미 등록된 PR 이면 기존 item id 를 그대로 반환한다.

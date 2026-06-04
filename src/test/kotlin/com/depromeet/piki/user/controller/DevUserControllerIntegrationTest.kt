@@ -37,7 +37,6 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
         buildMockMvc()
             .perform(get("/api/v1/dev/users"))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data").isArray)
             .andExpect(jsonPath("$.data[?(@.userId == '${userId}')].nickname").value("테스트유저"))
             .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
@@ -48,7 +47,6 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
         buildMockMvc()
             .perform(get("/api/v1/dev/users"))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data").isArray)
             .andExpect(jsonPath("$.data").isEmpty)
             .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
@@ -74,7 +72,6 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
         buildMockMvc()
             .perform(get("/api/v1/dev/users/$userId").header(ClientType.HEADER, "app"))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.accessToken", notNullValue()))
             .andExpect(jsonPath("$.data.refreshToken", notNullValue()))
             .andExpect(jsonPath("$.data.user.id").value(userId.toString()))
@@ -103,8 +100,6 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
         buildMockMvc()
             .perform(get("/api/v1/dev/users/${UUID.randomUUID()}"))
             .andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
-            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
             .andExpect(jsonPath("$.data").doesNotExist())
     }
 
@@ -113,7 +108,6 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
         buildMockMvc()
             .perform(get("/api/v1/dev/users"))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.status").value(200))
     }
 
     private fun buildMockMvc(): MockMvc =

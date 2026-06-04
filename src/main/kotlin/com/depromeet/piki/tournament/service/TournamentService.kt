@@ -236,6 +236,7 @@ class TournamentService(
         return TournamentItemDetail(
             tournamentItemId = tournamentItem.getId(),
             itemId = item.getId(),
+            sourceUrl = item.link?.toString(),
             name = item.name,
             imageUrl = item.imageUrl,
             price = item.currentPrice,
@@ -355,6 +356,25 @@ class TournamentService(
     }
 
     @Transactional
+    fun deleteTournament(
+        userId: UUID,
+        tournamentId: Long,
+    ) {
+        val tournament =
+            tournamentRepository.findTournamentByIdForUpdate(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        val tournamentUser =
+            tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+                ?: throw TournamentException.forbiddenTournament()
+        if (tournamentUser.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
+        if (tournament.isInProgress()) throw TournamentException.inProgressTournamentCannotBeDeleted()
+        tournamentRepository.softDeleteHistoriesByTournamentId(tournamentId)
+        tournamentItemRepository.softDeleteAllByTournamentId(tournamentId)
+        tournamentUserRepository.softDeleteAllByTournamentId(tournamentId)
+        tournament.softDelete()
+    }
+
+    @Transactional
     fun deleteItem(
         userId: UUID,
         tournamentId: Long,
@@ -378,7 +398,7 @@ class TournamentService(
             if (!isTournamentOwner) throw TournamentException.forbiddenTournament()
         }
 
-        val deleted = tournamentItemRepository.deleteIfPending(tournamentItemId, tournamentId)
+        val deleted = tournamentItemRepository.softDeleteIfPending(tournamentItemId, tournamentId)
         if (deleted == 0) throw TournamentException.notPendingTournament()
     }
 

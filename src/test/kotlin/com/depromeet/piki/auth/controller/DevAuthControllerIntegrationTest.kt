@@ -46,8 +46,6 @@ class DevAuthControllerIntegrationTest : IntegrationTestSupport() {
                     .header(ClientType.HEADER, "app")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer $guestToken"),
             ).andExpect(status().isCreated)
-            .andExpect(jsonPath("$.status").value(201))
-            .andExpect(jsonPath("$.code").value("CREATED"))
             .andExpect(jsonPath("$.data.accessToken", notNullValue()))
             .andExpect(jsonPath("$.data.refreshToken", notNullValue()))
             .andExpect(jsonPath("$.data.user.id").value(targetUserId.toString()))
@@ -98,8 +96,6 @@ class DevAuthControllerIntegrationTest : IntegrationTestSupport() {
                 post("/api/v1/dev/$unknownUserId/token")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer $guestToken"),
             ).andExpect(status().isNotFound)
-            .andExpect(jsonPath("$.status").value(404))
-            .andExpect(jsonPath("$.code").value("NOT_FOUND"))
             .andExpect(jsonPath("$.detail", notNullValue()))
             .andExpect(jsonPath("$.data").doesNotExist())
     }
@@ -115,8 +111,6 @@ class DevAuthControllerIntegrationTest : IntegrationTestSupport() {
                 post("/api/v1/dev/$deletedUserId/token")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer $guestToken"),
             ).andExpect(status().isConflict)
-            .andExpect(jsonPath("$.status").value(409))
-            .andExpect(jsonPath("$.code").value("CONFLICT"))
             .andExpect(jsonPath("$.detail", notNullValue()))
             .andExpect(jsonPath("$.data").doesNotExist())
     }

@@ -50,6 +50,9 @@ class SecurityConfig(
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/guest")
                     .permitAll()
+                    // OAuth 인가 URL 생성 — state 발급 포함. 미인증으로 호출 (로그인 전 단계).
+                    .requestMatchers(HttpMethod.GET, "/api/v1/auth/*/url")
+                    .permitAll()
                     // 소셜 로그인 진입점 — 미인증으로 호출(게스트 토큰은 선택). 게스트 토큰을 보내면 필터가 principal 을 채워 게스트-연결로 동작.
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/login/*")
                     .permitAll()
@@ -65,10 +68,18 @@ class SecurityConfig(
                     // (/v3/api-docs/**, springdoc 제공). Swagger UI 는 사용하지 않음.
                     .requestMatchers("/docs/**", "/v3/api-docs/**")
                     .permitAll()
+                    // 파비콘 — 브라우저가 모든 페이지에서 자동 요청하는 사이트 전역 정적 자산.
+                    // admin 체인(/admin/**)이 안 잡고 이 체인으로 떨어지므로 여기서 permit 해야
+                    // docs·admin 어디서든 401 없이 뜬다. 민감정보 없는 공개 파일.
+                    .requestMatchers(HttpMethod.GET, "/favicon.ico")
+                    .permitAll()
                     .requestMatchers("/api/v1/wishlists/**")
                     .hasAuthority(IdentityType.MEMBER.name)
                     // 토너먼트 플레이는 GUEST 도 허용
                     .requestMatchers("/api/v1/tournaments/**")
+                    .authenticated()
+                    // 알림 실시간 구독(SSE) — 인증 유저가 자기 알림 스트림을 연다 (GUEST 포함).
+                    .requestMatchers("/api/v1/notifications/**")
                     .authenticated()
                     // /users/me 와 /users/nickname/check 는 게스트도 호출 가능 (닉네임 확정/수정 흐름)
                     .requestMatchers(HttpMethod.GET, "/api/v1/users/me", "/api/v1/users/nickname/check")

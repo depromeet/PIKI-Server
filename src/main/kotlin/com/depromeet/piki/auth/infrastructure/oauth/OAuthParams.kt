@@ -10,4 +10,8 @@ internal object OAuthParams {
     const val REDIRECT_URI = "redirect_uri"
     const val CODE = "code"
     const val GRANT_TYPE_AUTHORIZATION_CODE = "authorization_code"
+    const val RESPONSE_TYPE = "response_type"
+    const val RESPONSE_TYPE_CODE = "code"
+    const val SCOPE = "scope"
+    const val STATE = "state"
 }

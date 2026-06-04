@@ -20,6 +20,13 @@ oauth:
     client-id: test-kakao-client-id
     client-secret: test-kakao-client-secret
     redirect-uri: http://localhost/auth/callback/kakao
+  apple:
+    team-id: test-team-id
+    key-id: test-key-id
+    client-id: test-apple-client-id
+    bundle-id: com.test.app
+    private-key: test-private-key
+    redirect-uri: http://localhost/auth/callback/apple
 
 # 컨텍스트 로딩만 통과시키기 위한 더미 fallback. 실제 Gemini 호출 테스트는 @Disabled 또는
 # @EnabledIfEnvironmentVariable 로 별도 격리되어 있으므로 CI 에서 GEMINI_API_KEY 가 없어도
