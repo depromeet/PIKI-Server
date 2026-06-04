@@ -26,6 +26,10 @@ class TournamentRepositoryImpl(
     override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
         tournamentHistoryJpaRepository.findAllByTournamentIdAndDeletedAtIsNullOrderByCurrentRoundAscIdAsc(tournamentId)
 
+    override fun findHistoriesByTournamentIds(ids: List<Long>): List<TournamentHistory> =
+        if (ids.isEmpty()) emptyList()
+        else tournamentHistoryJpaRepository.findAllByTournamentIdInAndDeletedAtIsNull(ids)
+
     override fun softDeleteHistoriesByTournamentId(tournamentId: Long) {
         tournamentHistoryJpaRepository.softDeleteAllByTournamentId(tournamentId, LocalDateTime.now())
     }

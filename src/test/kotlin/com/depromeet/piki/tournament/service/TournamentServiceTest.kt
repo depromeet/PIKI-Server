@@ -192,6 +192,9 @@ class TournamentServiceTest {
         override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
             items.filter { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }
 
+        override fun findAllByTournamentIds(ids: List<Long>): List<TournamentItem> =
+            items.filter { it.tournamentId in ids && (it.deletedAt?.let { false } ?: true) }
+
         override fun findByIds(ids: List<Long>): List<TournamentItem> =
             items.filter { it.getId() in ids }
 
@@ -253,6 +256,9 @@ class TournamentServiceTest {
 
         override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
             histories.filter { it.tournamentId == tournamentId }
+
+        override fun findHistoriesByTournamentIds(ids: List<Long>): List<TournamentHistory> =
+            histories.filter { it.tournamentId in ids }
 
         override fun findByIdsAndStatuses(
             ids: List<Long>,

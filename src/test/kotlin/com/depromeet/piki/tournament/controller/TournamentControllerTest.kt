@@ -11,6 +11,7 @@ import com.depromeet.piki.support.StubItemParsingWorker
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.repository.TournamentItemJpaRepository
+import com.depromeet.piki.tournament.repository.TournamentJpaRepository
 import com.depromeet.piki.tournament.repository.TournamentUserJpaRepository
 import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.user.domain.User
@@ -49,6 +50,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
     @Autowired private lateinit var objectMapper: ObjectMapper
 
     @Autowired private lateinit var tournamentItemJpaRepository: TournamentItemJpaRepository
+
+    @Autowired private lateinit var tournamentJpaRepository: TournamentJpaRepository
 
     @Autowired private lateinit var tournamentUserJpaRepository: TournamentUserJpaRepository
 
@@ -1664,12 +1667,44 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 .content("{}"),
         )
 
-        mockMvc
+        val result = mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/from-play-link")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
             ).andExpect(status().isCreated)
             .andExpect(jsonPath("$.data").isNumber)
+            .andReturn()
+
+        val newTournamentId = objectMapper.readTree(result.response.contentAsString)["data"].asLong()
+        val cloned = tournamentJpaRepository.findByIdAndDeletedAtIsNull(newTournamentId)!!
+        assertEquals(tournamentId, cloned.sourceTournamentId)
+
+        val sourceItemIds = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).map { it.itemId }.toSet()
+        val clonedItemIds = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(newTournamentId).map { it.itemId }.toSet()
+        assertEquals(sourceItemIds, clonedItemIds)
+    }
+
+    @Test
+    fun `POST from-play-link 는 같은 유저가 동일 플레이 링크로 재복제 시 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+        val (tournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/from-play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+        )
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/from-play-link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isConflict)
     }
 
     // ── 그룹 결과 ──────────────────────────────────────────────────

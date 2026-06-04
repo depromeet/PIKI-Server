@@ -556,13 +556,17 @@ class TournamentService(
         // 원본 토너먼트의 아이템 정보를 기준으로 결과 표시
         val referenceItemsById: MutableMap<Long, RankedItem> = mutableMapOf()
 
-        for (t in allRelated) {
-            val histories = tournamentRepository.findTournamentHistoriesByTournamentId(t.getId())
-            if (histories.isEmpty()) continue
-            val ranked = computeRanking(histories)
-            val tItemById = tournamentItemRepository.findByIds(ranked.map { it.first }).associateBy { it.getId() }
-            val itemById = itemRepository.findByIds(tItemById.values.map { it.itemId }).associate { it.getId() to it }
+        val allRelatedIds = allRelated.map { it.getId() }
+        val historiesByTournamentId = tournamentRepository.findHistoriesByTournamentIds(allRelatedIds)
+            .groupBy { it.tournamentId }
+        val rankedByTournamentId = historiesByTournamentId
+            .mapValues { (_, histories) -> computeRanking(histories) }
+        val allTournamentItemIds = rankedByTournamentId.values.flatten().map { it.first }
+        val tItemById = tournamentItemRepository.findByIds(allTournamentItemIds).associateBy { it.getId() }
+        val itemById = itemRepository.findByIds(tItemById.values.map { it.itemId }).associate { it.getId() to it }
 
+        for (t in allRelated) {
+            val ranked = rankedByTournamentId[t.getId()] ?: continue
             val ownerUserId = ownerByTournamentId[t.getId()] ?: continue
             val user = userById[ownerUserId] ?: continue
             val participant = ParticipantSummary(userId = user.id, nickname = user.nickname, profileImage = user.profileImage)
