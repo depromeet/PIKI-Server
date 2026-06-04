@@ -1,6 +1,7 @@
 package com.depromeet.piki.auth.config
 
 import com.depromeet.piki.support.IntegrationTestSupport
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.Arguments.arguments
@@ -9,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpMethod
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
@@ -37,6 +39,22 @@ class AuthorizationBoundaryIntegrationTest : IntegrationTestSupport() {
         mockMvc
             .perform(request(method, path))
             .andExpect(status().isUnauthorized)
+    }
+
+    // 루트(/)는 우리 API 표면이 아닌데 인증 벽에 걸려 401 + 인증실패 로그(노이즈)를 남기던 회귀를 막는다.
+    // WebConfig 가 /docs 로 리다이렉트한다. (/favicon.ico 의 공개 서빙은 #373 의 DocsAccessIntegrationTest 가 검증)
+    @Test
+    fun `루트는 인증 없이 API 문서로 리다이렉트된다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+
+        mockMvc
+            .perform(request(HttpMethod.GET, "/"))
+            .andExpect(status().is3xxRedirection)
+            .andExpect(redirectedUrl("/docs/index.html"))
     }
 
     companion object {
