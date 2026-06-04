@@ -104,6 +104,19 @@ class UserService(
     }
 
     @Transactional
+    fun createGuestWithNickname(nickname: String): User {
+        val id = UUID.randomUUID()
+        val profileImage = dicebearUrl(id)
+        return try {
+            userRepository.save(
+                User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.GUEST),
+            )
+        } catch (e: org.springframework.dao.DataIntegrityViolationException) {
+            throw UserException.duplicateNickname()
+        }
+    }
+
+    @Transactional
     fun createMember(nickname: String): User {
         if (userRepository.existsByNickname(nickname)) throw UserException.duplicateNickname()
         val id = UUID.randomUUID()
