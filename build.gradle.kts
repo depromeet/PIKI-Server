@@ -67,16 +67,21 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("io.micrometer:micrometer-registry-prometheus")
 
-    // 분산 추적: 요청마다 traceId/spanId 생성 → MDC·로그 correlation 패턴·응답 body(traceId)에 노출.
-    // Grafana Loki 에서 traceId 로 한 요청의 전체 로그를 추적한다. 버전은 Spring Boot BOM 이 관리.
+    // 분산 추적: 요청마다 traceId/spanId 생성 → MDC·로그 correlation·응답 body(traceId) 노출 +
+    // OTLP 로 export 해 Grafana Cloud Traces(Tempo)에서 trace waterfall·구간 latency 로 본다(#380). 버전은 BOM 관리.
     //
-    // Spring Boot 4 는 autoconfigure 를 모듈로 쪼갰다. tracing 코어(spring-boot-micrometer-tracing)만 있으면
-    // NoopTracerAutoConfiguration 이 NOOP Tracer 를 등록해 traceId 가 비어 버린다. 둘 다 있어야 실제 Tracer 가 뜬다:
-    //  - spring-boot-micrometer-tracing-brave: Spring Boot 의 Brave autoconfig(@ConditionalOnClass(brave...))
-    //  - micrometer-tracing-bridge-brave: micrometer Tracer ↔ Brave 구현 + brave core(autoconfig 의 ConditionalOnClass 대상)
-    // Zipkin 등 외부 export 는 하지 않으므로 reporter(zipkin-reporter-brave)는 넣지 않는다 — traceId 생성·전파만 목적.
-    implementation("org.springframework.boot:spring-boot-micrometer-tracing-brave")
-    implementation("io.micrometer:micrometer-tracing-bridge-brave")
+    // Spring Boot 4 는 autoconfigure 를 모듈로 쪼갰다(brave / opentelemetry 분리). tracing 코어만 있으면
+    // NoopTracerAutoConfiguration 이 NOOP Tracer 를 등록해 traceId 가 비어 버린다. 실제 Tracer + export 엔 셋이 필요:
+    //  - spring-boot-micrometer-tracing-opentelemetry: Spring Boot 의 OpenTelemetry autoconfig
+    //  - micrometer-tracing-bridge-otel: micrometer Tracer ↔ OpenTelemetry 구현
+    //  - opentelemetry-exporter-otlp: span 을 OTLP 로 export (endpoint 는 application.yml, 운영만 로컬 Alloy 로 보낸다)
+    //
+    // brave 가 아니라 OTel 을 택한 이유는 PR 본문 참고: 공식(Spring·Grafana)·업계 표준이고(Zipkin exporter 는 deprecate),
+    // 우리 스택(Alloy = OTel Collector, Tempo = OTLP native)과 직결된다. 코드는 micrometer 추상(Tracer)에만
+    // 의존해(brave 직접 import 0건) 브리지 교체에 애플리케이션·테스트 코드 변경이 없다.
+    implementation("org.springframework.boot:spring-boot-micrometer-tracing-opentelemetry")
+    implementation("io.micrometer:micrometer-tracing-bridge-otel")
+    implementation("io.opentelemetry:opentelemetry-exporter-otlp")
 
     // 크롭한 상품 이미지를 S3 에 업로드 (#144). 버전은 BOM 이 관리.
     implementation("software.amazon.awssdk:s3")

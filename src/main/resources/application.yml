@@ -111,9 +111,24 @@ management:
       application: ${spring.application.name}
   tracing:
     sampling:
-      # Zipkin 등 외부 export 가 없어 모든 요청을 추적해도 비용은 span 생성 + MDC put/remove 뿐.
-      # 모든 응답·로그에 traceId 가 빠짐없이 찍히도록 1.0 으로 둔다 (기본 0.1 이면 일부 요청에 누락).
+      # 모든 응답·로그에 traceId 가 빠짐없이 찍히고 모든 요청이 trace 로 export 되도록 1.0 으로 둔다
+      # (기본 0.1 이면 일부 요청만 추적). 트래픽이 커져 GC Traces 볼륨·비용이 부담되면 그때 하향한다.
       probability: 1.0
+    export:
+      otlp:
+        # span 을 OTLP 로 내보낼지 토글 (micrometer-tracing 기본 true). 로컬엔 수집기(Alloy)가 없어 끈다 —
+        # 운영 docker run 에만 TRACING_OTLP_ENABLED=true 를 준다 (LOG_STRUCTURED=ecs 와 같은 env override 패턴).
+        # off 여도 trace 생성·전파(traceId·MDC·로그 correlation)는 그대로다 — export 단계만 끈다.
+        enabled: ${TRACING_OTLP_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          # export on 일 때 span 을 보낼 OTLP(HTTP/protobuf, 기본 transport=http) endpoint.
+          # 앱 컨테이너(bridge)에서 호스트의 Alloy(otelcol.receiver.otlp, --network host)로 보내려면
+          # 컨테이너→호스트 게이트웨이를 거쳐야 한다 (컨테이너 안 localhost 는 자기 자신이라 호스트 Alloy 에 안 닿는다).
+          # deploy.yml 이 앱 docker run 에 --add-host=host.docker.internal:host-gateway 를 주고 이 endpoint 로 보낸다.
+          endpoint: ${OTLP_TRACES_ENDPOINT:http://host.docker.internal:4318/v1/traces}
 
 logging:
   structured:
