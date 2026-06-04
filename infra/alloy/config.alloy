@@ -176,19 +176,21 @@ otelcol.receiver.otlp "app" {
 // 작은 박스라 span 을 모아 한 번에 보내 네트워크·CPU 를 아낀다.
 otelcol.processor.batch "traces" {
   output {
-    traces = [otelcol.exporter.otlp.grafana_cloud.input]
+    traces = [otelcol.exporter.otlphttp.grafana_cloud.input]
   }
 }
 
-// GC Tempo 로 OTLP export. endpoint·instance ID 는 secret, token 은 메트릭·로그와 공유(GRAFANA_CLOUD_TOKEN).
-// GRAFANA_TRACES_URL 미설정(traces secret 미등록) 시 더미로 fallback 해 Alloy 부팅을 살린다 — 메트릭·로그는 계속
-// 수집되고 trace export 만 연결 실패 로그를 남긴다(skip 가드는 GRAFANA_METRICS_URL 기준이라 traces 만 비면 여기 닿는다).
-// 더미는 receiver(4317/4318)와 안 겹쳐 self-loop 가 없다. secret 등록 후 다음 배포에 정상화된다.
-// dev/prod 구분(메트릭 external_labels·로그 static_labels 의 environment)은 trace 엔 아직 안 붙인다 — trace 는
+// GC 로 OTLP export. GC 는 통합 OTLP gateway(HTTP/protobuf, https://otlp-gateway-...grafana.net/otlp)를
+// 제공하므로 gRPC(otelcol.exporter.otlp)가 아니라 otlphttp 로 보낸다. otlphttp 는 endpoint 뒤에 /v1/traces 를
+// 붙여 전송한다. endpoint·instance ID(basic auth username)는 secret, token 은 메트릭·로그와 공유
+// (GRAFANA_CLOUD_TOKEN, traces:write scope 포함).
+// GRAFANA_TRACES_URL 미설정(traces secret 미등록) 시 더미로 fallback 해 Alloy 부팅을 살린다(메트릭·로그는 계속
+// 수집되고 trace export 만 연결 실패 로그를 남긴다. skip 가드는 GRAFANA_METRICS_URL 기준이라 traces 만 비면 여기 닿는다).
+// dev/prod 구분(메트릭 external_labels·로그 static_labels 의 environment)은 trace 엔 아직 안 붙인다. trace 는
 // traceId 단건 조회·service.name(piki)으로 우선 식별하고, 환경 필터가 필요하면 후속에 resource attribute 로 추가한다.
-otelcol.exporter.otlp "grafana_cloud" {
+otelcol.exporter.otlphttp "grafana_cloud" {
   client {
-    endpoint = coalesce(sys.env("GRAFANA_TRACES_URL"), "tempo-unset.invalid:443")
+    endpoint = coalesce(sys.env("GRAFANA_TRACES_URL"), "https://otlp-unset.invalid/otlp")
     auth     = otelcol.auth.basic.grafana_cloud.handler
   }
 }
