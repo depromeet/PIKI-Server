@@ -185,6 +185,13 @@ class TournamentException private constructor(
                 HttpStatus.CONFLICT,
             )
 
+        fun clonedTournamentCannotSharePlayLink(): TournamentException =
+            TournamentException(
+                "플레이 링크로 참여한 토너먼트는 플레이 링크를 생성할 수 없습니다.",
+                ErrorCategory.FORBIDDEN,
+                HttpStatus.FORBIDDEN,
+            )
+
         fun playLinkAlreadyCreated(): TournamentException =
             TournamentException(
                 "플레이 링크가 이미 생성된 토너먼트입니다.",

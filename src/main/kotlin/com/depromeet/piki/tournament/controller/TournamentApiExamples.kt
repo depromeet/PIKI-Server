@@ -518,6 +518,14 @@ class TournamentApiExamples(
                             payload = ApiResponseBody.ok(LocalDateTime.of(2026, 6, 9, 22, 0, 0)),
                         )
                         add(
+                            status = HttpStatus.FORBIDDEN,
+                            name = "플레이 링크로 참여한 토너먼트 (재공유 불가)",
+                            payload = ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.FORBIDDEN,
+                                detail = "플레이 링크로 참여한 토너먼트는 플레이 링크를 생성할 수 없습니다.",
+                            ),
+                        )
+                        add(
                             status = HttpStatus.CONFLICT,
                             name = "플레이 링크 이미 생성됨",
                             payload = ApiResponseBody.fail<Unit>(

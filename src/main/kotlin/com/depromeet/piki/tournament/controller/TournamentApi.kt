@@ -586,7 +586,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "403",
-                description = "권한 없음 (토너먼트 참여자가 아님 · 소유자가 아님)",
+                description = "권한 없음 (토너먼트 참여자가 아님 · 소유자가 아님 · 플레이 링크로 참여한 토너먼트는 플레이 링크 생성 불가)",
                 content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
             ApiResponse(
