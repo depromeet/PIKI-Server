@@ -484,7 +484,7 @@ class TournamentService(
         sourceTournamentId: Long,
     ): Long {
         val sourceTournament =
-            tournamentRepository.findTournamentById(sourceTournamentId)
+            tournamentRepository.findTournamentByIdForUpdate(sourceTournamentId)
                 ?: throw TournamentException.notFoundTournament()
         sourceTournament.playLinkExpiresAt ?: throw TournamentException.playLinkNotCreated()
         if (!sourceTournament.isPlayLinkValid()) throw TournamentException.playLinkExpired()
