@@ -48,10 +48,15 @@ class SecurityConfig(
                     // metrics·env 등 나머지 actuator 엔드포인트는 application.yml 에서 애초에 노출하지 않는다.
                     .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/prometheus")
                     .permitAll()
+                    // 런타임 로그 레벨 변경(POST /actuator/loggers/{logger}) — 평소 DEBUG 인 비-API 인증 로그를
+                    // 조사 시 켜기 위해 노출한다. POST 로 동작을 바꾸는 WRITE 엔드포인트라 health/prometheus 보다
+                    // 민감하나, 위와 같은 2층 차단(외부는 nginx 가 /actuator/ 403)으로 localhost(박스 SSH)에서만 도달한다.
+                    .requestMatchers("/actuator/loggers", "/actuator/loggers/**")
+                    .permitAll()
                     // 루트(/)는 우리 API 표면이 아닌데 anyRequest().authenticated() 에 걸려 401 +
                     // 인증실패 로그(노이즈)를 남기던 것을 막기 위해 인증 대상에서 제외한다.
                     // WebConfig 가 /docs/index.html 로 리다이렉트해 깔끔한 응답을 낸다.
-                    // (/favicon.ico 는 아래 별도 permitAll 로 처리 — 사이트 전역 정적 자산.)
+                    // (/favicon.ico 는 아래 별도 permitAll 로 처리: 사이트 전역 정적 자산.)
                     .requestMatchers(HttpMethod.GET, "/")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/guest")
