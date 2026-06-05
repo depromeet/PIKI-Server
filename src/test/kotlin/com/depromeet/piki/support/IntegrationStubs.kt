@@ -29,6 +29,13 @@ class IntegrationStubs {
     @Primary
     fun imageStorage(): StubImageStorage = StubImageStorage()
 
+    // FCM 발송 외부 경계(#245). 운영 FirebaseMessageSender 는 FirebaseApp 키가 없는 테스트 환경에선
+    // 아예 안 뜨지만, PushNotificationChannel 이 ObjectProvider 로 FcmMessageSender 를 찾으므로
+    // stub 을 @Primary 로 등록해 발송 fan-out·죽은 토큰 정리를 실제 FCM 호출 없이 검증한다.
+    @Bean
+    @Primary
+    fun fcmMessageSender(): StubFcmMessageSender = StubFcmMessageSender()
+
     // ItemParsingWorker·ImageParsingWorker 는 내부 비동기 워커를 래핑한 configurable stub.
     // enabled=true (기본): 실제 워커로 위임 — WishlistRegisterAsyncIntegrationTest 는 이 경로를 사용한다.
     // enabled=false: no-op — @Transactional 통합 테스트에서 미커밋 item 접근으로 발생하는 warn 로그 노이즈를
