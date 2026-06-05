@@ -83,6 +83,10 @@ dependencies {
     implementation("io.micrometer:micrometer-tracing-bridge-otel")
     implementation("io.opentelemetry:opentelemetry-exporter-otlp")
 
+    // JDBC 쿼리를 trace span 으로 계측 (DataSource proxy 자동 설정 → SQL 이 trace 의 한 구간으로 보인다).
+    // Spring Boot BOM 미관리라 버전 명시(Maven Central 최신 2.2.1). Boot 4 공식 호환 명시가 없어 부팅으로 검증한다.
+    implementation("net.ttddyy.observation:datasource-micrometer-spring-boot:2.2.1")
+
     // 크롭한 상품 이미지를 S3 에 업로드 (#144). 버전은 BOM 이 관리.
     implementation("software.amazon.awssdk:s3")
 
