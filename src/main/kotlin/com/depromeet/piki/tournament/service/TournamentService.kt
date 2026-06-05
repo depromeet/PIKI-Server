@@ -599,8 +599,13 @@ class TournamentService(
             val participant = ParticipantSummary(userId = user.id, nickname = user.nickname, profileImage = user.profileImage)
 
             for ((tournamentItemId, rank) in ranked) {
+                // tItem 누락은 삭제된 출전 아이템이 history 에 남은 정상 경우라 건너뛴다. 그러나 tItem 이 살아있으면
+                // snapshot 은 불변식상 반드시 있어야 한다 — 없으면 continue 로 삼키지 않고 fail-fast 로 터뜨려, 부분 집계된
+                // 랭킹이 200 으로 새어 나가는 것을 막는다.
                 val tItem = tItemById[tournamentItemId] ?: continue
-                val snapshot = tItem.snapshotId?.let { snapshotById[it] } ?: continue
+                val snapshot =
+                    tItem.snapshotId?.let { snapshotById[it] }
+                        ?: error("tournamentItem $tournamentItemId 의 snapshot ${tItem.snapshotId} 가 없다")
                 val key = RankKey(tItem.itemId, rank)
                 chosenByMap.getOrPut(key) { mutableListOf() }.add(participant)
                 if (t.getId() == rootId) {

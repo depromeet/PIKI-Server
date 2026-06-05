@@ -46,9 +46,11 @@ class WishPersistenceService(
         count: Int,
     ): List<WishWithItem> {
         val items = itemRepository.saveAll(List(count) { Item(status = ItemStatus.PROCESSING) })
-        // saveAll 은 입력 순서를 보존하므로 items[i] 와 snapshots[i] 가 같은 상품을 가리킨다.
-        val snapshots = itemSnapshotRepository.saveAll(items.map { ItemSnapshot.forItem(it) })
-        return items.zip(snapshots) { item, snapshot ->
+        // snapshot 을 itemId 로 매핑해 saveAll 반환 순서에 의존하지 않는다(순서 보존은 공식 계약이 아니다).
+        val snapshotsByItemId =
+            itemSnapshotRepository.saveAll(items.map { ItemSnapshot.forItem(it) }).associateBy { it.itemId }
+        return items.map { item ->
+            val snapshot = snapshotsByItemId[item.getId()] ?: error("item ${item.getId()} 의 snapshot 이 없다")
             val wish = wishRepository.save(Wish(userId = userId, itemId = item.getId(), snapshotId = snapshot.getId()))
             WishWithItem(wish = wish, item = item, snapshot = snapshot)
         }

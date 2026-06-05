@@ -105,6 +105,11 @@ class WishlistService(
                 val snapshot =
                     wish.snapshotId?.let { snapshotsById[it] }
                         ?: error("wish ${wish.getId()} 의 snapshot ${wish.snapshotId} 가 없다")
+                // snapshot_id 는 FK 없는 raw Long 이라 잘못 연결되면 item 은 A, 표시값은 B 인 섞인 응답이 나갈 수 있다.
+                // 서비스가 보장하는 정합성을 불변식으로 한 번 더 막는다(어긋나면 영속화 경로가 깨진 코드 버그).
+                require(snapshot.itemId == wish.itemId) {
+                    "wish ${wish.getId()} 의 snapshot(${snapshot.getId()}) 가 다른 item(${snapshot.itemId} != ${wish.itemId})을 가리킨다"
+                }
                 WishWithItem(wish = wish, item = item, snapshot = snapshot)
             }
 
@@ -131,6 +136,10 @@ class WishlistService(
         val snapshot =
             wish.snapshotId?.let { itemSnapshotRepository.findById(it) }
                 ?: error("wish ${wish.getId()} 의 snapshot ${wish.snapshotId} 가 없다")
+        // snapshot_id 는 FK 없는 raw Long 이라 잘못 연결되면 item 은 A, 표시값은 B 인 섞인 응답이 나갈 수 있다.
+        require(snapshot.itemId == wish.itemId) {
+            "wish ${wish.getId()} 의 snapshot(${snapshot.getId()}) 가 다른 item(${snapshot.itemId} != ${wish.itemId})을 가리킨다"
+        }
         return WishWithItem(wish = wish, item = item, snapshot = snapshot)
     }
 
