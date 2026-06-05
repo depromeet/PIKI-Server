@@ -38,7 +38,7 @@ class WishlistController(
         @Valid @RequestBody request: WishlistRegisterRequest,
     ): ApiResponseBody<WishItemResponse> {
         val result = wishlistService.registerFromUrl(rawUrl = request.url, userId = userId)
-        return ApiResponseBody.created(WishItemResponse.from(result.wish, result.item))
+        return ApiResponseBody.created(WishItemResponse.from(result.wish, result.item, result.snapshot))
     }
 
     @PostMapping("/images", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
@@ -50,7 +50,7 @@ class WishlistController(
         // images 파트를 아예 안 보내면(0장) Spring 이 컨트롤러 진입 전 MissingServletRequestPartException 으로
         // 끊어 캐치올(500)로 떨어진다. required=false + orEmpty 로 항상 서비스 검증(invalidImageCount, 400)에 닿게 한다.
         val results = wishlistService.registerFromImages(images = images.orEmpty(), userId = userId)
-        return ApiResponseBody.created(results.map { WishItemResponse.from(it.wish, it.item) })
+        return ApiResponseBody.created(results.map { WishItemResponse.from(it.wish, it.item, it.snapshot) })
     }
 
     @GetMapping
@@ -60,7 +60,7 @@ class WishlistController(
         @RequestParam(required = false) size: Int?,
     ): ApiResponseBody<List<WishItemResponse>> {
         val page = wishlistService.getWishlist(userId = userId, rawCursor = cursor, rawSize = size)
-        val data = page.entries.map { WishItemResponse.from(it.wish, it.item) }
+        val data = page.entries.map { WishItemResponse.from(it.wish, it.item, it.snapshot) }
         return ApiResponseBody.ok(
             data = data,
             pageResponse = PageResponse(nextCursor = page.nextCursor, hasNext = page.hasNext),
@@ -73,7 +73,7 @@ class WishlistController(
         @PathVariable wishId: Long,
     ): ApiResponseBody<WishItemResponse> {
         val result = wishlistService.getWish(userId = userId, wishId = wishId)
-        return ApiResponseBody.ok(WishItemResponse.from(result.wish, result.item))
+        return ApiResponseBody.ok(WishItemResponse.from(result.wish, result.item, result.snapshot))
     }
 
     @PatchMapping("/{wishId}", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
@@ -92,7 +92,7 @@ class WishlistController(
                 currency = request.currency,
                 image = image,
             )
-        return ApiResponseBody.ok(WishItemResponse.from(result.wish, result.item))
+        return ApiResponseBody.ok(WishItemResponse.from(result.wish, result.item, result.snapshot))
     }
 
     @DeleteMapping("/{wishId}")

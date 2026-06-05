@@ -2,8 +2,10 @@ package com.depromeet.piki.tournament.service
 
 import com.depromeet.piki.common.domain.LongBaseEntity
 import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemRepository
+import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.tournament.domain.Tournament
 import com.depromeet.piki.tournament.domain.TournamentHistory
 import com.depromeet.piki.tournament.domain.TournamentItem
@@ -114,15 +116,35 @@ class TournamentServiceTest {
         }
     }
 
-    private class TestWishRepository : WishRepository {
-        // userId → itemIds 매핑. 위시에 등록된 것만 카운트된다.
-        val wishItemIdsByUser: MutableMap<UUID, MutableSet<Long>> = mutableMapOf()
+    // 위시 등록의 축약 — itemId 마다 활성 snapshot(READY·기본가)을 만들고 그것을 가리키는 wish 를 만든다.
+    // 실제 persist 흐름(item → snapshot → wish.snapshotId 연결)과 동형이라, addItemsFromWish 가 wish.snapshotId 를
+    // 읽어 tournament_item 에 고정하는 3단계 동작을 그대로 검증할 수 있다.
+    private class TestWishRepository(
+        private val snapshotRepository: TestItemSnapshotRepository,
+    ) : WishRepository {
+        val wishes = mutableListOf<Wish>()
+        private var idSeq = 1L
 
         fun addWish(
             userId: UUID,
             vararg itemIds: Long,
         ) {
-            wishItemIdsByUser.getOrPut(userId) { mutableSetOf() }.addAll(itemIds.toList())
+            itemIds.forEach { itemId ->
+                // 같은 (user, item) 중복은 무시한다(기존 Set 시맨틱 보존).
+                if (wishes.any { it.userId == userId && it.itemId == itemId }) return@forEach
+                val snapshot =
+                    snapshotRepository.save(
+                        ItemSnapshot(
+                            itemId = itemId,
+                            name = "상품$itemId",
+                            currentPrice = TestItemRepository.DEFAULT_PRICE,
+                            status = ItemStatus.READY,
+                        ),
+                    )
+                val wish = Wish(userId = userId, itemId = itemId, snapshotId = snapshot.getId())
+                setEntityId(wish, idSeq++)
+                wishes.add(wish)
+            }
         }
 
         override fun save(wish: Wish): Wish = wish
@@ -135,10 +157,7 @@ class TournamentServiceTest {
         override fun countByItemIdsAndUserId(
             itemIds: List<Long>,
             userId: UUID,
-        ): Long {
-            val owned = wishItemIdsByUser[userId] ?: emptySet()
-            return itemIds.count { it in owned }.toLong()
-        }
+        ): Long = wishes.count { it.userId == userId && it.itemId in itemIds }.toLong()
 
         override fun findPage(
             userId: UUID,
@@ -146,12 +165,56 @@ class TournamentServiceTest {
             limit: Int,
         ): List<Wish> = emptyList()
 
-        override fun findById(id: Long): Wish? = null
+        override fun findById(id: Long): Wish? = wishes.find { it.getId() == id }
 
-        override fun findAllByIds(ids: List<Long>): List<Wish> = emptyList()
+        override fun findAllByIds(ids: List<Long>): List<Wish> = wishes.filter { it.getId() in ids }
 
+        override fun findByItemIdsAndUserId(
+            itemIds: List<Long>,
+            userId: UUID,
+        ): List<Wish> = wishes.filter { it.userId == userId && it.itemId in itemIds }
+
+        // 이 아이템을 위시에 담은 유저들 (알림 수신자 역조회). dev #371 이 추가한 계약을 wishes 기반으로 옮긴 것.
         override fun findUserIdsByItemId(itemId: Long): List<UUID> =
-            wishItemIdsByUser.filterValues { itemId in it }.keys.toList()
+            wishes.filter { it.itemId == itemId }.map { it.userId }.distinct()
+
+        private fun setEntityId(
+            entity: LongBaseEntity,
+            id: Long,
+        ) {
+            val field = LongBaseEntity::class.java.getDeclaredField("id")
+            field.isAccessible = true
+            field.set(entity, id)
+        }
+    }
+
+    // 고정/활성 snapshot 저장소. addWish 가 채운 snapshot 을 출전 후 조회 경로(getTournamentById 등)가 다시 읽는다.
+    private class TestItemSnapshotRepository : ItemSnapshotRepository {
+        val snapshots = mutableListOf<ItemSnapshot>()
+        private var idSeq = 1L
+
+        override fun save(snapshot: ItemSnapshot): ItemSnapshot {
+            setEntityId(snapshot, idSeq++)
+            snapshots.add(snapshot)
+            return snapshot
+        }
+
+        override fun saveAll(snapshots: List<ItemSnapshot>): List<ItemSnapshot> = snapshots.map { save(it) }
+
+        override fun findLatestByItemId(itemId: Long): ItemSnapshot? = snapshots.lastOrNull { it.itemId == itemId }
+
+        override fun findById(id: Long): ItemSnapshot? = snapshots.find { it.getId() == id }
+
+        override fun findByIds(ids: List<Long>): List<ItemSnapshot> = snapshots.filter { it.getId() in ids }
+
+        private fun setEntityId(
+            entity: LongBaseEntity,
+            id: Long,
+        ) {
+            val field = LongBaseEntity::class.java.getDeclaredField("id")
+            field.isAccessible = true
+            field.set(entity, id)
+        }
     }
 
     private class TestUserRepository : UserRepository {
@@ -304,7 +367,8 @@ class TournamentServiceTest {
     private val repository = TestTournamentRepository()
     private val testUserRepository = TestUserRepository()
     private val testItemRepository = TestItemRepository()
-    private val testWishRepository = TestWishRepository()
+    private val testItemSnapshotRepository = TestItemSnapshotRepository()
+    private val testWishRepository = TestWishRepository(testItemSnapshotRepository)
     private val service =
         TournamentService(
             tournamentUserRepository,
@@ -312,6 +376,7 @@ class TournamentServiceTest {
             tournamentItemRepository,
             testUserRepository,
             testItemRepository,
+            testItemSnapshotRepository,
             testWishRepository,
         )
     private val userId = UUID.randomUUID()

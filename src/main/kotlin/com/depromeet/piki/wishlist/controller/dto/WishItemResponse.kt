@@ -1,6 +1,7 @@
 package com.depromeet.piki.wishlist.controller.dto
 
 import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.wishlist.domain.Wish
 import io.swagger.v3.oas.annotations.media.Schema
@@ -17,10 +18,11 @@ data class WishItemResponse(
         fun from(
             wish: Wish,
             item: Item,
+            snapshot: ItemSnapshot,
         ): WishItemResponse =
             WishItemResponse(
                 wish = WishView.from(wish),
-                item = ItemView.from(item),
+                item = ItemView.from(item, snapshot),
             )
     }
 
@@ -69,14 +71,19 @@ data class WishItemResponse(
         val sourceUrl: String?,
     ) {
         companion object {
-            fun from(item: Item): ItemView =
+            // 표시값(status·name·currentPrice·currency·imageUrl)은 활성 snapshot 에서,
+            // 정체성(id·sourceUrl=상품 링크)은 item 에서 읽는다. snapshot 은 5단계 갱신에서 새 버전으로 스왑된다.
+            fun from(
+                item: Item,
+                snapshot: ItemSnapshot,
+            ): ItemView =
                 ItemView(
                     id = item.getId(),
-                    status = item.status,
-                    name = item.name,
-                    currentPrice = item.currentPrice,
-                    currency = item.currency,
-                    imageUrl = item.imageUrl,
+                    status = snapshot.status,
+                    name = snapshot.name,
+                    currentPrice = snapshot.currentPrice,
+                    currency = snapshot.currency,
+                    imageUrl = snapshot.imageUrl,
                     sourceUrl = item.link?.toString(),
                 )
         }

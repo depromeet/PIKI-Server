@@ -31,6 +31,13 @@ interface WishRepository {
     // 호출부가 반환 개수로 누락 여부를 판단한다.
     fun findAllByIds(ids: List<Long>): List<Wish>
 
+    // 한 유저의 위시를 itemId 목록으로 조회. 토너먼트로 출전시킬 때 각 위시의 활성 snapshotId 를
+    // 읽어 tournament_item 에 고정하는 데 쓴다. itemId 는 등록당 1건이라 유저 내에서 사실상 1:1.
+    fun findByItemIdsAndUserId(
+        itemIds: List<Long>,
+        userId: UUID,
+    ): List<Wish>
+
     // 이 아이템을 위시에 담은 유저들 (알림 수신자 역조회). 같은 아이템을 여러 유저가 담을 수 있다.
     fun findUserIdsByItemId(itemId: Long): List<UUID>
 }
