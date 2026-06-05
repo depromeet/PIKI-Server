@@ -6,7 +6,9 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
-// FCM 기기 토큰 등록/해제(#244). 발송(#245)은 PushNotificationChannel 이 repository 를 직접 사용한다.
+// FCM 기기 토큰 등록/해제(#244) + 발송 시 토큰 조회·죽은 토큰 정리(#245).
+// 트랜잭션 경계를 서비스 레벨에 모은다 — 발송 채널(PushNotificationChannel)은 트랜잭션 밖에서
+// 외부 FCM 호출만 하고, 토큰 조회(readOnly)·죽은 토큰 삭제(쓰기)는 이 서비스의 짧은 트랜잭션에 위임한다.
 @Service
 class UserDeviceService(
     private val userDeviceRepository: UserDeviceRepository,
@@ -36,6 +38,18 @@ class UserDeviceService(
         deviceId: String,
     ) {
         userDeviceRepository.deleteByUserIdAndDeviceId(userId, deviceId)
+    }
+
+    // 발송(#245) — 한 사용자의 모든 기기 토큰을 모아 멀티캐스트 대상으로 넘긴다.
+    @Transactional(readOnly = true)
+    fun findTokens(userId: UUID): List<String> = userDeviceRepository.findAllByUserId(userId).map { it.fcmToken }
+
+    // 발송 후 정리(#245) — FCM 이 UNREGISTERED/INVALID 로 응답한 죽은 토큰을 일괄 제거한다.
+    // 발송 결과가 비면(전부 정상) 호출자 분기 없이 여기서 멱등하게 흡수한다.
+    @Transactional
+    fun removeStaleTokens(fcmTokens: List<String>) {
+        if (fcmTokens.isEmpty()) return
+        userDeviceRepository.deleteAllByFcmTokenIn(fcmTokens)
     }
 
     // 같은 토큰을 들고 있던 다른 row 를 해제한다 — 토큰당 1 row(배달 정확성)를 유지하기 위함.
