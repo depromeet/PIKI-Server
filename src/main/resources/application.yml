@@ -99,12 +99,13 @@ management:
   endpoints:
     web:
       exposure:
-        # 최소 노출: health(상태), prometheus(메트릭 scrape) 둘뿐.
+        # 노출: health(상태), prometheus(메트릭 scrape), loggers(런타임 로그 레벨 변경).
         # info·metrics·env 등 나머지 actuator 엔드포인트는 노출하지 않는다 (info 는 contributor 가
         # 없어 빈 응답이라 노출 표면만 늘릴 뿐이고, Alloy 도 prometheus·health 만 긁는다).
-        # 외부(nginx 443) 는 /actuator/ 를 차단하고, EC2 내부의 Grafana Alloy 만
-        # localhost 로 /actuator/prometheus 를 scrape 한다 (별도 PR).
-        include: health, prometheus
+        # loggers 는 비-API 인증 로그(평소 DEBUG)를 조사 시 런타임에 켜기 위함. POST 로 동작을 바꾸는
+        # WRITE 엔드포인트라, 외부(nginx 443)가 /actuator/ 를 403 으로 차단해 localhost(박스)에서만 도달한다.
+        # 외부 차단 + EC2 내부 Grafana Alloy 만 localhost 로 /actuator/prometheus 를 scrape 하는 2층 구조.
+        include: health, prometheus, loggers
   metrics:
     tags:
       # Grafana Cloud 에서 서비스 단위로 메트릭을 구분하는 공통 라벨.

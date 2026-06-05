@@ -44,4 +44,6 @@ class WishRepositoryImpl(
         itemIds: List<Long>,
         userId: UUID,
     ): List<Wish> = wishJpaRepository.findByItemIdInAndUserIdAndDeletedAtIsNull(itemIds, userId)
+
+    override fun findUserIdsByItemId(itemId: Long): List<UUID> = wishJpaRepository.findUserIdsByItemId(itemId)
 }

@@ -174,6 +174,10 @@ class TournamentServiceTest {
             userId: UUID,
         ): List<Wish> = wishes.filter { it.userId == userId && it.itemId in itemIds }
 
+        // 이 아이템을 위시에 담은 유저들 (알림 수신자 역조회). dev #371 이 추가한 계약을 wishes 기반으로 옮긴 것.
+        override fun findUserIdsByItemId(itemId: Long): List<UUID> =
+            wishes.filter { it.itemId == itemId }.map { it.userId }.distinct()
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
@@ -254,6 +258,12 @@ class TournamentServiceTest {
 
         override fun findIdsByTournamentId(tournamentId: Long): List<Long> =
             items.filter { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }.map { it.getId() }
+
+        override fun findUserIdsByItemId(itemId: Long): List<UUID> =
+            items
+                .filter { it.itemId == itemId && (it.deletedAt?.let { false } ?: true) }
+                .map { it.userId }
+                .distinct()
 
         override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
             items.filter { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }

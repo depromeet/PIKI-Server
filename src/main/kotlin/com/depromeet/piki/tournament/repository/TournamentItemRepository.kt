@@ -1,6 +1,7 @@
 package com.depromeet.piki.tournament.repository
 
 import com.depromeet.piki.tournament.domain.TournamentItem
+import java.util.UUID
 
 interface TournamentItemRepository {
     fun saveAll(items: List<TournamentItem>): List<TournamentItem>
@@ -8,6 +9,9 @@ interface TournamentItemRepository {
     fun countByTournamentId(tournamentId: Long): Int
 
     fun findIdsByTournamentId(tournamentId: Long): List<Long>
+
+    // 이 아이템을 토너먼트에 추가한 사람들(adder). 파싱 알림 수신자 역조회. 같은 아이템이 여러 토너먼트에 공유될 수 있다.
+    fun findUserIdsByItemId(itemId: Long): List<UUID>
 
     fun findAllByTournamentId(tournamentId: Long): List<TournamentItem>
 
