@@ -3,7 +3,7 @@
     {
       "name": "DS_PROM",
       "label": "Prometheus",
-      "description": "PIKI 메트릭 (grafanacloud-piki-prom)",
+      "description": "PiKi 메트릭 (grafanacloud-piki-prom)",
       "type": "datasource",
       "pluginId": "prometheus",
       "pluginName": "Prometheus"
@@ -11,7 +11,7 @@
     {
       "name": "DS_LOKI",
       "label": "Loki",
-      "description": "PIKI 로그 (grafanacloud-piki-logs)",
+      "description": "PiKi 로그 (grafanacloud-piki-logs)",
       "type": "datasource",
       "pluginId": "loki",
       "pluginName": "Loki"
@@ -19,14 +19,14 @@
     {
       "name": "DS_TEMPO",
       "label": "Tempo",
-      "description": "PIKI 트레이스 (grafanacloud-piki-traces)",
+      "description": "PiKi 트레이스 (grafanacloud-piki-traces)",
       "type": "datasource",
       "pluginId": "tempo",
       "pluginName": "Tempo"
     }
   ],
   "__requires": [],
-  "title": "PIKI - 앱 + 호스트 개요",
+  "title": "PiKi - 앱 + 호스트 개요",
   "uid": "piki-app-overview",
   "tags": [
     "piki"
