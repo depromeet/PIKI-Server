@@ -1025,7 +1025,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         val failedItem = itemJpaRepository.save(Item(status = ItemStatus.FAILED))
-        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId))
+        val snapshot = itemSnapshotJpaRepository.save(ItemSnapshot.forItem(failedItem))
+        tournamentItemJpaRepository.save(
+            TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId, snapshotId = snapshot.getId()),
+        )
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc
@@ -1116,7 +1119,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         val failedItem = itemJpaRepository.save(Item(name = "기존 이름", status = ItemStatus.FAILED))
-        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId))
+        val snapshot = itemSnapshotJpaRepository.save(ItemSnapshot.forItem(failedItem))
+        tournamentItemJpaRepository.save(
+            TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId, snapshotId = snapshot.getId()),
+        )
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc
