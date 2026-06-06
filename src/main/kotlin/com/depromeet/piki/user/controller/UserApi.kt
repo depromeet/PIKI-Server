@@ -188,6 +188,16 @@ interface UserApi {
                 ],
             ),
             ApiResponse(
+                responseCode = "413",
+                description = "파일 크기가 허용 한도(multipart max-file-size)를 초과함",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
                 responseCode = "502",
                 description = "외부 의존성 실패 (이미지 저장소(S3) 업로드 실패 — 재시도 가능)",
                 content = [

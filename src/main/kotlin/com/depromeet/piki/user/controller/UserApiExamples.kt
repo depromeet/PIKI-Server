@@ -99,6 +99,13 @@ class UserApiExamples(
                                 ),
                         )
                         add(UserException.deletedUser(SAMPLE_USER_ID), name = "탈퇴한 유저")
+                        // multipart 한도 초과 — ResponseEntityExceptionHandler 가 표준으로 413 처리하고
+                        // handleExceptionInternal 이 ApiResponseBody(category=INVALID_INPUT, 기본 detail)로 감싼다.
+                        add(
+                            status = HttpStatus.PAYLOAD_TOO_LARGE,
+                            name = "파일 크기 초과",
+                            payload = ApiResponseBody.fail<Unit>(category = ErrorCategory.INVALID_INPUT),
+                        )
                         add(ImageStorageException.uploadFailed(), name = "이미지 저장소(S3) 업로드 실패")
                     }
 
