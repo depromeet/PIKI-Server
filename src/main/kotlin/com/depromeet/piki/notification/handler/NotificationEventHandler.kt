@@ -1,5 +1,6 @@
 package com.depromeet.piki.notification.handler
 
+import com.depromeet.piki.notification.domain.NotificationRouting
 import com.depromeet.piki.notification.domain.NotificationType
 import org.springframework.core.GenericTypeResolver
 import java.util.UUID
@@ -31,6 +32,11 @@ abstract class NotificationEventHandler<E : Any>(
 
     // 템플릿 변수 (예: actorName). 변수 없는 알림은 기본값 emptyMap 을 그대로 쓰고 override 하지 않는다.
     open fun resolveVariables(event: E): Map<String, String> = emptyMap()
+
+    // 딥링크 라우팅 컨텍스트(#408). 파싱 알림처럼 출처(위시/토너먼트)별로 이동 화면이 갈리는 알림은 이를 override 해
+    // 도메인 식별자(kind·tournamentId·tournamentItemId)를 싣는다. refId 만으로 충분한 알림(토너먼트 알림 등)은
+    // 기본값 null 을 그대로 쓰고, 그러면 Notification 의 라우팅 컬럼이 비워진다(채널에서 키가 생략된다).
+    open fun resolveRouting(event: E): NotificationRouting? = null
 
     // 타입 인자 E 를 Spring 의 제네릭 추출 헬퍼로 풀어낸다. 서브클래스 생성 시 javaClass 는 실제 구현체라,
     // 그 슈퍼타입 NotificationEventHandler<E> 의 첫 타입 인자가 E 다. (private 라 가상 호출이 아니므로 init 안전)
