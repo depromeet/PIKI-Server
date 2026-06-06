@@ -420,6 +420,7 @@ class TournamentService(
             },
             hasGroupResult = hasGroupResult,
             isOwner = isOwner,
+            playLinkExpiresAt = tournament.playLinkExpiresAt,
         )
     }
 
@@ -455,6 +456,22 @@ class TournamentService(
         val participantCount = tournamentUserRepository.countByTournamentId(tournamentId)
         return TournamentInvitePreview(
             tournamentId = tournamentId,
+            tournamentName = tournament.name,
+            itemCount = itemCount,
+            participantCount = participantCount,
+        )
+    }
+
+    @Transactional(readOnly = true)
+    fun getInvitePreviewByCode(code: String): TournamentInvitePreview {
+        val tournament =
+            tournamentRepository.findTournamentByInviteCode(code)
+                ?: throw TournamentException.invalidInviteCode()
+        tournament.checkJoinable(null)
+        val itemCount = tournamentItemRepository.countByTournamentId(tournament.getId())
+        val participantCount = tournamentUserRepository.countByTournamentId(tournament.getId())
+        return TournamentInvitePreview(
+            tournamentId = tournament.getId(),
             tournamentName = tournament.name,
             itemCount = itemCount,
             participantCount = participantCount,

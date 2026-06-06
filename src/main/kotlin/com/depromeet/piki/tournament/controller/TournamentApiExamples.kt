@@ -238,6 +238,7 @@ class TournamentApiExamples(
                                         ),
                                     ),
                                     hasGroupResult = true,
+                                    playLinkExpiresAt = java.time.LocalDateTime.of(2026, 6, 20, 22, 0, 0),
                                 ),
                             ),
                         )
@@ -432,6 +433,7 @@ class TournamentApiExamples(
                                                         ),
                                                     ),
                                                 hasGroupResult = true,
+                                                playLinkExpiresAt = java.time.LocalDateTime.of(2026, 6, 20, 22, 0, 0),
                                             ),
                                     ),
                                 ),
@@ -506,6 +508,38 @@ class TournamentApiExamples(
                                     itemCount = 8,
                                     participantCount = 2,
                                 ),
+                            ),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::getInvitePreviewByCode) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "코드 조회 성공",
+                            payload = ApiResponseBody.ok(
+                                TournamentInvitePreviewResponse(
+                                    tournamentId = 1,
+                                    tournamentName = "내 토너먼트",
+                                    itemCount = 8,
+                                    participantCount = 2,
+                                ),
+                            ),
+                        )
+                        add(
+                            status = HttpStatus.BAD_REQUEST,
+                            name = "코드에 해당하는 토너먼트 없음",
+                            payload = ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.INVALID_INPUT,
+                                detail = "초대 코드가 올바르지 않습니다.",
+                            ),
+                        )
+                        add(
+                            status = HttpStatus.CONFLICT,
+                            name = "초대 링크 만료",
+                            payload = ApiResponseBody.fail<Unit>(
+                                category = ErrorCategory.CONFLICT,
+                                detail = "초대 링크가 만료되었습니다.",
                             ),
                         )
                     }

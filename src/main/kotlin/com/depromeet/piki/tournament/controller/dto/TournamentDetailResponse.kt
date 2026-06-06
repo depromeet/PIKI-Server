@@ -77,12 +77,14 @@ data class TournamentDetailResponse(
     data class CompletedData(
         val result: List<RankedItemResponse>,
         val hasGroupResult: Boolean,
+        val playLinkExpiresAt: LocalDateTime?,
     ) {
         companion object {
             fun from(completed: TournamentDetail.Completed): CompletedData =
                 CompletedData(
                     result = completed.result.map { RankedItemResponse.from(it) },
                     hasGroupResult = completed.hasGroupResult,
+                    playLinkExpiresAt = completed.playLinkExpiresAt,
                 )
         }
     }

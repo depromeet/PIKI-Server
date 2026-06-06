@@ -30,6 +30,7 @@ sealed class TournamentDetail {
         val result: List<RankedItem>,
         val hasGroupResult: Boolean,
         val isOwner: Boolean,
+        val playLinkExpiresAt: java.time.LocalDateTime?,
     ) : TournamentDetail()
 
     data class ItemDetail(
