@@ -64,6 +64,25 @@ class PushNotificationChannelIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `iOS·Android·Web 기기가 같은 등록·발송 경로로 한 번에 멀티캐스트된다`() {
+        // 플랫폼별 deviceId 형태(IDFV / ANDROID_ID / 웹 localStorage UUID)는 서버엔 전부 String 이라
+        // 같은 user_devices·같은 findTokens·같은 sender 한 경로로 수렴한다. 플랫폼 분기 없음을 가드한다.
+        val userId = UUID.randomUUID()
+        userDeviceRepository.save(UserDevice(userId = userId, deviceId = "idfv-1B2A3C4D", fcmToken = "ios-token"))
+        userDeviceRepository.save(UserDevice(userId = userId, deviceId = "android-ssaid-xyz", fcmToken = "android-token"))
+        userDeviceRepository.save(UserDevice(userId = userId, deviceId = "web-uuid-9f8e7d", fcmToken = "web-token"))
+        var captured: List<String>? = null
+        stubFcmMessageSender.onSend = { tokens, _ ->
+            captured = tokens
+            emptyList()
+        }
+
+        pushNotificationChannel.send(userId, saveNotification(userId))
+
+        assertEquals(setOf("ios-token", "android-token", "web-token"), captured?.toSet())
+    }
+
+    @Test
     fun `발송 결과 죽은 토큰은 user_devices 에서 정리된다`() {
         val userId = UUID.randomUUID()
         userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-1", fcmToken = "live-token"))
