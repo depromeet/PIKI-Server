@@ -5,6 +5,7 @@ import com.depromeet.piki.product.service.gemini.GeminiHttpClient
 import com.depromeet.piki.product.service.gemini.GeminiProductLinkExtractor
 import com.depromeet.piki.product.service.gemini.GeminiProperties
 import com.depromeet.piki.product.service.http.HttpPageFetcher
+import io.micrometer.observation.ObservationRegistry
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -19,14 +20,14 @@ import java.util.concurrent.TimeUnit
  */
 @Disabled("실제 Gemini API 호출 + 외부 쇼핑몰 fetch. 측정 필요 시 수동으로 enable 후 실행.")
 class ProductLinkExtractE2ETest {
-    private val pageFetcher = HttpPageFetcher()
+    private val pageFetcher = HttpPageFetcher(ObservationRegistry.NOOP)
     private val objectMapper = jacksonObjectMapper()
     private val properties =
         GeminiProperties(
             apiKey = System.getenv("GEMINI_API_KEY"),
             model = "gemini-3-flash-preview",
         )
-    private val httpClient = GeminiHttpClient(properties, objectMapper)
+    private val httpClient = GeminiHttpClient(properties, objectMapper, ObservationRegistry.NOOP)
     private val extractor =
         GeminiProductLinkExtractor(
             geminiHttpClient = httpClient,
