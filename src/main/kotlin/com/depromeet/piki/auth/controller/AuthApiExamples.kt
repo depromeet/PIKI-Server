@@ -1,8 +1,10 @@
 package com.depromeet.piki.auth.controller
 
+import com.depromeet.piki.auth.controller.dto.DevUserCreateRequest
 import com.depromeet.piki.auth.controller.dto.GuestCreateResponse
 import com.depromeet.piki.auth.controller.dto.LogoutResponse
 import com.depromeet.piki.auth.controller.dto.TokenRefreshResponse
+import com.depromeet.piki.auth.exception.AuthException
 import com.depromeet.piki.auth.service.dto.TokenPair
 import com.depromeet.piki.common.exception.ErrorCategory
 import com.depromeet.piki.common.openapi.OpenApiObjectMapper
@@ -11,6 +13,7 @@ import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.user.controller.dto.UserResponse
 import com.depromeet.piki.user.domain.IdentityType
+import com.depromeet.piki.user.domain.UserException
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -67,24 +70,10 @@ class AuthApiExamples(
                                     ),
                                 ),
                         )
-                        add(
-                            status = HttpStatus.BAD_REQUEST,
-                            name = "리프레시 토큰 미입력",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.INVALID_INPUT,
-                                    detail = "리프레시 토큰이 필요합니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.UNAUTHORIZED,
-                            name = "유효하지 않은 토큰",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.UNAUTHORIZED,
-                                    detail = "유효하지 않은 토큰입니다.",
-                                ),
-                        )
+                        add(AuthException.refreshTokenRequired(), name = "리프레시 토큰 미입력")
+                        // 컨트롤러가 직접 던지는 401 도메인 예외(만료·위변조·이미 사용된 토큰)라 detail 이 있으므로
+                        // Security 필터 단의 unauthorized() 가 아니라 예외를 그대로 받는다.
+                        add(AuthException.invalidToken(), name = "유효하지 않은 토큰")
                     }
 
                 handlerMethod.binds(AuthController::logout) ->
@@ -127,20 +116,13 @@ class AuthApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    detail = "nickname: 닉네임은 필수입니다.",
+                                    // @RequestBody Bean Validation 위반은 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
+                                    detail = "nickname: ${DevUserCreateRequest.NICKNAME_REQUIRED_MESSAGE}",
                                 ),
                         )
                         unauthorized()
                         forbidden("GUEST 권한 없음 (MEMBER 토큰으로 호출 불가)")
-                        add(
-                            status = HttpStatus.CONFLICT,
-                            name = "이미 사용 중인 닉네임",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.CONFLICT,
-                                    detail = "이미 사용 중인 닉네임입니다.",
-                                ),
-                        )
+                        add(UserException.duplicateNickname(), name = "이미 사용 중인 닉네임")
                     }
 
                 handlerMethod.binds(DevAuthController::issueTokenForUser) ->
@@ -167,26 +149,16 @@ class AuthApiExamples(
                                     ),
                                 ),
                         )
-                        add(
-                            status = HttpStatus.NOT_FOUND,
-                            name = "userId 에 해당하는 user 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.NOT_FOUND,
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.CONFLICT,
-                            name = "탈퇴된 user",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.CONFLICT,
-                                ),
-                        )
+                        add(UserException.notFound(exampleUserId), name = "userId 에 해당하는 user 없음")
+                        add(UserException.deletedUser(exampleUserId), name = "탈퇴된 user")
                         unauthorized()
                         forbidden("GUEST 권한 없음 (MEMBER 토큰으로 호출 불가)")
                     }
             }
             operation
         }
+
+    // UserException.notFound/deletedUser 는 detail 에 userId 를 끼워 넣으므로 example 도 userId 가 필요하다.
+    // 위 성공 example 의 user.id 와 같은 값을 써 한 화면 안에서 일관되게 보이게 한다.
+    private val exampleUserId = UUID.fromString("3b9c1d2e-4f5a-4b6c-8d7e-9f0a1b2c3d4e")
 }

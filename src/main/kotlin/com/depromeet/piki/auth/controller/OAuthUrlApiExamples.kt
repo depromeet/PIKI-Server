@@ -1,7 +1,7 @@
 package com.depromeet.piki.auth.controller
 
 import com.depromeet.piki.auth.controller.dto.OAuthUrlResponse
-import com.depromeet.piki.common.exception.ErrorCategory
+import com.depromeet.piki.auth.infrastructure.oauth.OAuthException
 import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
@@ -36,15 +36,7 @@ class OAuthUrlApiExamples(
                                 ),
                             ),
                     )
-                    add(
-                        status = HttpStatus.BAD_REQUEST,
-                        name = "지원하지 않는 provider",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.INVALID_INPUT,
-                                detail = "지원하지 않는 소셜 로그인 제공자입니다.",
-                            ),
-                    )
+                    add(OAuthException.unsupportedProvider(), name = "지원하지 않는 provider")
                 }
             }
             operation

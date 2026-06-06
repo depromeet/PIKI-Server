@@ -8,6 +8,7 @@ import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.GroupResultResponse
+import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestRequest
 import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestResponse
 import com.depromeet.piki.tournament.controller.dto.PlayLinkInfoResponse
 import com.depromeet.piki.tournament.controller.dto.RankedItemResponse
@@ -16,12 +17,13 @@ import com.depromeet.piki.tournament.controller.dto.TournamentInvitePreviewRespo
 import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
-import java.time.LocalDateTime
-import java.util.UUID
+import com.depromeet.piki.tournament.service.TournamentException
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpStatus
+import java.time.LocalDateTime
+import java.util.UUID
 
 @Configuration
 class TournamentApiExamples(
@@ -61,13 +63,14 @@ class TournamentApiExamples(
                         add(
                             status = HttpStatus.CREATED,
                             name = "생성 성공",
-                            payload = ApiResponseBody.created(
-                                CreateTournamentResponse(
-                                    tournamentId = 1,
-                                    inviteCode = "ABC123",
-                                    inviteExpiresAt = LocalDateTime.of(2026, 5, 30, 15, 0, 0),
+                            payload =
+                                ApiResponseBody.created(
+                                    CreateTournamentResponse(
+                                        tournamentId = 1,
+                                        inviteCode = "ABC123",
+                                        inviteExpiresAt = LocalDateTime.of(2026, 5, 30, 15, 0, 0),
+                                    ),
                                 ),
-                            ),
                         )
                     }
 
@@ -85,24 +88,26 @@ class TournamentApiExamples(
                         add(
                             status = HttpStatus.CREATED,
                             name = "게스트 참여 성공",
-                            payload = ApiResponseBody.created(
-                                JoinTournamentAsGuestResponse(
-                                    accessToken = "eyJhbGciOiJIUzI1NiJ9.example",
-                                    refreshToken = "eyJhbGciOiJIUzI1NiJ9.refresh",
-                                    userId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-                                    nickname = "멋진친구",
-                                    profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
-                                    tournamentId = 1,
+                            payload =
+                                ApiResponseBody.created(
+                                    JoinTournamentAsGuestResponse(
+                                        accessToken = "eyJhbGciOiJIUzI1NiJ9.example",
+                                        refreshToken = "eyJhbGciOiJIUzI1NiJ9.refresh",
+                                        userId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+                                        nickname = "멋진친구",
+                                        profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
+                                        tournamentId = 1,
+                                    ),
                                 ),
-                            ),
                         )
                         add(
                             status = HttpStatus.BAD_REQUEST,
-                            name = "이름 미입력",
+                            name = "닉네임 미입력",
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    detail = "name: 토너먼트 이름은 필수입니다.",
+                                    // @RequestBody Bean Validation 위반은 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
+                                    detail = "nickname: ${JoinTournamentAsGuestRequest.NICKNAME_BLANK_MESSAGE}",
                                 ),
                         )
                         unauthorized()
@@ -113,78 +118,48 @@ class TournamentApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "시작 성공",
-                            payload = ApiResponseBody.ok(
-                                TournamentStartResponse(
-                                    items = listOf(
-                                        TournamentStartResponse.ItemResponse(
-                                            tournamentItemId = 1,
-                                            name = "나이키 에어맥스",
-                                            price = 129_000,
-                                            currency = "KRW",
-                                            imageUrl = "https://cdn.example.com/items/1.jpg",
-                                        ),
-                                        TournamentStartResponse.ItemResponse(
-                                            tournamentItemId = 2,
-                                            name = "아디다스 울트라부스트",
-                                            price = 189_000,
-                                            currency = "KRW",
-                                            imageUrl = "https://cdn.example.com/items/2.jpg",
-                                        ),
-                                        TournamentStartResponse.ItemResponse(
-                                            tournamentItemId = 3,
-                                            name = "뉴발란스 993",
-                                            price = 259_000,
-                                            currency = "KRW",
-                                            imageUrl = "https://cdn.example.com/items/3.jpg",
-                                        ),
-                                        TournamentStartResponse.ItemResponse(
-                                            tournamentItemId = 4,
-                                            name = "살로몬 XT-6",
-                                            price = 279_000,
-                                            currency = "USD",
-                                            imageUrl = null,
-                                        ),
+                            payload =
+                                ApiResponseBody.ok(
+                                    TournamentStartResponse(
+                                        items =
+                                            listOf(
+                                                TournamentStartResponse.ItemResponse(
+                                                    tournamentItemId = 1,
+                                                    name = "나이키 에어맥스",
+                                                    price = 129_000,
+                                                    currency = "KRW",
+                                                    imageUrl = "https://cdn.example.com/items/1.jpg",
+                                                ),
+                                                TournamentStartResponse.ItemResponse(
+                                                    tournamentItemId = 2,
+                                                    name = "아디다스 울트라부스트",
+                                                    price = 189_000,
+                                                    currency = "KRW",
+                                                    imageUrl = "https://cdn.example.com/items/2.jpg",
+                                                ),
+                                                TournamentStartResponse.ItemResponse(
+                                                    tournamentItemId = 3,
+                                                    name = "뉴발란스 993",
+                                                    price = 259_000,
+                                                    currency = "KRW",
+                                                    imageUrl = "https://cdn.example.com/items/3.jpg",
+                                                ),
+                                                TournamentStartResponse.ItemResponse(
+                                                    tournamentItemId = 4,
+                                                    name = "살로몬 XT-6",
+                                                    price = 279_000,
+                                                    currency = "USD",
+                                                    imageUrl = null,
+                                                ),
+                                            ),
                                     ),
                                 ),
-                            ),
                         )
-                        add(
-                            status = HttpStatus.BAD_REQUEST,
-                            name = "아이템 수 미충족 (2~32개)",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.INVALID_INPUT,
-                                    detail = "토너먼트 아이템은 최소 2개, 최대 32개여야 합니다.",
-                                ),
-                        )
+                        add(TournamentException.invalidItemCount(), name = "아이템 수 미충족 (2~32개)")
                         unauthorized()
-                        add(
-                            status = HttpStatus.FORBIDDEN,
-                            name = "토너먼트 권한 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.FORBIDDEN,
-                                    detail = "해당 토너먼트에 대한 권한이 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.NOT_FOUND,
-                            name = "토너먼트를 찾을 수 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.NOT_FOUND,
-                                    detail = "토너먼트를 찾을 수 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.CONFLICT,
-                            name = "PENDING 상태 아님",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.CONFLICT,
-                                    detail = "PENDING 상태인 토너먼트에만 수행할 수 있습니다.",
-                                ),
-                        )
+                        add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")
+                        add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
+                        add(TournamentException.notPendingTournament(), name = "PENDING 상태 아님")
                     }
 
                 handlerMethod.binds(TournamentController::recordMatch) ->
@@ -197,87 +172,58 @@ class TournamentApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "기록 성공 (결승 라운드) — 순위 결과 포함",
-                            payload = ApiResponseBody.ok(
-                                TournamentDetailResponse.CompletedData(
-                                    result = listOf(
-                                        RankedItemResponse(
-                                            rank = 1,
-                                            tournamentItemId = 1,
-                                            itemId = 10,
-                                            name = "나이키 에어맥스",
-                                            price = 129_000,
-                                            currency = "KRW",
-                                            imageUrl = "https://cdn.example.com/items/1.jpg",
-                                        ),
-                                        RankedItemResponse(
-                                            rank = 2,
-                                            tournamentItemId = 2,
-                                            itemId = 20,
-                                            name = "아디다스 울트라부스트",
-                                            price = 189_000,
-                                            currency = "KRW",
-                                            imageUrl = "https://cdn.example.com/items/2.jpg",
-                                        ),
-                                        RankedItemResponse(
-                                            rank = 3,
-                                            tournamentItemId = 3,
-                                            itemId = 30,
-                                            name = "뉴발란스 993",
-                                            price = 259_000,
-                                            currency = "KRW",
-                                            imageUrl = "https://cdn.example.com/items/3.jpg",
-                                        ),
-                                        RankedItemResponse(
-                                            rank = 4,
-                                            tournamentItemId = 4,
-                                            itemId = 40,
-                                            name = "살로몬 XT-6",
-                                            price = 279_000,
-                                            currency = "USD",
-                                            imageUrl = null,
-                                        ),
+                            payload =
+                                ApiResponseBody.ok(
+                                    TournamentDetailResponse.CompletedData(
+                                        result =
+                                            listOf(
+                                                RankedItemResponse(
+                                                    rank = 1,
+                                                    tournamentItemId = 1,
+                                                    itemId = 10,
+                                                    name = "나이키 에어맥스",
+                                                    price = 129_000,
+                                                    currency = "KRW",
+                                                    imageUrl = "https://cdn.example.com/items/1.jpg",
+                                                ),
+                                                RankedItemResponse(
+                                                    rank = 2,
+                                                    tournamentItemId = 2,
+                                                    itemId = 20,
+                                                    name = "아디다스 울트라부스트",
+                                                    price = 189_000,
+                                                    currency = "KRW",
+                                                    imageUrl = "https://cdn.example.com/items/2.jpg",
+                                                ),
+                                                RankedItemResponse(
+                                                    rank = 3,
+                                                    tournamentItemId = 3,
+                                                    itemId = 30,
+                                                    name = "뉴발란스 993",
+                                                    price = 259_000,
+                                                    currency = "KRW",
+                                                    imageUrl = "https://cdn.example.com/items/3.jpg",
+                                                ),
+                                                RankedItemResponse(
+                                                    rank = 4,
+                                                    tournamentItemId = 4,
+                                                    itemId = 40,
+                                                    name = "살로몬 XT-6",
+                                                    price = 279_000,
+                                                    currency = "USD",
+                                                    imageUrl = null,
+                                                ),
+                                            ),
+                                        hasGroupResult = true,
+                                        playLinkExpiresAt = LocalDateTime.of(2026, 6, 20, 22, 0, 0),
                                     ),
-                                    hasGroupResult = true,
-                                ),
-                            ),
-                        )
-                        add(
-                            status = HttpStatus.BAD_REQUEST,
-                            name = "승자가 대결 아이템이 아님",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.INVALID_INPUT,
-                                    detail = "승자는 대결한 두 아이템 중 하나여야 합니다.",
                                 ),
                         )
+                        add(TournamentException.invalidWinner(), name = "승자가 대결 아이템이 아님")
                         unauthorized()
-                        add(
-                            status = HttpStatus.FORBIDDEN,
-                            name = "토너먼트 권한 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.FORBIDDEN,
-                                    detail = "해당 토너먼트에 대한 권한이 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.NOT_FOUND,
-                            name = "토너먼트를 찾을 수 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.NOT_FOUND,
-                                    detail = "토너먼트를 찾을 수 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.CONFLICT,
-                            name = "진행 중 토너먼트 아님",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.CONFLICT,
-                                    detail = "진행 중인 토너먼트에만 수행할 수 있습니다.",
-                                ),
-                        )
+                        add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")
+                        add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
+                        add(TournamentException.notInProgressTournament(), name = "진행 중 토너먼트 아님")
                     }
 
                 handlerMethod.binds(TournamentController::getTournamentById) ->
@@ -320,7 +266,10 @@ class TournamentApiExamples(
                                                 participants =
                                                     listOf(
                                                         TournamentDetailResponse.ParticipantResponse(
-                                                            userId = UUID.fromString("11111111-2222-3333-4444-555555555555"),
+                                                            userId =
+                                                                UUID.fromString(
+                                                                    "11111111-2222-3333-4444-555555555555",
+                                                                ),
                                                             nickname = "참여자1",
                                                             profileImage = "https://cdn.example.com/profiles/user1.jpg",
                                                         ),
@@ -432,29 +381,14 @@ class TournamentApiExamples(
                                                         ),
                                                     ),
                                                 hasGroupResult = true,
+                                                playLinkExpiresAt = LocalDateTime.of(2026, 6, 20, 22, 0, 0),
                                             ),
                                     ),
                                 ),
                         )
                         unauthorized()
-                        add(
-                            status = HttpStatus.FORBIDDEN,
-                            name = "토너먼트 권한 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.FORBIDDEN,
-                                    detail = "해당 토너먼트에 대한 권한이 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.NOT_FOUND,
-                            name = "토너먼트를 찾을 수 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.NOT_FOUND,
-                                    detail = "토너먼트를 찾을 수 없습니다.",
-                                ),
-                        )
+                        add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")
+                        add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
                     }
 
                 handlerMethod.binds(TournamentController::deleteTournament) ->
@@ -465,40 +399,33 @@ class TournamentApiExamples(
                             payload = ApiResponseBody.ok<Unit>(),
                         )
                         unauthorized()
-                        add(
-                            status = HttpStatus.FORBIDDEN,
-                            name = "토너먼트 권한 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.FORBIDDEN,
-                                    detail = "해당 토너먼트에 대한 권한이 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.NOT_FOUND,
-                            name = "토너먼트를 찾을 수 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.NOT_FOUND,
-                                    detail = "토너먼트를 찾을 수 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.CONFLICT,
-                            name = "진행 중 토너먼트 삭제 불가",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.CONFLICT,
-                                    detail = "진행 중인 토너먼트는 삭제할 수 없습니다.",
-                                ),
-                        )
+                        add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")
+                        add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
+                        add(TournamentException.inProgressTournamentCannotBeDeleted(), name = "진행 중 토너먼트 삭제 불가")
                     }
 
                 handlerMethod.binds(TournamentController::getInvitePreview) ->
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.OK,
-                            name = "초대 코드 검증 성공",
+                            name = "링크 접근 미리보기 성공",
+                            payload =
+                                ApiResponseBody.ok(
+                                    TournamentInvitePreviewResponse(
+                                        tournamentId = 1,
+                                        tournamentName = "내 토너먼트",
+                                        itemCount = 8,
+                                        participantCount = 2,
+                                    ),
+                                ),
+                        )
+                    }
+
+                handlerMethod.binds(TournamentController::getInvitePreviewByCode) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "코드 조회 성공",
                             payload = ApiResponseBody.ok(
                                 TournamentInvitePreviewResponse(
                                     tournamentId = 1,
@@ -508,6 +435,8 @@ class TournamentApiExamples(
                                 ),
                             ),
                         )
+                        add(TournamentException.invalidInviteCode(), name = "코드에 해당하는 토너먼트 없음")
+                        add(TournamentException.inviteExpired(), name = "초대 링크 만료")
                     }
 
                 handlerMethod.binds(TournamentController::createPlayLink) ->
@@ -518,21 +447,10 @@ class TournamentApiExamples(
                             payload = ApiResponseBody.ok(LocalDateTime.of(2026, 6, 9, 22, 0, 0)),
                         )
                         add(
-                            status = HttpStatus.FORBIDDEN,
+                            TournamentException.clonedTournamentCannotSharePlayLink(),
                             name = "플레이 링크로 참여한 토너먼트 (재공유 불가)",
-                            payload = ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.FORBIDDEN,
-                                detail = "플레이 링크로 참여한 토너먼트는 플레이 링크를 생성할 수 없습니다.",
-                            ),
                         )
-                        add(
-                            status = HttpStatus.CONFLICT,
-                            name = "플레이 링크 이미 생성됨",
-                            payload = ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.CONFLICT,
-                                detail = "플레이 링크가 이미 생성된 토너먼트입니다.",
-                            ),
-                        )
+                        add(TournamentException.playLinkAlreadyCreated(), name = "플레이 링크 이미 생성됨")
                     }
 
                 handlerMethod.binds(TournamentController::getPlayLinkInfo) ->
@@ -540,14 +458,15 @@ class TournamentApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "플레이 링크 정보 조회 성공",
-                            payload = ApiResponseBody.ok(
-                                PlayLinkInfoResponse(
-                                    sourceTournamentId = 1,
-                                    tournamentName = "내 토너먼트",
-                                    itemCount = 8,
-                                    playLinkExpiresAt = LocalDateTime.of(2026, 6, 9, 22, 0, 0),
+                            payload =
+                                ApiResponseBody.ok(
+                                    PlayLinkInfoResponse(
+                                        sourceTournamentId = 1,
+                                        tournamentName = "내 토너먼트",
+                                        itemCount = 8,
+                                        playLinkExpiresAt = LocalDateTime.of(2026, 6, 9, 22, 0, 0),
+                                    ),
                                 ),
-                            ),
                         )
                     }
 
@@ -565,47 +484,60 @@ class TournamentApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "그룹 결과 조회 성공",
-                            payload = ApiResponseBody.ok(
-                                GroupResultResponse(
-                                    items = listOf(
-                                        GroupResultResponse.GroupResultItemResponse(
-                                            rank = 1,
-                                            itemId = 10,
-                                            name = "나이키 에어맥스",
-                                            price = 129_000,
-                                            currency = "KRW",
-                                            imageUrl = "https://cdn.example.com/items/1.jpg",
-                                            chosenBy = listOf(
-                                                GroupResultResponse.ParticipantSummaryResponse(
-                                                    userId = UUID.fromString("11111111-2222-3333-4444-555555555555"),
-                                                    nickname = "참여자A",
-                                                    profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
+                            payload =
+                                ApiResponseBody.ok(
+                                    GroupResultResponse(
+                                        items =
+                                            listOf(
+                                                GroupResultResponse.GroupResultItemResponse(
+                                                    rank = 1,
+                                                    itemId = 10,
+                                                    name = "나이키 에어맥스",
+                                                    price = 129_000,
+                                                    currency = "KRW",
+                                                    imageUrl = "https://cdn.example.com/items/1.jpg",
+                                                    chosenBy =
+                                                        listOf(
+                                                            GroupResultResponse.ParticipantSummaryResponse(
+                                                                userId =
+                                                                    UUID.fromString(
+                                                                        "11111111-2222-3333-4444-555555555555",
+                                                                    ),
+                                                                nickname = "참여자A",
+                                                                profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
+                                                            ),
+                                                            GroupResultResponse.ParticipantSummaryResponse(
+                                                                userId =
+                                                                    UUID.fromString(
+                                                                        "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                                                                    ),
+                                                                nickname = "참여자B",
+                                                                profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=bbbbbbbb",
+                                                            ),
+                                                        ),
                                                 ),
-                                                GroupResultResponse.ParticipantSummaryResponse(
-                                                    userId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-                                                    nickname = "참여자B",
-                                                    profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=bbbbbbbb",
+                                                GroupResultResponse.GroupResultItemResponse(
+                                                    rank = 2,
+                                                    itemId = 20,
+                                                    name = "아디다스 울트라부스트",
+                                                    price = 189_000,
+                                                    currency = "KRW",
+                                                    imageUrl = "https://cdn.example.com/items/2.jpg",
+                                                    chosenBy =
+                                                        listOf(
+                                                            GroupResultResponse.ParticipantSummaryResponse(
+                                                                userId =
+                                                                    UUID.fromString(
+                                                                        "11111111-2222-3333-4444-555555555555",
+                                                                    ),
+                                                                nickname = "참여자A",
+                                                                profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
+                                                            ),
+                                                        ),
                                                 ),
                                             ),
-                                        ),
-                                        GroupResultResponse.GroupResultItemResponse(
-                                            rank = 2,
-                                            itemId = 20,
-                                            name = "아디다스 울트라부스트",
-                                            price = 189_000,
-                                            currency = "KRW",
-                                            imageUrl = "https://cdn.example.com/items/2.jpg",
-                                            chosenBy = listOf(
-                                                GroupResultResponse.ParticipantSummaryResponse(
-                                                    userId = UUID.fromString("11111111-2222-3333-4444-555555555555"),
-                                                    nickname = "참여자A",
-                                                    profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
-                                                ),
-                                            ),
-                                        ),
                                     ),
                                 ),
-                            ),
                         )
                     }
             }

@@ -25,4 +25,8 @@ interface TournamentRepository {
     fun softDeleteHistoriesByTournamentId(tournamentId: Long)
 
     fun findBySourceTournamentId(sourceTournamentId: Long): List<Tournament>
+
+    fun findTournamentByInviteCode(code: String): Tournament?
+
+    fun existsTournamentByInviteCode(code: String): Boolean
 }
