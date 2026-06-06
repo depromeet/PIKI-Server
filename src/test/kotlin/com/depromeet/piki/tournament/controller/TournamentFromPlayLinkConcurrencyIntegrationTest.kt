@@ -3,6 +3,7 @@ package com.depromeet.piki.tournament.controller
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.domain.ItemSnapshot
+import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemJpaRepository
 import com.depromeet.piki.item.repository.ItemSnapshotJpaRepository
 import com.depromeet.piki.support.IntegrationTestSupport
@@ -25,6 +26,7 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
+import java.time.LocalDateTime
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -72,10 +74,31 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
             val tId = objectMapper.readTree(createResult.response.contentAsString)["data"]["tournamentId"].asLong()
 
             // 3단계: tournament_item 은 고정 snapshot 을 참조한다. 조회·start 표시값이 snapshot 에서 오므로 함께 만들어 연결한다.
-            val item1 = itemJpaRepository.save(Item(name = "race-item1", currentPrice = 10_000, currency = "KRW"))
-            val item2 = itemJpaRepository.save(Item(name = "race-item2", currentPrice = 20_000, currency = "KRW"))
-            val snapshot1 = itemSnapshotJpaRepository.save(ItemSnapshot.forItem(item1))
-            val snapshot2 = itemSnapshotJpaRepository.save(ItemSnapshot.forItem(item2))
+            // item 은 정체성(link)만 들고, 표시값·상태는 READY snapshot 이 보유한다(4a).
+            val item1 = itemJpaRepository.save(Item())
+            val item2 = itemJpaRepository.save(Item())
+            val snapshot1 =
+                itemSnapshotJpaRepository.save(
+                    ItemSnapshot(
+                        itemId = item1.getId(),
+                        name = "race-item1",
+                        currentPrice = 10_000,
+                        currency = "KRW",
+                        status = ItemStatus.READY,
+                        extractedAt = LocalDateTime.now(),
+                    ),
+                )
+            val snapshot2 =
+                itemSnapshotJpaRepository.save(
+                    ItemSnapshot(
+                        itemId = item2.getId(),
+                        name = "race-item2",
+                        currentPrice = 20_000,
+                        currency = "KRW",
+                        status = ItemStatus.READY,
+                        extractedAt = LocalDateTime.now(),
+                    ),
+                )
             tournamentItemJpaRepository.save(
                 TournamentItem(tournamentId = tId, itemId = item1.getId(), userId = ownerId, snapshotId = snapshot1.getId()),
             )
