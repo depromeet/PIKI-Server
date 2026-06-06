@@ -118,6 +118,9 @@ class SecurityConfig(
                     // "게스트는 탈퇴 불가" 라는 구체 사유를 못 전달하기 때문.
                     .requestMatchers(HttpMethod.DELETE, "/api/v1/users/me")
                     .authenticated()
+                    // 프로필 이미지 업로드 — GET /me·PATCH /me 와 동일하게 게스트도 호출 가능
+                    .requestMatchers(HttpMethod.POST, "/api/v1/users/me/profile-image")
+                    .authenticated()
                     .anyRequest()
                     .authenticated()
             }.exceptionHandling {

@@ -18,6 +18,17 @@ else
   grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 fi
 
+# 1b) swappiness — swap 은 비상 쿠션으로만 쓰고 라이브 JVM heap 은 RAM 에 유지한다. 기본 60 은
+# 너무 공격적이라 평시에도 JVM 이 swap 으로 밀려 GC 가 느려진다(실측 ~140Mi swap). 10 으로 낮춰
+# 커널이 anon(힙)보다 page cache 를 먼저 회수하게 한다. sysctl 드롭인으로 영속화 + 즉시 적용(멱등).
+if [ "$(cat /proc/sys/vm/swappiness)" = "10" ]; then
+  echo "[swappiness] 이미 10 — skip"
+else
+  echo "[swappiness] 60 → 10 설정"
+  echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swappiness.conf
+  sudo sysctl -w vm.swappiness=10
+fi
+
 # 2) redis — RefreshToken 저장소(RedisRefreshTokenStore). 없을 때만 named 볼륨(team3-redis-data)으로 기동.
 #    기존 컨테이너(익명 볼륨 포함)는 보존한다 — 멱등 skip. 새 인스턴스에서만 named 볼륨으로 생성돼,
 #    이후 컨테이너 재생성에도 refresh token 이 유지된다.
