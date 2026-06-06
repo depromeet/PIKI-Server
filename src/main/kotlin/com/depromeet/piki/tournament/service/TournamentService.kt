@@ -9,6 +9,8 @@ import com.depromeet.piki.tournament.domain.TournamentHistory
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.domain.TournamentUser
+import com.depromeet.piki.tournament.event.TournamentItemAdded
+import com.depromeet.piki.tournament.event.TournamentJoined
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
@@ -28,6 +30,7 @@ import com.depromeet.piki.tournament.service.dto.TournamentStartResult
 import com.depromeet.piki.tournament.service.dto.TournamentSummary
 import com.depromeet.piki.user.repository.UserRepository
 import com.depromeet.piki.wishlist.repository.WishRepository
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -42,6 +45,7 @@ class TournamentService(
     private val itemRepository: ItemRepository,
     private val itemSnapshotRepository: ItemSnapshotRepository,
     private val wishRepository: WishRepository,
+    private val eventPublisher: ApplicationEventPublisher,
 ) {
     @Transactional
     fun create(
@@ -87,6 +91,8 @@ class TournamentService(
             throw TournamentException.participantLimitExceeded()
         }
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = userId))
+        // 참여가 커밋된 뒤에만 구독자에게 전달되도록 트랜잭션 안에서 발행한다 (롤백 시 미발행).
+        eventPublisher.publishEvent(TournamentJoined(tournamentId = tournamentId, actorId = userId))
     }
 
     @Transactional
@@ -126,7 +132,7 @@ class TournamentService(
             wishRepository
                 .findByItemIdsAndUserId(command.itemIds, userId)
                 .associate { it.itemId to it.snapshotId }
-        return tournamentItemRepository.saveAll(
+        val savedItemIds = tournamentItemRepository.saveAll(
             command.itemIds.map { itemId ->
                 val snapshotId =
                     snapshotIdByItemId[itemId]
@@ -139,6 +145,9 @@ class TournamentService(
                 )
             },
         ).map { it.getId() }
+        // 여러 개를 한 번에 추가해도 "아이템이 추가됐다"는 사실은 1건이라 이벤트도 1회만 발행한다.
+        eventPublisher.publishEvent(TournamentItemAdded(tournamentId = command.tournamentId, actorId = userId))
+        return savedItemIds
     }
 
     @Transactional

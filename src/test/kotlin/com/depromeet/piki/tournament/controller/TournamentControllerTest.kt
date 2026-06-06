@@ -14,6 +14,8 @@ import com.depromeet.piki.support.StubRefreshTokenStore
 import com.depromeet.piki.tournament.domain.Tournament
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
+import com.depromeet.piki.tournament.event.TournamentItemAdded
+import com.depromeet.piki.tournament.event.TournamentJoined
 import com.depromeet.piki.tournament.repository.TournamentItemJpaRepository
 import com.depromeet.piki.tournament.repository.TournamentJpaRepository
 import com.depromeet.piki.tournament.repository.TournamentUserJpaRepository
@@ -30,6 +32,8 @@ import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
+import org.springframework.test.context.event.ApplicationEvents
+import org.springframework.test.context.event.RecordApplicationEvents
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -49,6 +53,7 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+@RecordApplicationEvents
 @Transactional
 class TournamentControllerTest : IntegrationTestSupport() {
     @Autowired private lateinit var webApplicationContext: WebApplicationContext
@@ -78,6 +83,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
     @Autowired private lateinit var stubImageParsingWorker: StubImageParsingWorker
 
     @Autowired private lateinit var stubRefreshTokenStore: StubRefreshTokenStore
+
+    // 발행 검증용 — 같은 스레드(MockMvc 컨트롤러 실행)에서 publish 된 도메인 이벤트를 기록한다.
+    // AFTER_COMMIT 리스너 발화(별도 스레드, 트랜잭션 롤백 무관) 여부와 독립적으로 "서비스가 이벤트를 쐈는가" 만 본다.
+    @Autowired private lateinit var applicationEvents: ApplicationEvents
 
     private val userId: UUID = UUID.fromString("11111111-2222-3333-4444-555555555555")
     private val otherUserId: UUID = UUID.fromString("99999999-8888-7777-6666-555555555555")
@@ -1246,6 +1255,73 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 .andExpect(jsonPath("$.data.tournamentItemIds.length()").value(2))
 
             assertEquals(2, tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).size)
+        } finally {
+            stubImageParsingWorker.enabled = true
+        }
+    }
+
+    @Test
+    fun `게스트 합류 시 TournamentJoined 이벤트가 발행된다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/join/guest")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteCode":"$inviteCode","nickname":"새친구"}"""),
+            ).andExpect(status().isCreated)
+
+        val joined = applicationEvents.stream(TournamentJoined::class.java).toList()
+        assertEquals(1, joined.size)
+        assertEquals(tournamentId, joined.first().tournamentId)
+    }
+
+    @Test
+    fun `링크 아이템 추가 시 TournamentItemAdded 이벤트가 발행된다`() {
+        stubItemParsingWorker.enabled = false
+        try {
+            val mockMvc = buildMockMvc()
+            val tournamentId = createTournament(mockMvc)
+
+            mockMvc
+                .perform(
+                    post("/api/v1/tournaments/$tournamentId/items/link")
+                        .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"url":"https://example.com/product"}"""),
+                ).andExpect(status().isOk)
+
+            val added = applicationEvents.stream(TournamentItemAdded::class.java).toList()
+            assertEquals(1, added.size)
+            assertEquals(tournamentId, added.first().tournamentId)
+            assertEquals(userId, added.first().actorId)
+        } finally {
+            stubItemParsingWorker.enabled = true
+        }
+    }
+
+    @Test
+    fun `이미지 아이템 추가는 여러 장이어도 TournamentItemAdded 를 한 번만 발행한다`() {
+        stubImageParsingWorker.enabled = false
+        try {
+            val mockMvc = buildMockMvc()
+            val tournamentId = createTournament(mockMvc)
+            val image1 = MockMultipartFile("images", "img1.jpg", "image/jpeg", ByteArray(100) { 1 })
+            val image2 = MockMultipartFile("images", "img2.jpg", "image/jpeg", ByteArray(100) { 2 })
+
+            mockMvc
+                .perform(
+                    multipart("/api/v1/tournaments/$tournamentId/items/images")
+                        .file(image1)
+                        .file(image2)
+                        .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+                ).andExpect(status().isOk)
+
+            val added = applicationEvents.stream(TournamentItemAdded::class.java).toList()
+            assertEquals(1, added.size)
+            assertEquals(tournamentId, added.first().tournamentId)
+            assertEquals(userId, added.first().actorId)
         } finally {
             stubImageParsingWorker.enabled = true
         }

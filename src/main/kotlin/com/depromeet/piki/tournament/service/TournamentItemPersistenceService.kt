@@ -7,10 +7,12 @@ import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.tournament.domain.TournamentItem
+import com.depromeet.piki.tournament.event.TournamentItemAdded
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.tournament.service.dto.PersistedTournamentItem
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -27,6 +29,7 @@ class TournamentItemPersistenceService(
     private val tournamentItemRepository: TournamentItemRepository,
     private val itemRepository: ItemRepository,
     private val itemSnapshotRepository: ItemSnapshotRepository,
+    private val eventPublisher: ApplicationEventPublisher,
 ) {
     @Transactional
     fun persistLinkItem(
@@ -48,6 +51,8 @@ class TournamentItemPersistenceService(
                 ),
             ),
         ).first()
+        // 링크 1개 추가. 커밋된 뒤에만 구독자에게 전달되도록 트랜잭션 안에서 발행한다 (롤백 시 미발행).
+        eventPublisher.publishEvent(TournamentItemAdded(tournamentId = tournamentId, actorId = userId))
         return PersistedTournamentItem(itemId = item.getId(), tournamentItemId = tournamentItem.getId())
     }
 
@@ -71,6 +76,8 @@ class TournamentItemPersistenceService(
                 )
             },
         )
+        // 이미지를 여러 장 한 번에 올려도 "아이템이 추가됐다"는 사실은 1건이라 이벤트도 1회만 발행한다.
+        eventPublisher.publishEvent(TournamentItemAdded(tournamentId = tournamentId, actorId = userId))
         return items.zip(tournamentItems) { item, tournamentItem ->
             PersistedTournamentItem(itemId = item.getId(), tournamentItemId = tournamentItem.getId())
         }
