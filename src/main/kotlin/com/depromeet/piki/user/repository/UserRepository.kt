@@ -1,12 +1,21 @@
 package com.depromeet.piki.user.repository
 
+import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.user.domain.User
+import java.time.LocalDateTime
 import java.util.UUID
 
 interface UserRepository {
     fun save(user: User): User
 
     fun findById(id: UUID): User?
+
+    // 30일 파기 스케줄러 — grace 기간을 넘긴 MEMBER tombstone id 를 limit 개까지 오래된 순으로 조회.
+    fun findIdsToPurge(
+        cutoff: LocalDateTime,
+        identityType: IdentityType,
+        limit: Int,
+    ): List<UUID>
 
     fun findByIds(ids: Collection<UUID>): List<User>
 

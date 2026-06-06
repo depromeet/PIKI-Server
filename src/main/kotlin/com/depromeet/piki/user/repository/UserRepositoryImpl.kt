@@ -1,8 +1,11 @@
 package com.depromeet.piki.user.repository
 
+import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.user.domain.User
+import org.springframework.data.domain.Limit
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
+import java.time.LocalDateTime
 import java.util.UUID
 
 @Repository
@@ -12,6 +15,12 @@ class UserRepositoryImpl(
     override fun save(user: User): User = userJpaRepository.save(user)
 
     override fun findById(id: UUID): User? = userJpaRepository.findByIdOrNull(id)
+
+    override fun findIdsToPurge(
+        cutoff: LocalDateTime,
+        identityType: IdentityType,
+        limit: Int,
+    ): List<UUID> = userJpaRepository.findIdsByDeletedAtBeforeAndIdentityType(cutoff, identityType, Limit.of(limit))
 
     override fun findByIds(ids: Collection<UUID>): List<User> = userJpaRepository.findAllById(ids)
 

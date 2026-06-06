@@ -45,6 +45,12 @@ jwt:
   access-token-expiry: ${JWT_ACCESS_EXPIRY:1h}
   refresh-token-expiry: ${JWT_REFRESH_EXPIRY:14d}
 
+account:
+  withdrawal:
+    # 회원 탈퇴 tombstone 전이 후 soft-delete 된 콘텐츠(위시·알림)를 영구 파기하기까지의 유예일.
+    # DailyAccountPurgeScheduler 가 매일 새벽 이 기간을 넘긴 tombstone 의 콘텐츠를 하드삭제한다.
+    grace-days: ${ACCOUNT_WITHDRAWAL_GRACE_DAYS:30}
+
 auth:
   cookie:
     # 토큰 쿠키의 Secure 속성. 운영(HTTPS)은 true, 로컬(HTTP)은 .env 의 COOKIE_SECURE=false 로 끈다.

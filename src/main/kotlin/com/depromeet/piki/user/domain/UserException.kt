@@ -54,5 +54,14 @@ class UserException private constructor(
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
+
+        // 게스트 탈퇴 거부 — 멀쩡한 클라이언트(게스트 토큰)가 정상 요청으로 닿을 수 있는 계약 응답이라 커스텀 예외(403).
+        // 게스트는 보존할 PII 도, 스토어 요건상 "계정"도 없고, 공유 토너먼트 참조 때문에 하드삭제도 불가하다.
+        fun guestCannotWithdraw(): UserException =
+            UserException(
+                "게스트는 탈퇴할 수 없습니다.",
+                ErrorCategory.FORBIDDEN,
+                HttpStatus.FORBIDDEN,
+            )
     }
 }

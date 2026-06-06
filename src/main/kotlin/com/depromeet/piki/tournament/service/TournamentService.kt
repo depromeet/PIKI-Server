@@ -237,6 +237,7 @@ class TournamentService(
                                     userId = user.id,
                                     nickname = user.nickname,
                                     profileImage = user.profileImage,
+                                    isWithdrawn = !user.isActive(),
                                 )
                             }
                         },
@@ -623,7 +624,13 @@ class TournamentService(
             val ranked = rankedByTournamentId[t.getId()] ?: continue
             val ownerUserId = ownerByTournamentId[t.getId()] ?: continue
             val user = userById[ownerUserId] ?: continue
-            val participant = ParticipantSummary(userId = user.id, nickname = user.nickname, profileImage = user.profileImage)
+            val participant =
+                ParticipantSummary(
+                    userId = user.id,
+                    nickname = user.nickname,
+                    profileImage = user.profileImage,
+                    isWithdrawn = !user.isActive(),
+                )
 
             for ((tournamentItemId, rank) in ranked) {
                 // tItem 누락은 삭제된 출전 아이템이 history 에 남은 정상 경우라 건너뛴다. 그러나 tItem 이 살아있으면

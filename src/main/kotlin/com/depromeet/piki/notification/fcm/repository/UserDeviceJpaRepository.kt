@@ -14,4 +14,6 @@ interface UserDeviceJpaRepository : JpaRepository<UserDevice, Long> {
     fun deleteByUserIdAndDeviceId(userId: UUID, deviceId: String)
 
     fun deleteAllByFcmTokenIn(fcmTokens: Collection<String>)
+
+    fun deleteAllByUserId(userId: UUID)
 }

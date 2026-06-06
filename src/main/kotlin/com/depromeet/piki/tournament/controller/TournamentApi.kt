@@ -347,7 +347,9 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (초대 코드 형식 오류 · 코드 불일치 — inviteCode 전달 시에만 발생 · 닉네임 미입력 · 닉네임 10자 초과)",
+                description =
+                    "잘못된 요청 (초대 코드 형식 오류 · 코드 불일치 — inviteCode 전달 시에만 발생 · " +
+                        "닉네임 미입력 · 닉네임 10자 초과 · 닉네임이 '탈퇴' 예약 prefix 로 시작)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

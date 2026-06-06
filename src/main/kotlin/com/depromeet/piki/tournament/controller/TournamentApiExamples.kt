@@ -18,6 +18,7 @@ import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.service.TournamentException
+import com.depromeet.piki.user.domain.User
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -272,6 +273,7 @@ class TournamentApiExamples(
                                                                 ),
                                                             nickname = "참여자1",
                                                             profileImage = "https://cdn.example.com/profiles/user1.jpg",
+                                                            isWithdrawn = false,
                                                         ),
                                                     ),
                                             ),
@@ -505,14 +507,17 @@ class TournamentApiExamples(
                                                                     ),
                                                                 nickname = "참여자A",
                                                                 profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
+                                                                isWithdrawn = false,
                                                             ),
                                                             GroupResultResponse.ParticipantSummaryResponse(
                                                                 userId =
                                                                     UUID.fromString(
                                                                         "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
                                                                     ),
-                                                                nickname = "참여자B",
-                                                                profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=bbbbbbbb",
+                                                                // 탈퇴 유저 — 닉네임·프로필은 익명값, isWithdrawn=true 로 FE 가 "유저 알수없음" 렌더.
+                                                                nickname = "탈퇴aaaaaaaa",
+                                                                profileImage = User.WITHDRAWN_PROFILE_IMAGE,
+                                                                isWithdrawn = true,
                                                             ),
                                                         ),
                                                 ),
@@ -532,6 +537,7 @@ class TournamentApiExamples(
                                                                     ),
                                                                 nickname = "참여자A",
                                                                 profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
+                                                                isWithdrawn = false,
                                                             ),
                                                         ),
                                                 ),

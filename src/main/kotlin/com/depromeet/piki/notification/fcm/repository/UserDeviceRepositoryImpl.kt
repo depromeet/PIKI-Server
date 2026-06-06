@@ -28,5 +28,7 @@ class UserDeviceRepositoryImpl(
 
     override fun delete(userDevice: UserDevice) = userDeviceJpaRepository.delete(userDevice)
 
+    override fun deleteAllByUserId(userId: UUID) = userDeviceJpaRepository.deleteAllByUserId(userId)
+
     override fun flush() = userDeviceJpaRepository.flush()
 }

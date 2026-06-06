@@ -72,6 +72,25 @@ class UserApiExamples(
                         )
                     }
 
+                handlerMethod.binds(UserController::withdraw) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "탈퇴 성공",
+                            payload = ApiResponseBody.ok<Unit>(),
+                        )
+                        unauthorized()
+                        add(UserException.guestCannotWithdraw(), name = "게스트 탈퇴 거부")
+                        add(
+                            status = HttpStatus.NOT_FOUND,
+                            name = "유저 없음 (JWT 유효하나 DB에 없음)",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.NOT_FOUND,
+                                ),
+                        )
+                    }
+
                 handlerMethod.binds(UserController::checkNickname) ->
                     operation.examples(openApiObjectMapper.delegate) {
                         add(

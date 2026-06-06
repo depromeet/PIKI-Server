@@ -2,10 +2,20 @@ package com.depromeet.piki.wishlist.repository
 
 import com.depromeet.piki.wishlist.domain.Wish
 import com.depromeet.piki.wishlist.domain.WishCursor
+import java.time.LocalDateTime
 import java.util.UUID
 
 interface WishRepository {
     fun save(wish: Wish): Wish
+
+    // 탈퇴 cascade — 그 유저의 활성 위시를 일괄 soft-delete 하고 영향 건수를 돌려준다. 멱등.
+    fun softDeleteAllByUserId(
+        userId: UUID,
+        now: LocalDateTime,
+    ): Int
+
+    // 30일 파기 — 그 유저의 위시를 영구 하드삭제하고 영향 건수를 돌려준다.
+    fun hardDeleteAllByUserId(userId: UUID): Int
 
     fun countByIdsAndUserId(
         ids: List<Long>,

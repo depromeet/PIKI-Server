@@ -172,6 +172,17 @@ class TournamentServiceTest {
         override fun findUserIdsByItemId(itemId: Long): List<UUID> =
             wishes.filter { it.itemId == itemId }.map { it.userId }.distinct()
 
+        override fun softDeleteAllByUserId(
+            userId: UUID,
+            now: LocalDateTime,
+        ): Int = wishes.count { it.userId == userId }
+
+        override fun hardDeleteAllByUserId(userId: UUID): Int {
+            val before = wishes.size
+            wishes.removeAll { it.userId == userId }
+            return before - wishes.size
+        }
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
@@ -264,6 +275,19 @@ class TournamentServiceTest {
 
         override fun findNicknamesIn(candidates: Collection<String>): List<String> =
             users.values.map { it.nickname }.filter { it in candidates }
+
+        override fun findIdsToPurge(
+            cutoff: LocalDateTime,
+            identityType: IdentityType,
+            limit: Int,
+        ): List<UUID> =
+            users.values
+                .filter { user ->
+                    val purgeable = user.deletedAt?.let { it.isBefore(cutoff) } ?: false
+                    val notPurged = user.contentPurgedAt?.let { false } ?: true
+                    purgeable && user.identityType == identityType && notPurged
+                }.map { it.id }
+                .take(limit)
     }
 
     private class TestTournamentItemRepository : TournamentItemRepository {

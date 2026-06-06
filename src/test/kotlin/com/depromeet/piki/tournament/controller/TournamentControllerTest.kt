@@ -1974,8 +1974,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
     // ── 그룹 결과 ──────────────────────────────────────────────────
 
     @Test
-    fun `GET group-result 는 완료된 토너먼트의 그룹 결과를 반환한다`() {
+    fun `GET group-result 는 완료된 토너먼트의 그룹 결과를 반환하고 활성 참여자는 isWithdrawn=false 다`() {
         val mockMvc = buildMockMvc()
+        saveUser(userId, userProfileImage, "활성유저")
         val (tournamentId, _, _) = completeTournamentWith2Items(mockMvc)
 
         mockMvc
@@ -1984,6 +1985,24 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.data.items").isArray)
+            .andExpect(jsonPath("$.data.items[0].chosenBy[0].isWithdrawn").value(false))
+    }
+
+    @Test
+    fun `GET group-result 의 참여자가 탈퇴 유저면 isWithdrawn=true 로 내려온다`() {
+        val mockMvc = buildMockMvc()
+        val owner = saveUser(userId, userProfileImage, "곧나갈사람")
+        val (tournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+        // 그룹 결과 참여자(= 토너먼트 owner)를 탈퇴 tombstone 으로 전이시킨다.
+        owner.withdraw()
+        userJpaRepository.save(owner)
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId/group-result")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.items[0].chosenBy[0].isWithdrawn").value(true))
     }
 
     @Test

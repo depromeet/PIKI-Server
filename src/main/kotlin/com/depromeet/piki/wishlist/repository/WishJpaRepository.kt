@@ -3,8 +3,10 @@ package com.depromeet.piki.wishlist.repository
 import com.depromeet.piki.wishlist.domain.Wish
 import org.springframework.data.domain.Limit
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import java.time.LocalDateTime
 import java.util.UUID
 
 interface WishJpaRepository : JpaRepository<Wish, Long> {
@@ -43,4 +45,19 @@ interface WishJpaRepository : JpaRepository<Wish, Long> {
         itemIds: Collection<Long>,
         userId: UUID,
     ): List<Wish>
+
+    // 탈퇴 cascade — 그 유저의 활성 위시를 일괄 soft-delete. 이미 삭제된 행은 건드리지 않아 멱등하다.
+    @Modifying
+    @Query("UPDATE Wish w SET w.deletedAt = :now WHERE w.userId = :userId AND w.deletedAt IS NULL")
+    fun softDeleteAllByUserId(
+        @Param("userId") userId: UUID,
+        @Param("now") now: LocalDateTime,
+    ): Int
+
+    // 30일 파기 — soft-delete 된 위시를 영구 하드삭제. tombstone 유저의 콘텐츠 잔재 제거.
+    @Modifying
+    @Query("DELETE FROM Wish w WHERE w.userId = :userId")
+    fun hardDeleteAllByUserId(
+        @Param("userId") userId: UUID,
+    ): Int
 }

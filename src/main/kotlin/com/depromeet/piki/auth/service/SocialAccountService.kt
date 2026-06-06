@@ -43,8 +43,12 @@ class SocialAccountService(
         }
     }
 
+    // 탈퇴(tombstone) 유저는 없는 것으로 취급해 신규 가입 경로를 타게 한다. 탈퇴 시 user_details 는 하드삭제되므로
+    // 보통 여기서 user_detail 자체가 안 잡히지만, 파기 전 잔존이나 경합 상황을 방어해 deletedAt 까지 확인한다 —
+    // tombstone 을 반환하면 탈퇴한 소셜계정으로 재로그인 시 죽은 계정을 되살리는 버그가 된다.
     private fun findExisting(userInfo: OAuthUserInfo): User? =
         userDetailRepository
             .findByProviderAndSocialId(userInfo.provider.name, userInfo.socialId)
             ?.let { userService.findById(it.getIdOrNull()) }
+            ?.takeIf { it.isActive() }
 }
