@@ -36,7 +36,7 @@ class TournamentSocialPersistenceService(
         }
         val user = userService.createGuestWithNickname(nickname)
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = user.id))
-        // 게스트 합류. 트랜잭션 안에서 발행 → AFTER_COMMIT 후 알림. 수신자는 기존 참가자 - 본인(actor=새 게스트).
+        // 게스트 합류도 일반 참여와 같은 사실이라 같은 이벤트를 발행한다. 커밋된 뒤에만 전달되도록 트랜잭션 안에서 (롤백 시 미발행).
         eventPublisher.publishEvent(TournamentJoined(tournamentId = tournamentId, actorId = user.id))
         return user
     }

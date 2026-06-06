@@ -91,7 +91,7 @@ class TournamentService(
             throw TournamentException.participantLimitExceeded()
         }
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = userId))
-        // 트랜잭션 안에서 발행 → AFTER_COMMIT 리스너가 커밋 후에만 알림을 보낸다. 수신자는 참가자 - 본인(actor).
+        // 참여가 커밋된 뒤에만 구독자에게 전달되도록 트랜잭션 안에서 발행한다 (롤백 시 미발행).
         eventPublisher.publishEvent(TournamentJoined(tournamentId = tournamentId, actorId = userId))
     }
 
@@ -145,7 +145,7 @@ class TournamentService(
                 )
             },
         ).map { it.getId() }
-        // 위시에서 N개를 한 번에 추가해도 "추가됨" 알림은 1회. 수신자는 참가자 - 본인(actor).
+        // 여러 개를 한 번에 추가해도 "아이템이 추가됐다"는 사실은 1건이라 이벤트도 1회만 발행한다.
         eventPublisher.publishEvent(TournamentItemAdded(tournamentId = command.tournamentId, actorId = userId))
         return savedItemIds
     }

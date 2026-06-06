@@ -51,7 +51,7 @@ class TournamentItemPersistenceService(
                 ),
             ),
         ).first()
-        // 링크 1개 추가. 트랜잭션 안에서 발행 → AFTER_COMMIT 후 알림. 수신자는 참가자 - 본인(actor).
+        // 링크 1개 추가. 커밋된 뒤에만 구독자에게 전달되도록 트랜잭션 안에서 발행한다 (롤백 시 미발행).
         eventPublisher.publishEvent(TournamentItemAdded(tournamentId = tournamentId, actorId = userId))
         return PersistedTournamentItem(itemId = item.getId(), tournamentItemId = tournamentItem.getId())
     }
@@ -76,7 +76,7 @@ class TournamentItemPersistenceService(
                 )
             },
         )
-        // 이미지 N개를 한 번에 올려도 "추가됨" 알림은 1회. 수신자는 참가자 - 본인(actor).
+        // 이미지를 여러 장 한 번에 올려도 "아이템이 추가됐다"는 사실은 1건이라 이벤트도 1회만 발행한다.
         eventPublisher.publishEvent(TournamentItemAdded(tournamentId = tournamentId, actorId = userId))
         return items.zip(tournamentItems) { item, tournamentItem ->
             PersistedTournamentItem(itemId = item.getId(), tournamentItemId = tournamentItem.getId())
