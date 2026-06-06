@@ -2,7 +2,9 @@ package com.depromeet.piki.tournament.controller
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.repository.ItemJpaRepository
+import com.depromeet.piki.item.repository.ItemSnapshotJpaRepository
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.uuidToBytes
 import com.depromeet.piki.tournament.domain.TournamentItem
@@ -38,6 +40,7 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
     @Autowired private lateinit var jwtProvider: JwtProvider
     @Autowired private lateinit var userJpaRepository: UserJpaRepository
     @Autowired private lateinit var itemJpaRepository: ItemJpaRepository
+    @Autowired private lateinit var itemSnapshotJpaRepository: ItemSnapshotJpaRepository
     @Autowired private lateinit var tournamentItemJpaRepository: TournamentItemJpaRepository
     @Autowired private lateinit var tournamentJpaRepository: TournamentJpaRepository
     @Autowired private lateinit var tournamentUserJpaRepository: TournamentUserJpaRepository
@@ -68,10 +71,17 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
             ).andReturn()
             val tId = objectMapper.readTree(createResult.response.contentAsString)["data"]["tournamentId"].asLong()
 
-            val item1 = itemJpaRepository.save(Item(name = "race-item1", currentPrice = 10_000, currency = "KRW")).getId()
-            val item2 = itemJpaRepository.save(Item(name = "race-item2", currentPrice = 20_000, currency = "KRW")).getId()
-            tournamentItemJpaRepository.save(TournamentItem(tournamentId = tId, itemId = item1, userId = ownerId))
-            tournamentItemJpaRepository.save(TournamentItem(tournamentId = tId, itemId = item2, userId = ownerId))
+            // 3단계: tournament_item 은 고정 snapshot 을 참조한다. 조회·start 표시값이 snapshot 에서 오므로 함께 만들어 연결한다.
+            val item1 = itemJpaRepository.save(Item(name = "race-item1", currentPrice = 10_000, currency = "KRW"))
+            val item2 = itemJpaRepository.save(Item(name = "race-item2", currentPrice = 20_000, currency = "KRW"))
+            val snapshot1 = itemSnapshotJpaRepository.save(ItemSnapshot.forItem(item1))
+            val snapshot2 = itemSnapshotJpaRepository.save(ItemSnapshot.forItem(item2))
+            tournamentItemJpaRepository.save(
+                TournamentItem(tournamentId = tId, itemId = item1.getId(), userId = ownerId, snapshotId = snapshot1.getId()),
+            )
+            tournamentItemJpaRepository.save(
+                TournamentItem(tournamentId = tId, itemId = item2.getId(), userId = ownerId, snapshotId = snapshot2.getId()),
+            )
 
             mockMvc.perform(
                 post("/api/v1/tournaments/$tId/start")
@@ -138,6 +148,22 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
             Long::class.java, sourceTournamentId, uuidToBytes(clonerId),
         )
         assertEquals(1L, cloneCount, "복제본은 정확히 1개여야 한다")
+
+        // 복제 토너먼트가 원본의 고정 snapshot_id 를 그대로 가져왔는지 검증한다(복제본 개수만으로는 잘못된 snapshot 연결을 못 잡는다).
+        val sourcePairs = jdbcTemplate.queryForList(
+            "SELECT item_id, snapshot_id FROM tournament_items WHERE tournament_id = ? ORDER BY item_id",
+            sourceTournamentId,
+        )
+        val clonedPairs = jdbcTemplate.queryForList(
+            """SELECT ti.item_id, ti.snapshot_id
+               FROM tournament_items ti
+               JOIN tournaments t ON t.id = ti.tournament_id
+               JOIN tournament_users tu ON tu.tournament_id = t.id
+               WHERE t.source_tournament_id = ? AND tu.user_id = ? AND tu.deleted_at IS NULL
+               ORDER BY ti.item_id""",
+            sourceTournamentId, uuidToBytes(clonerId),
+        )
+        assertEquals(sourcePairs, clonedPairs, "복제 토너먼트는 원본 snapshot_id 를 그대로 가져야 한다")
 
         // 정리
         jdbcTemplate.update("DELETE FROM tournament_histories WHERE tournament_id = ?", sourceTournamentId)

@@ -217,8 +217,10 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
     gh pr edit --add-assignee @me ${ISSUE_LABELS:+--add-label "$ISSUE_LABELS"}
     ITEM_ID=$(gh project item-add 99 --owner depromeet --url {PR URL} --format json --jq '.id')
 
-    # Status + Start date 현재 값 동시 조회
-    read CURRENT_STATUS CURRENT_START < <(gh api graphql -F id="$ITEM_ID" -f query='
+    # Status + Start date 현재 값 동시 조회. @tsv 출력이라 IFS 를 탭으로 고정한다.
+    # 기본 IFS(공백 포함)면 "In review"·"In progress" 같은 공백 포함 단일 선택 값이 첫 단어에서
+    # 쪼개져 CURRENT_STATUS 가 "In" 으로 잘리고, In review 승격 분기가 조용히 어긋난다.
+    IFS=$'\t' read -r CURRENT_STATUS CURRENT_START < <(gh api graphql -F id="$ITEM_ID" -f query='
       query($id: ID!) {
         node(id: $id) {
           ... on ProjectV2Item {
