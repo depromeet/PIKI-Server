@@ -11,6 +11,7 @@ import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubImageParsingWorker
 import com.depromeet.piki.support.StubItemParsingWorker
 import com.depromeet.piki.support.StubRefreshTokenStore
+import com.depromeet.piki.tournament.domain.Tournament
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.repository.TournamentItemJpaRepository
@@ -1617,15 +1618,13 @@ class TournamentControllerTest : IntegrationTestSupport() {
     // ── 초대 미리보기 ──────────────────────────────────────────────────
 
     @Test
-    fun `GET invite-preview 는 유효한 초대 코드로 토너먼트 정보를 반환한다`() {
+    fun `GET invite-preview 는 tournamentId 만으로 토너먼트 정보를 반환한다`() {
         val mockMvc = buildMockMvc()
-        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+        val (tournamentId, _) = createTournamentWithInviteCode(mockMvc)
 
         mockMvc
-            .perform(
-                get("/api/v1/tournaments/$tournamentId/invite-preview")
-                    .param("inviteCode", inviteCode),
-            ).andExpect(status().isOk)
+            .perform(get("/api/v1/tournaments/$tournamentId/invite-preview"))
+            .andExpect(status().isOk)
             .andExpect(jsonPath("$.data.tournamentId").value(tournamentId))
             .andExpect(jsonPath("$.data.tournamentName").isString)
             .andExpect(jsonPath("$.data.itemCount").value(0))
@@ -1635,25 +1634,75 @@ class TournamentControllerTest : IntegrationTestSupport() {
     @Test
     fun `GET invite-preview 는 JWT 없이도 호출 가능하다`() {
         val mockMvc = buildMockMvc()
-        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
-
-        mockMvc
-            .perform(
-                get("/api/v1/tournaments/$tournamentId/invite-preview")
-                    .param("inviteCode", inviteCode),
-            ).andExpect(status().isOk)
-    }
-
-    @Test
-    fun `GET invite-preview 는 초대 코드가 불일치하면 400 을 반환한다`() {
-        val mockMvc = buildMockMvc()
         val (tournamentId, _) = createTournamentWithInviteCode(mockMvc)
 
         mockMvc
-            .perform(
-                get("/api/v1/tournaments/$tournamentId/invite-preview")
-                    .param("inviteCode", "ZZZ999"),
-            ).andExpect(status().isBadRequest)
+            .perform(get("/api/v1/tournaments/$tournamentId/invite-preview"))
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    fun `GET by-invite-code 는 유효한 코드로 tournamentId 를 포함한 토너먼트 정보를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(get("/api/v1/tournaments/by-invite-code").param("code", inviteCode))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.tournamentId").value(tournamentId))
+            .andExpect(jsonPath("$.data.tournamentName").isString)
+    }
+
+    @Test
+    fun `GET by-invite-code 는 JWT 없이도 호출 가능하다`() {
+        val mockMvc = buildMockMvc()
+        val (_, inviteCode) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(get("/api/v1/tournaments/by-invite-code").param("code", inviteCode))
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    fun `GET by-invite-code 는 존재하지 않는 코드이면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+
+        mockMvc
+            .perform(get("/api/v1/tournaments/by-invite-code").param("code", "ZZZ999"))
+            .andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `GET by-invite-code 는 초대 링크가 만료된 토너먼트이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val expiredCode = "EXP001"
+        tournamentJpaRepository.save(
+            Tournament(
+                ownerTournamentUserId = 0L,
+                name = "만료 토너먼트",
+                inviteCode = expiredCode,
+                inviteExpiresAt = java.time.LocalDateTime.now().minusMinutes(1),
+            ),
+        )
+
+        mockMvc
+            .perform(get("/api/v1/tournaments/by-invite-code").param("code", expiredCode))
+            .andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `GET by-invite-code 는 PENDING 이 아닌 토너먼트이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem(name = "아이템1"), saveWishItem(name = "아이템2"))
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+
+        mockMvc
+            .perform(get("/api/v1/tournaments/by-invite-code").param("code", inviteCode))
+            .andExpect(status().isConflict)
     }
 
     // ── 플레이 링크 ──────────────────────────────────────────────────
