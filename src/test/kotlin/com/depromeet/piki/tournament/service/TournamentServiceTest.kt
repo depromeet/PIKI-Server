@@ -352,6 +352,9 @@ class TournamentServiceTest {
         override fun findBySourceTournamentId(sourceTournamentId: Long): List<Tournament> =
             tournaments.values.filter { it.sourceTournamentId == sourceTournamentId && (it.deletedAt?.let { false } ?: true) }
 
+        override fun findTournamentByInviteCode(code: String): Tournament? =
+            tournaments.values.firstOrNull { it.inviteCode == code && (it.deletedAt?.let { false } ?: true) }
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,

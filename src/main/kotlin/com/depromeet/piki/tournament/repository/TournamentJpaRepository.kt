@@ -22,4 +22,6 @@ interface TournamentJpaRepository : JpaRepository<Tournament, Long> {
     fun findByIdInAndDeletedAtIsNullOrderByCreatedAtDesc(ids: List<Long>): List<Tournament>
 
     fun findBySourceTournamentIdAndDeletedAtIsNull(sourceTournamentId: Long): List<Tournament>
+
+    fun findByInviteCodeAndDeletedAtIsNull(inviteCode: String): Tournament?
 }

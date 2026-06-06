@@ -564,6 +564,37 @@ interface TournamentApi {
     ): ApiResponseBody<TournamentInvitePreviewResponse>
 
     @Operation(
+        summary = "초대 코드로 토너먼트 미리보기",
+        description = """
+            홈 다이얼로그에서 6자리 코드만 입력하는 경로 전용 — tournamentId 없이 코드만으로 조회한다.
+            코드가 유효하면 tournamentId·이름·아이템 수·참여자 수를 반환한다.
+            이후 /join 또는 /join/guest 호출 시 응답의 tournamentId를 사용하면 된다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "조회 성공 (tournamentId·토너먼트 이름·아이템 수·참여자 수 반환)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "400",
+                description = "잘못된 요청 (코드에 해당하는 토너먼트 없음)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+        ],
+    )
+    fun getInvitePreviewByCode(
+        @Parameter(description = "초대 코드 (영어 대문자 3자리 + 숫자 3자리)", example = "ABC123") code: String,
+    ): ApiResponseBody<TournamentInvitePreviewResponse>
+
+    @Operation(
         summary = "플레이 링크 생성",
         description = """
             완료된 토너먼트의 플레이 링크를 생성한다. 토너먼트 소유자만 호출 가능.

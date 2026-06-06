@@ -125,6 +125,14 @@ class TournamentController(
         return ApiResponseBody.ok(TournamentInvitePreviewResponse.from(preview))
     }
 
+    @GetMapping("/by-invite-code")
+    override fun getInvitePreviewByCode(
+        @RequestParam code: String,
+    ): ApiResponseBody<TournamentInvitePreviewResponse> {
+        val preview = tournamentService.getInvitePreviewByCode(code)
+        return ApiResponseBody.ok(TournamentInvitePreviewResponse.from(preview))
+    }
+
     @PostMapping("/{tournamentId}/play-link")
     override fun createPlayLink(
         @AuthenticationPrincipal userId: UUID,
