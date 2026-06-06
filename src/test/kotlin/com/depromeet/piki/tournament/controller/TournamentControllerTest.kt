@@ -1614,6 +1614,63 @@ class TournamentControllerTest : IntegrationTestSupport() {
             ).andExpect(status().isNotFound)
     }
 
+    // ── 초대 미리보기 ──────────────────────────────────────────────────
+
+    @Test
+    fun `GET invite-preview 는 tournamentId 만으로 토너먼트 정보를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, _) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(get("/api/v1/tournaments/$tournamentId/invite-preview"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.tournamentId").value(tournamentId))
+            .andExpect(jsonPath("$.data.tournamentName").isString)
+            .andExpect(jsonPath("$.data.itemCount").value(0))
+            .andExpect(jsonPath("$.data.participantCount").value(1))
+    }
+
+    @Test
+    fun `GET invite-preview 는 JWT 없이도 호출 가능하다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, _) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(get("/api/v1/tournaments/$tournamentId/invite-preview"))
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    fun `GET by-invite-code 는 유효한 코드로 tournamentId 를 포함한 토너먼트 정보를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(get("/api/v1/tournaments/by-invite-code").param("code", inviteCode))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.tournamentId").value(tournamentId))
+            .andExpect(jsonPath("$.data.tournamentName").isString)
+    }
+
+    @Test
+    fun `GET by-invite-code 는 JWT 없이도 호출 가능하다`() {
+        val mockMvc = buildMockMvc()
+        val (_, inviteCode) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(get("/api/v1/tournaments/by-invite-code").param("code", inviteCode))
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    fun `GET by-invite-code 는 존재하지 않는 코드이면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+
+        mockMvc
+            .perform(get("/api/v1/tournaments/by-invite-code").param("code", "ZZZ999"))
+            .andExpect(status().isBadRequest)
+    }
+
     // ── 플레이 링크 ──────────────────────────────────────────────────
 
     @Test
