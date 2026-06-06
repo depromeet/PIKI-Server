@@ -12,6 +12,12 @@
 -- 읽을 수 있다. OS 가 꺼져 있어도 FCM 발송은 성공 응답하고 iOS 가 표시만 안 하므로(에러 아님), 서버는 동의를
 -- 추정·저장하지 않고 그냥 쏜다. 앱 삭제 등 진짜 죽은 토큰만 FCM 이 UNREGISTERED 로 알려줘 #245 가 정리한다.
 -- (앱 자체 음소거 기능이 생기면 그때 push_enabled 를 additive 로 추가한다 — YAGNI.)
+--
+-- 기기 메타(user-agent·브라우저·OS·모델 등)도 저장하지 않는다. device_id(iOS IDFV / 웹 localStorage UUID)가
+--   기기를 안정적으로 식별해 라우팅·dedup·upsert 에 충분하고, user-agent 는 브라우저/OS 업데이트로 자주 바뀌어
+--   안정 키가 못 되며 발송 경로(FCM 토큰 기반)도 쓰지 않는다. 긴 문자열·핑거프린팅 소지의 PII 성격이라 최소
+--   저장 원칙으로 제외한다. "내 기기 관리" UI·기기 분석에서 "어느 브라우저/기기" 표시가 필요해지면 그때
+--   platform 과 함께 additive 로 추가한다 — YAGNI.
 CREATE TABLE user_devices (
     id         BIGINT       NOT NULL AUTO_INCREMENT,
     user_id    BINARY(16)   NOT NULL,
