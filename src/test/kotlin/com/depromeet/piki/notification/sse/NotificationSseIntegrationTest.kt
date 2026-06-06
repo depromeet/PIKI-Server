@@ -3,6 +3,8 @@ package com.depromeet.piki.notification.sse
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.notification.controller.dto.NotificationSsePayload
 import com.depromeet.piki.notification.domain.Notification
+import com.depromeet.piki.notification.domain.NotificationKind
+import com.depromeet.piki.notification.domain.NotificationRouting
 import com.depromeet.piki.notification.domain.NotificationType
 import com.depromeet.piki.notification.repository.NotificationRepository
 import com.depromeet.piki.notification.service.NotificationChannel
@@ -27,6 +29,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 // 구독 엔드포인트 contract 와 채널 전달을 실제 빈으로 검증한다.
@@ -153,6 +156,57 @@ class NotificationSseIntegrationTest : IntegrationTestSupport() {
         sseNotificationChannel.send(userId, notification)
 
         assertTrue(registry.emittersOf(userId).isEmpty())
+    }
+
+    @Test
+    fun `토너먼트 파싱 알림은 채널 payload 에 kind·tournamentId·tournamentItemId 가 실린다`() {
+        val userId = UUID.randomUUID()
+        val emitter = RecordingSseEmitter()
+        registry.register(userId, emitter)
+        val notification =
+            notificationRepository.save(
+                Notification(
+                    userId,
+                    NotificationType.ITEM_PARSING_COMPLETED,
+                    "상품 정보가 저장됐어요",
+                    "",
+                    11L,
+                    NotificationRouting.Tournament(tournamentId = 99L, tournamentItemId = 555L),
+                ),
+            )
+
+        try {
+            sseNotificationChannel.send(userId, notification)
+
+            val payload = emitter.sentData.filterIsInstance<NotificationSsePayload>().first()
+            assertEquals(NotificationKind.TOURNAMENT, payload.kind)
+            assertEquals(99L, payload.tournamentId)
+            assertEquals(555L, payload.tournamentItemId)
+            assertEquals(11L, payload.refId)
+        } finally {
+            registry.unregister(userId, emitter)
+        }
+    }
+
+    @Test
+    fun `위시 파싱 알림 payload 는 kind=WISH 이고 토너먼트 식별자가 비어 있다`() {
+        val userId = UUID.randomUUID()
+        val notification =
+            notificationRepository.save(
+                Notification(
+                    userId,
+                    NotificationType.ITEM_PARSING_COMPLETED,
+                    "상품 정보가 저장됐어요",
+                    "",
+                    11L,
+                    NotificationRouting.Wish,
+                ),
+            )
+
+        val payload = NotificationSsePayload.from(notification)
+        assertEquals(NotificationKind.WISH, payload.kind)
+        assertNull(payload.tournamentId)
+        assertNull(payload.tournamentItemId)
     }
 }
 
