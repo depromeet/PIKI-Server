@@ -89,7 +89,10 @@ class SecurityConfig(
                     // 소셜 토너먼트 게스트 합류: 계정 없이 초대 코드 + 닉네임으로 가입과 동시에 참여
                     .requestMatchers(HttpMethod.POST, "/api/v1/tournaments/*/join/guest")
                     .permitAll()
-                    // 초대 코드 미리보기: 미인증 상태에서 6자리 코드만으로 토너먼트 정보 확인
+                    // 링크 접근 미리보기: 미인증 상태에서 tournamentId 로 참여 전 정보 확인
+                    .requestMatchers(HttpMethod.GET, "/api/v1/tournaments/*/invite-preview")
+                    .permitAll()
+                    // 코드 입력 미리보기: 미인증 상태에서 6자리 코드만으로 토너먼트 정보 확인
                     .requestMatchers(HttpMethod.GET, "/api/v1/tournaments/by-invite-code")
                     .permitAll()
                     // 플레이 링크 정보 조회: 미인증 상태에서 링크 진입 시 토너먼트 정보 확인

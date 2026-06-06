@@ -526,6 +526,33 @@ interface TournamentApi {
     ): ApiResponseBody<Unit>
 
     @Operation(
+        summary = "링크 접근 경로 — 토너먼트 참여 전 미리보기",
+        description = "초대 링크 직접 접근 시 tournamentId 만으로 토너먼트 정보(이름·아이템 수·참여자 수)를 반환한다. 인증 불필요.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "조회 성공 (토너먼트 이름·아이템 수·참여자 수 반환)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "토너먼트를 찾을 수 없음",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+        ],
+    )
+    fun getInvitePreview(
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
+    ): ApiResponseBody<TournamentInvitePreviewResponse>
+
+    @Operation(
         summary = "초대 코드로 토너먼트 미리보기",
         description = """
             홈 다이얼로그에서 6자리 코드만 입력하는 경로 전용 — tournamentId 없이 코드만으로 조회한다.

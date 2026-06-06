@@ -496,6 +496,22 @@ class TournamentApiExamples(
                         )
                     }
 
+                handlerMethod.binds(TournamentController::getInvitePreview) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "링크 접근 미리보기 성공",
+                            payload = ApiResponseBody.ok(
+                                TournamentInvitePreviewResponse(
+                                    tournamentId = 1,
+                                    tournamentName = "내 토너먼트",
+                                    itemCount = 8,
+                                    participantCount = 2,
+                                ),
+                            ),
+                        )
+                    }
+
                 handlerMethod.binds(TournamentController::getInvitePreviewByCode) ->
                     operation.examples(openApiObjectMapper.delegate) {
                         add(

@@ -444,6 +444,22 @@ class TournamentService(
     }
 
     @Transactional(readOnly = true)
+    fun getInvitePreview(tournamentId: Long): TournamentInvitePreview {
+        val tournament =
+            tournamentRepository.findTournamentById(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        tournament.checkJoinable(null)
+        val itemCount = tournamentItemRepository.countByTournamentId(tournamentId)
+        val participantCount = tournamentUserRepository.countByTournamentId(tournamentId)
+        return TournamentInvitePreview(
+            tournamentId = tournamentId,
+            tournamentName = tournament.name,
+            itemCount = itemCount,
+            participantCount = participantCount,
+        )
+    }
+
+    @Transactional(readOnly = true)
     fun getInvitePreviewByCode(code: String): TournamentInvitePreview {
         val tournament =
             tournamentRepository.findTournamentByInviteCode(code)
