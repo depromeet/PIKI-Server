@@ -9,6 +9,10 @@ import com.depromeet.piki.common.storage.ImageStorage
 class StubImageStorage : ImageStorage {
     val uploadedKeys = mutableListOf<String>()
 
+    // deleteByPrefix 호출 기록. 삭제는 부수효과뿐이라 default 가 throw 가 아니라 단순 기록이라 안전하다
+    // (upload 와 같은 결 — 명시 세팅을 강제할 동적 응답이 없다). 호출 검증은 deletedPrefixes 를 본다.
+    val deletedPrefixes = mutableListOf<String>()
+
     // 기본 동작 — key 로 고정 URL 생성. 502 시나리오 테스트가 behavior 를 throw 람다로 교체한 뒤 이 값으로 복원한다.
     val defaultBehavior: (ByteArray, String, String) -> String = { _, key, _ -> "$BASE_URL/$key" }
     var behavior: (ByteArray, String, String) -> String = defaultBehavior
@@ -21,6 +25,10 @@ class StubImageStorage : ImageStorage {
         val url = behavior(bytes, key, contentType)
         uploadedKeys.add(key)
         return url
+    }
+
+    override fun deleteByPrefix(prefix: String) {
+        deletedPrefixes.add(prefix)
     }
 
     companion object {

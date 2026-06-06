@@ -2,6 +2,7 @@ package com.depromeet.piki.user.controller
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.support.IntegrationTestSupport
+import com.depromeet.piki.support.StubImageStorage
 import com.depromeet.piki.support.uuidToBytes
 import com.depromeet.piki.user.domain.IdentityType
 import jakarta.persistence.EntityManager
@@ -20,6 +21,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
 import java.util.UUID
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
@@ -34,6 +36,9 @@ class WithdrawalIntegrationTest : IntegrationTestSupport() {
 
     @Autowired
     private lateinit var jwtProvider: JwtProvider
+
+    @Autowired
+    private lateinit var stubImageStorage: StubImageStorage
 
     @PersistenceContext
     private lateinit var entityManager: EntityManager
@@ -242,6 +247,21 @@ class WithdrawalIntegrationTest : IntegrationTestSupport() {
                 uuidToBytes(userId),
             )
         assertEquals(1L, tiCount)
+    }
+
+    @Test
+    fun `DELETE users me - 탈퇴 시 S3 프로필 prefix 가 삭제 호출된다`() {
+        val userId = UUID.randomUUID()
+        insertUser(userId, "멤버닉네임", IdentityType.MEMBER)
+
+        mockMvc()
+            .perform(
+                delete("/api/v1/users/me")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.MEMBER)}"),
+            ).andExpect(status().isOk)
+
+        // 탈퇴 시 유저 프로필 이미지(얼굴 등 PII)를 S3 에서 prefix 통째로 파기한다.
+        assertContains(stubImageStorage.deletedPrefixes, "profiles/$userId/")
     }
 
     @Test
