@@ -11,6 +11,7 @@ import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubImageParsingWorker
 import com.depromeet.piki.support.StubItemParsingWorker
 import com.depromeet.piki.support.StubRefreshTokenStore
+import com.depromeet.piki.tournament.domain.Tournament
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.repository.TournamentItemJpaRepository
@@ -1669,6 +1670,39 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(get("/api/v1/tournaments/by-invite-code").param("code", "ZZZ999"))
             .andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `GET by-invite-code 는 초대 링크가 만료된 토너먼트이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val expiredCode = "EXP001"
+        tournamentJpaRepository.save(
+            Tournament(
+                ownerTournamentUserId = 0L,
+                name = "만료 토너먼트",
+                inviteCode = expiredCode,
+                inviteExpiresAt = java.time.LocalDateTime.now().minusMinutes(1),
+            ),
+        )
+
+        mockMvc
+            .perform(get("/api/v1/tournaments/by-invite-code").param("code", expiredCode))
+            .andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `GET by-invite-code 는 PENDING 이 아닌 토너먼트이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem(name = "아이템1"), saveWishItem(name = "아이템2"))
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+
+        mockMvc
+            .perform(get("/api/v1/tournaments/by-invite-code").param("code", inviteCode))
+            .andExpect(status().isConflict)
     }
 
     // ── 플레이 링크 ──────────────────────────────────────────────────
