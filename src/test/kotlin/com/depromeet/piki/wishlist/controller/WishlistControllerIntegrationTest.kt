@@ -9,6 +9,7 @@ import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubImageStorage
 import com.depromeet.piki.support.uuidToBytes
 import com.depromeet.piki.user.domain.IdentityType
+import com.depromeet.piki.wishlist.controller.dto.WishlistUpdateRequest
 import com.depromeet.piki.wishlist.service.WishPersistenceService
 import org.hamcrest.Matchers.nullValue
 import org.hamcrest.Matchers.startsWith
@@ -451,6 +452,8 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isBadRequest)
+            // 응답 detail 이 OpenAPI example(WishlistApiExamples 가격 음수)과 같은 형식인지 contract 로 고정.
+            .andExpect(jsonPath("$.detail").value("currentPrice: ${WishlistUpdateRequest.PRICE_MIN_MESSAGE}"))
     }
 
     @Test

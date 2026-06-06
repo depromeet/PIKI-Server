@@ -5,9 +5,12 @@ import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.user.controller.dto.NicknameCheckRequest
 import com.depromeet.piki.user.controller.dto.NicknameCheckResponse
 import com.depromeet.piki.user.controller.dto.UserResponse
+import com.depromeet.piki.user.controller.dto.UserUpdateRequest
 import com.depromeet.piki.user.domain.IdentityType
+import com.depromeet.piki.user.domain.UserException
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -53,18 +56,11 @@ class UserApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    detail = "닉네임은 1자 이상 10자 이하여야 한다.",
+                                    // @RequestBody Bean Validation 위반은 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
+                                    detail = "nickname: ${UserUpdateRequest.NICKNAME_SIZE_MESSAGE}",
                                 ),
                         )
-                        add(
-                            status = HttpStatus.CONFLICT,
-                            name = "닉네임 중복",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.CONFLICT,
-                                    detail = "이미 사용 중인 닉네임입니다.",
-                                ),
-                        )
+                        add(UserException.duplicateNickname(), name = "닉네임 중복")
                         unauthorized()
                         add(
                             status = HttpStatus.NOT_FOUND,
@@ -94,7 +90,8 @@ class UserApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    detail = "nickname 은 10자 이하여야 한다.",
+                                    // 쿼리 파라미터 바인딩 @Valid 위반도 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
+                                    detail = "nickname: ${NicknameCheckRequest.NICKNAME_SIZE_MESSAGE}",
                                 ),
                         )
                         unauthorized()

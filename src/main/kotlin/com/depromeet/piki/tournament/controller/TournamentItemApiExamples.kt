@@ -5,11 +5,16 @@ import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.common.storage.ImageStorageException
+import com.depromeet.piki.item.domain.ItemException
 import com.depromeet.piki.item.domain.ItemStatus
+import com.depromeet.piki.product.domain.ProductLinkException
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemFromLinkResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromImagesResponse
 import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsFromWishResponse
+import com.depromeet.piki.tournament.controller.dto.AddTournamentItemsRequest
 import com.depromeet.piki.tournament.controller.dto.TournamentItemDetailResponse
+import com.depromeet.piki.tournament.service.TournamentException
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -28,9 +33,10 @@ class TournamentItemApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "위시 아이템 추가 성공",
-                            payload = ApiResponseBody.ok(
-                                AddTournamentItemsFromWishResponse(tournamentItemIds = listOf(10L, 11L)),
-                            ),
+                            payload =
+                                ApiResponseBody.ok(
+                                    AddTournamentItemsFromWishResponse(tournamentItemIds = listOf(10L, 11L)),
+                                ),
                         )
                         add(
                             status = HttpStatus.BAD_REQUEST,
@@ -38,37 +44,19 @@ class TournamentItemApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    detail = "itemIds: 아이템은 1개 이상 32개 이하여야 합니다.",
+                                    // @RequestBody Bean Validation 위반은 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
+                                    detail = "itemIds: ${AddTournamentItemsRequest.ITEM_IDS_SIZE_MESSAGE}",
                                 ),
                         )
+                        add(TournamentException.tooManyTournamentItems(), name = "아이템 최대 32개 초과")
                         unauthorized()
-                        add(
-                            status = HttpStatus.FORBIDDEN,
-                            name = "위시리스트에 없는 아이템 포함",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.FORBIDDEN,
-                                    detail = "위시리스트에 없는 아이템은 토너먼트에 추가할 수 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.NOT_FOUND,
-                            name = "토너먼트를 찾을 수 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.NOT_FOUND,
-                                    detail = "토너먼트를 찾을 수 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.CONFLICT,
-                            name = "PENDING 상태 아님",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.CONFLICT,
-                                    detail = "PENDING 상태인 토너먼트에만 수행할 수 있습니다.",
-                                ),
-                        )
+                        add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")
+                        add(TournamentException.itemNotInWishlist(), name = "위시리스트에 없는 아이템 포함")
+                        add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
+                        add(TournamentException.notFoundItems(), name = "존재하지 않는 아이템 포함")
+                        add(TournamentException.notPendingTournament(), name = "PENDING 상태 아님")
+                        add(TournamentException.duplicateTournamentItem(), name = "이미 등록된/중복 아이템")
+                        add(TournamentException.itemNotReady(), name = "PROCESSING/FAILED 상품 포함")
                     }
 
                 handlerMethod.binds(TournamentItemController::addItemFromLink) ->
@@ -78,43 +66,13 @@ class TournamentItemApiExamples(
                             name = "링크 아이템 추가 성공",
                             payload = ApiResponseBody.ok(AddTournamentItemFromLinkResponse(tournamentItemId = 1L)),
                         )
-                        add(
-                            status = HttpStatus.BAD_REQUEST,
-                            name = "URL 형식 오류",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.INVALID_INPUT,
-                                    detail = "유효한 URL 형식이 아닙니다.",
-                                ),
-                        )
+                        add(ProductLinkException.invalidFormat(urlFormatCause), name = "유효하지 않은 URL 형식")
+                        add(ProductLinkException.unsupportedScheme(), name = "https 외 스킴")
+                        add(TournamentException.tooManyTournamentItems(), name = "아이템 최대 32개 초과")
                         unauthorized()
-                        add(
-                            status = HttpStatus.FORBIDDEN,
-                            name = "토너먼트 권한 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.FORBIDDEN,
-                                    detail = "해당 토너먼트에 대한 권한이 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.NOT_FOUND,
-                            name = "토너먼트를 찾을 수 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.NOT_FOUND,
-                                    detail = "토너먼트를 찾을 수 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.CONFLICT,
-                            name = "PENDING 상태 아님",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.CONFLICT,
-                                    detail = "PENDING 상태인 토너먼트에만 수행할 수 있습니다.",
-                                ),
-                        )
+                        add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")
+                        add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
+                        add(TournamentException.notPendingTournament(), name = "PENDING 상태 아님")
                     }
 
                 handlerMethod.binds(TournamentItemController::addItemsFromImages) ->
@@ -122,49 +80,19 @@ class TournamentItemApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "이미지 아이템 추가 성공",
-                            payload = ApiResponseBody.ok(
-                                AddTournamentItemsFromImagesResponse(
-                                    tournamentItemIds = listOf(1L, 2L, 3L),
-                                ),
-                            ),
-                        )
-                        add(
-                            status = HttpStatus.BAD_REQUEST,
-                            name = "이미지 개수 위반 (1~5개)",
                             payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.INVALID_INPUT,
-                                    detail = "이미지는 최소 1개, 최대 5개까지 전송할 수 있습니다.",
+                                ApiResponseBody.ok(
+                                    AddTournamentItemsFromImagesResponse(
+                                        tournamentItemIds = listOf(1L, 2L, 3L),
+                                    ),
                                 ),
                         )
+                        add(TournamentException.invalidImageCount(), name = "이미지 개수 위반 (1~5개)")
+                        add(TournamentException.tooManyTournamentItems(), name = "아이템 최대 32개 초과")
                         unauthorized()
-                        add(
-                            status = HttpStatus.FORBIDDEN,
-                            name = "토너먼트 권한 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.FORBIDDEN,
-                                    detail = "해당 토너먼트에 대한 권한이 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.NOT_FOUND,
-                            name = "토너먼트를 찾을 수 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.NOT_FOUND,
-                                    detail = "토너먼트를 찾을 수 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.CONFLICT,
-                            name = "PENDING 상태 아님",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.CONFLICT,
-                                    detail = "PENDING 상태인 토너먼트에만 수행할 수 있습니다.",
-                                ),
-                        )
+                        add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")
+                        add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
+                        add(TournamentException.notPendingTournament(), name = "PENDING 상태 아님")
                     }
 
                 handlerMethod.binds(TournamentItemController::updateItem) ->
@@ -174,51 +102,15 @@ class TournamentItemApiExamples(
                             name = "수정 성공 (FAILED → READY)",
                             payload = ApiResponseBody.ok<Unit>(),
                         )
-                        add(
-                            status = HttpStatus.BAD_GATEWAY,
-                            name = "이미지 저장 실패 (S3 업로드 오류)",
-                            payload = ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.RETRYABLE,
-                                detail = "이미지 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.",
-                            ),
-                        )
-                        add(
-                            status = HttpStatus.BAD_REQUEST,
-                            name = "상품명 없이 보정 시도",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.INVALID_INPUT,
-                                    detail = "상품명을 입력해야 합니다.",
-                                ),
-                        )
+                        add(ItemException.nameRequiredForReady(), name = "상품명 없이 보정 시도")
                         unauthorized()
-                        add(
-                            status = HttpStatus.FORBIDDEN,
-                            name = "토너먼트 권한 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.FORBIDDEN,
-                                    detail = "해당 토너먼트에 대한 권한이 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.NOT_FOUND,
-                            name = "토너먼트를 찾을 수 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.NOT_FOUND,
-                                    detail = "토너먼트를 찾을 수 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.CONFLICT,
-                            name = "이미 등록 완료(READY) 항목",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.CONFLICT,
-                                    detail = "이미 등록 완료된 상품은 수정할 수 없습니다.",
-                                ),
-                        )
+                        add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")
+                        add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
+                        add(TournamentException.notFoundTournamentItem(), name = "토너먼트 아이템을 찾을 수 없음")
+                        add(TournamentException.notPendingTournament(), name = "PENDING 상태 아님")
+                        add(ItemException.alreadyReady(), name = "이미 등록 완료(READY) 항목 — 수정 불가")
+                        add(ItemException.stillProcessing(), name = "아직 처리 중(PROCESSING) 항목 — 수정 불가")
+                        add(ImageStorageException.uploadFailed(), name = "이미지 저장 실패")
                     }
 
                 handlerMethod.binds(TournamentItemController::deleteItem) ->
@@ -229,24 +121,10 @@ class TournamentItemApiExamples(
                             payload = ApiResponseBody.ok<Unit>(),
                         )
                         unauthorized()
-                        add(
-                            status = HttpStatus.FORBIDDEN,
-                            name = "토너먼트 권한 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.FORBIDDEN,
-                                    detail = "해당 토너먼트에 대한 권한이 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.NOT_FOUND,
-                            name = "토너먼트/아이템을 찾을 수 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.NOT_FOUND,
-                                    detail = "토너먼트를 찾을 수 없습니다.",
-                                ),
-                        )
+                        add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")
+                        add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
+                        add(TournamentException.notFoundTournamentItem(), name = "토너먼트 아이템을 찾을 수 없음")
+                        add(TournamentException.notPendingTournament(), name = "PENDING 상태 아님")
                     }
 
                 handlerMethod.binds(TournamentItemController::getTournamentItem) ->
@@ -254,88 +132,84 @@ class TournamentItemApiExamples(
                         add(
                             status = HttpStatus.OK,
                             name = "READY - 파싱 완료 (링크 등록)",
-                            payload = ApiResponseBody.ok(
-                                TournamentItemDetailResponse(
-                                    tournamentItemId = 10,
-                                    itemId = 100,
-                                    sourceUrl = "https://www.nike.com/kr/t/air-max/example",
-                                    name = "나이키 에어맥스",
-                                    imageUrl = "https://cdn.example.com/items/1.jpg",
-                                    price = 129_000,
-                                    currency = "KRW",
-                                    status = ItemStatus.READY,
+                            payload =
+                                ApiResponseBody.ok(
+                                    TournamentItemDetailResponse(
+                                        tournamentItemId = 10,
+                                        itemId = 100,
+                                        sourceUrl = "https://www.nike.com/kr/t/air-max/example",
+                                        name = "나이키 에어맥스",
+                                        imageUrl = "https://cdn.example.com/items/1.jpg",
+                                        price = 129_000,
+                                        currency = "KRW",
+                                        status = ItemStatus.READY,
+                                    ),
                                 ),
-                            ),
                         )
                         add(
                             status = HttpStatus.OK,
                             name = "READY - 파싱 완료 (이미지 등록, sourceUrl=null)",
-                            payload = ApiResponseBody.ok(
-                                TournamentItemDetailResponse(
-                                    tournamentItemId = 11,
-                                    itemId = 101,
-                                    sourceUrl = null,
-                                    name = "아디다스 울트라부스트",
-                                    imageUrl = "https://cdn.example.com/items/2.jpg",
-                                    price = 189_000,
-                                    currency = "KRW",
-                                    status = ItemStatus.READY,
+                            payload =
+                                ApiResponseBody.ok(
+                                    TournamentItemDetailResponse(
+                                        tournamentItemId = 11,
+                                        itemId = 101,
+                                        sourceUrl = null,
+                                        name = "아디다스 울트라부스트",
+                                        imageUrl = "https://cdn.example.com/items/2.jpg",
+                                        price = 189_000,
+                                        currency = "KRW",
+                                        status = ItemStatus.READY,
+                                    ),
                                 ),
-                            ),
                         )
                         add(
                             status = HttpStatus.OK,
                             name = "PROCESSING - 파싱 진행 중",
-                            payload = ApiResponseBody.ok(
-                                TournamentItemDetailResponse(
-                                    tournamentItemId = 10,
-                                    itemId = 100,
-                                    sourceUrl = "https://www.nike.com/kr/t/air-max/example",
-                                    name = null,
-                                    imageUrl = null,
-                                    price = null,
-                                    currency = null,
-                                    status = ItemStatus.PROCESSING,
+                            payload =
+                                ApiResponseBody.ok(
+                                    TournamentItemDetailResponse(
+                                        tournamentItemId = 10,
+                                        itemId = 100,
+                                        sourceUrl = "https://www.nike.com/kr/t/air-max/example",
+                                        name = null,
+                                        imageUrl = null,
+                                        price = null,
+                                        currency = null,
+                                        status = ItemStatus.PROCESSING,
+                                    ),
                                 ),
-                            ),
                         )
                         add(
                             status = HttpStatus.OK,
                             name = "FAILED - 파싱 실패",
-                            payload = ApiResponseBody.ok(
-                                TournamentItemDetailResponse(
-                                    tournamentItemId = 10,
-                                    itemId = 100,
-                                    sourceUrl = "https://www.nike.com/kr/t/air-max/example",
-                                    name = null,
-                                    imageUrl = null,
-                                    price = null,
-                                    currency = null,
-                                    status = ItemStatus.FAILED,
+                            payload =
+                                ApiResponseBody.ok(
+                                    TournamentItemDetailResponse(
+                                        tournamentItemId = 10,
+                                        itemId = 100,
+                                        sourceUrl = "https://www.nike.com/kr/t/air-max/example",
+                                        name = null,
+                                        imageUrl = null,
+                                        price = null,
+                                        currency = null,
+                                        status = ItemStatus.FAILED,
+                                    ),
                                 ),
-                            ),
                         )
                         unauthorized()
+                        add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")
+                        add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
                         add(
-                            status = HttpStatus.FORBIDDEN,
-                            name = "토너먼트 권한 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.FORBIDDEN,
-                                    detail = "해당 토너먼트에 대한 권한이 없습니다.",
-                                ),
-                        )
-                        add(
-                            status = HttpStatus.NOT_FOUND,
-                            name = "토너먼트/아이템을 찾을 수 없음",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.NOT_FOUND,
-                                    detail = "토너먼트를 찾을 수 없습니다.",
-                                ),
+                            TournamentException.notFoundTournamentItem(),
+                            name = "토너먼트 아이템을 찾을 수 없음 · 아이템이 해당 토너먼트에 속하지 않음",
                         )
                     }
             }
             operation
         }
+
+    // ProductLinkException.invalidFormat 은 cause 를 요구하지만, example 헬퍼는 message·category·status 만
+    // 사용한다(GlobalExceptionHandler.handleBaseException 과 동일). 따라서 이 cause 는 payload 에 영향을 주지 않는 더미다.
+    private val urlFormatCause = IllegalArgumentException("example")
 }

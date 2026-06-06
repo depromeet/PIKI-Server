@@ -21,7 +21,7 @@ data class OAuthLoginRequest(
 ) {
     // v1(code+redirectUri) XOR v2(accessToken) — 정확히 한 흐름만 유효. 둘 다·둘 다 없음·공백은 400(입력 경계 계약).
     @get:JsonIgnore
-    @get:AssertTrue(message = "code+redirectUri 또는 accessToken 중 한 흐름만 보내야 합니다.")
+    @get:AssertTrue(message = VALID_FLOW_MESSAGE)
     val validFlow: Boolean
         get() {
             val v1 = !code.isNullOrBlank() && !redirectUri.isNullOrBlank()
@@ -31,4 +31,10 @@ data class OAuthLoginRequest(
 
     fun toCommand(): OAuthLoginCommand =
         OAuthLoginCommand(code = code, redirectUri = redirectUri, accessToken = accessToken, state = state)
+
+    companion object {
+        // Bean Validation 위반 메시지를 const 로 빼 OpenApiExamples 가 같은 상수를 참조하게 한다.
+        // (실제 응답 detail 과 example 이 한 곳에서 동기화되어 손으로 박은 문자열이 어긋나는 함정을 차단)
+        const val VALID_FLOW_MESSAGE = "code+redirectUri 또는 accessToken 중 한 흐름만 보내야 합니다."
+    }
 }
