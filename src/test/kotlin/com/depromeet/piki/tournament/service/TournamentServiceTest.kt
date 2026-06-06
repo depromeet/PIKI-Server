@@ -11,6 +11,8 @@ import com.depromeet.piki.tournament.domain.TournamentHistory
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.domain.TournamentUser
+import com.depromeet.piki.tournament.event.TournamentItemAdded
+import com.depromeet.piki.tournament.event.TournamentJoined
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
@@ -25,6 +27,7 @@ import com.depromeet.piki.wishlist.domain.Wish
 import com.depromeet.piki.wishlist.domain.WishCursor
 import com.depromeet.piki.wishlist.repository.WishRepository
 import org.junit.jupiter.api.Test
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -375,6 +378,8 @@ class TournamentServiceTest {
     private val testItemRepository = TestItemRepository()
     private val testItemSnapshotRepository = TestItemSnapshotRepository()
     private val testWishRepository = TestWishRepository(testItemSnapshotRepository)
+    // 발행된 도메인 이벤트를 그대로 모으는 capturing publisher — 발행 단언에 쓴다.
+    private val publishedEvents = mutableListOf<Any>()
     private val service =
         TournamentService(
             tournamentUserRepository,
@@ -384,6 +389,7 @@ class TournamentServiceTest {
             testItemRepository,
             testItemSnapshotRepository,
             testWishRepository,
+            ApplicationEventPublisher { publishedEvents += it },
         )
     private val userId = UUID.randomUUID()
     private val otherUserId = UUID.randomUUID()
@@ -407,6 +413,25 @@ class TournamentServiceTest {
         assertEquals(1L, id)
         assertTrue(result.inviteCode.matches(Regex("[A-Z]{3}\\d{3}")))
         assertEquals(TournamentStatus.PENDING, repository.tournaments[id]!!.status)
+    }
+
+    @Test
+    fun `join 은 참여 후 TournamentJoined 이벤트를 발행한다`() {
+        val created = service.create(userId, CreateTournament("내 토너먼트"))
+
+        service.join(otherUserId, created.tournamentId, created.inviteCode)
+
+        assertEquals(listOf<Any>(TournamentJoined(created.tournamentId, otherUserId)), publishedEvents)
+    }
+
+    @Test
+    fun `addItemsFromWish 는 여러 개를 추가해도 TournamentItemAdded 를 한 번만 발행한다`() {
+        val tournamentId = service.create(userId, CreateTournament("내 토너먼트")).tournamentId
+        testWishRepository.addWish(userId, *(1L..3L).toList().toLongArray())
+
+        service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, (1L..3L).toList()))
+
+        assertEquals(listOf<Any>(TournamentItemAdded(tournamentId, userId)), publishedEvents)
     }
 
     @Test
