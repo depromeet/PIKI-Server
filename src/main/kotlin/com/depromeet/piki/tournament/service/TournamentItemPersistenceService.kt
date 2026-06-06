@@ -36,9 +36,17 @@ class TournamentItemPersistenceService(
     ): PersistedTournamentItem {
         validateAndCheckCapacity(userId, tournamentId, 1)
         val item = itemRepository.save(Item.processing(link))
-        itemSnapshotRepository.save(ItemSnapshot.forItem(item))
+        // 3단계: 저장한 snapshot 의 id 를 tournament_item 에 고정한다. 출전 시점 버전이 박혀 위시 갱신과 격리된다.
+        val snapshot = itemSnapshotRepository.save(ItemSnapshot.forItem(item))
         val tournamentItem = tournamentItemRepository.saveAll(
-            listOf(TournamentItem(tournamentId = tournamentId, itemId = item.getId(), userId = userId)),
+            listOf(
+                TournamentItem(
+                    tournamentId = tournamentId,
+                    itemId = item.getId(),
+                    userId = userId,
+                    snapshotId = snapshot.getId(),
+                ),
+            ),
         ).first()
         return PersistedTournamentItem(itemId = item.getId(), tournamentItemId = tournamentItem.getId())
     }
@@ -51,9 +59,17 @@ class TournamentItemPersistenceService(
     ): List<PersistedTournamentItem> {
         validateAndCheckCapacity(userId, tournamentId, count)
         val items = itemRepository.saveAll(List(count) { Item(status = ItemStatus.PROCESSING) })
-        itemSnapshotRepository.saveAll(items.map { ItemSnapshot.forItem(it) })
+        // saveAll 은 입력 순서를 보존하므로 items[i] 와 snapshots[i] 가 같은 상품이다. 각 tournament_item 에 그 snapshot 을 고정한다.
+        val snapshots = itemSnapshotRepository.saveAll(items.map { ItemSnapshot.forItem(it) })
         val tournamentItems = tournamentItemRepository.saveAll(
-            items.map { TournamentItem(tournamentId = tournamentId, itemId = it.getId(), userId = userId) },
+            items.zip(snapshots) { item, snapshot ->
+                TournamentItem(
+                    tournamentId = tournamentId,
+                    itemId = item.getId(),
+                    userId = userId,
+                    snapshotId = snapshot.getId(),
+                )
+            },
         )
         return items.zip(tournamentItems) { item, tournamentItem ->
             PersistedTournamentItem(itemId = item.getId(), tournamentItemId = tournamentItem.getId())
@@ -88,8 +104,15 @@ class TournamentItemPersistenceService(
             itemRepository.findById(tournamentItem.itemId)
                 ?: error("item 없음 — tournamentItemId=$tournamentItemId, itemId=${tournamentItem.itemId}")
         item.recover(name = name, currentPrice = price, imageUrl = imageUrl, currency = currency)
-        itemSnapshotRepository.findLatestByItemId(tournamentItem.itemId)
-            ?.recover(name = name, currentPrice = price, imageUrl = imageUrl, currency = currency)
+        // 토너먼트는 출전 시점 고정 snapshot 을 본다. 최신(findLatestByItemId)이 아니라 tournamentItem.snapshotId 를
+        // 갱신해야, 5단계 갱신으로 같은 item 에 snapshot 이 여러 개 생겨도 토너먼트가 고정한 버전만 보정돼 격리가 유지된다.
+        val snapshotId =
+            tournamentItem.snapshotId
+                ?: error("snapshot 없음 — tournamentItemId=$tournamentItemId, itemId=${tournamentItem.itemId}")
+        val snapshot =
+            itemSnapshotRepository.findById(snapshotId)
+                ?: error("snapshot 없음 — tournamentItemId=$tournamentItemId, snapshotId=$snapshotId")
+        snapshot.recover(name = name, currentPrice = price, imageUrl = imageUrl, currency = currency)
     }
 
     private fun validateAndCheckCapacity(

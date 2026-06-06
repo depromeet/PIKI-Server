@@ -90,6 +90,10 @@ dependencies {
     // 크롭한 상품 이미지를 S3 에 업로드 (#144). 버전은 BOM 이 관리.
     implementation("software.amazon.awssdk:s3")
 
+    // FCM 푸시 (#242) — Firebase Admin SDK. Spring Boot BOM 미관리라 버전 명시 (Maven Central 최신 안정).
+    // 자체 Jackson 2(com.fasterxml) 를 번들하나 우리 Jackson 3(tools.jackson)와 그룹이 달라 공존한다.
+    implementation("com.google.firebase:firebase-admin:9.9.0")
+
     // JJWT - Jackson 2.x 와 3.x 는 그룹 ID 가 달라 공존 가능 (com.fasterxml vs tools.jackson)
     val jjwtVersion = "0.13.0"
     implementation("io.jsonwebtoken:jjwt-api:$jjwtVersion")
