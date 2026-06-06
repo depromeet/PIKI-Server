@@ -112,6 +112,9 @@ class SecurityConfig(
                     .authenticated()
                     .requestMatchers(HttpMethod.PATCH, "/api/v1/users/me")
                     .authenticated()
+                    // 프로필 이미지 업로드 — GET /me·PATCH /me 와 동일하게 게스트도 호출 가능
+                    .requestMatchers(HttpMethod.POST, "/api/v1/users/me/profile-image")
+                    .authenticated()
                     .anyRequest()
                     .authenticated()
             }.exceptionHandling {
