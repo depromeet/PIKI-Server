@@ -22,7 +22,7 @@ interface NotificationSseApi {
             응답은 ApiResponseBody JSON 래퍼가 아니라 text/event-stream 스트림이며, 다음 이벤트가 흘러온다.
             - connect: 구독 직후 1회. data="connected". 연결 성립 신호.
             - notification: 알림 1건. data 는 NotificationSsePayload JSON (200 응답 스키마 참고). type+refId 로 딥링크를 분기한다.
-            - (주석 ping): 약 15초 간격 하트비트. 연결 유지용이며 data 이벤트가 아니다.
+            - (주석 ping): 약 30초 간격 하트비트. 연결 유지용이며 data 이벤트가 아니다.
             토너먼트 알림은 해당 토너먼트 참여자에게만 fan-out 되므로, 자기 스트림 1개만 구독하면 토너먼트·개인 알림이 모두 도착한다.
             연결은 30분 후 타임아웃되며, 클라이언트는 끊기면 재연결한다.
         """,

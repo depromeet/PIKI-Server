@@ -48,7 +48,7 @@ class TournamentService(
         userId: UUID,
         command: CreateTournament,
     ): CreateTournamentResult {
-        val inviteCode = Tournament.generateInviteCode()
+        val inviteCode = generateUniqueInviteCode()
         val inviteExpiresAt = LocalDateTime.now().plusMinutes(command.inviteDurationMinutes)
         val tournament =
             tournamentRepository.saveTournament(
@@ -420,6 +420,7 @@ class TournamentService(
             },
             hasGroupResult = hasGroupResult,
             isOwner = isOwner,
+            playLinkExpiresAt = tournament.playLinkExpiresAt,
         )
     }
 
@@ -443,18 +444,31 @@ class TournamentService(
     }
 
     @Transactional(readOnly = true)
-    fun getInvitePreview(
-        tournamentId: Long,
-        inviteCode: String?,
-    ): TournamentInvitePreview {
+    fun getInvitePreview(tournamentId: Long): TournamentInvitePreview {
         val tournament =
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
-        tournament.checkJoinable(inviteCode)
+        tournament.checkJoinable(null)
         val itemCount = tournamentItemRepository.countByTournamentId(tournamentId)
         val participantCount = tournamentUserRepository.countByTournamentId(tournamentId)
         return TournamentInvitePreview(
             tournamentId = tournamentId,
+            tournamentName = tournament.name,
+            itemCount = itemCount,
+            participantCount = participantCount,
+        )
+    }
+
+    @Transactional(readOnly = true)
+    fun getInvitePreviewByCode(code: String): TournamentInvitePreview {
+        val tournament =
+            tournamentRepository.findTournamentByInviteCode(code)
+                ?: throw TournamentException.invalidInviteCode()
+        tournament.checkJoinable(null)
+        val itemCount = tournamentItemRepository.countByTournamentId(tournament.getId())
+        val participantCount = tournamentUserRepository.countByTournamentId(tournament.getId())
+        return TournamentInvitePreview(
+            tournamentId = tournament.getId(),
             tournamentName = tournament.name,
             itemCount = itemCount,
             participantCount = participantCount,
@@ -516,7 +530,7 @@ class TournamentService(
         val sourceItems = tournamentItemRepository.findAllByTournamentId(sourceTournamentId)
         require(sourceItems.isNotEmpty()) { "플레이 링크 복제 시 원본 아이템 없음 — sourceTournamentId=$sourceTournamentId" }
 
-        val inviteCode = Tournament.generateInviteCode()
+        val inviteCode = generateUniqueInviteCode()
         val newTournament = tournamentRepository.saveTournament(
             Tournament(
                 ownerTournamentUserId = 0L,
@@ -744,6 +758,16 @@ class TournamentService(
         }
         // 모든 라운드가 완료됐는데 isInProgress() 인 상태 — tournament.complete() 누락 버그
         error("모든 라운드가 완료됐는데 IN_PROGRESS 상태임 tournamentId=${histories.firstOrNull()?.tournamentId}")
+    }
+
+    // invite_code 는 랜덤 생성이라 충돌 가능성이 낮지만 0이 아니다. 활성 코드 중복을 사전 확인하고
+    // 충돌 시 재시도한다. DB 레벨 unique constraint(uk_tournaments_active_invite_code)가 최후 보루.
+    private fun generateUniqueInviteCode(): String {
+        repeat(INVITE_CODE_MAX_ATTEMPTS) {
+            val code = Tournament.generateInviteCode()
+            if (!tournamentRepository.existsTournamentByInviteCode(code)) return code
+        }
+        error("invite_code $INVITE_CODE_MAX_ATTEMPTS 회 생성 실패 — DB 포화 또는 keyspace 고갈 가능성")
     }
 }
 

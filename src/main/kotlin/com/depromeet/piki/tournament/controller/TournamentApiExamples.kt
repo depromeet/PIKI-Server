@@ -215,6 +215,7 @@ class TournamentApiExamples(
                                                 ),
                                             ),
                                         hasGroupResult = true,
+                                        playLinkExpiresAt = LocalDateTime.of(2026, 6, 20, 22, 0, 0),
                                     ),
                                 ),
                         )
@@ -380,6 +381,7 @@ class TournamentApiExamples(
                                                         ),
                                                     ),
                                                 hasGroupResult = true,
+                                                playLinkExpiresAt = LocalDateTime.of(2026, 6, 20, 22, 0, 0),
                                             ),
                                     ),
                                 ),
@@ -406,7 +408,7 @@ class TournamentApiExamples(
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.OK,
-                            name = "초대 코드 검증 성공",
+                            name = "링크 접근 미리보기 성공",
                             payload =
                                 ApiResponseBody.ok(
                                     TournamentInvitePreviewResponse(
@@ -417,6 +419,24 @@ class TournamentApiExamples(
                                     ),
                                 ),
                         )
+                    }
+
+                handlerMethod.binds(TournamentController::getInvitePreviewByCode) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "코드 조회 성공",
+                            payload = ApiResponseBody.ok(
+                                TournamentInvitePreviewResponse(
+                                    tournamentId = 1,
+                                    tournamentName = "내 토너먼트",
+                                    itemCount = 8,
+                                    participantCount = 2,
+                                ),
+                            ),
+                        )
+                        add(TournamentException.invalidInviteCode(), name = "코드에 해당하는 토너먼트 없음")
+                        add(TournamentException.inviteExpired(), name = "초대 링크 만료")
                     }
 
                 handlerMethod.binds(TournamentController::createPlayLink) ->
