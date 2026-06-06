@@ -119,9 +119,16 @@ class TournamentController(
     @GetMapping("/{tournamentId}/invite-preview")
     override fun getInvitePreview(
         @PathVariable tournamentId: Long,
-        @RequestParam(required = false) inviteCode: String?,
     ): ApiResponseBody<TournamentInvitePreviewResponse> {
-        val preview = tournamentService.getInvitePreview(tournamentId, inviteCode)
+        val preview = tournamentService.getInvitePreview(tournamentId)
+        return ApiResponseBody.ok(TournamentInvitePreviewResponse.from(preview))
+    }
+
+    @GetMapping("/by-invite-code")
+    override fun getInvitePreviewByCode(
+        @RequestParam code: String,
+    ): ApiResponseBody<TournamentInvitePreviewResponse> {
+        val preview = tournamentService.getInvitePreviewByCode(code)
         return ApiResponseBody.ok(TournamentInvitePreviewResponse.from(preview))
     }
 
