@@ -3,6 +3,8 @@ package com.depromeet.piki.user.controller
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.uuidToBytes
+import com.depromeet.piki.user.controller.dto.NicknameCheckRequest
+import com.depromeet.piki.user.controller.dto.UserUpdateRequest
 import com.depromeet.piki.user.domain.IdentityType
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -126,6 +128,8 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}")
                     .content(body),
             ).andExpect(status().isBadRequest)
+            // @RequestBody 검증 실패 응답 detail 이 OpenAPI example(UserApiExamples updateMe 400)과 같은 형식인지 고정.
+            .andExpect(jsonPath("$.detail").value("nickname: ${UserUpdateRequest.NICKNAME_SIZE_MESSAGE}"))
     }
 
     @Test
@@ -246,5 +250,7 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
                     .param("nickname", "12345678901")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}"),
             ).andExpect(status().isBadRequest)
+            // 쿼리 파라미터 POJO(암묵 @ModelAttribute) 검증 실패도 같은 "필드명: 메시지" 형식인지 실측·고정.
+            .andExpect(jsonPath("$.detail").value("nickname: ${NicknameCheckRequest.NICKNAME_SIZE_MESSAGE}"))
     }
 }

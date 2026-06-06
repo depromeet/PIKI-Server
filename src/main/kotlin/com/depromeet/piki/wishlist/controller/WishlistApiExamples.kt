@@ -6,9 +6,14 @@ import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.common.response.PageResponse
+import com.depromeet.piki.common.storage.ImageStorageException
 import com.depromeet.piki.image.domain.ProductImage
+import com.depromeet.piki.item.domain.ItemException
 import com.depromeet.piki.item.domain.ItemStatus
+import com.depromeet.piki.product.domain.ProductLinkException
 import com.depromeet.piki.wishlist.controller.dto.WishItemResponse
+import com.depromeet.piki.wishlist.controller.dto.WishlistUpdateRequest
+import com.depromeet.piki.wishlist.domain.WishException
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -29,15 +34,8 @@ class WishlistApiExamples(
                         name = "등록 접수 (파싱 중)",
                         payload = ApiResponseBody.created(processingSampleEntry),
                     )
-                    add(
-                        status = HttpStatus.BAD_REQUEST,
-                        name = "URL 형식 오류",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.INVALID_INPUT,
-                                detail = "지원하지 않는 URL 형식입니다.",
-                            ),
-                    )
+                    add(ProductLinkException.invalidFormat(urlFormatCause), name = "유효하지 않은 URL 형식")
+                    add(ProductLinkException.unsupportedScheme(), name = "https 외 스킴")
                     unauthorized()
                     forbidden("권한 없음 (MEMBER 필요)")
                 }
@@ -71,15 +69,7 @@ class WishlistApiExamples(
                                 pageResponse = PageResponse(nextCursor = null, hasNext = false),
                             ),
                     )
-                    add(
-                        status = HttpStatus.BAD_REQUEST,
-                        name = "유효하지 않은 cursor",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.INVALID_INPUT,
-                                detail = "유효하지 않은 cursor 입니다.",
-                            ),
-                    )
+                    add(WishException.invalidCursor(), name = "유효하지 않은 cursor")
                     unauthorized()
                     forbidden("권한 없음 (MEMBER 필요)")
                 }
@@ -91,24 +81,8 @@ class WishlistApiExamples(
                         name = "조회 성공",
                         payload = ApiResponseBody.ok(sampleEntry),
                     )
-                    add(
-                        status = HttpStatus.FORBIDDEN,
-                        name = "본인 위시 아님",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.FORBIDDEN,
-                                detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.NOT_FOUND,
-                        name = "존재하지 않는 위시 항목",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.NOT_FOUND,
-                                detail = "존재하지 않는 위시리스트 항목입니다.",
-                            ),
-                    )
+                    add(WishException.forbiddenWishItems(), name = "본인 위시 아님")
+                    add(WishException.notFound(), name = "존재하지 않는 위시 항목")
                     unauthorized()
                 }
             }
@@ -125,63 +99,16 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                detail = "가격은 0 이상이어야 합니다.",
+                                // @ModelAttribute Bean Validation 위반은 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
+                                detail = "currentPrice: ${WishlistUpdateRequest.PRICE_MIN_MESSAGE}",
                             ),
                     )
-                    add(
-                        status = HttpStatus.BAD_REQUEST,
-                        name = "상품명 없이 복구 시도",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.INVALID_INPUT,
-                                detail = "상품명을 입력해야 합니다.",
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.FORBIDDEN,
-                        name = "본인 위시 아님",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.FORBIDDEN,
-                                detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.NOT_FOUND,
-                        name = "존재하지 않는 위시 항목",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.NOT_FOUND,
-                                detail = "존재하지 않는 위시리스트 항목입니다.",
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.CONFLICT,
-                        name = "이미 등록 완료(READY) 항목 — 수정 불가",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.CONFLICT,
-                                detail = "이미 등록 완료된 상품은 수정할 수 없습니다.",
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.CONFLICT,
-                        name = "아직 처리 중(PROCESSING) 항목 — 수정 불가",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.CONFLICT,
-                                detail = "아직 처리 중인 상품은 수정할 수 없습니다.",
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.BAD_GATEWAY,
-                        name = "이미지 저장 실패",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.RETRYABLE,
-                                detail = "이미지 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.",
-                            ),
-                    )
+                    add(ItemException.nameRequiredForReady(), name = "상품명 없이 복구 시도")
+                    add(WishException.forbiddenWishItems(), name = "본인 위시 아님")
+                    add(WishException.notFound(), name = "존재하지 않는 위시 항목")
+                    add(ItemException.alreadyReady(), name = "이미 등록 완료(READY) 항목 — 수정 불가")
+                    add(ItemException.stillProcessing(), name = "아직 처리 중(PROCESSING) 항목 — 수정 불가")
+                    add(ImageStorageException.uploadFailed(), name = "이미지 저장 실패")
                     unauthorized()
                 }
             }
@@ -192,15 +119,7 @@ class WishlistApiExamples(
                         name = "삭제 성공",
                         payload = ApiResponseBody.ok<Unit>(),
                     )
-                    add(
-                        status = HttpStatus.FORBIDDEN,
-                        name = "본인 위시 아님",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.FORBIDDEN,
-                                detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
-                            ),
-                    )
+                    add(WishException.forbiddenWishItems(), name = "본인 위시 아님")
                     unauthorized()
                 }
             }
@@ -211,24 +130,8 @@ class WishlistApiExamples(
                         name = "다중 삭제 성공",
                         payload = ApiResponseBody.ok<Unit>(),
                     )
-                    add(
-                        status = HttpStatus.BAD_REQUEST,
-                        name = "ids 누락/빈 목록/100개 초과",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.INVALID_INPUT,
-                                detail = "삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다.",
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.FORBIDDEN,
-                        name = "본인 위시 아닌 항목 포함",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.FORBIDDEN,
-                                detail = "해당 위시 아이템에 접근할 권한이 없습니다.",
-                            ),
-                    )
+                    add(WishException.invalidIdCount(), name = "ids 누락/빈 목록/100개 초과")
+                    add(WishException.forbiddenWishItems(), name = "본인 위시 아닌 항목 포함")
                     unauthorized()
                 }
             }
@@ -239,15 +142,7 @@ class WishlistApiExamples(
                         name = "이미지 등록 접수 (PROCESSING, 다건)",
                         payload = ApiResponseBody.created(imageProcessingEntries),
                     )
-                    add(
-                        status = HttpStatus.BAD_REQUEST,
-                        name = "이미지 개수 위반 (1~5개 아님)",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.INVALID_INPUT,
-                                detail = "이미지는 최소 1개, 최대 5개까지 전송할 수 있습니다.",
-                            ),
-                    )
+                    add(WishException.invalidImageCount(), name = "이미지 개수 위반 (1~5개 아님)")
                     add(
                         status = HttpStatus.BAD_REQUEST,
                         name = "지원하지 않는 이미지 형식",
@@ -263,6 +158,10 @@ class WishlistApiExamples(
             }
             operation
         }
+
+    // ProductLinkException.invalidFormat 은 cause 를 요구하지만, example 헬퍼는 message·category·status 만
+    // 사용한다(GlobalExceptionHandler.handleBaseException 과 동일). 따라서 이 cause 는 payload 에 영향을 주지 않는 더미다.
+    private val urlFormatCause = IllegalArgumentException("example")
 
     // 파싱이 끝난 완성 항목 (READY).
     private val sampleEntry =

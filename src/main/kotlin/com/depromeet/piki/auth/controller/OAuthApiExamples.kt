@@ -1,6 +1,8 @@
 package com.depromeet.piki.auth.controller
 
+import com.depromeet.piki.auth.controller.dto.OAuthLoginRequest
 import com.depromeet.piki.auth.controller.dto.OAuthLoginResponse
+import com.depromeet.piki.auth.infrastructure.oauth.OAuthException
 import com.depromeet.piki.auth.service.dto.TokenPair
 import com.depromeet.piki.common.exception.ErrorCategory
 import com.depromeet.piki.common.openapi.OpenApiObjectMapper
@@ -47,60 +49,27 @@ class OAuthApiExamples(
                     )
                     add(
                         status = HttpStatus.BAD_REQUEST,
-                        name = "잘못된 요청 (자격증명 누락 또는 미지원 provider)",
+                        name = "요청 본문 검증 실패 (두 흐름 동시 전달 또는 둘 다 누락/공백)",
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                detail = "소셜 로그인 요청이 올바르지 않습니다 (code+redirectUri 또는 accessToken 이 필요합니다).",
+                                // @AssertTrue(validFlow) 위반은 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
+                                detail = "validFlow: ${OAuthLoginRequest.VALID_FLOW_MESSAGE}",
                             ),
                     )
-                    add(
-                        status = HttpStatus.BAD_REQUEST,
-                        name = "인가코드(code) 만료/재사용/무효",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.INVALID_INPUT,
-                                detail = "소셜 로그인 인가 정보가 만료되었거나 유효하지 않습니다. 다시 시도해 주세요.",
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.UNAUTHORIZED,
-                        name = "state 검증 실패 (만료 또는 미발급)",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.UNAUTHORIZED,
-                                detail = "유효하지 않은 state 파라미터입니다. 인가 URL 을 새로 발급받아 다시 시도하세요.",
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.UNAUTHORIZED,
-                        name = "provider access token 무효/만료 (재로그인 필요)",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.UNAUTHORIZED,
-                                detail = "소셜 로그인 토큰이 유효하지 않습니다. 다시 로그인해 주세요.",
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.BAD_GATEWAY,
-                        name = "소셜 제공자 장애 (RETRYABLE — 재시도 가능)",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.RETRYABLE,
-                                detail = "소셜 로그인 제공자 호출에 실패했습니다.",
-                            ),
-                    )
-                    add(
-                        status = HttpStatus.BAD_GATEWAY,
-                        name = "우리 OAuth 설정/요청 오류 (SERVER_ERROR — 재시도 무의미)",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.SERVER_ERROR,
-                                detail = "소셜 로그인 설정 오류가 발생했습니다.",
-                            ),
-                    )
+                    add(OAuthException.invalidRequest(), name = "자격증명 누락 (code+redirectUri·accessToken 모두 공백)")
+                    add(OAuthException.unsupportedProvider(), name = "지원하지 않는 provider")
+                    add(OAuthException.invalidGrant(), name = "인가코드(code) 만료/재사용/무효")
+                    add(OAuthException.invalidState(), name = "state 검증 실패 (만료 또는 미발급)")
+                    add(OAuthException.invalidProviderToken(), name = "provider access token 무효/만료 (재로그인 필요)")
+                    add(OAuthException.providerError(dummyCause), name = "소셜 제공자 장애 (RETRYABLE — 재시도 가능)")
+                    add(OAuthException.misconfigured(dummyCause), name = "우리 OAuth 설정/요청 오류 (SERVER_ERROR — 재시도 무의미)")
                 }
             }
             operation
         }
+
+    // OAuthException.providerError/misconfigured 는 cause 를 요구하지만, example 헬퍼는 message·category·status 만
+    // 사용한다(GlobalExceptionHandler.handleBaseException 과 동일). 따라서 이 cause 는 payload 에 영향을 주지 않는 더미다.
+    private val dummyCause = IllegalArgumentException("example")
 }
