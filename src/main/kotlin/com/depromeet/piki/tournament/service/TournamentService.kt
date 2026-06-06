@@ -9,6 +9,8 @@ import com.depromeet.piki.tournament.domain.TournamentHistory
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.domain.TournamentUser
+import com.depromeet.piki.tournament.event.TournamentItemAdded
+import com.depromeet.piki.tournament.event.TournamentJoined
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
@@ -28,6 +30,7 @@ import com.depromeet.piki.tournament.service.dto.TournamentStartResult
 import com.depromeet.piki.tournament.service.dto.TournamentSummary
 import com.depromeet.piki.user.repository.UserRepository
 import com.depromeet.piki.wishlist.repository.WishRepository
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -42,6 +45,7 @@ class TournamentService(
     private val itemRepository: ItemRepository,
     private val itemSnapshotRepository: ItemSnapshotRepository,
     private val wishRepository: WishRepository,
+    private val eventPublisher: ApplicationEventPublisher,
 ) {
     @Transactional
     fun create(
@@ -87,6 +91,8 @@ class TournamentService(
             throw TournamentException.participantLimitExceeded()
         }
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = userId))
+        // 트랜잭션 안에서 발행 → AFTER_COMMIT 리스너가 커밋 후에만 알림을 보낸다. 수신자는 참가자 - 본인(actor).
+        eventPublisher.publishEvent(TournamentJoined(tournamentId = tournamentId, actorId = userId))
     }
 
     @Transactional
@@ -126,7 +132,7 @@ class TournamentService(
             wishRepository
                 .findByItemIdsAndUserId(command.itemIds, userId)
                 .associate { it.itemId to it.snapshotId }
-        return tournamentItemRepository.saveAll(
+        val savedItemIds = tournamentItemRepository.saveAll(
             command.itemIds.map { itemId ->
                 val snapshotId =
                     snapshotIdByItemId[itemId]
@@ -139,6 +145,9 @@ class TournamentService(
                 )
             },
         ).map { it.getId() }
+        // 위시에서 N개를 한 번에 추가해도 "추가됨" 알림은 1회. 수신자는 참가자 - 본인(actor).
+        eventPublisher.publishEvent(TournamentItemAdded(tournamentId = command.tournamentId, actorId = userId))
+        return savedItemIds
     }
 
     @Transactional

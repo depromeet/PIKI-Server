@@ -1,11 +1,13 @@
 package com.depromeet.piki.tournament.service
 
 import com.depromeet.piki.tournament.domain.TournamentUser
+import com.depromeet.piki.tournament.event.TournamentJoined
 import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.user.domain.User
 import com.depromeet.piki.user.service.UserService
 import java.util.UUID
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -17,6 +19,7 @@ class TournamentSocialPersistenceService(
     private val tournamentRepository: TournamentRepository,
     private val tournamentUserRepository: TournamentUserRepository,
     private val userService: UserService,
+    private val eventPublisher: ApplicationEventPublisher,
 ) {
     @Transactional
     fun createGuestAndJoin(
@@ -33,6 +36,8 @@ class TournamentSocialPersistenceService(
         }
         val user = userService.createGuestWithNickname(nickname)
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = user.id))
+        // 게스트 합류. 트랜잭션 안에서 발행 → AFTER_COMMIT 후 알림. 수신자는 기존 참가자 - 본인(actor=새 게스트).
+        eventPublisher.publishEvent(TournamentJoined(tournamentId = tournamentId, actorId = user.id))
         return user
     }
 
