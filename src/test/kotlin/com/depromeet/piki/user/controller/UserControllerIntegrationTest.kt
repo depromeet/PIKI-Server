@@ -389,4 +389,24 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
             ).andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.detail").value("이미지 파일이 손상되었거나 형식과 내용이 일치하지 않습니다."))
     }
+
+    @Test
+    fun `POST users me profile-image - image 파트가 아예 없으면 400 이 반환된다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId)
+
+        // 파일 파트 없이 호출 — 컨트롤러의 `image ?: throw emptyProfileImage()` 분기가 프레임워크 500 이 아닌
+        // 400 도메인 응답으로 떨어지는지 고정한다 (required=false + Elvis 방어).
+        mockMvc
+            .perform(
+                multipart("/api/v1/users/me/profile-image")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}"),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.detail").value("빈 이미지 파일은 업로드할 수 없습니다."))
+    }
 }
