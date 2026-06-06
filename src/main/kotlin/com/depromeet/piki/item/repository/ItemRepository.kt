@@ -1,7 +1,6 @@
 package com.depromeet.piki.item.repository
 
 import com.depromeet.piki.item.domain.Item
-import java.time.LocalDateTime
 
 interface ItemRepository {
     fun save(item: Item): Item
@@ -14,7 +13,4 @@ interface ItemRepository {
 
     // admin 운영 도구의 조회용 — 삭제되지 않은 item 을 createdAt 내림차순으로 limit 개.
     fun findRecent(limit: Int): List<Item>
-
-    // cutoff 이전에 생성됐는데 아직 PROCESSING 인 item — 워커가 죽어 방치된 stale 후보의 id.
-    fun findStaleProcessingIds(cutoff: LocalDateTime): List<Long>
 }

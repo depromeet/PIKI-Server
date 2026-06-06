@@ -2,7 +2,6 @@ package com.depromeet.piki.tournament.service
 
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.domain.ItemSnapshot
-import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.product.domain.ProductLink
@@ -35,9 +34,9 @@ class TournamentItemPersistenceService(
         link: ProductLink,
     ): PersistedTournamentItem {
         validateAndCheckCapacity(userId, tournamentId, 1)
-        val item = itemRepository.save(Item.processing(link))
-        // 3단계: 저장한 snapshot 의 id 를 tournament_item 에 고정한다. 출전 시점 버전이 박혀 위시 갱신과 격리된다.
-        val snapshot = itemSnapshotRepository.save(ItemSnapshot.forItem(item))
+        val item = itemRepository.save(Item(link))
+        // 저장한 snapshot 의 id 를 tournament_item 에 고정한다. 출전 시점 버전이 박혀 위시 갱신과 격리된다.
+        val snapshot = itemSnapshotRepository.save(ItemSnapshot.processing(item.getId()))
         val tournamentItem = tournamentItemRepository.saveAll(
             listOf(
                 TournamentItem(
@@ -58,9 +57,9 @@ class TournamentItemPersistenceService(
         count: Int,
     ): List<PersistedTournamentItem> {
         validateAndCheckCapacity(userId, tournamentId, count)
-        val items = itemRepository.saveAll(List(count) { Item(status = ItemStatus.PROCESSING) })
+        val items = itemRepository.saveAll(List(count) { Item() })
         // saveAll 은 입력 순서를 보존하므로 items[i] 와 snapshots[i] 가 같은 상품이다. 각 tournament_item 에 그 snapshot 을 고정한다.
-        val snapshots = itemSnapshotRepository.saveAll(items.map { ItemSnapshot.forItem(it) })
+        val snapshots = itemSnapshotRepository.saveAll(items.map { ItemSnapshot.processing(it.getId()) })
         val tournamentItems = tournamentItemRepository.saveAll(
             items.zip(snapshots) { item, snapshot ->
                 TournamentItem(
@@ -76,9 +75,9 @@ class TournamentItemPersistenceService(
         }
     }
 
-    // FAILED item 의 수동 보정 영속화 — S3 업로드(외부 호출)는 호출부가 트랜잭션 바깥에서 끝내고,
-    // 여기선 권한·상태 검증 + recover(값 변경 + FAILED→READY 전이)만 짧은 트랜잭션으로 묶는다(dirty checking).
-    // recover 게이트를 통과한 뒤 같은 item 의 snapshot 도 평행하게 보정한다(전환기엔 snapshot 이 없을 수 있어 null-safe).
+    // FAILED 버전의 수동 보정 영속화 — S3 업로드(외부 호출)는 호출부가 트랜잭션 바깥에서 끝내고,
+    // 여기선 권한·소유 검증 + snapshot.recover(값 변경 + FAILED→READY 전이)만 짧은 트랜잭션으로 묶는다(dirty checking).
+    // recover 가 READY/PROCESSING 을 409 로 막는다(도메인 자기방어). item 은 정체성이라 건드리지 않는다.
     @Transactional
     fun recoverItem(
         userId: UUID,
@@ -100,10 +99,6 @@ class TournamentItemPersistenceService(
                 ?: throw TournamentException.notFoundTournamentItem()
         if (tournamentItem.tournamentId != tournamentId) throw TournamentException.notFoundTournamentItem()
         if (tournamentItem.userId != userId) throw TournamentException.forbiddenTournament()
-        val item =
-            itemRepository.findById(tournamentItem.itemId)
-                ?: error("item 없음 — tournamentItemId=$tournamentItemId, itemId=${tournamentItem.itemId}")
-        item.recover(name = name, currentPrice = price, imageUrl = imageUrl, currency = currency)
         // 토너먼트는 출전 시점 고정 snapshot 을 본다. 최신(findLatestByItemId)이 아니라 tournamentItem.snapshotId 를
         // 갱신해야, 5단계 갱신으로 같은 item 에 snapshot 이 여러 개 생겨도 토너먼트가 고정한 버전만 보정돼 격리가 유지된다.
         val snapshotId =

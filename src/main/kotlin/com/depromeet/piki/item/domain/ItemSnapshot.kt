@@ -9,19 +9,14 @@ import jakarta.persistence.Enumerated
 import jakarta.persistence.Table
 import java.time.LocalDateTime
 
-// item(정체성)의 한 추출 버전. item 이 갱신될 때마다 새 행이 쌓여 가격·이름·이미지 이력을 보존한다.
-// itemId 는 정체성(items) 을 raw 로 참조한다 (FK 제약 없음 — 프로젝트 정책). 같은 item 의 여러 버전이 1:N.
+// item(정체성=link)의 한 추출 버전. 추출값(name·price·image·currency)·상태(status)·추출시각을 들고,
+// item 이 갱신될 때마다 새 행이 쌓여 가격·이름·이미지 이력을 보존한다.
+// 4a 부터 추출값·상태는 전적으로 이 버전이 보유한다 — item 은 link(정체성)만 남고, 추출·검증·전이의 무게중심이 여기로 모였다.
+// itemId 는 정체성(items)을 raw 로 참조한다 (FK 제약 없음 — 프로젝트 정책). 같은 item 의 여러 버전이 1:N.
 // 버전 순서는 id(단조증가)로 충분해 별도 version 컬럼을 두지 않는다.
 //
-// 구조상 snapshot 은 item 과 N:1(위 1:N — 한 item 에 여러 버전)이다. 다만 2단계(쓰기 이중화)에선 갱신 전이라 item 당
-// snapshot 이 아직 1행이고, 그 행이 item 의 생애주기를 평행하게 따라간다 — 등록 시 PROCESSING 으로 함께 생기고,
-// 추출 성공/실패/보정에 맞춰 item 과 같이 전이한다. 여러 버전(v2·v3)은 5단계 갱신부터 쌓인다.
-// 전이의 계약 검증(이미 READY 등 클라이언트 도달 가능 예외)은 item 이 책임지고, snapshot 은 item 이 같은 전이를
-// 통과한 뒤 호출되므로 check 불변식(상태 가정)만 둔다.
-//
-// 기존 items 백필은 하지 않는다 — 현재 dev 서버만 열려 있어 보존할 운영 데이터가 없기 때문. 필요해지면 idempotent
-// 백필 마이그레이션(INSERT INTO item_snapshots ... SELECT ... FROM items WHERE NOT EXISTS(같은 item_id 의 snapshot))을
-// 추가하면 된다. 그래서 쓰기 이중화 배포 전 등록된 기존 items 는 snapshot 이 없으며, 그 처리는 3단계(참조 이전)에서 정한다.
+// 전이의 계약 검증(이미 READY·PROCESSING 은 클라이언트가 못 바꿈)도 이 버전이 직접 던진다 — 추출값·상태가 여기로 모이면서
+// item 이 들고 있던 자기방어 책임이 함께 옮겨왔다(4a). 여러 버전(v2·v3)은 5단계 갱신부터 쌓인다.
 @Entity
 @Table(name = "item_snapshots")
 class ItemSnapshot(
@@ -65,12 +60,12 @@ class ItemSnapshot(
     // 엔티티 불변식 — 최후의 보루. 범위·길이만 보고 null 은 통과시킨다.
     // kotlin("plugin.jpa") 가 합성하는 no-arg 생성자가 Hibernate 하이드레이션 시점에 이 init 을 실행하는데,
     // 그 순간 필드는 아직 주입 전이라 전부 null/기본값이다. 그래서 상태-의존·필수값 불변식은 여기 두지 않고
-    // (두면 행 하이드레이션이 깨진다), 범위·길이만 본다. Item 과 동일 전략.
+    // (두면 행 하이드레이션이 깨진다), 범위·길이만 본다.
     init {
         validate(name, currentPrice, imageUrl, currency)
     }
 
-    // 추출 필드를 갈아끼우는 코어. 들어온 필드만 갱신하고 생성 때와 같은 불변식을 재검증한다. Item.apply 와 동형.
+    // 추출 필드를 갈아끼우는 코어. 들어온 필드만 갱신하고 생성 때와 같은 불변식을 재검증한다.
     private fun apply(
         name: String? = null,
         currentPrice: Int? = null,
@@ -88,7 +83,8 @@ class ItemSnapshot(
         this.currency = newCurrency
     }
 
-    // PROCESSING → READY. item.markReady 와 평행. 추출 결과(snapshot)를 채우며 전이한다.
+    // PROCESSING → READY. 백그라운드 파싱이 성공해 추출 결과(snapshot)를 채우며 전이한다.
+    // 전이 가능 상태가 아닌데 호출되면 워커가 잘못된 버전을 집은 코드 버그이므로 check(500).
     // extractedAt 은 전이 시점의 now() — Wish.delete() 등 도메인이 시간을 만드는 프로젝트 관례를 따른다.
     fun markReady(snapshot: ProductSnapshot) {
         check(status == ItemStatus.PROCESSING) { "PROCESSING 이 아닌 snapshot(status=$status)은 READY 로 전이할 수 없다" }
@@ -98,33 +94,52 @@ class ItemSnapshot(
             imageUrl = snapshot.imageUrl,
             currency = snapshot.currency,
         )
+        // 추출이 이름을 못 얻었으면 READY 부적격 — 워커가 이 예외를 받아 FAILED 로 흡수한다(PROCESSING 방치 방지).
         requireReadyInvariant()
         status = ItemStatus.READY
         this.extractedAt = LocalDateTime.now()
     }
 
-    // PROCESSING → FAILED. 파싱 실패를 상태로 남긴다. item.markFailed 와 평행.
+    // PROCESSING → FAILED. 파싱 실패(상품 아님·신뢰 불가·타임아웃)를 동기 400 대신 상태로 남긴다.
     fun markFailed() {
         check(status == ItemStatus.PROCESSING) { "PROCESSING 이 아닌 snapshot(status=$status)은 FAILED 로 전이할 수 없다" }
         status = ItemStatus.FAILED
     }
 
-    // FAILED → READY. 사용자 수동 보정(item.recover)과 평행. 계약(이미 READY·PROCESSING)은 item 이 막고,
-    // snapshot 은 item 이 보정 게이트를 통과한 뒤 호출되므로 check(FAILED) 불변식만 둔다.
+    // 클라이언트가 추출 버전을 직접 바꾸는 유일한 통로 — 추출 실패(FAILED) 항목의 수동 보정.
+    // FAILED 는 추출이 맺히다 만 미완성 버전이라, 사용자가 채우면 정상 버전이 된 것이므로 READY 로 복구한다.
+    // READY(등록 완료)는 기계 추출 사실이라 손으로 못 바꾸고(409), PROCESSING(파싱 중)은 워커 소관이라 끼어들 수 없다(409).
+    // 둘 다 멀쩡한 클라이언트가 PATCH 로 닿을 수 있는 계약이므로 이 버전이 직접 던진다 — 4a 에서 item 으로부터 승격받은 책임이다.
     fun recover(
-        name: String?,
-        currentPrice: Int?,
-        imageUrl: String?,
-        currency: String?,
+        name: String? = null,
+        currentPrice: Int? = null,
+        imageUrl: String? = null,
+        currency: String? = null,
     ) {
-        check(status == ItemStatus.FAILED) { "FAILED 가 아닌 snapshot(status=$status)은 recover 로 전이할 수 없다" }
-        apply(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
-        requireReadyInvariant()
-        status = ItemStatus.READY
-        this.extractedAt = LocalDateTime.now()
+        when (status) {
+            ItemStatus.READY -> throw ItemException.alreadyReady()
+            ItemStatus.PROCESSING -> throw ItemException.stillProcessing()
+            ItemStatus.FAILED -> {
+                apply(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
+                // 입력 경계 계약 — 보정 후에도 이름이 없으면 쓸 수 없는 버전이 READY 로 새어 들어간다(409 아닌 400).
+                if (this.name.isNullOrBlank()) throw ItemException.nameRequiredForReady()
+                status = ItemStatus.READY
+                this.extractedAt = LocalDateTime.now()
+            }
+        }
     }
 
-    // READY 불변식 — "쓸 수 있는 버전"은 최소한 이름이 있어야 한다. Item.requireReadyInvariant 와 동형.
+    // 파싱이 끝나 추출 결과가 채워진 버전인지. 토너먼트 출전·목록 노출처럼 "완성된 버전만" 요구하는 게이트에서 쓴다.
+    // PROCESSING(파싱 중)·FAILED(실패)는 false — 이름·가격이 비어 출전에 부적합하다.
+    fun isReady(): Boolean = status == ItemStatus.READY
+
+    // 클라이언트 보정(recover) 대상인지 — FAILED 만 보정 가능. 서비스가 S3 업로드 같은 외부 작업 전에
+    // 미리 걸러 헛된 비용(orphan 업로드)을 막는 사전 가드용. 도메인 최후 보루는 recover 가 진다.
+    fun isFailed(): Boolean = status == ItemStatus.FAILED
+
+    // READY 불변식 — "쓸 수 있는 버전"은 최소한 이름이 있어야 한다. isReady() 게이트(목록 노출·토너먼트 출전)가
+    // 미완성 버전을 정상으로 취급하지 않도록, READY 가 되는 명시 경로(markReady)에서 검사한다. 엔티티 최후의 보루이므로
+    // require(500) — 정상 흐름에선 입력 경계(recover 의 nameRequiredForReady, 추출 워커의 FAILED 흡수)가 먼저 거른다.
     private fun requireReadyInvariant() {
         require(!name.isNullOrBlank()) { "READY snapshot 은 최소한 name 이 있어야 한다 (status=$status)" }
     }
@@ -146,17 +161,9 @@ class ItemSnapshot(
         const val IMAGE_URL_MAX_LENGTH = 2048
         const val CURRENCY_MAX_LENGTH = 8
 
-        // 신규 등록 시점, item 의 현재 상태를 그대로 미러링한 snapshot — item.processing/from 과 평행하게 같은 트랜잭션에서 생성된다.
-        // persist 는 PROCESSING 전용이 아니라 어떤 상태의 item 이든 받으므로(예: 픽스처의 FAILED item), status 를 고정하지 않고 item 을 따른다.
-        // 등록 경로의 item 은 추출 전이라 추출 필드가 비어 있고, extractedAt 은 item 에 없는 개념이라 null 로 둔다.
-        fun forItem(item: Item): ItemSnapshot =
-            ItemSnapshot(
-                itemId = item.getId(),
-                name = item.name,
-                imageUrl = item.imageUrl,
-                currentPrice = item.currentPrice,
-                currency = item.currency,
-                status = item.status,
-            )
+        // 신규 등록 시작점 — 추출 전 PROCESSING 버전. link 추출·이미지 추출 모두 비동기라 PROCESSING 으로 시작하고,
+        // 파싱이 끝나면 markReady/markFailed 로 전이한다. 추출값은 비어 있고 extractedAt 도 null.
+        // item 의 정체성(itemId)만 알면 되고 item 의 추출 상태를 읽지 않는다 — 등록 경로는 항상 PROCESSING 으로 출발한다.
+        fun processing(itemId: Long): ItemSnapshot = ItemSnapshot(itemId = itemId, status = ItemStatus.PROCESSING)
     }
 }
