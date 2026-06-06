@@ -44,7 +44,13 @@ class FirebaseMessageSender(
                     }
             response.responses.forEachIndexed { i, result ->
                 if (result.isSuccessful) return@forEachIndexed
-                if (isStaleToken(result.exception?.messagingErrorCode)) stale += chunk[i]
+                val code = result.exception?.messagingErrorCode
+                if (isStaleToken(code)) {
+                    stale += chunk[i]
+                } else {
+                    // 토큰 무관 실패(요청 오류·일시 오류 등)는 토큰을 지우지 않고 코드만 남긴다(토큰은 민감).
+                    log.warn("FCM 발송 실패(토큰 보존) code={}", code)
+                }
             }
         }
         return stale
@@ -117,13 +123,10 @@ class FirebaseMessageSender(
 
         // 발송 실패 토큰 중 "정리 대상(죽은 토큰)" 판정 — FirebaseMessaging 응답 구조와 무관한 순수 정책이라
         // companion 으로 분리해 단위 테스트로 분기를 망라한다(FirebaseApp 없이 검증).
-        // UNREGISTERED(앱 삭제·토큰 폐기)·INVALID_ARGUMENT(형식 무효)만 제거하고, 그 외(네트워크·서버 일시 오류·
-        // 쿼터 등)와 코드 부재는 다음 발송에서 재시도되도록 보존한다.
-        internal fun isStaleToken(code: MessagingErrorCode?): Boolean =
-            when (code) {
-                MessagingErrorCode.UNREGISTERED, MessagingErrorCode.INVALID_ARGUMENT -> true
-                else -> false
-            }
+        // UNREGISTERED(앱 삭제·토큰 폐기)만 보수적으로 삭제한다. INVALID_ARGUMENT 는 토큰이 아닌 요청·메시지
+        // 파라미터 문제에도 올 수 있어, 그걸 stale 로 보면 코드 버그가 정상 토큰을 대량 삭제할 위험이 있다 →
+        // 삭제하지 않고 로그로 남긴다(send 의 else 분기). 네트워크·일시 오류·코드 부재도 보존해 재시도된다.
+        internal fun isStaleToken(code: MessagingErrorCode?): Boolean = code == MessagingErrorCode.UNREGISTERED
 
         // 백그라운드 수신 시 클라가 딥링크를 복원하려고 읽는 data 키 — FE 와 공유하는 contract.
         // 값은 NotificationSsePayload 의 필드명(type·refId)과 일치시켜, 클라가 SSE/FCM 어느 채널로 받든

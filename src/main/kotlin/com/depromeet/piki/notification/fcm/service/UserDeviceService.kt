@@ -22,12 +22,16 @@ class UserDeviceService(
         deviceId: String,
         fcmToken: String,
     ): UserDevice {
-        val mine = userDeviceRepository.findByUserIdAndDeviceId(userId, deviceId)
-        releaseStaleTokenHolder(fcmToken, keep = mine)
+        // deviceId·fcmToken 은 유니크 키다. 앞뒤 공백을 입력 경계에서 정규화해야 "x"/"x " 가 다른 키로
+        // 갈려 upsert 가 쪼개지거나 죽은 토큰 정리가 빗나가는 일을 막는다. (@NotBlank 는 공백-only 만 거른다)
+        val device = deviceId.trim()
+        val token = fcmToken.trim()
+        val mine = userDeviceRepository.findByUserIdAndDeviceId(userId, device)
+        releaseStaleTokenHolder(token, keep = mine)
         mine ?: return userDeviceRepository.save(
-            UserDevice(userId = userId, deviceId = deviceId, fcmToken = fcmToken),
+            UserDevice(userId = userId, deviceId = device, fcmToken = token),
         )
-        mine.refreshToken(fcmToken)
+        mine.refreshToken(token)
         return userDeviceRepository.save(mine)
     }
 
@@ -37,7 +41,8 @@ class UserDeviceService(
         userId: UUID,
         deviceId: String,
     ) {
-        userDeviceRepository.deleteByUserIdAndDeviceId(userId, deviceId)
+        // 등록과 같은 정규화 — 키 일치를 위해 trim.
+        userDeviceRepository.deleteByUserIdAndDeviceId(userId, deviceId.trim())
     }
 
     // 발송(#245) — 한 사용자의 모든 기기 토큰을 모아 멀티캐스트 대상으로 넘긴다.
