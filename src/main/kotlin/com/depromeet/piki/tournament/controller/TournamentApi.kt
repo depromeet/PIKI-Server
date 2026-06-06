@@ -526,44 +526,6 @@ interface TournamentApi {
     ): ApiResponseBody<Unit>
 
     @Operation(
-        summary = "토너먼트 참여 전 미리보기",
-        description = """
-            토너먼트 기본 정보(이름, 아이템 수, 참여자 수)를 반환한다. 인증 불필요.
-            - 링크 직접 접근: inviteCode 생략 가능. 만료 여부만 확인.
-            - 코드 입력 경로: inviteCode 전달 시 코드 일치 여부도 함께 검증.
-            비회원은 이 정보를 보고 닉네임 설정 후 /join/guest, 회원은 /join을 호출한다.
-        """,
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "조회 성공 (토너먼트 이름·아이템 수·참여자 수 반환)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "400",
-                description = "잘못된 요청 (초대 코드 불일치 — inviteCode 전달 시에만 발생)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "404",
-                description = "토너먼트를 찾을 수 없음",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "409",
-                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-        ],
-    )
-    fun getInvitePreview(
-        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
-        @Parameter(description = "초대 코드 (영어 대문자 3자리 + 숫자 3자리, 코드 입력 경로에서만 전달)", example = "ABC123") inviteCode: String?,
-    ): ApiResponseBody<TournamentInvitePreviewResponse>
-
-    @Operation(
         summary = "초대 코드로 토너먼트 미리보기",
         description = """
             홈 다이얼로그에서 6자리 코드만 입력하는 경로 전용 — tournamentId 없이 코드만으로 조회한다.
