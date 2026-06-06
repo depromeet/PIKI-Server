@@ -83,8 +83,16 @@ dependencies {
     implementation("io.micrometer:micrometer-tracing-bridge-otel")
     implementation("io.opentelemetry:opentelemetry-exporter-otlp")
 
+    // JDBC 쿼리를 trace span 으로 계측 (DataSource proxy 자동 설정 → SQL 이 trace 의 한 구간으로 보인다).
+    // Spring Boot BOM 미관리라 버전 명시(2.2.1, 현재 최신). 2.x 가 Boot 4 대응 라인이나(이슈 #78) 릴리스 노트가 호환을 명시하진 않아 부팅으로 검증한다.
+    implementation("net.ttddyy.observation:datasource-micrometer-spring-boot:2.2.1")
+
     // 크롭한 상품 이미지를 S3 에 업로드 (#144). 버전은 BOM 이 관리.
     implementation("software.amazon.awssdk:s3")
+
+    // FCM 푸시 (#242) — Firebase Admin SDK. Spring Boot BOM 미관리라 버전 명시 (Maven Central 최신 안정).
+    // 자체 Jackson 2(com.fasterxml) 를 번들하나 우리 Jackson 3(tools.jackson)와 그룹이 달라 공존한다.
+    implementation("com.google.firebase:firebase-admin:9.9.0")
 
     // JJWT - Jackson 2.x 와 3.x 는 그룹 ID 가 달라 공존 가능 (com.fasterxml vs tools.jackson)
     val jjwtVersion = "0.13.0"

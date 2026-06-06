@@ -3,6 +3,7 @@ package com.depromeet.piki.product.service.http
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.PageContent
 import com.depromeet.piki.product.service.PageFetcher
+import io.micrometer.observation.ObservationRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.client.SimpleClientHttpRequestFactory
@@ -14,7 +15,9 @@ import java.net.HttpURLConnection
 import java.net.InetAddress
 
 @Component
-class HttpPageFetcher : PageFetcher {
+class HttpPageFetcher(
+    observationRegistry: ObservationRegistry,
+) : PageFetcher {
     private val log = LoggerFactory.getLogger(javaClass)
 
     // 외부 페이지 fetch 라 redirect 를 따라가지 않는다. 따라가면 1차 host 검증을
@@ -40,6 +43,8 @@ class HttpPageFetcher : PageFetcher {
             .defaultHeader(HttpHeaders.USER_AGENT, USER_AGENT)
             .defaultHeader(HttpHeaders.ACCEPT, "text/html,application/xhtml+xml,*/*;q=0.8")
             .defaultHeader(HttpHeaders.ACCEPT_LANGUAGE, "ko,en;q=0.9")
+            // 상품 페이지 fetch 가 trace 의 한 구간(HTTP client span)으로 잡히게 한다.
+            .observationRegistry(observationRegistry)
             .build()
 
     override fun fetch(link: ProductLink): PageContent {

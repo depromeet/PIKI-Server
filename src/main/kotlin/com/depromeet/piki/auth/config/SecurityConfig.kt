@@ -101,6 +101,9 @@ class SecurityConfig(
                     // 알림 실시간 구독(SSE) — 인증 유저가 자기 알림 스트림을 연다 (GUEST 포함).
                     .requestMatchers("/api/v1/notifications/**")
                     .authenticated()
+                    // FCM 토큰 등록/해제 — 인증 유저가 자기 기기 토큰을 등록한다 (GUEST 포함, 토너먼트 푸시 대상).
+                    .requestMatchers("/api/v1/fcm/**")
+                    .authenticated()
                     // /users/me 와 /users/nickname/check 는 게스트도 호출 가능 (닉네임 확정/수정 흐름)
                     .requestMatchers(HttpMethod.GET, "/api/v1/users/me", "/api/v1/users/nickname/check")
                     .authenticated()

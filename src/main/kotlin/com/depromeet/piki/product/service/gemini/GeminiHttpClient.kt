@@ -1,5 +1,6 @@
 package com.depromeet.piki.product.service.gemini
 
+import io.micrometer.observation.ObservationRegistry
 import org.springframework.http.MediaType
 import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.stereotype.Component
@@ -23,7 +24,10 @@ import tools.jackson.databind.ObjectMapper
 class GeminiHttpClient(
     private val geminiProperties: GeminiProperties,
     private val objectMapper: ObjectMapper,
+    observationRegistry: ObservationRegistry,
 ) {
+    // ObservationRegistry 를 물려 Gemini 호출(최대 30s)이 trace 의 한 구간(HTTP client span)으로 잡히게 한다.
+    // 한 요청 trace 에서 LLM 호출 latency 가 막대로 또렷이 보인다.
     private val restClient =
         RestClient
             .builder()
@@ -33,7 +37,8 @@ class GeminiHttpClient(
                     setConnectTimeout(CONNECT_TIMEOUT_MS)
                     setReadTimeout(READ_TIMEOUT_MS)
                 },
-            ).build()
+            ).observationRegistry(observationRegistry)
+            .build()
 
     private val geminiRetry = GeminiRetry(geminiProperties.retry)
 
