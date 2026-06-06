@@ -76,3 +76,37 @@ jobs:
           path: build/test-results/**/*.xml
           reporter: java-junit
           fail-on-error: false
+
+  # nginx conf 문법 검증 — 깨진 conf 가 dev 에 머지된 뒤 배포(deploy.yml)에서야 nginx -t 로
+  # 걸려 롤백되던 걸, PR 단계에서 미리 막는다. infra/nginx 변경이 없는 PR 도 수초면 통과하므로
+  # path filter 없이 항상 돌려 required check 로 걸어도 skip 함정이 없게 한다.
+  nginx-validate:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      # conf 는 http{} 안에서 include 되는 partial 이고, SSL 인증서·upstream include 가 런타임
+      # 의존이라 그대로는 단독 검증이 안 된다. 우회: http 컨텍스트 래퍼로 감싸고, SSL·letsencrypt
+      # 라인을 제거(listen 443 ssl[...] → 평문 8443: prod 는 http2, dev 는 없는 형식 둘 다 커버),
+      # upstream include 는 더미로 마운트한다. 실제 인증서 검증은 배포 시 deploy.yml 이 EC2 에서 한다.
+      - name: Validate nginx configs
+        run: |
+          set -e
+          for conf in infra/nginx/*.conf; do
+            echo "::group::validate $conf"
+            work=$(mktemp -d)
+            sed -e 's/listen 443 ssl[^;]*;/listen 8443;/' \
+                -e '/ssl_certificate/d' -e '/ssl_dhparam/d' -e '/include \/etc\/letsencrypt/d' \
+                "$conf" > "$work/site.conf"
+            echo 'server 127.0.0.1:8080;' > "$work/team3-upstream.conf"
+            printf 'events {}\nhttp {\n  include /work/site.conf;\n}\n' > "$work/nginx.conf"
+            docker run --rm \
+              -v "$work/nginx.conf:/work/nginx.conf:ro" \
+              -v "$work/site.conf:/work/site.conf:ro" \
+              -v "$work/team3-upstream.conf:/etc/nginx/team3-upstream.conf:ro" \
+              nginx:alpine nginx -t -c /work/nginx.conf
+            echo "::endgroup::"
+          done
