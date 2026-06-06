@@ -32,16 +32,18 @@ fi
 # 1c) swap 추가 증설 — overlap(blue+green) 때 1G swap 이 100% 꽉 차는 게 실측됐다(#420 검증 배포). 2G 를
 # 별도 파일로 더해 총 3G 로 만든다. 기존 /swapfile 을 리사이즈(swapoff)하지 않는 이유: swap 사용량이
 # free RAM 보다 클 때 swapoff 는 페이지를 RAM 으로 못 옮겨 OOM 위험이 있다(라이브 박스). 추가 파일은 안전·멱등.
+# swapon 활성 체크는 생성·활성화만 가르고, fstab 영속화는 활성 여부와 무관하게 항상 보장한다 —
+# "활성이지만 fstab 누락" 상태면 재부팅에 swap2 가 사라져 완화가 무력화되기 때문.
 if sudo swapon --show | grep -q '/swapfile2'; then
-  echo "[swap2] 이미 활성 — skip"
+  echo "[swap2] 이미 활성"
 else
   echo "[swap2] /swapfile2 2G 추가 (총 3G)"
   sudo fallocate -l 2G /swapfile2 || sudo dd if=/dev/zero of=/swapfile2 bs=1M count=2048
   sudo chmod 600 /swapfile2
   sudo mkswap /swapfile2
   sudo swapon /swapfile2
-  grep -q '/swapfile2' /etc/fstab || echo '/swapfile2 none swap sw 0 0' | sudo tee -a /etc/fstab
 fi
+grep -q '^/swapfile2[[:space:]]' /etc/fstab || echo '/swapfile2 none swap sw 0 0' | sudo tee -a /etc/fstab
 
 # 2) redis — RefreshToken 저장소(RedisRefreshTokenStore). 없을 때만 named 볼륨(team3-redis-data)으로 기동.
 #    기존 컨테이너(익명 볼륨 포함)는 보존한다 — 멱등 skip. 새 인스턴스에서만 named 볼륨으로 생성돼,
