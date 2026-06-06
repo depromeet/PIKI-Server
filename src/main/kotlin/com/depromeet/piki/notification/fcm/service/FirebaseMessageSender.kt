@@ -2,9 +2,15 @@ package com.depromeet.piki.notification.fcm.service
 
 import com.depromeet.piki.notification.domain.Notification
 import com.google.firebase.FirebaseApp
+import com.google.firebase.messaging.AndroidConfig
+import com.google.firebase.messaging.AndroidNotification
+import com.google.firebase.messaging.ApnsConfig
+import com.google.firebase.messaging.Aps
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.MessagingErrorCode
 import com.google.firebase.messaging.MulticastMessage
+import com.google.firebase.messaging.WebpushConfig
+import com.google.firebase.messaging.WebpushFcmOptions
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.stereotype.Component
@@ -64,19 +70,50 @@ class FirebaseMessageSender(
             .applyPlatformConfig()
             .build()
 
-    // 플랫폼별 푸시 옵션(iOS APNS / Android / WebPush)을 싣는 확장 지점 — FCM 한 발송이 세 플랫폼을
-    // 다 라우팅하므로 sender 를 쪼개지 않고 여기 한 곳에서만 분기한다.
-    //
-    // 지금은 iOS 만이고 공통 notification(title/body)만으로 표시가 충분해 분기 없이 그대로 둔다.
-    // Android/Web 합류 시 손댈 곳은 딱 (1) user_devices.platform 컬럼 additive 추가 →
-    // (2) findTokens 가 플랫폼별 그룹으로 토큰을 반환 → (3) 이 함수가 platform 을 받아
-    // setApnsConfig/setAndroidConfig/setWebpushConfig 로 분기. 인터페이스(FcmMessageSender)와
-    // 호출부(PushNotificationChannel)는 그대로다.
-    private fun MulticastMessage.Builder.applyPlatformConfig(): MulticastMessage.Builder = this
+    // 플랫폼별 푸시 옵션을 한 메시지에 모두 싣는다 — FCM 이 각 토큰의 플랫폼에 맞는 config 만 적용하므로
+    // (iOS 토큰엔 APNS, Android 토큰엔 Android, 웹 토큰엔 WebPush) 한 발송이 세 플랫폼을 다 커버한다.
+    // 따라서 user_devices.platform 컬럼 없이도 안전하고, iOS 발송에도 무해하다(다른 config 는 무시됨).
+    // 플랫폼마다 "다른 내용"을 보내야 할 때만 (1) platform 컬럼 (2) findTokens 플랫폼 그룹핑이 필요해진다.
+    private fun MulticastMessage.Builder.applyPlatformConfig(): MulticastMessage.Builder =
+        this
+            // iOS(APNS) — 백그라운드 표시 시 소리. 포그라운드 표시는 클라가 SSE 로 처리해 억제한다.
+            .setApnsConfig(
+                ApnsConfig
+                    .builder()
+                    .setAps(Aps.builder().setSound("default").build())
+                    .build(),
+            )
+            // Android — 8.0+ 는 채널이 있어야 알림이 표시된다. 이 channelId 는 Android 클라가 동일 id 로
+            // NotificationChannel 을 생성해야 매칭된다(FE 와 공유하는 상수). HIGH 로 헤드업 표시.
+            .setAndroidConfig(
+                AndroidConfig
+                    .builder()
+                    .setPriority(AndroidConfig.Priority.HIGH)
+                    .setNotification(
+                        AndroidNotification
+                            .builder()
+                            .setChannelId(ANDROID_CHANNEL_ID)
+                            .setDefaultSound(true)
+                            .build(),
+                    ).build(),
+            )
+            // Web — 알림 클릭 시 이동할 링크. 아이콘 등 웹 전용 옵션·VAPID·서비스워커는 웹 클라 붙일 때 채운다.
+            .setWebpushConfig(
+                WebpushConfig
+                    .builder()
+                    .setFcmOptions(WebpushFcmOptions.withLink(WEB_CLICK_LINK))
+                    .build(),
+            )
 
     companion object {
         // FCM MulticastMessage 한 번에 최대 500 토큰 (Firebase 제한).
         private const val MULTICAST_LIMIT = 500
+
+        // Android 알림 채널 id — Android 클라가 같은 id 로 NotificationChannel 을 만들어야 8.0+ 에서 표시된다(FE 합의 상수).
+        private const val ANDROID_CHANNEL_ID = "piki_default"
+
+        // 웹 푸시 클릭 시 이동할 링크(https 필수) — 웹 프론트 붙을 때 실제 경로로 조정.
+        private const val WEB_CLICK_LINK = "https://depromeet18team3.cloud"
 
         // 발송 실패 토큰 중 "정리 대상(죽은 토큰)" 판정 — FirebaseMessaging 응답 구조와 무관한 순수 정책이라
         // companion 으로 분리해 단위 테스트로 분기를 망라한다(FirebaseApp 없이 검증).
