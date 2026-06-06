@@ -8,7 +8,7 @@ import org.springframework.context.ApplicationContext
 import kotlin.test.assertTrue
 
 // datasource-micrometer 가 Spring Boot 4 에서 autoconfig 되는지 검증한다. 부팅 성공만으론 autoconfig 가 조용히
-// skip 됐는지 알 수 없어(Boot 4 공식 호환 명시 없음), 핵심 빈(DataSourceObservationBeanPostProcessor) 등록을
+// skip 됐는지 알 수 없어(2.x 가 Boot 4 라인이나 릴리스 노트가 호환을 명시하진 않음), 핵심 빈(DataSourceObservationBeanPostProcessor) 등록을
 // 직접 단언해 negative control 로 둔다. 이 BeanPostProcessor 가 DataSource 를 observation proxy(JDK dynamic
 // proxy)로 감싸 JDBC 쿼리를 trace span 으로 잡는다(이 작업의 목적). 미등록이면 SQL span 이 안 생긴다.
 class DataSourceObservationIntegrationTest : IntegrationTestSupport() {
