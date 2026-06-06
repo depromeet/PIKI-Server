@@ -70,6 +70,28 @@ class ProfileImageFileTest {
         assertFailsWith<UserException> { ProfileImageFile.of(notAnImage, "image/png") }
     }
 
+    // 합성 시그니처가 아니라 실제 인코딩된 파일로 검증한다. 특히 HEIC 의 실제 brand(heic)·WebP 의 RIFF/WEBP 가
+    // 매직바이트 교차검증을 통과하는지 — 화이트리스트가 정상 파일을 거부하지 않음을 보장하는 회귀 가드.
+    @ParameterizedTest
+    @CsvSource(
+        "test-product.png, image/png, png",
+        "test-product.jpg, image/jpeg, jpg",
+        "test-profile.webp, image/webp, webp",
+        "test-profile.heic, image/heic, heic",
+    )
+    fun `실제 인코딩된 이미지 파일은 매직바이트 교차검증을 통과한다`(
+        resourceName: String,
+        mimeType: String,
+        expectedExtension: String,
+    ) {
+        val bytes = requireNotNull(javaClass.getResourceAsStream("/$resourceName")).readBytes()
+
+        val image = ProfileImageFile.of(bytes, mimeType)
+
+        assertEquals(mimeType, image.mimeType)
+        assertEquals(expectedExtension, image.extension)
+    }
+
     @Test
     fun `bytes 는 방어적 복사본을 반환해 외부 변경이 내부 상태를 깨지 않는다`() {
         val image = ProfileImageFile.of(JPEG, "image/jpeg")
