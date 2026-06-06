@@ -8,6 +8,7 @@ import io.swagger.v3.oas.models.info.License
 import io.swagger.v3.oas.models.security.SecurityRequirement
 import io.swagger.v3.oas.models.security.SecurityScheme
 import io.swagger.v3.oas.models.servers.Server
+import org.springdoc.core.customizers.OpenApiCustomizer
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -52,7 +53,41 @@ class OpenApiConfig {
             .addSecurityItem(SecurityRequirement().addList(SECURITY_SCHEME_NAME))
             .addServersItem(Server().url("/").description("Current host"))
 
+    // 문서 UI(Stoplight Elements)는 OpenAPI spec 의 tags[] 배열 순서를 사이드바 그룹 순서로 그대로
+    // 반영한다. springdoc 3.0.x 는 이 배열을 핸들러 스캔 순서(빈/핸들러 등록 순서에 의존해 사실상
+    // 비결정적)로 채워, OpenAPI 빈의 .tags() 로는 순서가 잡히지 않는다(실측). 그래서 문서 빌드가 끝난
+    // 뒤 OpenApiCustomizer 로 tags 를 도메인 흐름 순(TAG_ORDER)으로 재정렬한다. TAG_ORDER 에 없는
+    // 태그(새로 추가되고 등록을 빠뜨린 것)는 맨 뒤로 보내되 이름 알파벳으로 정렬한다 — 누락은
+    // OpenApiDocsIntegrationTest 의 순서 단언이 잡는다.
+    @Bean
+    fun sortTagsByDomainFlow(): OpenApiCustomizer =
+        OpenApiCustomizer { openApi ->
+            val tags = openApi.tags ?: return@OpenApiCustomizer
+            openApi.tags =
+                tags.sortedWith(
+                    compareBy(
+                        { TAG_ORDER.indexOf(it.name).let { idx -> if (idx < 0) Int.MAX_VALUE else idx } },
+                        { it.name },
+                    ),
+                )
+        }
+
     companion object {
         private const val SECURITY_SCHEME_NAME = "bearerAuth"
+
+        // 사이드바 그룹 순서: 인증·내 정보(진입) → 핵심 도메인(위시 → 토너먼트 → 토너먼트 아이템) →
+        // 알림(SSE·FCM) → 개발 전용. health-controller 는 @Tag 미선언 자동 태그라 spec 의 top-level
+        // tags[] 에 없어 여기 둘 필요가 없고, Stoplight Elements 가 사이드바 맨 뒤에 자동 배치한다.
+        private val TAG_ORDER =
+            listOf(
+                "Auth",
+                "User",
+                "Wishlist",
+                "Tournament",
+                "Tournament Item",
+                "Notification",
+                "FCM",
+                "Dev",
+            )
     }
 }
