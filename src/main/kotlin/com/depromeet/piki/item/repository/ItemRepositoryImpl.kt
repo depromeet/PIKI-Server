@@ -1,10 +1,8 @@
 package com.depromeet.piki.item.repository
 
 import com.depromeet.piki.item.domain.Item
-import com.depromeet.piki.item.domain.ItemStatus
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Repository
-import java.time.LocalDateTime
 
 @Repository
 class ItemRepositoryImpl(
@@ -24,7 +22,4 @@ class ItemRepositoryImpl(
         require(limit > 0) { "limit 은 1 이상이어야 한다: $limit" }
         return itemJpaRepository.findRecent(PageRequest.of(0, limit))
     }
-
-    override fun findStaleProcessingIds(cutoff: LocalDateTime): List<Long> =
-        itemJpaRepository.findIdsByStatusAndCreatedAtBefore(ItemStatus.PROCESSING, cutoff)
 }

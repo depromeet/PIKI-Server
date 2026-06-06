@@ -1,7 +1,9 @@
 package com.depromeet.piki.item.repository
 
 import com.depromeet.piki.item.domain.ItemSnapshot
+import com.depromeet.piki.item.domain.ItemStatus
 import org.springframework.stereotype.Repository
+import java.time.LocalDateTime
 
 @Repository
 class ItemSnapshotRepositoryImpl(
@@ -19,4 +21,7 @@ class ItemSnapshotRepositoryImpl(
 
     override fun findByIds(ids: List<Long>): List<ItemSnapshot> =
         itemSnapshotJpaRepository.findByIdInAndDeletedAtIsNull(ids)
+
+    override fun findStaleProcessingItemIds(cutoff: LocalDateTime): List<Long> =
+        itemSnapshotJpaRepository.findItemIdsByStatusAndCreatedAtBefore(ItemStatus.PROCESSING, cutoff)
 }

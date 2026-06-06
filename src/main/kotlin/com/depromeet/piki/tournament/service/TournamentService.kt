@@ -125,13 +125,16 @@ class TournamentService(
             .map { it.getId() }
             .toSet()
         if (command.itemIds.any { it !in foundItemIds }) throw TournamentException.notFoundItems()
-        // 비동기 파싱 중(PROCESSING)이거나 실패(FAILED)한 상품은 이름·가격이 비어 출전에 부적합하다. READY 만 허용.
-        if (foundItems.any { !it.isReady() }) throw TournamentException.itemNotReady()
         // 출전 시점에 위시의 활성 snapshot 을 tournament_item 에 고정한다 — 이후 위시 갱신과 무관하게 그 버전을 본다.
         val snapshotIdByItemId =
             wishRepository
                 .findByItemIdsAndUserId(command.itemIds, userId)
                 .associate { it.itemId to it.snapshotId }
+        // 비동기 파싱 중(PROCESSING)이거나 실패(FAILED)한 상품은 이름·가격이 비어 출전에 부적합하다. 활성 snapshot 이 READY 인 것만 허용.
+        val activeSnapshots = itemSnapshotRepository.findByIds(snapshotIdByItemId.values.filterNotNull())
+        if (activeSnapshots.size != command.itemIds.size || activeSnapshots.any { !it.isReady() }) {
+            throw TournamentException.itemNotReady()
+        }
         val savedItemIds = tournamentItemRepository.saveAll(
             command.itemIds.map { itemId ->
                 val snapshotId =
@@ -174,12 +177,13 @@ class TournamentService(
                 .findByIds(tournamentItems.map { it.itemId })
                 .associate { it.getId() to it }
         if (tournamentItems.any { it.itemId !in itemById }) throw TournamentException.notFoundItems()
-        for (item in itemById.values) {
-            if (!item.isReady()) throw TournamentException.itemNotReadyToStart()
-            item.currentPrice ?: throw TournamentException.itemPriceRequired()
-        }
-        // 검증은 item 으로 끝냈고, 표시값은 출전 시점 고정 snapshot 에서 읽는다.
+        // 검증·표시값 모두 출전 시점 고정 snapshot 에서 본다.
         val snapshotById = snapshotsOf(tournamentItems)
+        for (tournamentItem in tournamentItems) {
+            val snapshot = tournamentItem.requireSnapshot(snapshotById)
+            if (!snapshot.isReady()) throw TournamentException.itemNotReadyToStart()
+            snapshot.currentPrice ?: throw TournamentException.itemPriceRequired()
+        }
 
         tournament.start()
         return tournamentItems
