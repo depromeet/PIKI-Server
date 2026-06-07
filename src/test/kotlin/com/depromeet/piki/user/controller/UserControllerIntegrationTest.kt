@@ -178,6 +178,32 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
                     .content(body),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.data.nickname").value("새닉네임"))
+            // 수정 응답도 조회와 동일한 내 정보 모양 — 게스트는 email 칸이 null 로 항상 포함된다.
+            .andExpect(jsonPath("$.data.email").value(null))
+    }
+
+    @Test
+    fun `PATCH users me - 소셜 회원이 닉네임을 수정하면 email 도 함께 내려온다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId, nickname = "초기닉네임", identityType = IdentityType.MEMBER)
+        insertUserDetail(userId, provider = "GOOGLE", email = "member@gmail.com")
+        val body = objectMapper.writeValueAsString(mapOf("nickname" to "수정닉네임"))
+
+        mockMvc
+            .perform(
+                patch("/api/v1/users/me")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.MEMBER)}")
+                    .content(body),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.nickname").value("수정닉네임"))
+            // 수정 응답이 조회(GET /me)와 동일하게 email 을 포함하는지 contract 고정.
+            .andExpect(jsonPath("$.data.email").value("member@gmail.com"))
     }
 
     @Test
@@ -362,6 +388,8 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
                 jsonPath("$.data.profileImage")
                     .value(startsWith("${StubImageStorage.BASE_URL}/profiles/$userId/")),
             )
+            // 수정 응답도 조회와 동일한 내 정보 모양 — 게스트는 email 칸이 null 로 항상 포함된다.
+            .andExpect(jsonPath("$.data.email").value(null))
     }
 
     @Test
