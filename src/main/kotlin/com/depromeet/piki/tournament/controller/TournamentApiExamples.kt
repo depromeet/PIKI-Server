@@ -4,6 +4,7 @@ import com.depromeet.piki.common.exception.ErrorCategory
 import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
+import com.depromeet.piki.auth.service.dto.TokenPair
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
@@ -88,12 +89,14 @@ class TournamentApiExamples(
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.CREATED,
-                            name = "게스트 참여 성공",
+                            name = "게스트 참여 성공 (APP — body 토큰)",
                             payload =
                                 ApiResponseBody.created(
                                     JoinTournamentAsGuestResponse(
-                                        accessToken = "eyJhbGciOiJIUzI1NiJ9.example",
-                                        refreshToken = "eyJhbGciOiJIUzI1NiJ9.refresh",
+                                        tokenPair = TokenPair(
+                                            accessToken = "eyJhbGciOiJIUzI1NiJ9.example",
+                                            refreshToken = "eyJhbGciOiJIUzI1NiJ9.refresh",
+                                        ),
                                         userId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
                                         nickname = "멋진친구",
                                         profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
