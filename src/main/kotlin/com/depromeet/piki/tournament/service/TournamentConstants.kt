@@ -8,8 +8,8 @@ internal const val TOURNAMENT_INVITE_MAX_DURATION_MINUTES = 24 * 60L
 
 internal const val PLAY_LINK_DURATION_DAYS = 14L
 
-// 소유자 1명 + 친구 최대 8명
-internal const val TOURNAMENT_MAX_PARTICIPANT_COUNT = 9
+// 주최자 포함 최대 8명
+internal const val TOURNAMENT_MAX_PARTICIPANT_COUNT = 8
 
 // invite_code 충돌 시 재시도 최대 횟수 (17,576,000 가지 조합 → 충돌 극히 드물어 5회면 충분)
 internal const val INVITE_CODE_MAX_ATTEMPTS = 5

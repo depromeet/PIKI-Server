@@ -379,6 +379,33 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `POST tournaments-id-items 에서 플레이링크 복제 토너먼트이면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+        val (sourceTournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$sourceTournamentId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+        val cloneResult = mockMvc.perform(
+            post("/api/v1/tournaments/$sourceTournamentId/from-play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+        ).andReturn()
+        val cloneId = objectMapper.readTree(cloneResult.response.contentAsString)["data"].asLong()
+        val wishItemId = saveWishItem(owner = otherUserId)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$cloneId/items/wish")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"itemIds":[$wishItemId]}"""),
+            ).andExpect(status().isForbidden)
+    }
+
+    @Test
     fun `POST tournaments-id-start 는 아이템이 있는 PENDING 토너먼트를 시작하고 가격 오름차순 정렬된 아이템 목록을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
@@ -1261,6 +1288,32 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `POST tournaments-id-items-link 에서 플레이링크 복제 토너먼트이면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+        val (sourceTournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$sourceTournamentId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+        val cloneResult = mockMvc.perform(
+            post("/api/v1/tournaments/$sourceTournamentId/from-play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+        ).andReturn()
+        val cloneId = objectMapper.readTree(cloneResult.response.contentAsString)["data"].asLong()
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$cloneId/items/link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"url":"https://example.com/product"}"""),
+            ).andExpect(status().isForbidden)
+    }
+
+    @Test
     fun `POST tournaments-id-items-images 는 참여자이면 PROCESSING 아이템을 생성하고 tournamentItemIds 를 반환한다`() {
         stubImageParsingWorker.enabled = false
         try {
@@ -1361,6 +1414,32 @@ class TournamentControllerTest : IntegrationTestSupport() {
         mockMvc
             .perform(
                 multipart("/api/v1/tournaments/$tournamentId/items/images")
+                    .file(image)
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `POST tournaments-id-items-images 에서 플레이링크 복제 토너먼트이면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+        val (sourceTournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$sourceTournamentId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+        val cloneResult = mockMvc.perform(
+            post("/api/v1/tournaments/$sourceTournamentId/from-play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+        ).andReturn()
+        val cloneId = objectMapper.readTree(cloneResult.response.contentAsString)["data"].asLong()
+        val image = MockMultipartFile("images", "test.jpg", "image/jpeg", ByteArray(100) { 1 })
+
+        mockMvc
+            .perform(
+                multipart("/api/v1/tournaments/$cloneId/items/images")
                     .file(image)
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
             ).andExpect(status().isForbidden)
@@ -1741,7 +1820,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `DELETE tournaments-id 소프트 딜리트 후 조회하면 404 를 반환한다`() {
+    fun `DELETE tournaments-id 삭제 후 소유자가 조회하면 403 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         mockMvc.perform(
@@ -1753,7 +1832,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .perform(
                 get("/api/v1/tournaments/$tournamentId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
-            ).andExpect(status().isNotFound)
+            ).andExpect(status().isForbidden)
     }
 
     // ── 초대 기한 수정 ──────────────────────────────────────────────────

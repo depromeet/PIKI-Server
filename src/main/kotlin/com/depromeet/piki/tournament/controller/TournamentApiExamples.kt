@@ -510,6 +510,10 @@ class TournamentApiExamples(
                 handlerMethod.binds(TournamentController::getGroupResult) ->
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
+                            TournamentException.clonedTournamentCannotViewGroupResult(),
+                            name = "플레이링크 복제 토너먼트에서 그룹 결과 조회 불가",
+                        )
+                        add(
                             status = HttpStatus.OK,
                             name = "그룹 결과 조회 성공",
                             payload =
