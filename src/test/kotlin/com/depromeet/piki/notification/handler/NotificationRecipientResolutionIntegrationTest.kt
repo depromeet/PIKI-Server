@@ -8,6 +8,7 @@ import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.event.TournamentItemAdded
 import com.depromeet.piki.tournament.event.TournamentJoined
+import com.depromeet.piki.tournament.event.TournamentStarted
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.user.domain.IdentityType
@@ -29,6 +30,8 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
     @Autowired private lateinit var itemAddedHandler: TournamentItemAddedHandler
 
     @Autowired private lateinit var joinedHandler: TournamentJoinedHandler
+
+    @Autowired private lateinit var startedHandler: TournamentStartedHandler
 
     @Autowired private lateinit var parsingCompletedHandler: ItemParsingCompletedHandler
 
@@ -67,6 +70,31 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val recipients = joinedHandler.resolveRecipients(TournamentJoined(tournamentId, joiner))
 
         assertEquals(setOf(existing1, existing2), recipients)
+    }
+
+    @Test
+    fun `토너먼트 시작 수신자는 참가자에서 시작시킨 주최자(actor)를 뺀 집합이다`() {
+        val tournamentId = 1007L
+        val owner = UUID.randomUUID()
+        val participant1 = UUID.randomUUID()
+        val participant2 = UUID.randomUUID()
+        // 주최자는 본인 화면이 이미 시작 상태로 넘어가므로, 나머지 참가자에게만 시작을 알린다.
+        listOf(owner, participant1, participant2).forEach { tournamentUserRepository.save(TournamentUser(tournamentId, it)) }
+
+        val recipients = startedHandler.resolveRecipients(TournamentStarted(tournamentId, owner))
+
+        assertEquals(setOf(participant1, participant2), recipients)
+    }
+
+    @Test
+    fun `토너먼트 시작 변수 actorName 은 시작시킨 주최자 닉네임이다`() {
+        val tournamentId = 1008L
+        val owner = UUID.randomUUID()
+        userRepository.save(User(id = owner, nickname = "주최자", profileImage = "https://x/p.jpg", identityType = IdentityType.GUEST))
+
+        val variables = startedHandler.resolveVariables(TournamentStarted(tournamentId, owner))
+
+        assertEquals(mapOf("actorName" to "주최자"), variables)
     }
 
     @Test

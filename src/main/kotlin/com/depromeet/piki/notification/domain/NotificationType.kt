@@ -5,6 +5,7 @@ package com.depromeet.piki.notification.domain
 enum class NotificationType {
     TOURNAMENT_JOINED,
     TOURNAMENT_ITEM_ADDED,
+    TOURNAMENT_STARTED,
     ITEM_PARSING_COMPLETED,
     ITEM_PARSING_FAILED,
 }

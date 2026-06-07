@@ -13,6 +13,8 @@ class InMemoryNotificationTemplateProvider : NotificationTemplateProvider {
                 NotificationTemplate(title = "\${actorName}님이 참가했어요", body = ""),
             NotificationType.TOURNAMENT_ITEM_ADDED to
                 NotificationTemplate(title = "\${actorName}님이 아이템을 추가했어요", body = ""),
+            NotificationType.TOURNAMENT_STARTED to
+                NotificationTemplate(title = "\${actorName}님이 토너먼트를 시작했어요", body = ""),
             NotificationType.ITEM_PARSING_COMPLETED to
                 NotificationTemplate(title = "상품 정보가 저장됐어요", body = ""),
             NotificationType.ITEM_PARSING_FAILED to
