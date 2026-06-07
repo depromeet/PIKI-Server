@@ -33,6 +33,11 @@ spring:
     # history 에는 적용 기록이 있으나 로컬엔 파일이 없는(missing) 마이그레이션의 검증 실패를 무시한다.
     # 최종 스키마 정합성은 ddl-auto:validate 가 보증한다.
     ignore-migration-patterns: "*:missing"
+    # 데이터 마이그레이션이 env 별 값을 쓰도록 placeholder 주입. dicebear 기본 프로필 backfill 이
+    # ${s3publicbaseurl} 로 dev/prod 버킷 URL 을 조립한다. 미설정(로컬/테스트)이면 빈 값 → 해당 SQL 은 가드로 no-op.
+    # 키는 lowercase 로 둔다 — camelCase 는 Spring relaxed-binding 정규화로 Flyway 에 전달이 어긋난다.
+    placeholders:
+      s3publicbaseurl: ${s3.public-base-url}
   data:
     redis:
       host: ${REDIS_HOST:localhost}
