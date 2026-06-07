@@ -5,6 +5,7 @@ import com.depromeet.piki.auth.infrastructure.oauth.OAuthProvider
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthUserInfo
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubOAuthClient
+import com.depromeet.piki.user.service.WithdrawalService
 import com.depromeet.piki.wishlist.domain.Wish
 import com.depromeet.piki.wishlist.repository.WishRepository
 import org.hamcrest.Matchers.nullValue
@@ -50,6 +51,9 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
 
     @Autowired
     private lateinit var wishRepository: WishRepository
+
+    @Autowired
+    private lateinit var withdrawalService: WithdrawalService
 
     private fun mockMvc(): MockMvc =
         MockMvcBuilders
@@ -112,6 +116,43 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.user.identityType").value("MEMBER"))
             .andExpect(jsonPath("$.data.accessToken").isString)
             .andExpect(jsonPath("$.data.refreshToken").isString)
+    }
+
+    @Test
+    fun `재가입 - 탈퇴한 소셜로 다시 로그인하면 신규 user 가 생성된다 (tombstone 되살리지 않음)`() {
+        kakaoOAuthClient.fetchByAccessTokenStub = { OAuthUserInfo(OAuthProvider.KAKAO, "kakao_rejoin", null) }
+        val body = loginBody("accessToken" to "t")
+
+        // 1. 최초 가입 → MEMBER
+        val firstId =
+            userIdOf(
+                mockMvc()
+                    .perform(
+                        post(
+                            "/api/v1/auth/login/kakao",
+                        ).contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app").content(body),
+                    ).andReturn()
+                    .response.contentAsString,
+            )
+
+        // 2. 탈퇴 (user_details 하드삭제 + tombstone). withdrawalService 직접 호출로 외부 cascade 까지 태운다.
+        withdrawalService.withdraw(UUID.fromString(firstId))
+
+        // 3. 같은 소셜로 재로그인 → user_details 가 사라졌고, 설령 tombstone 이 잡혀도 isActive 가 거르므로 신규 가입.
+        val secondId =
+            userIdOf(
+                mockMvc()
+                    .perform(
+                        post(
+                            "/api/v1/auth/login/kakao",
+                        ).contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app").content(body),
+                    ).andExpect(status().isOk)
+                    .andExpect(jsonPath("$.data.user.identityType").value("MEMBER"))
+                    .andReturn()
+                    .response.contentAsString,
+            )
+
+        assertNotEquals(firstId, secondId)
     }
 
     @Test

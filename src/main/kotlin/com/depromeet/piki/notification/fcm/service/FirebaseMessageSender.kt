@@ -1,6 +1,8 @@
 package com.depromeet.piki.notification.fcm.service
 
 import com.depromeet.piki.notification.domain.Notification
+import com.depromeet.piki.notification.domain.NotificationKind
+import com.depromeet.piki.notification.domain.NotificationRouting
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.AndroidConfig
 import com.google.firebase.messaging.AndroidNotification
@@ -56,8 +58,8 @@ class FirebaseMessageSender(
         return stale
     }
 
-    // 표시용 title/body + 클라 라우팅용 data(type·refId)를 실은 멀티캐스트 메시지.
-    // 백그라운드 수신 시 클라가 data 로 딥링크(type+refId)를 복원한다.
+    // 표시용 title/body + 클라 라우팅용 data(type·refId·라우팅 컨텍스트)를 실은 멀티캐스트 메시지.
+    // 백그라운드 수신 시 클라가 data 로 딥링크를 복원한다. data 키 구성은 buildDataPayload 가 결정한다.
     private fun buildMessage(
         tokens: List<String>,
         notification: Notification,
@@ -71,8 +73,7 @@ class FirebaseMessageSender(
                     .setTitle(notification.title)
                     .setBody(notification.body)
                     .build(),
-            ).putData(DATA_KEY_TYPE, notification.type.name)
-            .putData(DATA_KEY_REF_ID, notification.refId.toString())
+            ).apply { buildDataPayload(notification).forEach { (key, value) -> putData(key, value) } }
             .applyPlatformConfig()
             .build()
 
@@ -129,10 +130,33 @@ class FirebaseMessageSender(
         internal fun isStaleToken(code: MessagingErrorCode?): Boolean = code == MessagingErrorCode.UNREGISTERED
 
         // 백그라운드 수신 시 클라가 딥링크를 복원하려고 읽는 data 키 — FE 와 공유하는 contract.
-        // 값은 NotificationSsePayload 의 필드명(type·refId)과 일치시켜, 클라가 SSE/FCM 어느 채널로 받든
-        // 같은 키로 딥링크를 읽게 한다. (SSE 는 data class 프로퍼티명을 Jackson 이 직렬화하므로 그 쪽은
-        //  같은 문자열을 상수로 빼지 못한다 — 이 상수의 값으로 일치를 맞춘다.)
+        // 값은 NotificationSsePayload 의 필드명(type·refId·kind·tournamentId·tournamentItemId)과 일치시켜,
+        // 클라가 SSE/FCM 어느 채널로 받든 같은 키로 딥링크를 읽게 한다. (SSE 는 data class 프로퍼티명을 Jackson 이
+        //  직렬화하므로 그 쪽은 같은 문자열을 상수로 빼지 못한다 — 이 상수의 값으로 일치를 맞춘다.)
         private const val DATA_KEY_TYPE = "type"
         private const val DATA_KEY_REF_ID = "refId"
+        private const val DATA_KEY_KIND = "kind"
+        private const val DATA_KEY_TOURNAMENT_ID = "tournamentId"
+        private const val DATA_KEY_TOURNAMENT_ITEM_ID = "tournamentItemId"
+
+        // FCM data payload(키→값) 구성 — type·refId 는 항상, 라우팅 컨텍스트(kind·tournamentId·tournamentItemId)는
+        // 있을 때만 싣는다. FCM data 는 값이 null 일 수 없어 null 키는 아예 넣지 않는다(#408). FirebaseMessaging
+        // 호출과 무관한 순수 매핑이라 companion 으로 분리해 단위 테스트로 분기를 망라한다(FirebaseApp 없이 검증).
+        internal fun buildDataPayload(notification: Notification): Map<String, String> =
+            buildMap {
+                put(DATA_KEY_TYPE, notification.type.name)
+                put(DATA_KEY_REF_ID, notification.refId.toString())
+                // SSE payload 와 같은 routing() sealed 를 분기해 두 채널이 한 소스를 쓴다. FCM data 는 값이 null 일 수 없어
+                // 라우팅이 없으면 키 자체를 안 넣고, TOURNAMENT 만 추가 식별자를 싣는다(#408).
+                when (val routing = notification.routing()) {
+                    null -> Unit
+                    NotificationRouting.Wish -> put(DATA_KEY_KIND, NotificationKind.WISH.name)
+                    is NotificationRouting.Tournament -> {
+                        put(DATA_KEY_KIND, NotificationKind.TOURNAMENT.name)
+                        put(DATA_KEY_TOURNAMENT_ID, routing.tournamentId.toString())
+                        put(DATA_KEY_TOURNAMENT_ITEM_ID, routing.tournamentItemId.toString())
+                    }
+                }
+            }
     }
 }

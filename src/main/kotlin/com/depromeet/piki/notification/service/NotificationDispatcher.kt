@@ -38,6 +38,7 @@ class NotificationDispatcher(
         if (recipients.isEmpty()) return
 
         val refId = handler.resolveRefId(event)
+        val routing = handler.resolveRouting(event)
         val template = templateProvider.find(handler.notificationType)
         val variables = handler.resolveVariables(event)
         val title = renderer.render(template.title, variables)
@@ -54,6 +55,7 @@ class NotificationDispatcher(
                             title = title,
                             body = body,
                             refId = refId,
+                            routing = routing,
                         ),
                     )
                 // 한 채널의 실패도 다른 채널 전달을 막지 않게 추가로 격리한다.

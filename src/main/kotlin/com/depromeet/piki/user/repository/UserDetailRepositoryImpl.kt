@@ -17,4 +17,8 @@ class UserDetailRepositoryImpl(
         provider: String,
         socialId: String,
     ): UserDetail? = userDetailJpaRepository.findByProviderAndSocialId(provider, socialId)
+
+    // user_id 가 user_details 의 PK. 파생 deleteByUserId 라 행이 없어도 no-op(멱등) — deleteById 와 달리
+    // EmptyResultDataAccessException 을 던지지 않아 double-request·user_detail 부재에 안전하다.
+    override fun deleteByUserId(userId: UUID) = userDetailJpaRepository.deleteByUserId(userId)
 }

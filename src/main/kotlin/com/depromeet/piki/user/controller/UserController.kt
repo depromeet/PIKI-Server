@@ -8,15 +8,19 @@ import com.depromeet.piki.user.controller.dto.UserUpdateRequest
 import com.depromeet.piki.user.domain.UserException
 import com.depromeet.piki.user.service.ProfileImageService
 import com.depromeet.piki.user.service.UserService
+import com.depromeet.piki.user.service.WithdrawalService
 import jakarta.validation.Valid
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
@@ -25,6 +29,7 @@ import java.util.UUID
 @RequestMapping("/api/v1/users")
 class UserController(
     private val userService: UserService,
+    private val withdrawalService: WithdrawalService,
     private val profileImageService: ProfileImageService,
 ) : UserApi {
     @GetMapping("/me")
@@ -46,6 +51,15 @@ class UserController(
         return ApiResponseBody.ok(UserResponse.from(user))
     }
 
+    @DeleteMapping("/me")
+    @ResponseStatus(HttpStatus.OK)
+    override fun withdraw(
+        @AuthenticationPrincipal userId: UUID,
+    ): ApiResponseBody<Unit> {
+        withdrawalService.withdraw(userId)
+        return ApiResponseBody.ok()
+    }
+
     @PostMapping("/me/profile-image", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     override fun updateProfileImage(
         @AuthenticationPrincipal userId: UUID,
@@ -60,7 +74,7 @@ class UserController(
 
     @GetMapping("/nickname/check")
     override fun checkNickname(
-        @AuthenticationPrincipal userId: UUID,
+        @AuthenticationPrincipal userId: UUID?,
         @Valid request: NicknameCheckRequest,
     ): ApiResponseBody<NicknameCheckResponse> =
         ApiResponseBody.ok(

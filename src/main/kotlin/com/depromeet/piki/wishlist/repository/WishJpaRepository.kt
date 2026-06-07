@@ -3,6 +3,7 @@ package com.depromeet.piki.wishlist.repository
 import com.depromeet.piki.wishlist.domain.Wish
 import org.springframework.data.domain.Limit
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import java.util.UUID
@@ -43,4 +44,11 @@ interface WishJpaRepository : JpaRepository<Wish, Long> {
         itemIds: Collection<Long>,
         userId: UUID,
     ): List<Wish>
+
+    // 탈퇴 cascade — 그 유저의 위시를 영구 하드삭제. 위시는 다른 데이터가 참조하지 않아 즉시 파기 가능. 멱등(없으면 0건).
+    @Modifying
+    @Query("DELETE FROM Wish w WHERE w.userId = :userId")
+    fun hardDeleteAllByUserId(
+        @Param("userId") userId: UUID,
+    ): Int
 }

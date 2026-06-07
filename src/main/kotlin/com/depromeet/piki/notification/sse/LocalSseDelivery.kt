@@ -32,6 +32,16 @@ class LocalSseDelivery(
         registry.emittersOf(userId).forEach { sendOrEvict(userId, it, event) }
     }
 
+    // 탈퇴 시 그 유저의 모든 SSE 연결을 즉시 끊는다(best-effort). 레지스트리에서 키째 빼고 각 emitter 를
+    // complete 한다. complete 가 컨트롤러의 onCompletion(unregister)을 다시 깨워도 unregister 는 멱등이라 무해.
+    // 인스턴스-로컬 연결만 끊는다 — 멀티 인스턴스로 확장돼도 각 인스턴스가 자기 메모리 연결만 정리하면 된다.
+    fun closeAll(userId: UUID) {
+        registry.removeAll(userId).forEach { emitter ->
+            runCatching { emitter.complete() }
+                .onFailure { e -> log.warn("SSE 연결 종료 실패 userId={}", userId, e) }
+        }
+    }
+
     // 전 연결에 주석 ping 을 보내 연결을 살아있게 유지하고, 끊긴 연결을 정리한다. (스케줄러가 주기 호출)
     fun heartbeat() {
         val ping = SseEmitter.event().comment("ping")

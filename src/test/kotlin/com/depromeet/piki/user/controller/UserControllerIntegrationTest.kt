@@ -225,6 +225,22 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `GET users nickname check - JWT 없이도 200 을 반환한다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+
+        mockMvc
+            .perform(
+                get("/api/v1/users/nickname/check")
+                    .param("nickname", "안쓰는닉네임"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.available").value(true))
+    }
+
+    @Test
     fun `PATCH users me - 본인이 자기 닉네임 그대로 보내면 200 으로 통과한다`() {
         val mockMvc =
             MockMvcBuilders

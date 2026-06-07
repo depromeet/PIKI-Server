@@ -39,6 +39,10 @@ class SseEmitterRegistry {
 
     fun emittersOf(userId: UUID): List<SseEmitter> = emitters[userId].orEmpty()
 
+    // 한 유저의 모든 연결을 한 번에 떼어내고 그 emitter 들을 돌려준다(탈퇴 시 강제 종료용).
+    // 키째 제거해 맵이 죽은 유저로 부풀지 않게 한다. 호출부가 받은 emitter 들을 complete 한다. 멱등(없으면 빈 리스트).
+    fun removeAll(userId: UUID): List<SseEmitter> = emitters.remove(userId).orEmpty()
+
     // 하트비트가 전 연결을 순회한다. (userId, emitter) 쌍으로 평탄화해 넘긴다.
     fun forEach(action: (UUID, SseEmitter) -> Unit) {
         emitters.forEach { (userId, list) -> list.forEach { action(userId, it) } }
