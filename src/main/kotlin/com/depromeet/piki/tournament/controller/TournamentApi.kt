@@ -519,8 +519,8 @@ interface TournamentApi {
         description = """
             IN_PROGRESS 상태의 토너먼트에서 한 매치의 결과(승자)를 기록한다.
             currentRound 는 해당 시점에 서버가 기대하는 라운드와 일치해야 한다.
-            결승(currentRound=2) 결과 기록 시 토너먼트가 COMPLETED 로 자동 전환되고,
-            응답 data 에 1위~최대 4위의 순위 결과(이름·가격·이미지)가 포함된다.
+            결승(currentRound=2) 결과 기록 시 본인의 순위 결과(1위~최대 4위)가 즉시 반환된다.
+            소셜 토너먼트(참여자 여럿)의 경우 모든 참여자가 결승을 완료해야 토너먼트가 COMPLETED 로 전환된다.
             결승이 아닌 라운드는 data=null 을 반환한다.
         """,
     )

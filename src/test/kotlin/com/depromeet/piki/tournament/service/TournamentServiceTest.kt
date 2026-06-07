@@ -383,9 +383,6 @@ class TournamentServiceTest {
             return null
         }
 
-        override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
-            histories.filter { it.tournamentId == tournamentId }
-
         override fun findHistoriesByTournamentIdAndTournamentUserId(
             tournamentId: Long,
             tournamentUserId: Long,

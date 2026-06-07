@@ -23,9 +23,6 @@ class TournamentRepositoryImpl(
     override fun findTournamentByIdForUpdate(tournamentId: Long): Tournament? =
         tournamentJpaRepository.findByIdForUpdate(tournamentId)
 
-    override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
-        tournamentHistoryJpaRepository.findAllByTournamentIdAndDeletedAtIsNullOrderByCurrentRoundAscIdAsc(tournamentId)
-
     override fun findHistoriesByTournamentIdAndTournamentUserId(
         tournamentId: Long,
         tournamentUserId: Long,

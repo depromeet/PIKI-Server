@@ -13,8 +13,6 @@ interface TournamentRepository {
 
     fun findTournamentByIdForUpdate(tournamentId: Long): Tournament?
 
-    fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory>
-
     fun findHistoriesByTournamentIdAndTournamentUserId(
         tournamentId: Long,
         tournamentUserId: Long,

@@ -8,8 +8,6 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
 interface TournamentHistoryJpaRepository : JpaRepository<TournamentHistory, Long> {
-    fun findAllByTournamentIdAndDeletedAtIsNullOrderByCurrentRoundAscIdAsc(tournamentId: Long): List<TournamentHistory>
-
     fun findAllByTournamentIdAndTournamentUserIdAndDeletedAtIsNullOrderByCurrentRoundAscIdAsc(
         tournamentId: Long,
         tournamentUserId: Long,
