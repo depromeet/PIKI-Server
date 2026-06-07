@@ -9,6 +9,7 @@ import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.GroupResultResponse
 import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestRequest
+import com.depromeet.piki.tournament.controller.dto.UpdateInviteDurationRequest
 import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestResponse
 import com.depromeet.piki.tournament.controller.dto.PlayLinkInfoResponse
 import com.depromeet.piki.tournament.controller.dto.RankedItemResponse
@@ -402,6 +403,28 @@ class TournamentApiExamples(
                         add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")
                         add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
                         add(TournamentException.inProgressTournamentCannotBeDeleted(), name = "진행 중 토너먼트 삭제 불가")
+                    }
+
+                handlerMethod.binds(TournamentController::updateInviteExpiry) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "초대 마감 시각 수정 성공",
+                            payload = ApiResponseBody.ok(LocalDateTime.of(2026, 6, 7, 11, 0, 0)),
+                        )
+                        add(
+                            status = HttpStatus.BAD_REQUEST,
+                            name = "유효 시간 범위 초과",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.INVALID_INPUT,
+                                    detail = "inviteDurationMinutes: ${UpdateInviteDurationRequest.INVITE_DURATION_MAX_MESSAGE}",
+                                ),
+                        )
+                        unauthorized()
+                        add(TournamentException.forbiddenTournament(), name = "권한 없음 (소유자 아님)")
+                        add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
+                        add(TournamentException.notPendingTournament(), name = "PENDING이 아닌 토너먼트")
                     }
 
                 handlerMethod.binds(TournamentController::getInvitePreview) ->
