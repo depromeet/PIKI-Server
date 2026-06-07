@@ -135,6 +135,133 @@ interface TournamentApi {
     ): ApiResponseBody<TournamentDetailResponse>
 
     @Operation(
+        summary = "링크 접근 경로 — 토너먼트 참여 전 미리보기",
+        description = "초대 링크 직접 접근 시 tournamentId 만으로 토너먼트 정보(이름·아이템 수·참여자 수)를 반환한다. 인증 불필요.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "조회 성공 (토너먼트 이름·아이템 수·참여자 수 반환)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "토너먼트를 찾을 수 없음",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+        ],
+    )
+    fun getInvitePreview(
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
+    ): ApiResponseBody<TournamentInvitePreviewResponse>
+
+    @Operation(
+        summary = "초대 코드로 토너먼트 미리보기",
+        description = """
+            홈 다이얼로그에서 6자리 코드만 입력하는 경로 전용 — tournamentId 없이 코드만으로 조회한다.
+            코드가 유효하면 tournamentId·이름·아이템 수·참여자 수를 반환한다.
+            이후 /join 또는 /join/guest 호출 시 응답의 tournamentId를 사용하면 된다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "조회 성공 (tournamentId·토너먼트 이름·아이템 수·참여자 수 반환)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "400",
+                description = "잘못된 요청 (코드에 해당하는 토너먼트 없음)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+        ],
+    )
+    fun getInvitePreviewByCode(
+        @Parameter(description = "초대 코드 (영어 대문자 3자리 + 숫자 3자리)", example = "ABC123") code: String,
+    ): ApiResponseBody<TournamentInvitePreviewResponse>
+
+    @Operation(
+        summary = "플레이 링크 정보 조회",
+        description = "플레이 링크가 유효한 토너먼트의 정보(이름, 아이템 수, 만료 시간)를 반환한다. 인증 불필요.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "조회 성공",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "토너먼트를 찾을 수 없음 · 플레이 링크가 생성되지 않은 토너먼트",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "플레이 링크 만료",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+        ],
+    )
+    fun getPlayLinkInfo(
+        @Parameter(description = "원본 토너먼트 ID", example = "1") tournamentId: Long,
+    ): ApiResponseBody<PlayLinkInfoResponse>
+
+    @Operation(
+        summary = "그룹 결과 조회",
+        description = """
+            완료된 토너먼트의 그룹 결과를 조회한다.
+            원본 토너먼트와 플레이 링크로 복제된 모든 토너먼트의 결과를 비교해,
+            각 순위의 아이템마다 동일한 결과를 선택한 참여자 정보를 반환한다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "그룹 결과 조회 성공",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "권한 없음 (토너먼트 참여자가 아님)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "토너먼트를 찾을 수 없음",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "상태 충돌 (COMPLETED가 아닌 토너먼트)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+        ],
+    )
+    fun getGroupResult(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
+    ): ApiResponseBody<GroupResultResponse>
+
+    @Operation(
         summary = "토너먼트 생성",
         description = """
             이름으로 PENDING 상태의 토너먼트를 생성한다.
@@ -466,6 +593,129 @@ interface TournamentApi {
     ): ApiResponseBody<TournamentDetailResponse.CompletedData?>
 
     @Operation(
+        summary = "플레이 링크 생성",
+        description = """
+            완료된 토너먼트의 플레이 링크를 생성한다. 토너먼트 소유자만 호출 가능.
+            플레이 링크를 통해 친구들이 동일한 아이템 구성으로 토너먼트를 진행할 수 있다.
+            만료 기간은 생성 시점 + 14일로 고정이며 변경 불가.
+            이미 링크가 있으면 만료 시간이 갱신된다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "플레이 링크 생성 성공 (playLinkExpiresAt 반환)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "권한 없음 (토너먼트 참여자가 아님 · 소유자가 아님 · 플레이 링크로 참여한 토너먼트는 플레이 링크 생성 불가)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "토너먼트를 찾을 수 없음",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "상태 충돌 (COMPLETED가 아닌 토너먼트 · 플레이 링크가 이미 생성됨)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+        ],
+    )
+    fun createPlayLink(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
+    ): ApiResponseBody<LocalDateTime>
+
+    @Operation(
+        summary = "플레이 링크로 토너먼트 복제 생성",
+        description = """
+            플레이 링크가 유효한 토너먼트와 동일한 아이템 구성으로 새 토너먼트를 생성한다.
+            생성된 토너먼트는 PENDING 상태이며 아이템이 미리 복사되어 있어 바로 시작할 수 있다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "201",
+                description = "복제 토너먼트 생성 성공 (tournamentId 반환)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "토너먼트를 찾을 수 없음 · 플레이 링크가 생성되지 않은 토너먼트",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "상태 충돌 (플레이 링크 만료 · 이미 해당 플레이 링크로 토너먼트를 생성한 경우)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+        ],
+    )
+    fun createFromPlayLink(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "원본 토너먼트 ID", example = "1") sourceTournamentId: Long,
+    ): ApiResponseBody<Long>
+
+    @Operation(
+        summary = "친구 초대 마감 시각 수정",
+        description = "PENDING 상태 토너먼트의 초대 마감 시각을 지금으로부터 N분 후로 재설정한다. 주최자만 가능. 최소 1분, 최대 1440분(24시간).",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "수정 성공 (새 inviteExpiresAt 반환)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "400",
+                description = "잘못된 요청 (inviteDurationMinutes 1 미만 또는 1440 초과)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "권한 없음 (토너먼트 참여자가 아님 · 소유자가 아님)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "토너먼트를 찾을 수 없음",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+        ],
+    )
+    fun updateInviteExpiry(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
+        request: UpdateInviteDurationRequest,
+    ): ApiResponseBody<LocalDateTime>
+
+    @Operation(
         summary = "토너먼트 삭제",
         description = "PENDING 또는 COMPLETED 상태의 토너먼트를 삭제한다. 토너먼트 소유자만 삭제할 수 있으며, IN_PROGRESS 상태에서는 삭제할 수 없다.",
     )
@@ -527,254 +777,4 @@ interface TournamentApi {
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
     ): ApiResponseBody<Unit>
-
-    @Operation(
-        summary = "친구 초대 마감 시각 수정",
-        description = "PENDING 상태 토너먼트의 초대 마감 시각을 지금으로부터 N분 후로 재설정한다. 주최자만 가능. 최소 1분, 최대 1440분(24시간).",
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "수정 성공 (새 inviteExpiresAt 반환)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "400",
-                description = "잘못된 요청 (inviteDurationMinutes 1 미만 또는 1440 초과)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "401",
-                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "403",
-                description = "권한 없음 (토너먼트 참여자가 아님 · 소유자가 아님)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "404",
-                description = "토너먼트를 찾을 수 없음",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "409",
-                description = "상태 충돌 (PENDING이 아닌 토너먼트)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-        ],
-    )
-    fun updateInviteExpiry(
-        @Parameter(hidden = true) userId: UUID,
-        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
-        request: UpdateInviteDurationRequest,
-    ): ApiResponseBody<LocalDateTime>
-
-    @Operation(
-        summary = "링크 접근 경로 — 토너먼트 참여 전 미리보기",
-        description = "초대 링크 직접 접근 시 tournamentId 만으로 토너먼트 정보(이름·아이템 수·참여자 수)를 반환한다. 인증 불필요.",
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "조회 성공 (토너먼트 이름·아이템 수·참여자 수 반환)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "404",
-                description = "토너먼트를 찾을 수 없음",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "409",
-                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-        ],
-    )
-    fun getInvitePreview(
-        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
-    ): ApiResponseBody<TournamentInvitePreviewResponse>
-
-    @Operation(
-        summary = "초대 코드로 토너먼트 미리보기",
-        description = """
-            홈 다이얼로그에서 6자리 코드만 입력하는 경로 전용 — tournamentId 없이 코드만으로 조회한다.
-            코드가 유효하면 tournamentId·이름·아이템 수·참여자 수를 반환한다.
-            이후 /join 또는 /join/guest 호출 시 응답의 tournamentId를 사용하면 된다.
-        """,
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "조회 성공 (tournamentId·토너먼트 이름·아이템 수·참여자 수 반환)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "400",
-                description = "잘못된 요청 (코드에 해당하는 토너먼트 없음)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "409",
-                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-        ],
-    )
-    fun getInvitePreviewByCode(
-        @Parameter(description = "초대 코드 (영어 대문자 3자리 + 숫자 3자리)", example = "ABC123") code: String,
-    ): ApiResponseBody<TournamentInvitePreviewResponse>
-
-    @Operation(
-        summary = "플레이 링크 생성",
-        description = """
-            완료된 토너먼트의 플레이 링크를 생성한다. 토너먼트 소유자만 호출 가능.
-            플레이 링크를 통해 친구들이 동일한 아이템 구성으로 토너먼트를 진행할 수 있다.
-            만료 기간은 생성 시점 + 14일로 고정이며 변경 불가.
-            이미 링크가 있으면 만료 시간이 갱신된다.
-        """,
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "플레이 링크 생성 성공 (playLinkExpiresAt 반환)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "401",
-                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "403",
-                description = "권한 없음 (토너먼트 참여자가 아님 · 소유자가 아님 · 플레이 링크로 참여한 토너먼트는 플레이 링크 생성 불가)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "404",
-                description = "토너먼트를 찾을 수 없음",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "409",
-                description = "상태 충돌 (COMPLETED가 아닌 토너먼트 · 플레이 링크가 이미 생성됨)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-        ],
-    )
-    fun createPlayLink(
-        @Parameter(hidden = true) userId: UUID,
-        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
-    ): ApiResponseBody<LocalDateTime>
-
-    @Operation(
-        summary = "플레이 링크 정보 조회",
-        description = "플레이 링크가 유효한 토너먼트의 정보(이름, 아이템 수, 만료 시간)를 반환한다. 인증 불필요.",
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "조회 성공",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "404",
-                description = "토너먼트를 찾을 수 없음 · 플레이 링크가 생성되지 않은 토너먼트",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "409",
-                description = "플레이 링크 만료",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-        ],
-    )
-    fun getPlayLinkInfo(
-        @Parameter(description = "원본 토너먼트 ID", example = "1") tournamentId: Long,
-    ): ApiResponseBody<PlayLinkInfoResponse>
-
-    @Operation(
-        summary = "플레이 링크로 토너먼트 복제 생성",
-        description = """
-            플레이 링크가 유효한 토너먼트와 동일한 아이템 구성으로 새 토너먼트를 생성한다.
-            생성된 토너먼트는 PENDING 상태이며 아이템이 미리 복사되어 있어 바로 시작할 수 있다.
-        """,
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "201",
-                description = "복제 토너먼트 생성 성공 (tournamentId 반환)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "401",
-                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "404",
-                description = "토너먼트를 찾을 수 없음 · 플레이 링크가 생성되지 않은 토너먼트",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "409",
-                description = "상태 충돌 (플레이 링크 만료 · 이미 해당 플레이 링크로 토너먼트를 생성한 경우)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-        ],
-    )
-    fun createFromPlayLink(
-        @Parameter(hidden = true) userId: UUID,
-        @Parameter(description = "원본 토너먼트 ID", example = "1") sourceTournamentId: Long,
-    ): ApiResponseBody<Long>
-
-    @Operation(
-        summary = "그룹 결과 조회",
-        description = """
-            완료된 토너먼트의 그룹 결과를 조회한다.
-            원본 토너먼트와 플레이 링크로 복제된 모든 토너먼트의 결과를 비교해,
-            각 순위의 아이템마다 동일한 결과를 선택한 참여자 정보를 반환한다.
-        """,
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "그룹 결과 조회 성공",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "401",
-                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "403",
-                description = "권한 없음 (토너먼트 참여자가 아님)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "404",
-                description = "토너먼트를 찾을 수 없음",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-            ApiResponse(
-                responseCode = "409",
-                description = "상태 충돌 (COMPLETED가 아닌 토너먼트)",
-                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
-            ),
-        ],
-    )
-    fun getGroupResult(
-        @Parameter(hidden = true) userId: UUID,
-        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
-    ): ApiResponseBody<GroupResultResponse>
 }
