@@ -1,12 +1,6 @@
 spring:
   application:
     name: PIKI
-  jackson:
-    serialization:
-      # LocalDateTime 을 ISO-8601 문자열로 직렬화한다 (숫자 타임스탬프 대신).
-      # Z(UTC) suffix 보장은 LocalDateTime → Instant/OffsetDateTime 타입 마이그레이션이 필요하며,
-      # 이 PR 범위를 넘어 별도 이슈로 추적한다. time-zone 설정은 LocalDateTime 에 효과 없어 제거.
-      write-dates-as-timestamps: false
   config:
     # .env 다음에 .env.local 을 읽어 로컬 개인 override 를 덮어쓴다(뒤가 우선). 둘 다 optional·gitignore.
     import:
