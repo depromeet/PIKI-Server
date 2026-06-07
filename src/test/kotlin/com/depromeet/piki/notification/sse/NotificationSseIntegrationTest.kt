@@ -29,7 +29,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 // 구독 엔드포인트 contract 와 채널 전달을 실제 빈으로 검증한다.
@@ -178,7 +178,7 @@ class NotificationSseIntegrationTest : IntegrationTestSupport() {
         try {
             sseNotificationChannel.send(userId, notification)
 
-            val payload = emitter.sentData.filterIsInstance<NotificationSsePayload>().first()
+            val payload = emitter.sentData.filterIsInstance<NotificationSsePayload.TournamentParsing>().first()
             assertEquals(NotificationKind.TOURNAMENT, payload.kind)
             assertEquals(99L, payload.tournamentId)
             assertEquals(555L, payload.tournamentItemId)
@@ -204,9 +204,9 @@ class NotificationSseIntegrationTest : IntegrationTestSupport() {
             )
 
         val payload = NotificationSsePayload.from(notification)
-        assertEquals(NotificationKind.WISH, payload.kind)
-        assertNull(payload.tournamentId)
-        assertNull(payload.tournamentItemId)
+        val wish = assertIs<NotificationSsePayload.WishParsing>(payload)
+        assertEquals(NotificationKind.WISH, wish.kind)
+        assertEquals(11L, wish.refId)
     }
 }
 
