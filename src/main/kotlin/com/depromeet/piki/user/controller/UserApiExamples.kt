@@ -169,7 +169,7 @@ class UserApiExamples(
         UserResponse(
             id = SAMPLE_USER_ID,
             nickname = "뛰어다니는 강아지",
-            profileImage = "https://piki-assets.s3.ap-northeast-2.amazonaws.com/user-profile-1.png",
+            profileImage = "https://piki-assets.s3.ap-northeast-2.amazonaws.com/defaults/user-profile-1.png",
             identityType = IdentityType.GUEST,
         )
 

@@ -16,22 +16,22 @@ class DefaultProfileImagesTest {
     fun `urlOf 는 publicBaseUrl 과 defaults profile 경로 png 를 조립한다`() {
         val images = defaultProfileImages("https://piki.s3.ap-northeast-2.amazonaws.com")
 
-        assertEquals("https://piki.s3.ap-northeast-2.amazonaws.com/user-profile-1.png", images.urlOf(1))
-        assertEquals("https://piki.s3.ap-northeast-2.amazonaws.com/user-profile-4.png", images.urlOf(4))
+        assertEquals("https://piki.s3.ap-northeast-2.amazonaws.com/defaults/user-profile-1.png", images.urlOf(1))
+        assertEquals("https://piki.s3.ap-northeast-2.amazonaws.com/defaults/user-profile-4.png", images.urlOf(4))
     }
 
     @Test
     fun `publicBaseUrl 끝 슬래시는 무시해 슬래시가 중복되지 않는다`() {
         val images = defaultProfileImages("https://piki.s3.ap-northeast-2.amazonaws.com/")
 
-        assertEquals("https://piki.s3.ap-northeast-2.amazonaws.com/user-profile-2.png", images.urlOf(2))
+        assertEquals("https://piki.s3.ap-northeast-2.amazonaws.com/defaults/user-profile-2.png", images.urlOf(2))
     }
 
     @Test
     fun `random 은 항상 publicBaseUrl + defaults profile 1부터 COUNT 까지 png 형식 URL 을 돌려준다`() {
         val base = "https://piki.s3.ap-northeast-2.amazonaws.com"
         val images = defaultProfileImages(base)
-        val expected = (1..DefaultProfileImages.COUNT).map { "$base/user-profile-$it.png" }.toSet()
+        val expected = (1..DefaultProfileImages.COUNT).map { "$base/defaults/user-profile-$it.png" }.toSet()
 
         // 여러 번 호출해 4종 범위 안에만 떨어지는지 확인한다.
         val produced = (1..200).map { images.random() }.toSet()

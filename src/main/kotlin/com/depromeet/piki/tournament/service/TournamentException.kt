@@ -233,5 +233,19 @@ class TournamentException private constructor(
                 ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )
+
+        fun clonedTournamentCannotViewGroupResult(): TournamentException =
+            TournamentException(
+                "플레이링크로 참여한 토너먼트에서는 친구 결과를 조회할 수 없습니다.",
+                ErrorCategory.FORBIDDEN,
+                HttpStatus.FORBIDDEN,
+            )
+
+        fun clonedTournamentCannotAddItems(): TournamentException =
+            TournamentException(
+                "플레이 링크로 생성된 토너먼트에는 아이템을 추가할 수 없습니다.",
+                ErrorCategory.FORBIDDEN,
+                HttpStatus.FORBIDDEN,
+            )
     }
 }

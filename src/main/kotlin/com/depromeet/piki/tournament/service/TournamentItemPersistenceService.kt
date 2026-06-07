@@ -126,6 +126,7 @@ class TournamentItemPersistenceService(
             tournamentRepository.findTournamentByIdForUpdate(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
+        tournament.sourceTournamentId?.let { throw TournamentException.clonedTournamentCannotAddItems() }
         tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
         val existingCount = tournamentItemRepository.countByTournamentId(tournamentId)
