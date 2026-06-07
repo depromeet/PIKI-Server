@@ -14,16 +14,12 @@ data class JoinTournamentAsGuestResponse(
     val tournamentId: Long,
     @get:JsonIgnore
     override val tokenPair: TokenPair,
-    @get:JsonIgnore
-    val bodyTokensIncluded: Boolean = true,
-) : TokenCarrying {
     @get:Schema(description = "액세스 토큰 (APP=값 / WEB=null, 쿠키로 전달)", nullable = true, example = "eyJhbGciOiJIUzI1NiJ9...")
-    val accessToken: String? get() = tokenPair.accessToken.takeIf { bodyTokensIncluded }
-
+    val accessToken: String? = tokenPair.accessToken,
     @get:Schema(description = "리프레시 토큰 (APP=값 / WEB=null, 쿠키로 전달)", nullable = true, example = "eyJhbGciOiJIUzI1NiJ9...")
-    val refreshToken: String? get() = tokenPair.refreshToken.takeIf { bodyTokensIncluded }
-
-    override fun withoutBodyTokens(): TokenCarrying = copy(bodyTokensIncluded = false)
+    val refreshToken: String? = tokenPair.refreshToken,
+) : TokenCarrying {
+    override fun withoutBodyTokens(): TokenCarrying = copy(accessToken = null, refreshToken = null)
 
     companion object {
         fun from(result: JoinTournamentAsGuestResult): JoinTournamentAsGuestResponse =
