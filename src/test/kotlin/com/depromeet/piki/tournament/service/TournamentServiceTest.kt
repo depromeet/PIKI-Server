@@ -14,6 +14,7 @@ import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.event.TournamentItemAdded
 import com.depromeet.piki.tournament.event.TournamentJoined
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
+import com.depromeet.piki.tournament.repository.TournamentItemRoutingView
 import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.tournament.service.dto.AddTournamentItemsFromWish
@@ -289,6 +290,17 @@ class TournamentServiceTest {
                 .filter { it.itemId == itemId && (it.deletedAt?.let { false } ?: true) }
                 .map { it.userId }
                 .distinct()
+
+        override fun findRoutingByItemId(itemId: Long): List<TournamentItemRoutingView> =
+            items
+                .filter { it.itemId == itemId && (it.deletedAt?.let { false } ?: true) }
+                .sortedBy { it.getId() }
+                .map { item ->
+                    object : TournamentItemRoutingView {
+                        override val tournamentId = item.tournamentId
+                        override val tournamentItemId = item.getId()
+                    }
+                }
 
         override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
             items.filter { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }

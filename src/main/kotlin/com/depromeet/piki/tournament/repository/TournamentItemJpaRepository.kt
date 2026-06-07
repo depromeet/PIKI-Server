@@ -27,6 +27,14 @@ interface TournamentItemJpaRepository : JpaRepository<TournamentItem, Long> {
     @Query("SELECT DISTINCT t.userId FROM TournamentItem t WHERE t.itemId = :itemId AND t.deletedAt IS NULL")
     fun findUserIdsByItemId(@Param("itemId") itemId: Long): List<UUID>
 
+    // 이 아이템의 토너먼트 출전 좌표(tournamentId·tournament_item id). 파싱 알림 딥링크 라우팅 역조회(#408).
+    // 공유 대비 List 지만 파싱 시점엔 단일 컨텍스트라 0~1 행이다. id 오름차순으로 결정성만 둔다.
+    @Query(
+        "SELECT t.tournamentId AS tournamentId, t.id AS tournamentItemId FROM TournamentItem t " +
+            "WHERE t.itemId = :itemId AND t.deletedAt IS NULL ORDER BY t.id ASC",
+    )
+    fun findRoutingByItemId(@Param("itemId") itemId: Long): List<TournamentItemRoutingView>
+
     @Modifying
     @Query(
         "UPDATE TournamentItem t SET t.deletedAt = :now WHERE t.id = :id AND t.tournamentId = :tournamentId " +
