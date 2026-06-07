@@ -244,12 +244,13 @@ class NotificationSseIntegrationTest : IntegrationTestSupport() {
         assertEquals(555L, tournament.tournamentItemId)
 
         // prod 가 쓰는 Spring 관리 Jackson(tools.jackson)으로 직렬화해 실제 SSE 와이어 셰입을 검증한다.
-        val json = objectMapper.writeValueAsString(payload)
-        assertTrue(json.contains("\"kind\":\"TOURNAMENT\""))
-        assertTrue(json.contains("\"tournamentId\":99"))
-        assertTrue(json.contains("\"tournamentItemId\":555"))
-        // Jackson3+kotlin module 은 isRead 를 그대로 직렬화한다(모듈 없는 Jackson2 였으면 "read" 로 나와 실패).
-        assertTrue(json.contains("\"isRead\":false"))
+        // 문자열 contains 대신 트리 경로/타입으로 단언해 공백·필드순서 변화엔 안 깨지고 구조 변경은 잡는다.
+        val node = objectMapper.readTree(objectMapper.writeValueAsString(payload))
+        assertEquals("TOURNAMENT", node.get("kind").asString())
+        assertEquals(99L, node.get("tournamentId").asLong())
+        assertEquals(555L, node.get("tournamentItemId").asLong())
+        // Jackson3+kotlin module 은 isRead 필드명으로 직렬화한다(모듈 없는 Jackson2 였으면 "read" 라 이 키가 없다).
+        assertTrue(node.has("isRead"))
     }
 }
 

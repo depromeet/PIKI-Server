@@ -182,4 +182,14 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
 
         assertEquals(NotificationRouting.Tournament(tournamentId, tournamentItem.getId()), routing)
     }
+
+    @Test
+    fun `파싱 실패 라우팅 - 위시로 담긴 아이템은 WISH 다`() {
+        val itemId = 3004L
+        wishRepository.save(Wish(UUID.randomUUID(), itemId))
+
+        val routing = parsingFailedHandler.resolveRouting(ItemParsingFailed(itemId))
+
+        assertEquals(NotificationRouting.Wish, routing)
+    }
 }
