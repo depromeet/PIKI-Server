@@ -10,6 +10,7 @@ import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.event.TournamentItemAdded
 import com.depromeet.piki.tournament.event.TournamentJoined
+import com.depromeet.piki.tournament.event.TournamentStarted
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
@@ -190,6 +191,8 @@ class TournamentService(
         }
 
         tournament.start()
+        // 시작이 커밋된 뒤에만 참가자에게 전달되도록 트랜잭션 안에서 발행한다 (롤백 시 미발행).
+        eventPublisher.publishEvent(TournamentStarted(tournamentId = tournamentId, actorId = userId))
         return tournamentItems
             .map { tournamentItem ->
                 val snapshot = tournamentItem.requireSnapshot(snapshotById)

@@ -6,6 +6,7 @@ import com.depromeet.piki.notification.domain.NotificationType
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.tournament.event.TournamentItemAdded
 import com.depromeet.piki.tournament.event.TournamentJoined
+import com.depromeet.piki.tournament.event.TournamentStarted
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import kotlin.test.assertEquals
@@ -21,6 +22,8 @@ class NotificationEventHandlerTest : IntegrationTestSupport() {
 
     @Autowired private lateinit var tournamentJoinedHandler: TournamentJoinedHandler
 
+    @Autowired private lateinit var tournamentStartedHandler: TournamentStartedHandler
+
     @Autowired private lateinit var handlers: List<NotificationEventHandler<*>>
 
     // eventType 은 제네릭 타입 인자 E 에서 GenericTypeResolver 로 자동 도출된다(::class 명시 제거).
@@ -31,6 +34,7 @@ class NotificationEventHandlerTest : IntegrationTestSupport() {
         assertEquals(ItemParsingFailed::class, itemParsingFailedHandler.eventType)
         assertEquals(TournamentItemAdded::class, tournamentItemAddedHandler.eventType)
         assertEquals(TournamentJoined::class, tournamentJoinedHandler.eventType)
+        assertEquals(TournamentStarted::class, tournamentStartedHandler.eventType)
     }
 
     @Test
@@ -39,6 +43,7 @@ class NotificationEventHandlerTest : IntegrationTestSupport() {
         assertEquals(NotificationType.ITEM_PARSING_FAILED, itemParsingFailedHandler.notificationType)
         assertEquals(NotificationType.TOURNAMENT_ITEM_ADDED, tournamentItemAddedHandler.notificationType)
         assertEquals(NotificationType.TOURNAMENT_JOINED, tournamentJoinedHandler.notificationType)
+        assertEquals(NotificationType.TOURNAMENT_STARTED, tournamentStartedHandler.notificationType)
     }
 
     // Dispatcher 는 eventType 으로 라우팅하므로 키가 유일해야 한다(중복이면 associateBy 가 조용히 덮어쓴다).

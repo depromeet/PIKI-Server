@@ -13,6 +13,7 @@ import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.event.TournamentItemAdded
 import com.depromeet.piki.tournament.event.TournamentJoined
+import com.depromeet.piki.tournament.event.TournamentStarted
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
@@ -554,6 +555,18 @@ class TournamentServiceTest {
         service.start(userId, tournamentId)
 
         assertEquals(TournamentStatus.IN_PROGRESS, repository.tournaments[tournamentId]!!.status)
+    }
+
+    @Test
+    fun `start 는 시작 후 시작시킨 주최자를 actor 로 하는 TournamentStarted 이벤트를 발행한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
+        testWishRepository.addWish(userId, 1L, 2L)
+        service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
+        publishedEvents.clear() // addItemsFromWish 가 발행한 TournamentItemAdded 를 비우고 start 발행만 본다
+
+        service.start(userId, tournamentId)
+
+        assertEquals(listOf<Any>(TournamentStarted(tournamentId, userId)), publishedEvents)
     }
 
     @Test
