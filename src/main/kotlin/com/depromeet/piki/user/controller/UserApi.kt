@@ -80,7 +80,7 @@ interface UserApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "닉네임 길이/공백 검증 실패",
+                description = "닉네임 검증 실패 (공백 · 10자 초과 · '탈퇴' 예약 prefix 로 시작)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -124,6 +124,61 @@ interface UserApi {
         @Parameter(hidden = true) userId: UUID,
         request: UserUpdateRequest,
     ): ApiResponseBody<UserResponse>
+
+    @Operation(
+        summary = "회원 탈퇴",
+        description =
+            "현재 로그인된 MEMBER 의 계정을 탈퇴 처리한다. users 행은 익명 tombstone 으로 남겨 공유 토너먼트 참조를 보존하고, " +
+                "소셜 식별자(user_details)·기기 토큰(user_devices)·위시·알림은 즉시 하드삭제 한다(PIPA 지체없이 파기). " +
+                "refresh token 무효화·SSE 연결 종료까지 함께 처리한다. 게스트는 탈퇴 대상이 아니라 403 으로 거부한다. 멱등 — 재요청해도 200.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "탈퇴 성공 (data=null)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "게스트는 탈퇴할 수 없음 (탈퇴는 MEMBER 전용)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "유저를 찾을 수 없음 (JWT 유효하지만 DB에서 유저가 삭제된 경우)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun withdraw(
+        @Parameter(hidden = true) userId: UUID,
+    ): ApiResponseBody<Unit>
 
     @Operation(
         summary = "프로필 이미지 수정",

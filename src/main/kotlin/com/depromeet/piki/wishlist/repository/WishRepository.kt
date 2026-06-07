@@ -7,6 +7,9 @@ import java.util.UUID
 interface WishRepository {
     fun save(wish: Wish): Wish
 
+    // 탈퇴 cascade — 그 유저의 위시를 일괄 하드삭제하고 영향 건수를 돌려준다. 멱등.
+    fun hardDeleteAllByUserId(userId: UUID): Int
+
     fun countByIdsAndUserId(
         ids: List<Long>,
         userId: UUID,

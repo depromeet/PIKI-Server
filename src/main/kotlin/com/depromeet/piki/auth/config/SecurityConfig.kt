@@ -115,6 +115,12 @@ class SecurityConfig(
                     .authenticated()
                     .requestMatchers(HttpMethod.PATCH, "/api/v1/users/me")
                     .authenticated()
+                    // 회원 탈퇴 — 인증만 요구한다(GUEST 도 통과). 게스트 거부(403)는 Security 권한이 아니라
+                    // WithdrawalService 가 도메인 계약(UserException.guestCannotWithdraw)으로 내린다 —
+                    // Security 에서 MEMBER 만 허용하면 게스트가 권한 없음 403(detail 없음)으로 떨어져
+                    // "게스트는 탈퇴 불가" 라는 구체 사유를 못 전달하기 때문.
+                    .requestMatchers(HttpMethod.DELETE, "/api/v1/users/me")
+                    .authenticated()
                     // 프로필 이미지 업로드 — GET /me·PATCH /me 와 동일하게 게스트도 호출 가능
                     .requestMatchers(HttpMethod.POST, "/api/v1/users/me/profile-image")
                     .authenticated()

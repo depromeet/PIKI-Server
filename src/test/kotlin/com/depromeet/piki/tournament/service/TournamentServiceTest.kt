@@ -173,6 +173,12 @@ class TournamentServiceTest {
         override fun findUserIdsByItemId(itemId: Long): List<UUID> =
             wishes.filter { it.itemId == itemId }.map { it.userId }.distinct()
 
+        override fun hardDeleteAllByUserId(userId: UUID): Int {
+            val before = wishes.size
+            wishes.removeAll { it.userId == userId }
+            return before - wishes.size
+        }
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
