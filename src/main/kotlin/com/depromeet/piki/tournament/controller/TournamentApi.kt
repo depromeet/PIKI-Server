@@ -330,15 +330,17 @@ interface TournamentApi {
             닉네임을 입력해 게스트 계정을 생성하고 토너먼트에 참여한다. 인증 불필요.
             - 링크 직접 접근: inviteCode 생략 가능. 만료 여부만 확인.
             - 코드 입력 경로: inviteCode 전달 시 코드 일치 여부도 검증.
-            성공 시 JWT 토큰 쌍(accessToken·refreshToken)과 생성된 사용자 정보가 반환된다.
-            이후 요청에서는 발급받은 accessToken 을 사용한다.
+            성공 시 JWT 토큰 쌍과 생성된 사용자 정보가 반환된다.
+            토큰 전달 방식은 클라이언트 타입에 따라 다르다 (X-Client-Type 헤더):
+            - WEB(기본·미설정): accessToken·refreshToken 은 HttpOnly 쿠키로 전달, body 값은 null.
+            - APP(app 명시): accessToken·refreshToken 을 body 로 전달, 쿠키 없음.
         """,
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "201",
-                description = "게스트 계정 생성 및 참여 성공 (accessToken·refreshToken·userId·nickname·profileImage 포함)",
+                description = "게스트 계정 생성 및 참여 성공 (WEB=쿠키 전달·body null / APP=body 전달)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
