@@ -46,12 +46,31 @@ class SocialAccountWriter(
         return userService.promoteToMember(guestId)
     }
 
+    // 기존 가입자 재로그인 시 email upsert (#442). provider 가 준 email 로 갱신해 backfill·최신 유지한다.
+    // email 이 null 이면(미수집·미동의) UserDetail.updateEmail 이 기존 값을 보존한다.
+    // resolveUser(비트랜잭션)가 호출하므로 proxy 경계를 위해 별도 빈의 @Transactional 메서드로 둔다.
+    @Transactional
+    fun updateEmail(
+        userId: UUID,
+        email: String?,
+    ) {
+        email ?: return // null 이면 조회·갱신 자체를 생략(불필요한 쿼리 방지)
+        val detail = userDetailRepository.findByUserId(userId) ?: return
+        detail.updateEmail(email)
+        userDetailRepository.save(detail)
+    }
+
     private fun link(
         userId: UUID,
         userInfo: OAuthUserInfo,
     ) {
         userDetailRepository.save(
-            UserDetail(userId = userId, provider = userInfo.provider.name, socialId = userInfo.socialId),
+            UserDetail(
+                userId = userId,
+                provider = userInfo.provider.name,
+                socialId = userInfo.socialId,
+                email = userInfo.email,
+            ),
         )
     }
 }

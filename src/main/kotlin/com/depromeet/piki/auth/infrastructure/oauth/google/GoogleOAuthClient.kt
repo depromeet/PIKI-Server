@@ -59,6 +59,7 @@ class GoogleOAuthClient(
             provider = OAuthProvider.GOOGLE,
             socialId = userInfo.id,
             profileImage = userInfo.picture.ifBlank { null },
+            email = userInfo.email?.ifBlank { null },
         )
     }
 
