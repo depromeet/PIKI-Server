@@ -3,6 +3,7 @@ package com.depromeet.piki.product.service.gemini
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.http.HttpPageFetcher
 import io.micrometer.observation.ObservationRegistry
+import org.jsoup.Jsoup
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -38,7 +39,8 @@ class GeminiHtmlExtractorTest {
         // 어떤 종류의 실패도 회귀 신호로 간주해 fail 시킨다.
         val link = ProductLink.parse("https://www.apple.com/shop/buy-iphone")
 
-        val product = extractor.extract(pageFetcher.fetch(link))
+        val page = pageFetcher.fetch(link)
+        val product = extractor.extract(Jsoup.parse(page.html, link.value.toString()), link)
 
         assertNotNull(product.name, "Gemini 가 상품명을 추출했어야 한다")
     }

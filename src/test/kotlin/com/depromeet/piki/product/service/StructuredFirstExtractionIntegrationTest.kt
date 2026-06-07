@@ -2,6 +2,7 @@ package com.depromeet.piki.product.service
 
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.gemini.GeminiApiException
+import com.depromeet.piki.product.service.gemini.GeminiExtractionRequest
 import com.depromeet.piki.product.service.gemini.GeminiExtractionResult
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubGeminiClient
@@ -10,6 +11,8 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 // 구조화 우선 / LLM fallback 분기를 실제 빈으로 검증한다. 오케스트레이터(DefaultProductLinkExtractor)와
 // 구조화 파서는 실제 빈, 외부 경계(PageFetcher·GeminiClient)만 stub 으로 격리한다.
@@ -74,6 +77,41 @@ class StructuredFirstExtractionIntegrationTest : IntegrationTestSupport() {
 
         assertFailsWith<GeminiApiException> { extractor.extract(link) }
         assertEquals(1, stubGeminiClient.invocations)
+    }
+
+    @Test
+    fun `fallback 시 LLM 입력에서 ld+json 은 보존되고 일반 script·style·주석은 제거된다`() {
+        stubGeminiClient.reset()
+        stubGeminiClient.build = { GeminiExtractionResult(isProductPage = true, name = "엘엘엠상품", currentPrice = 1_000) }
+        // ld+json 은 name 만 있어 구조화 미달 → fallback. 일반 script·style·주석은 빠지고 ld+json 은 남아야 한다.
+        val html =
+            """
+            <html><head>
+            <script type="application/ld+json">{"@type":"Product","name":"보존JSONLD"}</script>
+            <script>var leak = "제거대상스크립트";</script>
+            <style>.x{color:red}</style>
+            <!-- 제거대상주석 -->
+            </head><body></body></html>
+            """.trimIndent()
+        stubPageFetcher.build = { PageContent(it, html) }
+
+        extractor.extract(link)
+
+        val sentHtml = llmInputHtmlOf(stubGeminiClient.lastRequest)
+        assertTrue(sentHtml.contains("보존JSONLD"), "ld+json 은 LLM 입력에 보존돼야 한다")
+        assertFalse(sentHtml.contains("제거대상스크립트"), "일반 script 는 제거돼야 한다")
+        assertFalse(sentHtml.contains("color:red"), "style 은 제거돼야 한다")
+        assertFalse(sentHtml.contains("제거대상주석"), "주석은 제거돼야 한다")
+    }
+
+    // GeminiExtractionRequest 의 HTML part(마지막 Part)에서 sanitize 된 LLM 입력 HTML 을 꺼낸다.
+    private fun llmInputHtmlOf(request: Any?): String {
+        val extractionRequest = request as GeminiExtractionRequest
+        return extractionRequest.contents
+            .first()
+            .parts
+            .last()
+            .text
     }
 
     private fun productJsonLdHtml(

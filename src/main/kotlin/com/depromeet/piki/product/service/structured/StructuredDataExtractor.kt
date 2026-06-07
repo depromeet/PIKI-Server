@@ -1,5 +1,6 @@
 package com.depromeet.piki.product.service.structured
 
+import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.PageContent
 import com.depromeet.piki.product.service.ProductSnapshot
 import java.math.RoundingMode
@@ -19,17 +20,21 @@ import tools.jackson.databind.ObjectMapper
 class StructuredDataExtractor(
     private val objectMapper: ObjectMapper,
 ) {
+    // 오케스트레이터가 파싱한 Document 를 공유받아 읽기만 한다(Document 를 변형하지 않으므로 이후 Gemini fallback 과 안전하게 공유).
     // 우선순위: JSON-LD(구조적 가격을 정확히 들고 있음) > OpenGraph(가격 표준 태그가 없어 보조).
-    fun extract(page: PageContent): ProductSnapshot? {
-        val document = Jsoup.parse(page.html, page.link.value.toString())
-        return fromJsonLd(document, page) ?: fromOpenGraph(document, page)
-    }
+    fun extract(
+        document: Document,
+        link: ProductLink,
+    ): ProductSnapshot? = fromJsonLd(document, link) ?: fromOpenGraph(document, link)
+
+    // 단독 호출·테스트 편의: HTML 을 직접 파싱해 위임한다. 운영 경로는 오케스트레이터가 Document 를 만들어 공유한다.
+    fun extract(page: PageContent): ProductSnapshot? = extract(Jsoup.parse(page.html, page.link.value.toString()), page.link)
 
     // --- JSON-LD (schema.org/Product) ---
 
     private fun fromJsonLd(
         document: Document,
-        page: PageContent,
+        link: ProductLink,
     ): ProductSnapshot? =
         // type 속성에 charset 파라미터·따옴표·공백 변형이 붙어도 application/ld+json 으로 인식한다(jsoup 이 파싱한 attr 기준).
         document
@@ -40,15 +45,15 @@ class StructuredDataExtractor(
                 root?.let { collectProductNodes(it) } ?: emptyList()
             }
             // 앞 Product 가 검증에 실패해도(요약용 불완전 노드 등) 뒤의 완전한 Product 까지 모두 시도한다.
-            .firstNotNullOfOrNull { product -> toSnapshotFromProduct(product, page) }
+            .firstNotNullOfOrNull { product -> toSnapshotFromProduct(product, link) }
 
     private fun toSnapshotFromProduct(
         product: JsonNode,
-        page: PageContent,
+        link: ProductLink,
     ): ProductSnapshot? {
         val offer = firstOffer(product)
         return toSnapshotOrNull(
-            page = page,
+            link = link,
             name = textOf(product.get("name")),
             imageUrl = imageUrlOf(product),
             price = parsePrice(textOf(priceNode(offer))),
@@ -131,10 +136,10 @@ class StructuredDataExtractor(
 
     private fun fromOpenGraph(
         document: Document,
-        page: PageContent,
+        link: ProductLink,
     ): ProductSnapshot? =
         toSnapshotOrNull(
-            page = page,
+            link = link,
             name = stripSiteSuffix(metaContent(document, "og:title"), metaContent(document, "og:site_name")),
             imageUrl = metaContent(document, "og:image"),
             // OG 표준엔 가격이 없어 product:price:amount(OG product 확장)를 best-effort 로 시도한다.
@@ -166,7 +171,7 @@ class StructuredDataExtractor(
 
     // 필수 필드(name+price)가 모두 있고 정규화·범위검증을 통과해야 성공. 하나라도 미달이면 null(→fallback).
     private fun toSnapshotOrNull(
-        page: PageContent,
+        link: ProductLink,
         name: String?,
         imageUrl: String?,
         price: Int?,
@@ -176,7 +181,7 @@ class StructuredDataExtractor(
         price ?: return null
         // 범위 위반(가격 음수·길이 초과)은 fromExtracted 가 예외를 던지므로 흡수해 null(→fallback)로 다룬다.
         val snapshot =
-            runCatching { ProductSnapshot.fromExtracted(page.link, name, imageUrl, price, currency) }
+            runCatching { ProductSnapshot.fromExtracted(link, name, imageUrl, price, currency) }
                 .getOrNull() ?: return null
         // 정규화 후 name 이 blank→null 이 됐으면 필수 필드 상실로 보고 fallback (price 는 fromExtracted 가 보존).
         snapshot.name ?: return null

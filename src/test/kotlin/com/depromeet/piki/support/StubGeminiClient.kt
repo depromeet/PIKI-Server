@@ -9,6 +9,10 @@ class StubGeminiClient : GeminiClient {
     var invocations = 0
         private set
 
+    // 마지막 호출의 request 를 캡처한다. fallback 시 LLM 으로 보낸 입력(sanitize 결과)을 검증하는 데 쓴다.
+    var lastRequest: Any? = null
+        private set
+
     var build: (Any) -> Any = {
         error("stub.build 를 테스트 본문에서 명시 세팅해야 한다. CLAUDE.md '테스트 셋업 원칙' 참고.")
     }
@@ -19,10 +23,12 @@ class StubGeminiClient : GeminiClient {
         resultType: Class<Res>,
     ): Res {
         invocations++
+        lastRequest = request
         return build(request) as Res
     }
 
     fun reset() {
         invocations = 0
+        lastRequest = null
     }
 }
