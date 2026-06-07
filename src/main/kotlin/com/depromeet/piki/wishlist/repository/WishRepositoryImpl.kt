@@ -12,6 +12,8 @@ class WishRepositoryImpl(
 ) : WishRepository {
     override fun save(wish: Wish): Wish = wishJpaRepository.save(wish)
 
+    override fun hardDeleteAllByUserId(userId: UUID): Int = wishJpaRepository.hardDeleteAllByUserId(userId)
+
     override fun countByIdsAndUserId(
         ids: List<Long>,
         userId: UUID,

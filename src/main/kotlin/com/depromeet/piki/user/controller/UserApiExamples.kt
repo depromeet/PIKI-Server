@@ -2,10 +2,10 @@ package com.depromeet.piki.user.controller
 
 import com.depromeet.piki.common.exception.ErrorCategory
 import com.depromeet.piki.common.openapi.OpenApiObjectMapper
-import com.depromeet.piki.common.storage.ImageStorageException
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.common.storage.ImageStorageException
 import com.depromeet.piki.user.controller.dto.NicknameCheckRequest
 import com.depromeet.piki.user.controller.dto.NicknameCheckResponse
 import com.depromeet.piki.user.controller.dto.UserResponse
@@ -63,6 +63,25 @@ class UserApiExamples(
                         )
                         add(UserException.duplicateNickname(), name = "닉네임 중복")
                         unauthorized()
+                        add(
+                            status = HttpStatus.NOT_FOUND,
+                            name = "유저 없음 (JWT 유효하나 DB에 없음)",
+                            payload =
+                                ApiResponseBody.fail<Unit>(
+                                    category = ErrorCategory.NOT_FOUND,
+                                ),
+                        )
+                    }
+
+                handlerMethod.binds(UserController::withdraw) ->
+                    operation.examples(openApiObjectMapper.delegate) {
+                        add(
+                            status = HttpStatus.OK,
+                            name = "탈퇴 성공",
+                            payload = ApiResponseBody.ok<Unit>(),
+                        )
+                        unauthorized()
+                        add(UserException.guestCannotWithdraw(), name = "게스트 탈퇴 거부")
                         add(
                             status = HttpStatus.NOT_FOUND,
                             name = "유저 없음 (JWT 유효하나 DB에 없음)",

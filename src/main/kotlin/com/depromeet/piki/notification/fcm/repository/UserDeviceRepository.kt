@@ -25,6 +25,9 @@ interface UserDeviceRepository {
     // 토큰 탈취(#244 reconcile) — 다른 사용자가 들고 있던 토큰 row 를 제거한다.
     fun delete(userDevice: UserDevice)
 
+    // 탈퇴 cascade — 그 유저의 모든 기기(FCM 토큰)를 하드삭제한다.
+    fun deleteAllByUserId(userId: UUID)
+
     // DELETE 후 flush — UNIQUE(fcm_token) 충돌을 막기 위해 삭제를 후속 save 전에 DB 로 내린다(Hibernate flush 순서 함정 회피).
     fun flush()
 }

@@ -23,6 +23,8 @@ data class GroupResultResponse(
         val userId: UUID,
         val nickname: String,
         val profileImage: String,
+        // 탈퇴 유저면 true. 닉네임·프로필이 익명값이라 FE 가 이 플래그로 "유저 알수없음" 을 렌더한다.
+        val isWithdrawn: Boolean,
     )
 
     companion object {
@@ -41,6 +43,7 @@ data class GroupResultResponse(
                                 userId = p.userId,
                                 nickname = p.nickname,
                                 profileImage = p.profileImage,
+                                isWithdrawn = p.isWithdrawn,
                             )
                         },
                     )

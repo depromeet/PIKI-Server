@@ -20,6 +20,9 @@ class TournamentItemRepositoryImpl(
     override fun findUserIdsByItemId(itemId: Long): List<UUID> =
         tournamentItemJpaRepository.findUserIdsByItemId(itemId)
 
+    override fun findRoutingByItemId(itemId: Long): List<TournamentItemRoutingView> =
+        tournamentItemJpaRepository.findRoutingByItemId(itemId)
+
     override fun findAllByTournamentId(tournamentId: Long): List<TournamentItem> =
         tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId)
 
