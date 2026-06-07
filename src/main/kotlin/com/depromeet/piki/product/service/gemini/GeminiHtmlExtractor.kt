@@ -1,39 +1,21 @@
 package com.depromeet.piki.product.service.gemini
 
-import com.depromeet.piki.product.domain.ProductLink
-import com.depromeet.piki.product.service.PageFetcher
-import com.depromeet.piki.product.service.ProductLinkExtractor
+import com.depromeet.piki.product.service.PageContent
 import com.depromeet.piki.product.service.ProductSnapshot
-import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
+// fetch 된 HTML 에서 Gemini LLM 으로 상품 정보를 추출한다.
+// fetch 는 오케스트레이터(DefaultProductLinkExtractor)가 1회 수행해 PageContent 로 넘기므로,
+// 구조화 우선 파싱이 실패했을 때의 fallback 으로 재fetch 없이 같은 HTML 을 받아 호출된다.
 @Component
-class GeminiProductLinkExtractor(
-    private val geminiHttpClient: GeminiHttpClient,
-    private val pageFetcher: PageFetcher,
-) : ProductLinkExtractor {
-    private val log = LoggerFactory.getLogger(javaClass)
-
-    override fun extract(link: ProductLink): ProductSnapshot {
-        val fetchStart = System.nanoTime()
-        val page = pageFetcher.fetch(link)
-        val fetchMs = (System.nanoTime() - fetchStart) / 1_000_000
-
+class GeminiHtmlExtractor(
+    private val geminiClient: GeminiClient,
+) {
+    fun extract(page: PageContent): ProductSnapshot {
         val html = sanitize(page.html)
-        val request = GeminiExtractionRequest.forHtmlExtraction(link.value, html)
-
-        val llmStart = System.nanoTime()
-        val result = geminiHttpClient.generateContent(request, GeminiExtractionResult::class.java)
-        val llmMs = (System.nanoTime() - llmStart) / 1_000_000
-
-        log.info(
-            "extract latency: fetch={}ms llm={}ms html={}chars url={}",
-            fetchMs,
-            llmMs,
-            html.length,
-            link.safeLogString(),
-        )
-        return result.toProductSnapshot(link)
+        val request = GeminiExtractionRequest.forHtmlExtraction(page.link.value, html)
+        val result = geminiClient.generateContent(request, GeminiExtractionResult::class.java)
+        return result.toProductSnapshot(page.link)
     }
 
     // LLM 입력에서 <script>/<style>/주석을 제거해 토큰 낭비와 오판(스크립트 안의 가짜 가격 JSON 등)을 줄인다.

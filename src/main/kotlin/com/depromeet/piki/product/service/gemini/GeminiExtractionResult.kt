@@ -1,6 +1,5 @@
 package com.depromeet.piki.product.service.gemini
 
-import com.depromeet.piki.product.domain.CurrencyCode
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.product.service.ProductSnapshotException
@@ -12,39 +11,16 @@ data class GeminiExtractionResult(
     val currency: String? = null,
     val imageUrl: String? = null,
 ) {
+    // LLM 고유의 "상품 페이지인가" 판정만 여기서 하고, 정규화·범위검증은 ProductSnapshot.fromExtracted 에 위임한다.
+    // (구조화 파싱 경로와 같은 검증을 공유하는 single source.)
     fun toProductSnapshot(link: ProductLink): ProductSnapshot {
         if (!isProductPage) throw ProductSnapshotException.notProductPage()
-
-        val normalizedName = name?.takeIf { it.isNotBlank() }
-        // LLM 이 javascript:/data: 같은 스킴을 흘리면 클라이언트가 <img src> 로 쓰는
-        // 순간 XSS 사다리가 되므로 https 만 통과시킨다.
-        val normalizedImageUrl = imageUrl?.takeIf { it.isNotBlank() && it.startsWith("https://", ignoreCase = true) }
-        // LLM 이 형식을 제각각 주므로 ISO 4217 로 정규화하고, 안 맞으면 null (이미지 경로와 공유).
-        val normalizedCurrency = CurrencyCode.normalizeOrNull(currency)
-
-        // 추출 결과가 DB 컬럼 제약·상식을 벗어나면 추출 실패로 본다 (입력 경계의 계약 검증).
-        if ((currentPrice ?: 0) < 0) {
-            throw ProductSnapshotException.untrustworthyValue()
-        }
-        if ((normalizedName?.length ?: 0) > NAME_MAX_LENGTH) {
-            throw ProductSnapshotException.untrustworthyValue()
-        }
-        if ((normalizedImageUrl?.length ?: 0) > IMAGE_URL_MAX_LENGTH) {
-            throw ProductSnapshotException.untrustworthyValue()
-        }
-
-        return ProductSnapshot(
+        return ProductSnapshot.fromExtracted(
             link = link,
-            name = normalizedName,
-            imageUrl = normalizedImageUrl,
+            name = name,
+            imageUrl = imageUrl,
             currentPrice = currentPrice,
-            currency = normalizedCurrency,
+            currency = currency,
         )
-    }
-
-    companion object {
-        // items 테이블 컬럼 길이와 일치시킨다.
-        private const val NAME_MAX_LENGTH = 512
-        private const val IMAGE_URL_MAX_LENGTH = 2048
     }
 }
