@@ -4,6 +4,7 @@ import com.depromeet.piki.auth.infrastructure.oauth.OAuthUserInfo
 import com.depromeet.piki.user.domain.User
 import com.depromeet.piki.user.repository.UserDetailRepository
 import com.depromeet.piki.user.service.UserService
+import org.slf4j.LoggerFactory
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import java.util.UUID
@@ -17,6 +18,8 @@ class SocialAccountService(
     private val userDetailRepository: UserDetailRepository,
     private val socialAccountWriter: SocialAccountWriter,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     fun resolveUser(
         userInfo: OAuthUserInfo,
         currentUserId: UUID?,
@@ -45,8 +48,16 @@ class SocialAccountService(
 
     // 기존 가입자로 로그인할 때마다 email 을 upsert 한다 (#442) — 재방문·동시 충돌 합류 모두 같은 경로를 타게 해
     // "매 로그인 갱신"을 일관되게 보장한다. null 이면 UserDetail.updateEmail 이 기존 값을 보존한다.
+    // email 은 부가 정보라 upsert 실패(락 경합·일시 DB 오류 등)가 로그인 자체를 막아선 안 된다.
+    // updateEmail 은 REQUIRED 새 트랜잭션(호출자 비트랜잭션)이라 실패해도 rollback-only 오염 없이 흡수 가능하다.
+    // 실패는 warn 으로 남기고(email 값은 PII 라 미기록) 기존 user 로그인은 그대로 성공시킨다.
     private fun loginExisting(userInfo: OAuthUserInfo): User? =
-        findExisting(userInfo)?.also { socialAccountWriter.updateEmail(it.id, userInfo.email) }
+        findExisting(userInfo)?.also { user ->
+            runCatching { socialAccountWriter.updateEmail(user.id, userInfo.email) }
+                .onFailure { e ->
+                    log.warn("소셜 로그인 email upsert 실패. userId={}, provider={}", user.id, userInfo.provider, e)
+                }
+        }
 
     // 탈퇴(tombstone) 유저는 없는 것으로 취급해 신규 가입 경로를 타게 한다. 탈퇴 시 user_details 는 하드삭제되므로
     // 보통 여기서 user_detail 자체가 안 잡히지만, 파기 전 잔존이나 경합 상황을 방어해 deletedAt 까지 확인한다 —
