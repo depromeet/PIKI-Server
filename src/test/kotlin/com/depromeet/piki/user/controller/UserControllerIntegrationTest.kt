@@ -60,6 +60,22 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
         )
     }
 
+    private fun insertUserDetail(
+        userId: UUID,
+        provider: String = "GOOGLE",
+        socialId: String = userId.toString(),
+        email: String? = null,
+    ) {
+        jdbcTemplate.update(
+            "INSERT INTO user_details (user_id, provider, social_id, email, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?, NOW(6), NOW(6))",
+            uuidToBytes(userId),
+            provider,
+            socialId,
+            email,
+        )
+    }
+
     private fun token(
         userId: UUID,
         identityType: IdentityType = IdentityType.GUEST,
@@ -87,6 +103,49 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.nickname").value("테스트닉네임"))
             .andExpect(jsonPath("$.data.identityType").value("GUEST"))
             .andExpect(jsonPath("$.data.profileImage").isString)
+            // 게스트는 소셜 계정(user_details)이 없으므로 email 은 null 로 내려온다.
+            .andExpect(jsonPath("$.data.email").value(null))
+    }
+
+    @Test
+    fun `GET users me - 소셜 회원은 수집된 email 을 함께 받는다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId, nickname = "회원닉네임", identityType = IdentityType.MEMBER)
+        insertUserDetail(userId, provider = "GOOGLE", email = "member@gmail.com")
+
+        mockMvc
+            .perform(
+                get("/api/v1/users/me")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.MEMBER)}"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.identityType").value("MEMBER"))
+            // user_details 의 email 이 마이페이지 응답으로 내려오는지 contract 고정.
+            .andExpect(jsonPath("$.data.email").value("member@gmail.com"))
+    }
+
+    @Test
+    fun `GET users me - email 미동의 회원은 email 이 null 로 내려온다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId, identityType = IdentityType.MEMBER)
+        // 소셜 계정은 있지만 email 미수집(애플 Private Relay 거부 등) — user_details.email 이 null.
+        insertUserDetail(userId, provider = "APPLE", email = null)
+
+        mockMvc
+            .perform(
+                get("/api/v1/users/me")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.MEMBER)}"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.email").value(null))
     }
 
     @Test

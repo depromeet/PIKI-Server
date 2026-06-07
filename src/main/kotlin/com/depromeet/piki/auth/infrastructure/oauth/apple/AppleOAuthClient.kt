@@ -146,7 +146,9 @@ class AppleOAuthClient(
         val sub =
             claims.subject
                 ?: throw OAuthException.providerError(IllegalArgumentException("Apple id_token sub missing"))
-        return OAuthUserInfo(provider = OAuthProvider.APPLE, socialId = sub, profileImage = null)
+        // email 클레임은 최초 동의 시에만 들어온다(2회차·미동의는 부재). Private Relay 면 relay 주소. 없으면 null.
+        val email = (claims["email"] as? String)?.ifBlank { null }
+        return OAuthUserInfo(provider = OAuthProvider.APPLE, socialId = sub, profileImage = null, email = email)
     }
 
 

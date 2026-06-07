@@ -53,14 +53,7 @@ class GoogleOAuthClient(
     // Google SDK 는 id_token (JWT) 도 같이 반환하는데, 그 흐름은 JWKS public key 검증 로직이
     // 추가로 필요해 epic #122 (https://github.com/depromeet/PIKI-Server/issues/122) 의
     // Task 6 에서 별도 메서드로 구현한다. 본 PR 은 access_token 흐름까지만.
-    override fun fetchUserInfoByAccessToken(accessToken: String): OAuthUserInfo {
-        val userInfo = fetchGoogleUserInfo(accessToken)
-        return OAuthUserInfo(
-            provider = OAuthProvider.GOOGLE,
-            socialId = userInfo.id,
-            profileImage = userInfo.picture.ifBlank { null },
-        )
-    }
+    override fun fetchUserInfoByAccessToken(accessToken: String): OAuthUserInfo = fetchGoogleUserInfo(accessToken).toOAuthUserInfo()
 
     private fun fetchAccessToken(
         code: String,

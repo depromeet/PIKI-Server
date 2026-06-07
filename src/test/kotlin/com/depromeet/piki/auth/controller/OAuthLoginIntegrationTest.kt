@@ -7,6 +7,7 @@ import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubOAuthClient
 import com.depromeet.piki.user.service.WithdrawalService
 import com.depromeet.piki.wishlist.domain.Wish
+import com.depromeet.piki.user.repository.UserDetailRepository
 import com.depromeet.piki.wishlist.repository.WishRepository
 import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.Test
@@ -51,6 +52,9 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
 
     @Autowired
     private lateinit var wishRepository: WishRepository
+
+    @Autowired
+    private lateinit var userDetailRepository: UserDetailRepository
 
     @Autowired
     private lateinit var withdrawalService: WithdrawalService
@@ -392,5 +396,89 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
             .andExpect(cookie().exists("refresh_token"))
             .andExpect(jsonPath("$.data.accessToken").value(nullValue()))
             .andExpect(jsonPath("$.data.refreshToken").value(nullValue()))
+    }
+
+    @Test
+    fun `구글 신규 로그인 시 user_details 에 email 이 저장된다`() {
+        googleOAuthClient.fetchByAccessTokenStub =
+            { OAuthUserInfo(OAuthProvider.GOOGLE, "google_email", "https://img/p.jpg", email = "user@gmail.com") }
+
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/google")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("X-Client-Type", "app")
+                    .content(loginBody("accessToken" to "t")),
+            ).andExpect(status().isOk)
+
+        val detail = userDetailRepository.findByProviderAndSocialId("GOOGLE", "google_email")
+        assertEquals("user@gmail.com", detail?.email)
+    }
+
+    @Test
+    fun `애플 로그인 시 id_token email 클레임이 없으면 user_details email 은 null 이다`() {
+        appleOAuthClient.fetchByAccessTokenStub =
+            { OAuthUserInfo(OAuthProvider.APPLE, "apple_noemail", null, email = null) }
+
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/apple")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("X-Client-Type", "app")
+                    .content(loginBody("accessToken" to "t")),
+            ).andExpect(status().isOk)
+
+        val detail = userDetailRepository.findByProviderAndSocialId("APPLE", "apple_noemail")
+        assertEquals(null, detail?.email)
+    }
+
+    @Test
+    fun `기존 유저 재로그인 시 email 이 backfill 갱신된다`() {
+        val body = loginBody("accessToken" to "t")
+        // 1차: email 없이 가입
+        googleOAuthClient.fetchByAccessTokenStub =
+            { OAuthUserInfo(OAuthProvider.GOOGLE, "google_backfill", null, email = null) }
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/google")
+                    .contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app").content(body),
+            ).andExpect(status().isOk)
+
+        // 2차: provider 가 email 을 주면 재로그인에서 backfill
+        googleOAuthClient.fetchByAccessTokenStub =
+            { OAuthUserInfo(OAuthProvider.GOOGLE, "google_backfill", null, email = "filled@gmail.com") }
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/google")
+                    .contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app").content(body),
+            ).andExpect(status().isOk)
+
+        val detail = userDetailRepository.findByProviderAndSocialId("GOOGLE", "google_backfill")
+        assertEquals("filled@gmail.com", detail?.email)
+    }
+
+    @Test
+    fun `재로그인 시 email 이 null 로 오면 기존 값을 유지한다`() {
+        val body = loginBody("accessToken" to "t")
+        // 1차: email 있게 가입
+        googleOAuthClient.fetchByAccessTokenStub =
+            { OAuthUserInfo(OAuthProvider.GOOGLE, "google_keep", null, email = "keep@gmail.com") }
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/google")
+                    .contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app").content(body),
+            ).andExpect(status().isOk)
+
+        // 2차: email 미제공(애플 2회차 등) → 기존 값 보존
+        googleOAuthClient.fetchByAccessTokenStub =
+            { OAuthUserInfo(OAuthProvider.GOOGLE, "google_keep", null, email = null) }
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/login/google")
+                    .contentType(MediaType.APPLICATION_JSON).header("X-Client-Type", "app").content(body),
+            ).andExpect(status().isOk)
+
+        val detail = userDetailRepository.findByProviderAndSocialId("GOOGLE", "google_keep")
+        assertEquals("keep@gmail.com", detail?.email)
     }
 }
