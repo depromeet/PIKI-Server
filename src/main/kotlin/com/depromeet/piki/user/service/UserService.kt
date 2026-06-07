@@ -158,8 +158,11 @@ class UserService(
     @Transactional(readOnly = true)
     fun isNicknameAvailable(
         nickname: String,
-        userId: UUID,
-    ): Boolean = !userRepository.existsByNicknameAndIdNot(nickname, userId)
+        userId: UUID?,
+    ): Boolean =
+        userId
+            ?.let { !userRepository.existsByNicknameAndIdNot(nickname, it) }
+            ?: !userRepository.existsByNickname(nickname)
 
     @Transactional
     fun updateNickname(
