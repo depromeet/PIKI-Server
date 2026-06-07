@@ -21,6 +21,70 @@ import java.util.UUID
 
 @Tag(name = "Tournament Item", description = "토너먼트 아이템 API")
 interface TournamentItemApi {
+
+    @Operation(
+        summary = "토너먼트 아이템 단건 조회",
+        description = """
+            토너먼트 아이템의 상세 정보와 파싱 상태를 조회한다.
+            링크·이미지로 아이템을 추가하면 비동기 파싱이 진행되므로,
+            클라이언트가 status 필드를 폴링해 PROCESSING → READY/FAILED 전환을 감지할 수 있다.
+            - PROCESSING: 파싱 진행 중 (name·price·imageUrl 은 null)
+            - READY: 파싱 완료 (모든 필드 채워짐)
+            - FAILED: 파싱 실패 (상품 페이지 아님 또는 추출 불가)
+            sourceUrl: 등록 시 입력한 원본 링크. 이미지로 등록한 경우 null.
+            토너먼트 참여자만 조회할 수 있다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "아이템 조회 성공",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "권한 없음 (토너먼트 참여자가 아님)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "토너먼트를 찾을 수 없음 · 토너먼트 아이템을 찾을 수 없음 · 아이템이 해당 토너먼트에 속하지 않음",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun getTournamentItem(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
+        @Parameter(description = "토너먼트 아이템 ID", example = "10") tournamentItemId: Long,
+    ): ApiResponseBody<TournamentItemDetailResponse>
+
     @Operation(
         summary = "위시에서 토너먼트 아이템 추가",
         description = """
@@ -412,67 +476,4 @@ interface TournamentItemApi {
         @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
         @Parameter(description = "토너먼트 아이템 ID", example = "10") tournamentItemId: Long,
     ): ApiResponseBody<Unit>
-
-    @Operation(
-        summary = "토너먼트 아이템 단건 조회",
-        description = """
-            토너먼트 아이템의 상세 정보와 파싱 상태를 조회한다.
-            링크·이미지로 아이템을 추가하면 비동기 파싱이 진행되므로,
-            클라이언트가 status 필드를 폴링해 PROCESSING → READY/FAILED 전환을 감지할 수 있다.
-            - PROCESSING: 파싱 진행 중 (name·price·imageUrl 은 null)
-            - READY: 파싱 완료 (모든 필드 채워짐)
-            - FAILED: 파싱 실패 (상품 페이지 아님 또는 추출 불가)
-            sourceUrl: 등록 시 입력한 원본 링크. 이미지로 등록한 경우 null.
-            토너먼트 참여자만 조회할 수 있다.
-        """,
-    )
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "아이템 조회 성공",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "401",
-                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "403",
-                description = "권한 없음 (토너먼트 참여자가 아님)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "404",
-                description = "토너먼트를 찾을 수 없음 · 토너먼트 아이템을 찾을 수 없음 · 아이템이 해당 토너먼트에 속하지 않음",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun getTournamentItem(
-        @Parameter(hidden = true) userId: UUID,
-        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
-        @Parameter(description = "토너먼트 아이템 ID", example = "10") tournamentItemId: Long,
-    ): ApiResponseBody<TournamentItemDetailResponse>
 }
