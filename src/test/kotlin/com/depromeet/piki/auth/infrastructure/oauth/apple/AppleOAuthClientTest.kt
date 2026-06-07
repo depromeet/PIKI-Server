@@ -45,6 +45,44 @@ class AppleOAuthClientTest {
     )
 
     @Nested
+    inner class BuildAuthUrl {
+        @Test
+        fun `response_mode 는 query 이고 scope 는 요청하지 않는다 - Kakao Google 과 동일한 GET 쿼리 콜백`() {
+            val client = AppleOAuthClient(props())
+
+            val url = client.buildAuthUrl(state = "STATE_TOKEN", redirectUri = null)
+
+            // Apple 은 scope 에 email/name 이 있으면 response_mode 를 form_post 로 강제 → POST 콜백.
+            // scope 를 빼서 query 콜백(GET code·state)으로 통일한다.
+            assertTrue("response_mode=query" in url, "response_mode 는 query 여야 한다: $url")
+            assertFalse("form_post" in url, "form_post 가 남아 있으면 안 된다: $url")
+            assertFalse("scope=" in url, "scope 를 요청하면 Apple 이 form_post 를 강제한다: $url")
+        }
+
+        @Test
+        fun `필수 인가 파라미터와 state redirectUri 를 포함한다`() {
+            val client = AppleOAuthClient(props(clientId = "com.test.service"))
+
+            val url = client.buildAuthUrl(state = "STATE_TOKEN", redirectUri = "https://piki.day/auth/callback/apple")
+
+            assertTrue("response_type=code" in url, "response_type=code 가 있어야 한다: $url")
+            assertTrue("client_id=com.test.service" in url, "client_id 가 있어야 한다: $url")
+            assertTrue("state=STATE_TOKEN" in url, "state 가 있어야 한다: $url")
+            // 인자 redirectUri 가 props 기본값보다 우선한다 (URL 인코딩된 형태로 포함)
+            assertTrue("piki.day" in url, "인자로 받은 redirectUri 가 반영돼야 한다: $url")
+        }
+
+        @Test
+        fun `redirectUri 가 null 이면 props 기본값을 쓴다`() {
+            val client = AppleOAuthClient(props(redirectUri = "https://example.com/callback"))
+
+            val url = client.buildAuthUrl(state = "STATE_TOKEN", redirectUri = null)
+
+            assertTrue("example.com" in url, "redirectUri 가 null 이면 props.redirectUri 를 써야 한다: $url")
+        }
+    }
+
+    @Nested
     inner class PropertiesToString {
         @Test
         fun `toString 은 privateKey 를 마스킹한다 - 부팅 로그·BindException 으로 누출 방지`() {

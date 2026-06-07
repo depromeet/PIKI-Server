@@ -45,8 +45,11 @@ class AppleOAuthClient(
             .queryParam(OAuthParams.CLIENT_ID, props.clientId)
             .queryParam(OAuthParams.REDIRECT_URI, redirectUri ?: props.redirectUri)
             .queryParam(OAuthParams.RESPONSE_TYPE, OAuthParams.RESPONSE_TYPE_CODE)
-            .queryParam("response_mode", "form_post")
-            .queryParam(OAuthParams.SCOPE, "email name")
+            // Apple 은 scope 에 email/name 이 있으면 response_mode 를 form_post 로 강제해 콜백이 POST 로 온다.
+            // 우리는 email/name 을 수집·저장하지 않고 id_token 의 sub(socialId)만 쓰므로 scope 를 요청하지 않는다.
+            // 그 결과 response_mode=query 가 허용되어 Kakao·Google 과 동일하게 GET 쿼리(code·state)로 콜백받는다.
+            // (scope 에 email/name 을 다시 넣으면 Apple 이 form_post 를 강제하므로 함께 되돌리면 안 된다.)
+            .queryParam("response_mode", "query")
             .queryParam(OAuthParams.STATE, state)
             .build()
             .encode()
