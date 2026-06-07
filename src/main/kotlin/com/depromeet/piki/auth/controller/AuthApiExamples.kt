@@ -41,7 +41,7 @@ class AuthApiExamples(
                                                 id = UUID.fromString("8f1a3c2b-9d44-4e2a-9b12-1a2b3c4d5e6f"),
                                                 nickname = "뛰어다니는 강아지",
                                                 profileImage =
-                                                    "https://piki-assets.s3.ap-northeast-2.amazonaws.com/user-profile-1.png",
+                                                    "https://piki-assets.s3.ap-northeast-2.amazonaws.com/defaults/user-profile-1.png",
                                                 identityType = IdentityType.GUEST,
                                             ),
                                         tokenPair =
@@ -99,7 +99,7 @@ class AuthApiExamples(
                                                 id = UUID.fromString("3b9c1d2e-4f5a-4b6c-8d7e-9f0a1b2c3d4e"),
                                                 nickname = "홍길동",
                                                 profileImage =
-                                                    "https://piki-assets.s3.ap-northeast-2.amazonaws.com/user-profile-2.png",
+                                                    "https://piki-assets.s3.ap-northeast-2.amazonaws.com/defaults/user-profile-2.png",
                                                 identityType = IdentityType.MEMBER,
                                             ),
                                         tokenPair =
@@ -138,7 +138,7 @@ class AuthApiExamples(
                                                 id = UUID.fromString("3b9c1d2e-4f5a-4b6c-8d7e-9f0a1b2c3d4e"),
                                                 nickname = "홍길동",
                                                 profileImage =
-                                                    "https://piki-assets.s3.ap-northeast-2.amazonaws.com/user-profile-2.png",
+                                                    "https://piki-assets.s3.ap-northeast-2.amazonaws.com/defaults/user-profile-2.png",
                                                 identityType = IdentityType.MEMBER,
                                             ),
                                         tokenPair =

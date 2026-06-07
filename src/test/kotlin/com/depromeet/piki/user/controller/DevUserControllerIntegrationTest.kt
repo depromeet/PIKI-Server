@@ -126,7 +126,7 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
                 "VALUES (?, ?, ?, ?, NOW(6), NOW(6), NULL)",
             uuidToBytes(userId),
             nickname,
-            "https://test-bucket.s3.ap-northeast-2.amazonaws.com/user-profile-1.png",
+            "https://test-bucket.s3.ap-northeast-2.amazonaws.com/defaults/user-profile-1.png",
             identityType.name,
         )
     }

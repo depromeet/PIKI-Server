@@ -46,7 +46,7 @@ class DefaultProfileImageIntegrationTest : IntegrationTestSupport() {
 
     // @Value 는 생성 후 주입되므로 lazy 로 접근 시점에 조립한다(인라인 초기화는 lateinit 미초기화로 깨진다).
     private val defaultAvatarUrls: Set<String> by lazy {
-        (1..DefaultProfileImages.COUNT).map { "$publicBaseUrl/user-profile-$it.png" }.toSet()
+        (1..DefaultProfileImages.COUNT).map { "$publicBaseUrl/defaults/user-profile-$it.png" }.toSet()
     }
 
     private fun mockMvc(): MockMvc =
