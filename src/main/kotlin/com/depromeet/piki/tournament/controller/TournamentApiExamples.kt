@@ -9,8 +9,8 @@ import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.GroupResultResponse
 import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestRequest
-import com.depromeet.piki.tournament.controller.dto.UpdateInviteDurationRequest
 import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestResponse
+import com.depromeet.piki.tournament.controller.dto.UpdateInviteDurationRequest
 import com.depromeet.piki.tournament.controller.dto.PlayLinkInfoResponse
 import com.depromeet.piki.tournament.controller.dto.RankedItemResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentDetailResponse

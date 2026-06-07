@@ -72,6 +72,7 @@ class Tournament(
     }
 
     fun updateInviteExpiry(newExpiresAt: LocalDateTime) {
+        check(isPending()) { "updateInviteExpiry는 PENDING 상태에서만 호출 가능" }
         _inviteExpiresAt = newExpiresAt
     }
 
