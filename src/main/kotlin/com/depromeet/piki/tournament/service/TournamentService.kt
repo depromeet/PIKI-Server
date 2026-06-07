@@ -107,6 +107,7 @@ class TournamentService(
             tournamentRepository.findTournamentById(command.tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
+        tournament.sourceTournamentId?.let { throw TournamentException.clonedTournamentCannotAddItems() }
         tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
         val existingItemIds =
@@ -471,10 +472,10 @@ class TournamentService(
                 ?: throw TournamentException.forbiddenTournament()
         if (tournamentUser.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
         if (tournament.isInProgress()) throw TournamentException.inProgressTournamentCannotBeDeleted()
-        tournamentRepository.softDeleteHistoriesByTournamentId(tournamentId)
-        tournamentItemRepository.softDeleteAllByTournamentId(tournamentId)
-        tournamentUserRepository.softDeleteAllByTournamentId(tournamentId)
-        tournament.softDelete()
+        // 주최자의 TournamentUser 만 soft-delete 한다.
+        // 토너먼트·아이템·히스토리는 유지되어 다른 참여자들이 계속 접근할 수 있고,
+        // 그룹 결과에서도 주최자 내역이 보존된다.
+        tournamentUserRepository.softDeleteByTournamentIdAndUserId(tournamentId, userId)
     }
 
     @Transactional
@@ -630,6 +631,7 @@ class TournamentService(
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isCompleted()) throw TournamentException.groupResultNotAvailable()
+        tournament.sourceTournamentId?.let { throw TournamentException.clonedTournamentCannotViewGroupResult() }
         tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
 
@@ -649,9 +651,9 @@ class TournamentService(
             val ownerTuIds = allRelated
                 .map { it.ownerTournamentUserId }
                 .toSet()
+            // findByIds 는 deletedAt 필터 없음 — 주최자가 토너먼트를 삭제(TU soft-delete)해도 그룹 결과에 반영된다.
             tournamentUserRepository
-                .findByTournamentIds(allRelated.map { it.getId() })
-                .filter { it.getId() in ownerTuIds }
+                .findByIds(ownerTuIds)
                 .associate { it.tournamentId to it.userId }
         }
         val userById = userRepository
@@ -719,7 +721,6 @@ class TournamentService(
         }
 
         val items = referenceItemsById.values
-            .sortedBy { it.rank }
             .map { ref ->
                 val key = RankKey(ref.itemId, ref.rank)
                 GroupResultItem(
@@ -732,6 +733,7 @@ class TournamentService(
                     chosenBy = chosenByMap[key] ?: emptyList(),
                 )
             }
+            .sortedByDescending { it.chosenBy.size }
         return GroupResult(items = items)
     }
 

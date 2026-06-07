@@ -241,7 +241,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "403",
-                description = "권한 없음 (토너먼트 참여자가 아님)",
+                description = "권한 없음 (토너먼트 참여자가 아님 · 플레이링크로 참여한 복제 토너먼트는 그룹 결과 조회 불가)",
                 content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
             ApiResponse(
@@ -435,7 +435,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료 · 이미 참여 중 · 참여 인원 초과(최대 9명))",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료 · 이미 참여 중 · 참여 인원 초과(최대 8명))",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -499,7 +499,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료 · 닉네임 중복 · 참여 인원 초과(최대 9명))",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 초대 링크 만료 · 닉네임 중복 · 참여 인원 초과(최대 8명))",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -600,7 +600,7 @@ interface TournamentApi {
             완료된 토너먼트의 플레이 링크를 생성한다. 토너먼트 소유자만 호출 가능.
             플레이 링크를 통해 친구들이 동일한 아이템 구성으로 토너먼트를 진행할 수 있다.
             만료 기간은 생성 시점 + 14일로 고정이며 변경 불가.
-            이미 링크가 있으면 만료 시간이 갱신된다.
+            이미 링크가 생성된 경우 409.
         """,
     )
     @ApiResponses(
@@ -719,7 +719,7 @@ interface TournamentApi {
 
     @Operation(
         summary = "토너먼트 삭제",
-        description = "PENDING 또는 COMPLETED 상태의 토너먼트를 삭제한다. 토너먼트 소유자만 삭제할 수 있으며, IN_PROGRESS 상태에서는 삭제할 수 없다.",
+        description = "토너먼트를 소유자 목록에서 제거한다. 소유자만 호출 가능하며, IN_PROGRESS 상태에서는 불가. 토너먼트 데이터(아이템·히스토리)는 유지되어 다른 참여자들은 계속 접근할 수 있다.",
     )
     @ApiResponses(
         value = [

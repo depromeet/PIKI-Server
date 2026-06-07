@@ -51,6 +51,7 @@ class TournamentItemApiExamples(
                         add(TournamentException.tooManyTournamentItems(), name = "아이템 최대 32개 초과")
                         unauthorized()
                         add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")
+                        add(TournamentException.clonedTournamentCannotAddItems(), name = "플레이링크 복제 토너먼트에는 아이템 추가 불가")
                         add(TournamentException.itemNotInWishlist(), name = "위시리스트에 없는 아이템 포함")
                         add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
                         add(TournamentException.notFoundItems(), name = "존재하지 않는 아이템 포함")
@@ -71,6 +72,7 @@ class TournamentItemApiExamples(
                         add(TournamentException.tooManyTournamentItems(), name = "아이템 최대 32개 초과")
                         unauthorized()
                         add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")
+                        add(TournamentException.clonedTournamentCannotAddItems(), name = "플레이링크 복제 토너먼트에는 아이템 추가 불가")
                         add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
                         add(TournamentException.notPendingTournament(), name = "PENDING 상태 아님")
                     }
@@ -91,6 +93,7 @@ class TournamentItemApiExamples(
                         add(TournamentException.tooManyTournamentItems(), name = "아이템 최대 32개 초과")
                         unauthorized()
                         add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")
+                        add(TournamentException.clonedTournamentCannotAddItems(), name = "플레이링크 복제 토너먼트에는 아이템 추가 불가")
                         add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
                         add(TournamentException.notPendingTournament(), name = "PENDING 상태 아님")
                     }

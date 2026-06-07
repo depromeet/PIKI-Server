@@ -88,7 +88,8 @@ interface TournamentItemApi {
     @Operation(
         summary = "위시에서 토너먼트 아이템 추가",
         description = """
-            PENDING 상태의 토너먼트에 위시리스트에 있는 아이템을 추가한다. 토너먼트 소유자만 호출 가능.
+            PENDING 상태의 토너먼트에 위시리스트에 있는 아이템을 추가한다. 토너먼트 참여자(회원)만 호출 가능.
+            플레이 링크로 생성된 복제 토너먼트에는 추가 불가.
             itemIds 중 하나라도 조건에 맞지 않으면 요청 전체가 실패한다(부분 성공 없음).
             응답의 tournamentItemIds 는 요청 itemIds 와 동일한 순서로 대응된다.
         """,
@@ -127,7 +128,7 @@ interface TournamentItemApi {
             ),
             ApiResponse(
                 responseCode = "403",
-                description = "권한 없음 (토너먼트 소유자가 아님 · 위시리스트에 없는 아이템 포함)",
+                description = "권한 없음 (토너먼트 참여자가 아님 · 위시리스트에 없는 아이템 포함 · 플레이 링크로 생성된 복제 토너먼트)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -167,9 +168,10 @@ interface TournamentItemApi {
         summary = "URL 링크로 토너먼트 아이템 추가",
         description = """
             PENDING 상태의 토너먼트에 URL 링크를 통해 아이템을 추가한다.
+            플레이 링크로 생성된 복제 토너먼트에는 추가 불가. 토너먼트 참여자만 추가할 수 있다.
             아이템이 PROCESSING 상태로 즉시 생성되어 tournamentItemId 가 반환된다.
             파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다.
-            클라이언트는 tournamentItemId 로 GET /tournaments/{id}/items/{tournamentItemId} 를 폴링한다. 토너먼트 참여자만 추가할 수 있다.
+            클라이언트는 tournamentItemId 로 GET /tournaments/{id}/items/{tournamentItemId} 를 폴링한다.
         """,
     )
     @ApiResponses(
@@ -206,7 +208,7 @@ interface TournamentItemApi {
             ),
             ApiResponse(
                 responseCode = "403",
-                description = "권한 없음 (토너먼트 참여자가 아님)",
+                description = "권한 없음 (토너먼트 참여자가 아님 · 플레이 링크로 생성된 복제 토너먼트)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -246,9 +248,10 @@ interface TournamentItemApi {
         summary = "이미지로 토너먼트 아이템 추가",
         description = """
             PENDING 상태의 토너먼트에 이미지 추출을 통해 아이템을 추가한다.
+            플레이 링크로 생성된 복제 토너먼트에는 추가 불가. 토너먼트 참여자만 추가할 수 있다.
             이미지 1~5장을 전달하면 아이템이 PROCESSING 상태로 즉시 생성되어 tournamentItemIds 가 반환된다.
             이미지 파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다.
-            클라이언트는 tournamentItemId 로 GET /tournaments/{id}/items/{tournamentItemId} 를 폴링한다. 토너먼트 참여자만 추가할 수 있다.
+            클라이언트는 tournamentItemId 로 GET /tournaments/{id}/items/{tournamentItemId} 를 폴링한다.
         """,
     )
     @ApiResponses(
@@ -285,7 +288,7 @@ interface TournamentItemApi {
             ),
             ApiResponse(
                 responseCode = "403",
-                description = "권한 없음 (토너먼트 참여자가 아님)",
+                description = "권한 없음 (토너먼트 참여자가 아님 · 플레이 링크로 생성된 복제 토너먼트)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

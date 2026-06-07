@@ -32,6 +32,9 @@ class TournamentUserRepositoryImpl(
             tournamentUserJpaRepository.findByTournamentIdInAndNotDeleted(tournamentIds)
         }
 
+    override fun findByIds(ids: Collection<Long>): List<TournamentUser> =
+        if (ids.isEmpty()) emptyList() else tournamentUserJpaRepository.findByIdIn(ids)
+
     override fun softDeleteAllByTournamentId(tournamentId: Long) {
         tournamentUserJpaRepository.softDeleteAllByTournamentId(tournamentId, LocalDateTime.now())
     }
