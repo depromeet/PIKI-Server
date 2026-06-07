@@ -15,10 +15,9 @@ import java.util.UUID
 class UserService(
     private val userRepository: UserRepository,
     private val userDetailRepository: UserDetailRepository,
+    private val defaultProfileImages: DefaultProfileImages,
 ) {
     companion object {
-        private const val DICEBEAR_BASE_URL = "https://api.dicebear.com/9.x/bottts/svg?seed="
-
         // 형용사 32 × 동물 32 = 1024 조합. 모든 조합이 닉네임 10자 제한 이하가 되도록
         // 형용사는 5자 이하, 동물은 3자 이하로 유지한다(최대 5+1+3=9자).
         private val NICKNAME_PREFIXES =
@@ -100,7 +99,7 @@ class UserService(
     fun createGuest(): User {
         val id = UUID.randomUUID()
         val nickname = generateUniqueGuestNickname()
-        val profileImage = dicebearUrl(id)
+        val profileImage = defaultProfileImages.random()
         return userRepository.save(
             User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.GUEST),
         )
@@ -109,7 +108,7 @@ class UserService(
     @Transactional
     fun createGuestWithNickname(nickname: String): User {
         val id = UUID.randomUUID()
-        val profileImage = dicebearUrl(id)
+        val profileImage = defaultProfileImages.random()
         return try {
             userRepository.save(
                 User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.GUEST),
@@ -123,7 +122,7 @@ class UserService(
     fun createMember(nickname: String): User {
         if (userRepository.existsByNickname(nickname)) throw UserException.duplicateNickname()
         val id = UUID.randomUUID()
-        val profileImage = dicebearUrl(id)
+        val profileImage = defaultProfileImages.random()
         return try {
             userRepository.save(
                 User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.MEMBER),
@@ -134,7 +133,7 @@ class UserService(
     }
 
     // 소셜 신규 가입용 MEMBER 생성. 닉네임은 게스트와 동일하게 자동 생성(fill)하고 사용자가 나중에 수정한다.
-    // 프로필 이미지는 provider 가 준 게 있으면 쓰고, 없으면(동의 거부 등) dicebear 기본 아바타.
+    // 프로필 이미지는 provider 가 준 게 있으면 쓰고, 없으면(동의 거부 등) 기본 아바타 4종 중 랜덤.
     @Transactional
     fun createSocialUser(profileImage: String?): User {
         val id = UUID.randomUUID()
@@ -144,7 +143,7 @@ class UserService(
                 User(
                     id = id,
                     nickname = nickname,
-                    profileImage = profileImage ?: dicebearUrl(id),
+                    profileImage = profileImage ?: defaultProfileImages.random(),
                     identityType = IdentityType.MEMBER,
                 ),
             )
@@ -224,8 +223,6 @@ class UserService(
         user.softDelete()
         userRepository.save(user)
     }
-
-    private fun dicebearUrl(userId: UUID): String = "$DICEBEAR_BASE_URL$userId"
 
     private fun generateUniqueGuestNickname(): String {
         val taken = userRepository.findNicknamesIn(NICKNAME_POOL).toSet()

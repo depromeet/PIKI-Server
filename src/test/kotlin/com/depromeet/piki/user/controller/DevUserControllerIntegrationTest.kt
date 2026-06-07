@@ -126,7 +126,7 @@ class DevUserControllerIntegrationTest : IntegrationTestSupport() {
                 "VALUES (?, ?, ?, ?, NOW(6), NOW(6), NULL)",
             uuidToBytes(userId),
             nickname,
-            "https://api.dicebear.com/9.x/bottts/svg?seed=$userId",
+            "https://test-bucket.s3.ap-northeast-2.amazonaws.com/user-profile-1.png",
             identityType.name,
         )
     }
