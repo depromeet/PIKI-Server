@@ -255,7 +255,7 @@ interface UserApi {
         ],
     )
     fun checkNickname(
-        @Parameter(hidden = true) userId: UUID,
+        @Parameter(hidden = true) userId: UUID?,
         request: NicknameCheckRequest,
     ): ApiResponseBody<NicknameCheckResponse>
 }
