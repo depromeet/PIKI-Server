@@ -81,7 +81,7 @@ class AuthorizationBoundaryIntegrationTest : IntegrationTestSupport() {
                 arguments(HttpMethod.GET, "/api/v1/tournaments/1"),
                 arguments(HttpMethod.GET, "/api/v1/users/me"),
                 arguments(HttpMethod.PATCH, "/api/v1/users/me"),
-                arguments(HttpMethod.GET, "/api/v1/users/nickname/check"),
+                // nickname/check 는 비회원 게스트 참여 화면에서 JWT 없이 호출하므로 permitAll — 이 목록에서 제외
             )
     }
 }

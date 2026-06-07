@@ -6,6 +6,7 @@ import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.GroupResultResponse
 import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestRequest
 import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestResponse
+import com.depromeet.piki.tournament.controller.dto.UpdateInviteDurationRequest
 import com.depromeet.piki.tournament.controller.dto.JoinTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.PlayLinkInfoResponse
 import com.depromeet.piki.tournament.controller.dto.RecordMatchRequest
@@ -329,15 +330,17 @@ interface TournamentApi {
             닉네임을 입력해 게스트 계정을 생성하고 토너먼트에 참여한다. 인증 불필요.
             - 링크 직접 접근: inviteCode 생략 가능. 만료 여부만 확인.
             - 코드 입력 경로: inviteCode 전달 시 코드 일치 여부도 검증.
-            성공 시 JWT 토큰 쌍(accessToken·refreshToken)과 생성된 사용자 정보가 반환된다.
-            이후 요청에서는 발급받은 accessToken 을 사용한다.
+            성공 시 JWT 토큰 쌍과 생성된 사용자 정보가 반환된다.
+            토큰 전달 방식은 클라이언트 타입에 따라 다르다 (X-Client-Type 헤더):
+            - WEB(기본·미설정): accessToken·refreshToken 은 HttpOnly 쿠키로 전달, body 값은 null.
+            - APP(app 명시): accessToken·refreshToken 을 body 로 전달, 쿠키 없음.
         """,
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "201",
-                description = "게스트 계정 생성 및 참여 성공 (accessToken·refreshToken·userId·nickname·profileImage 포함)",
+                description = "게스트 계정 생성 및 참여 성공 (WEB=쿠키 전달·body null / APP=body 전달)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -526,6 +529,50 @@ interface TournamentApi {
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
     ): ApiResponseBody<Unit>
+
+    @Operation(
+        summary = "친구 초대 마감 시각 수정",
+        description = "PENDING 상태 토너먼트의 초대 마감 시각을 지금으로부터 N분 후로 재설정한다. 주최자만 가능. 최소 1분, 최대 1440분(24시간).",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "수정 성공 (새 inviteExpiresAt 반환)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "400",
+                description = "잘못된 요청 (inviteDurationMinutes 1 미만 또는 1440 초과)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "권한 없음 (토너먼트 참여자가 아님 · 소유자가 아님)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "토너먼트를 찾을 수 없음",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트)",
+                content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
+            ),
+        ],
+    )
+    fun updateInviteExpiry(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "토너먼트 ID", example = "1") tournamentId: Long,
+        request: UpdateInviteDurationRequest,
+    ): ApiResponseBody<LocalDateTime>
 
     @Operation(
         summary = "링크 접근 경로 — 토너먼트 참여 전 미리보기",

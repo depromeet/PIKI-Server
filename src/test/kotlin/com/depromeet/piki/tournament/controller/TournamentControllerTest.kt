@@ -42,6 +42,8 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.hamcrest.Matchers.nullValue
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
@@ -130,7 +132,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .andReturn()
 
         val expiresAtStr = objectMapper.readTree(result.response.contentAsString)["data"]["inviteExpiresAt"].asText()
-        val expiresAt = LocalDateTime.parse(expiresAtStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        val expiresAt = java.time.OffsetDateTime.parse(expiresAtStr, DateTimeFormatter.ISO_OFFSET_DATE_TIME).toLocalDateTime()
         val expectedMin = before.plusMinutes(60)
         val expectedMax = LocalDateTime.now().plusMinutes(60)
         assertTrue(expiresAt >= expectedMin && expiresAt <= expectedMax)
@@ -207,8 +209,12 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"inviteCode":"$inviteCode","nickname":"새친구"}"""),
             ).andExpect(status().isCreated)
-            .andExpect(jsonPath("$.data.accessToken").isString)
-            .andExpect(jsonPath("$.data.refreshToken").isString)
+            .andExpect(cookie().exists("access_token"))
+            .andExpect(cookie().httpOnly("access_token", true))
+            .andExpect(cookie().exists("refresh_token"))
+            .andExpect(cookie().httpOnly("refresh_token", true))
+            .andExpect(jsonPath("$.data.accessToken").value(nullValue()))
+            .andExpect(jsonPath("$.data.refreshToken").value(nullValue()))
             .andExpect(jsonPath("$.data.userId").isString)
             .andExpect(jsonPath("$.data.nickname").value("새친구"))
             .andExpect(jsonPath("$.data.tournamentId").value(tournamentId))
@@ -1748,6 +1754,91 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 get("/api/v1/tournaments/$tournamentId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isNotFound)
+    }
+
+    // ── 초대 기한 수정 ──────────────────────────────────────────────────
+
+    @Test
+    fun `PATCH tournaments-id-invite 는 주최자가 200 과 함께 새 inviteExpiresAt 을 반환하고 DB 에도 반영된다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val before = LocalDateTime.now()
+
+        val result = mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/invite")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteDurationMinutes":60}"""),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data").isString)
+            .andReturn()
+
+        val expiresAtStr = objectMapper.readTree(result.response.contentAsString)["data"].asText()
+        val expiresAt = java.time.OffsetDateTime.parse(expiresAtStr, DateTimeFormatter.ISO_OFFSET_DATE_TIME).toLocalDateTime()
+        val expectedMin = before.plusMinutes(60)
+        val expectedMax = LocalDateTime.now().plusMinutes(60)
+        assertTrue(expiresAt >= expectedMin && expiresAt <= expectedMax)
+
+        // 응답뿐 아니라 엔티티에 실제로 반영됐는지 확인 — backing field dirty-check가 깨져도 응답은 통과하므로
+        val saved = tournamentJpaRepository.findByIdAndDeletedAtIsNull(tournamentId)!!
+        assertTrue(saved.inviteExpiresAt >= expectedMin && saved.inviteExpiresAt <= expectedMax)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-invite 에서 inviteDurationMinutes 가 0 이면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/invite")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteDurationMinutes":0}"""),
+            ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-invite 에서 참여자이지만 주최자가 아니면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        tournamentUserJpaRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/invite")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteDurationMinutes":60}"""),
+            ).andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-invite 에서 존재하지 않는 토너먼트이면 404 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/999999/invite")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteDurationMinutes":60}"""),
+            ).andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-invite 에서 PENDING 이 아닌 토너먼트이면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId) = startTournamentWith2Items(mockMvc)
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/invite")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteDurationMinutes":60}"""),
+            ).andExpect(status().isConflict)
     }
 
     // ── 초대 미리보기 ──────────────────────────────────────────────────

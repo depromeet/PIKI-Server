@@ -74,7 +74,7 @@ class UserController(
 
     @GetMapping("/nickname/check")
     override fun checkNickname(
-        @AuthenticationPrincipal userId: UUID,
+        @AuthenticationPrincipal userId: UUID?,
         @Valid request: NicknameCheckRequest,
     ): ApiResponseBody<NicknameCheckResponse> =
         ApiResponseBody.ok(
