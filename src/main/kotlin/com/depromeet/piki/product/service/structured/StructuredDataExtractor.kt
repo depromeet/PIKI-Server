@@ -100,12 +100,17 @@ class StructuredDataExtractor(
 
     private fun imageUrlOf(product: JsonNode): String? {
         val image = product.get("image") ?: return null
-        return when {
-            image.isArray -> textOf(image.takeIf { it.size() > 0 }?.get(0))
-            image.isObject -> textOf(image.get("url"))
-            else -> textOf(image)
-        }
+        return firstImageUrl(image)
     }
+
+    // image 는 문자열 URL · ImageObject(url·contentUrl) · 그 배열 중 하나다. 첫 유효 URL 을 뽑는다.
+    // schema.org ImageObject 는 url 또는 contentUrl 로 실제 주소를 담으므로(29cm 는 contentUrl) 둘 다 본다.
+    private fun firstImageUrl(node: JsonNode): String? =
+        when {
+            node.isArray -> (0 until node.size()).firstNotNullOfOrNull { firstImageUrl(node.get(it)) }
+            node.isObject -> textOf(node.get("url")) ?: textOf(node.get("contentUrl"))
+            else -> textOf(node)
+        }
 
     // --- OpenGraph (JSON-LD 가 실패했을 때의 보조 경로) ---
 
@@ -115,7 +120,7 @@ class StructuredDataExtractor(
     ): ProductSnapshot? =
         toSnapshotOrNull(
             page = page,
-            name = metaContent(document, "og:title"),
+            name = stripSiteSuffix(metaContent(document, "og:title"), metaContent(document, "og:site_name")),
             imageUrl = metaContent(document, "og:image"),
             // OG 표준엔 가격이 없어 product:price:amount(OG product 확장)를 best-effort 로 시도한다.
             price = parsePrice(metaContent(document, "product:price:amount")),
@@ -126,6 +131,21 @@ class StructuredDataExtractor(
         document: Document,
         property: String,
     ): String? = document.selectFirst("meta[property=$property]")?.attr("content")?.ifBlank { null }
+
+    // og:title 끝의 사이트명 꼬리표(" | 무신사" 등)를 제거한다. og:title 은 페이지 제목이라 사이트명이 붙기 쉬운데,
+    // 그게 상품명으로 새지 않도록 og:site_name 과 일치하는 접미만 떼어낸다(없거나 안 맞으면 원본 유지 — host 무관 일반 규칙).
+    private fun stripSiteSuffix(
+        title: String?,
+        siteName: String?,
+    ): String? {
+        title ?: return null
+        val site = siteName?.trim()?.ifBlank { null } ?: return title
+        for (separator in listOf(" | ", " - ")) {
+            val suffix = "$separator$site"
+            if (title.endsWith(suffix)) return title.removeSuffix(suffix).trim()
+        }
+        return title
+    }
 
     // --- 공통 ---
 

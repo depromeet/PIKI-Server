@@ -223,6 +223,48 @@ class StructuredDataExtractorTest {
         assertNull(snapshot?.imageUrl)
     }
 
+    @Test
+    fun `image 가 ImageObject 면 contentUrl 을 imageUrl 로 뽑는다`() {
+        val snapshot =
+            extractor.extract(
+                pageOf(
+                    jsonLd(
+                        """{"@type":"Product","name":"이미지객체","image":{"@type":"ImageObject","contentUrl":"https://cdn.example.com/c.jpg"},"offers":{"price":"5000"}}""",
+                    ),
+                ),
+            )
+
+        assertEquals("https://cdn.example.com/c.jpg", snapshot?.imageUrl)
+    }
+
+    @Test
+    fun `image 가 ImageObject 배열이면 첫 원소의 contentUrl 을 뽑는다`() {
+        val snapshot =
+            extractor.extract(
+                pageOf(
+                    jsonLd(
+                        """{"@type":"Product","name":"이미지배열","image":[{"@type":"ImageObject","contentUrl":"https://cdn.example.com/1.jpg"},{"@type":"ImageObject","contentUrl":"https://cdn.example.com/2.jpg"}],"offers":{"price":"5000"}}""",
+                    ),
+                ),
+            )
+
+        assertEquals("https://cdn.example.com/1.jpg", snapshot?.imageUrl)
+    }
+
+    @Test
+    fun `ImageObject 에 url 과 contentUrl 이 둘 다 있으면 url 을 우선한다`() {
+        val snapshot =
+            extractor.extract(
+                pageOf(
+                    jsonLd(
+                        """{"@type":"Product","name":"우선순위","image":{"@type":"ImageObject","url":"https://cdn.example.com/url.jpg","contentUrl":"https://cdn.example.com/content.jpg"},"offers":{"price":"5000"}}""",
+                    ),
+                ),
+            )
+
+        assertEquals("https://cdn.example.com/url.jpg", snapshot?.imageUrl)
+    }
+
     // --- OpenGraph (JSON-LD 가 없을 때의 보조 경로) ---
 
     @Test
@@ -268,6 +310,47 @@ class StructuredDataExtractorTest {
 
         assertEquals("제이슨엘디", snapshot?.name)
         assertEquals(10_000, snapshot?.currentPrice)
+    }
+
+    @Test
+    fun `og 경로에서 og_site_name 꼬리표를 제거한다`() {
+        val html =
+            """
+            <html><head>
+            <meta property="og:title" content="상품명 [Grey] - 사이즈 & 후기 | 무신사"/>
+            <meta property="og:site_name" content="무신사"/>
+            <meta property="product:price:amount" content="35100"/>
+            </head><body></body></html>
+            """.trimIndent()
+
+        assertEquals("상품명 [Grey] - 사이즈 & 후기", extractor.extract(pageOf(html))?.name)
+    }
+
+    @Test
+    fun `og_site_name 이 하이픈 구분자로 붙어도 제거한다`() {
+        val html =
+            """
+            <html><head>
+            <meta property="og:title" content="가방 - 29CM"/>
+            <meta property="og:site_name" content="29CM"/>
+            <meta property="product:price:amount" content="10000"/>
+            </head><body></body></html>
+            """.trimIndent()
+
+        assertEquals("가방", extractor.extract(pageOf(html))?.name)
+    }
+
+    @Test
+    fun `og_site_name 이 없으면 og_title 을 그대로 쓴다`() {
+        val html =
+            """
+            <html><head>
+            <meta property="og:title" content="상품명 | 사이트"/>
+            <meta property="product:price:amount" content="10000"/>
+            </head><body></body></html>
+            """.trimIndent()
+
+        assertEquals("상품명 | 사이트", extractor.extract(pageOf(html))?.name)
     }
 
     // --- 필수 필드 / 검증 미달 → null (fallback 신호) ---
