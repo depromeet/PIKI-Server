@@ -3,7 +3,6 @@ package com.depromeet.piki.tournament.repository
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import java.time.LocalDateTime
-import java.util.UUID
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
@@ -23,14 +22,11 @@ interface TournamentItemJpaRepository : JpaRepository<TournamentItem, Long> {
     @Query("SELECT t.id FROM TournamentItem t WHERE t.tournamentId = :tournamentId AND t.deletedAt IS NULL ORDER BY t.id ASC")
     fun findIdsByTournamentId(@Param("tournamentId") tournamentId: Long): List<Long>
 
-    // 이 아이템을 토너먼트에 추가한 사람들(adder). 같은 아이템이 여러 토너먼트에 공유될 수 있어 DISTINCT. (파싱 알림 수신자 역조회)
-    @Query("SELECT DISTINCT t.userId FROM TournamentItem t WHERE t.itemId = :itemId AND t.deletedAt IS NULL")
-    fun findUserIdsByItemId(@Param("itemId") itemId: Long): List<UUID>
-
-    // 이 아이템의 토너먼트 출전 좌표(tournamentId·tournament_item id). 파싱 알림 딥링크 라우팅 역조회(#408).
-    // 공유 대비 List 지만 파싱 시점엔 단일 컨텍스트라 0~1 행이다. id 오름차순으로 결정성만 둔다.
+    // 이 아이템의 토너먼트 출전 좌표(userId·tournamentId·tournament_item id). 파싱 알림 수신자별 딥링크 라우팅 역조회(#408).
+    // adder(userId)별로 자기 토너먼트로 라우팅하므로 userId 까지 함께 뽑아 수신자·라우팅을 한 쿼리로 얻는다.
+    // 같은 아이템이 여러 토너먼트에 공유될 수 있어 여러 행이 올 수 있다. id 오름차순으로 결정성을 둔다.
     @Query(
-        "SELECT t.tournamentId AS tournamentId, t.id AS tournamentItemId FROM TournamentItem t " +
+        "SELECT t.userId AS userId, t.tournamentId AS tournamentId, t.id AS tournamentItemId FROM TournamentItem t " +
             "WHERE t.itemId = :itemId AND t.deletedAt IS NULL ORDER BY t.id ASC",
     )
     fun findRoutingByItemId(@Param("itemId") itemId: Long): List<TournamentItemRoutingView>

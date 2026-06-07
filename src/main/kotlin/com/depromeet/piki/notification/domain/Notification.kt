@@ -67,10 +67,12 @@ class Notification(
         kind?.let { k ->
             when (k) {
                 NotificationKind.WISH -> NotificationRouting.Wish
+                // kind=TOURNAMENT 면 두 식별자가 반드시 있다(엔티티 생성 시 sealed 에서 원자적으로 채워짐). 없으면 데이터 정합성
+                // 위반이라 불변식(checkNotNull → IllegalStateException → 500)으로 다룬다 — 클라 입력 오류(400)가 아니다.
                 NotificationKind.TOURNAMENT ->
                     NotificationRouting.Tournament(
-                        requireNotNull(tournamentId) { "TOURNAMENT 알림에 tournamentId 가 없다" },
-                        requireNotNull(tournamentItemId) { "TOURNAMENT 알림에 tournamentItemId 가 없다" },
+                        checkNotNull(tournamentId) { "TOURNAMENT 알림에 tournamentId 가 없다" },
+                        checkNotNull(tournamentItemId) { "TOURNAMENT 알림에 tournamentItemId 가 없다" },
                     )
             }
         }

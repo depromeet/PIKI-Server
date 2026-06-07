@@ -1,9 +1,8 @@
 package com.depromeet.piki.notification.handler
 
-import com.depromeet.piki.notification.domain.NotificationRouting
 import com.depromeet.piki.notification.domain.NotificationType
+import com.depromeet.piki.notification.domain.Recipient
 import org.springframework.core.GenericTypeResolver
-import java.util.UUID
 import kotlin.reflect.KClass
 
 // 도메인 이벤트(item/tournament 등이 발행하는 사실)를 알림으로 변환하는 단위.
@@ -25,18 +24,13 @@ abstract class NotificationEventHandler<E : Any>(
     // 알림 도메인이 자기 표현(Notification.refId)으로 끌어내는 책임을 진다.
     abstract fun resolveRefId(event: E): Long
 
-    // 수신자 (개인=본인 / 협업=참가자 fan-out). refId 로 위시·토너먼트를 역조회해 결정한다.
-    // Set 으로 둬 "수신자는 중복 없는 집합"을 타입에 박는다 — owner + 참가자를 합쳐도 같은 유저에게
-    // 알림 row 가 중복 저장되지 않는다(#236 fan-out 안전).
-    abstract fun resolveRecipients(event: E): Set<UUID>
+    // 수신자 (개인=본인 / 협업=참가자 fan-out) 와 각자의 딥링크 라우팅(#408). refId·itemId 로 위시·토너먼트를 역조회해 결정한다.
+    // Set<Recipient> 로 둬 "수신자는 중복 없는 집합"을 타입에 박되, 라우팅은 수신자에 묶는다 — 같은 파싱 아이템이라도
+    // 위시 주인과 토너먼트 adder 의 이동 화면이 달라 수신자별로 갈린다. 라우팅이 필요 없는 알림은 Recipient.routing=null.
+    abstract fun resolveRecipients(event: E): Set<Recipient>
 
     // 템플릿 변수 (예: actorName). 변수 없는 알림은 기본값 emptyMap 을 그대로 쓰고 override 하지 않는다.
     open fun resolveVariables(event: E): Map<String, String> = emptyMap()
-
-    // 딥링크 라우팅 컨텍스트(#408). 파싱 알림처럼 출처(위시/토너먼트)별로 이동 화면이 갈리는 알림은 이를 override 해
-    // 도메인 식별자(kind·tournamentId·tournamentItemId)를 싣는다. refId 만으로 충분한 알림(토너먼트 알림 등)은
-    // 기본값 null 을 그대로 쓰고, 그러면 Notification 의 라우팅 컬럼이 비워진다(채널에서 키가 생략된다).
-    open fun resolveRouting(event: E): NotificationRouting? = null
 
     // 타입 인자 E 를 Spring 의 제네릭 추출 헬퍼로 풀어낸다. 서브클래스 생성 시 javaClass 는 실제 구현체라,
     // 그 슈퍼타입 NotificationEventHandler<E> 의 첫 타입 인자가 E 다. (private 라 가상 호출이 아니므로 init 안전)

@@ -38,32 +38,31 @@ class NotificationDispatcher(
         if (recipients.isEmpty()) return
 
         val refId = handler.resolveRefId(event)
-        val routing = handler.resolveRouting(event)
         val template = templateProvider.find(handler.notificationType)
         val variables = handler.resolveVariables(event)
         val title = renderer.render(template.title, variables)
         val body = renderer.render(template.body, variables)
 
-        recipients.forEach { userId ->
+        recipients.forEach { recipient ->
             // 한 수신자의 저장 실패가 나머지 수신자 fan-out 을 막지 않게 수신자 단위로 격리한다 (외부 전달은 트랜잭션 밖).
             runCatching {
                 val notification =
                     persistence.save(
                         Notification(
-                            userId = userId,
+                            userId = recipient.userId,
                             type = handler.notificationType,
                             title = title,
                             body = body,
                             refId = refId,
-                            routing = routing,
+                            routing = recipient.routing,
                         ),
                     )
                 // 한 채널의 실패도 다른 채널 전달을 막지 않게 추가로 격리한다.
                 channels.forEach { channel ->
-                    runCatching { channel.send(userId, notification) }
-                        .onFailure { e -> log.warn("채널 {} 전송 실패 userId={}", channel::class.simpleName, userId, e) }
+                    runCatching { channel.send(recipient.userId, notification) }
+                        .onFailure { e -> log.warn("채널 {} 전송 실패 userId={}", channel::class.simpleName, recipient.userId, e) }
                 }
-            }.onFailure { e -> log.warn("알림 저장 실패로 수신자 건너뜀 userId={}", userId, e) }
+            }.onFailure { e -> log.warn("알림 저장 실패로 수신자 건너뜀 userId={}", recipient.userId, e) }
         }
     }
 }
