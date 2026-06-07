@@ -130,7 +130,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .andReturn()
 
         val expiresAtStr = objectMapper.readTree(result.response.contentAsString)["data"]["inviteExpiresAt"].asText()
-        val expiresAt = LocalDateTime.parse(expiresAtStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        val expiresAt = java.time.OffsetDateTime.parse(expiresAtStr, DateTimeFormatter.ISO_OFFSET_DATE_TIME).toLocalDateTime()
         val expectedMin = before.plusMinutes(60)
         val expectedMax = LocalDateTime.now().plusMinutes(60)
         assertTrue(expiresAt >= expectedMin && expiresAt <= expectedMax)
