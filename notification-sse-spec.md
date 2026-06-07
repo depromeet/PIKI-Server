@@ -42,7 +42,7 @@
 - **APP (직접 HTTP 스트림 처리)**
   - `Authorization: Bearer <accessToken>` 헤더로 보내면 된다.
 
-> 미인증/유효하지 않은 토큰 → **401** (아래 6번). 스트림이 열리기 전에 거절된다.
+> 미인증/유효하지 않은 토큰 → **401** (아래 8번). 스트림이 열리기 전에 거절된다.
 
 ---
 
@@ -219,7 +219,10 @@ fun openSse() {
                 "connect" -> { /* 연결됨 */ }
                 "notification" -> {
                     val n = json.decode<NotificationPayload>(data)
-                    // n.type 으로 분기, n.refId 로 딥링크 (tournamentId | itemId)
+                    // type 으로 분기. 파싱 알림(ITEM_PARSING_*)은 kind 로 출처를 가른다:
+                    //   kind == "TOURNAMENT" -> tournamentId 로 입장 후 tournamentItemId 로 그 아이템 지목
+                    //   kind == "WISH"       -> /archive
+                    //   TOURNAMENT_*         -> refId(= tournamentId) 로 토너먼트
                 }
                 // 그 외(주석 ping 등)는 무시
             }
@@ -240,17 +243,8 @@ fun openSse() {
 
 - [ ] `type` 으로 분기, **문구로 분기하지 않기**
 - [ ] `refId` 의미가 `type` 마다 다름 (tournamentId vs itemId)
+- [ ] 파싱 알림(`ITEM_PARSING_*`)은 `kind` 로 출처 분기 (WISH → `/archive`, TOURNAMENT → `tournamentId`·`tournamentItemId`)
 - [ ] 주석 `: ping` 은 무시 (data 이벤트 아님)
 - [ ] 재연결 시 목록 API 로 놓친 알림 동기화
 - [ ] WEB 은 쿠키 인증(`withCredentials`), APP 은 `Authorization` 헤더
 - [ ] **재연결 시 토큰이 만료됐으면 refresh 후 새 토큰으로 연결** (연결 도중 만료는 무관, 재연결 시점이 관건)
-
----
-
-## 10. 참고 (서버 구현 위치)
-
-- 컨트롤러: `notification/controller/NotificationSseController.kt`
-- payload: `notification/controller/dto/NotificationSsePayload.kt`
-- 타입 enum: `notification/domain/NotificationType.kt`
-- 템플릿(임시): `notification/service/InMemoryNotificationTemplateProvider.kt`
-- 인증/권한: `auth/config/SecurityConfig.kt` (`/api/v1/notifications/**` → authenticated)
