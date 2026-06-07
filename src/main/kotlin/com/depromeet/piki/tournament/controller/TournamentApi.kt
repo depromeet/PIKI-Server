@@ -135,7 +135,7 @@ interface TournamentApi {
     ): ApiResponseBody<TournamentDetailResponse>
 
     @Operation(
-        summary = "링크 접근 경로 — 토너먼트 참여 전 미리보기",
+        summary = "초대 링크로 참여 화면 진입",
         description = "초대 링크 직접 접근 시 tournamentId 만으로 토너먼트 정보(이름·아이템 수·참여자 수)를 반환한다. 인증 불필요.",
     )
     @ApiResponses(
@@ -162,7 +162,7 @@ interface TournamentApi {
     ): ApiResponseBody<TournamentInvitePreviewResponse>
 
     @Operation(
-        summary = "초대 코드로 토너먼트 미리보기",
+        summary = "초대 코드로 참여 화면 진입",
         description = """
             홈 다이얼로그에서 6자리 코드만 입력하는 경로 전용 — tournamentId 없이 코드만으로 조회한다.
             코드가 유효하면 tournamentId·이름·아이템 수·참여자 수를 반환한다.
@@ -193,7 +193,7 @@ interface TournamentApi {
     ): ApiResponseBody<TournamentInvitePreviewResponse>
 
     @Operation(
-        summary = "플레이 링크 정보 조회",
+        summary = "플레이 링크로 참여 화면 진입",
         description = "플레이 링크가 유효한 토너먼트의 정보(이름, 아이템 수, 만료 시간)를 반환한다. 인증 불필요.",
     )
     @ApiResponses(
@@ -636,7 +636,7 @@ interface TournamentApi {
     ): ApiResponseBody<LocalDateTime>
 
     @Operation(
-        summary = "플레이 링크로 토너먼트 복제 생성",
+        summary = "플레이 링크로 토너먼트 진행",
         description = """
             플레이 링크가 유효한 토너먼트와 동일한 아이템 구성으로 새 토너먼트를 생성한다.
             생성된 토너먼트는 PENDING 상태이며 아이템이 미리 복사되어 있어 바로 시작할 수 있다.
