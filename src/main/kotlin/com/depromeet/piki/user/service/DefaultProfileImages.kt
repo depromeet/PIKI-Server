@@ -14,7 +14,11 @@ class DefaultProfileImages(
     fun random(): String = urlOf((1..COUNT).random())
 
     // URL 조립은 publicBaseUrl 외 의존이 없는 순수 로직이라 단위 테스트로 형식을 망라한다.
-    fun urlOf(index: Int): String = "${s3Properties.publicBaseUrl.trimEnd('/')}/$FILENAME_PREFIX$index.$EXTENSION"
+    // index 범위 밖은 존재하지 않는 키를 만드는 코드 버그라 불변식으로 막는다(정상 흐름은 random 이 1..COUNT 만 넘김).
+    fun urlOf(index: Int): String {
+        require(index in 1..COUNT) { "기본 아바타 index 는 1..$COUNT 여야 한다: $index" }
+        return "${s3Properties.publicBaseUrl.trimEnd('/')}/$FILENAME_PREFIX$index.$EXTENSION"
+    }
 
     companion object {
         const val COUNT = 4

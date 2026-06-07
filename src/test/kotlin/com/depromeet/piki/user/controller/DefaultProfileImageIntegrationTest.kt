@@ -8,6 +8,7 @@ import com.depromeet.piki.user.service.DefaultProfileImages
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
@@ -39,11 +40,14 @@ class DefaultProfileImageIntegrationTest : IntegrationTestSupport() {
     @Qualifier("googleOAuthClient")
     private lateinit var googleOAuthClient: StubOAuthClient
 
-    // application-test.yml 의 s3.public-base-url 과 일치해야 한다.
-    private val publicBaseUrl = "https://test-bucket.s3.ap-northeast-2.amazonaws.com"
+    // 테스트 yml 의 s3.public-base-url 을 직접 주입받아 하드코딩 동기화 부담을 없앤다(yml 값이 바뀌어도 자동 일치).
+    @Value("\${s3.public-base-url}")
+    private lateinit var publicBaseUrl: String
 
-    private val defaultAvatarUrls: Set<String> =
+    // @Value 는 생성 후 주입되므로 lazy 로 접근 시점에 조립한다(인라인 초기화는 lateinit 미초기화로 깨진다).
+    private val defaultAvatarUrls: Set<String> by lazy {
         (1..DefaultProfileImages.COUNT).map { "$publicBaseUrl/user-profile-$it.png" }.toSet()
+    }
 
     private fun mockMvc(): MockMvc =
         MockMvcBuilders
