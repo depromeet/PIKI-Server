@@ -6,6 +6,7 @@ import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.GroupResultResponse
 import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestRequest
 import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestResponse
+import com.depromeet.piki.tournament.controller.dto.UpdateInviteDurationRequest
 import com.depromeet.piki.tournament.controller.dto.JoinTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.PlayLinkInfoResponse
 import com.depromeet.piki.tournament.controller.dto.RecordMatchRequest
@@ -22,6 +23,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -114,6 +116,16 @@ class TournamentController(
     ): ApiResponseBody<Unit> {
         tournamentService.deleteTournament(userId, tournamentId)
         return ApiResponseBody.ok()
+    }
+
+    @PatchMapping("/{tournamentId}/invite")
+    override fun updateInviteExpiry(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+        @Valid @RequestBody request: UpdateInviteDurationRequest,
+    ): ApiResponseBody<LocalDateTime> {
+        val newExpiresAt = tournamentService.updateInviteExpiry(userId, tournamentId, request.inviteDurationMinutes)
+        return ApiResponseBody.ok(newExpiresAt)
     }
 
     @GetMapping("/{tournamentId}/invite-preview")
