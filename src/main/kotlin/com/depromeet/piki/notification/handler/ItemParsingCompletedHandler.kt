@@ -1,6 +1,7 @@
 package com.depromeet.piki.notification.handler
 
 import com.depromeet.piki.item.event.ItemParsingCompleted
+import com.depromeet.piki.notification.domain.NotificationRouting
 import com.depromeet.piki.notification.domain.NotificationType
 import org.springframework.stereotype.Component
 import java.util.UUID
@@ -15,4 +16,6 @@ class ItemParsingCompletedHandler(
     override fun resolveRefId(event: ItemParsingCompleted): Long = event.itemId
 
     override fun resolveRecipients(event: ItemParsingCompleted): Set<UUID> = recipientResolver.resolve(event.itemId)
+
+    override fun resolveRouting(event: ItemParsingCompleted): NotificationRouting = recipientResolver.resolveRouting(event.itemId)
 }

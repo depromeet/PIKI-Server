@@ -2,6 +2,7 @@ package com.depromeet.piki.notification.handler
 
 import com.depromeet.piki.item.event.ItemParsingCompleted
 import com.depromeet.piki.item.event.ItemParsingFailed
+import com.depromeet.piki.notification.domain.NotificationRouting
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
@@ -146,5 +147,49 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val recipients = parsingFailedHandler.resolveRecipients(ItemParsingFailed(itemId))
 
         assertEquals(setOf(owner), recipients)
+    }
+
+    @Test
+    fun `파싱 완료 라우팅 - 위시로 담긴 아이템은 WISH 다 (토너먼트 식별자 없음)`() {
+        val itemId = 3001L
+        wishRepository.save(Wish(UUID.randomUUID(), itemId))
+
+        val routing = parsingCompletedHandler.resolveRouting(ItemParsingCompleted(itemId))
+
+        assertEquals(NotificationRouting.Wish, routing)
+    }
+
+    @Test
+    fun `파싱 완료 라우팅 - 토너먼트로 담긴 아이템은 TOURNAMENT 와 그 출전 좌표(tournamentId·tournamentItemId)다`() {
+        val itemId = 3002L
+        val tournamentId = 1100L
+        val tournamentItem =
+            tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, itemId, UUID.randomUUID()))).first()
+
+        val routing = parsingCompletedHandler.resolveRouting(ItemParsingCompleted(itemId))
+
+        assertEquals(NotificationRouting.Tournament(tournamentId, tournamentItem.getId()), routing)
+    }
+
+    @Test
+    fun `파싱 실패 라우팅도 완료와 동일 규칙으로 토너먼트 출전 좌표를 싣는다`() {
+        val itemId = 3003L
+        val tournamentId = 1101L
+        val tournamentItem =
+            tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, itemId, UUID.randomUUID()))).first()
+
+        val routing = parsingFailedHandler.resolveRouting(ItemParsingFailed(itemId))
+
+        assertEquals(NotificationRouting.Tournament(tournamentId, tournamentItem.getId()), routing)
+    }
+
+    @Test
+    fun `파싱 실패 라우팅 - 위시로 담긴 아이템은 WISH 다`() {
+        val itemId = 3004L
+        wishRepository.save(Wish(UUID.randomUUID(), itemId))
+
+        val routing = parsingFailedHandler.resolveRouting(ItemParsingFailed(itemId))
+
+        assertEquals(NotificationRouting.Wish, routing)
     }
 }
