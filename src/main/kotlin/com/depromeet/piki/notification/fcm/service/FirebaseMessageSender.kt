@@ -1,6 +1,8 @@
 package com.depromeet.piki.notification.fcm.service
 
 import com.depromeet.piki.notification.domain.Notification
+import com.depromeet.piki.notification.domain.NotificationKind
+import com.depromeet.piki.notification.domain.NotificationRouting
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.AndroidConfig
 import com.google.firebase.messaging.AndroidNotification
@@ -144,9 +146,17 @@ class FirebaseMessageSender(
             buildMap {
                 put(DATA_KEY_TYPE, notification.type.name)
                 put(DATA_KEY_REF_ID, notification.refId.toString())
-                notification.kind?.let { put(DATA_KEY_KIND, it.name) }
-                notification.tournamentId?.let { put(DATA_KEY_TOURNAMENT_ID, it.toString()) }
-                notification.tournamentItemId?.let { put(DATA_KEY_TOURNAMENT_ITEM_ID, it.toString()) }
+                // SSE payload 와 같은 routing() sealed 를 분기해 두 채널이 한 소스를 쓴다. FCM data 는 값이 null 일 수 없어
+                // 라우팅이 없으면 키 자체를 안 넣고, TOURNAMENT 만 추가 식별자를 싣는다(#408).
+                when (val routing = notification.routing()) {
+                    null -> Unit
+                    NotificationRouting.Wish -> put(DATA_KEY_KIND, NotificationKind.WISH.name)
+                    is NotificationRouting.Tournament -> {
+                        put(DATA_KEY_KIND, NotificationKind.TOURNAMENT.name)
+                        put(DATA_KEY_TOURNAMENT_ID, routing.tournamentId.toString())
+                        put(DATA_KEY_TOURNAMENT_ITEM_ID, routing.tournamentItemId.toString())
+                    }
+                }
             }
     }
 }

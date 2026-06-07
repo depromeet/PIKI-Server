@@ -61,6 +61,20 @@ class Notification(
         isRead = true
     }
 
+    // 평면 저장된 라우팅 컬럼을 도메인 sealed 로 복원한다. 채널(SSE payload·FCM data)이 이걸로 셰입을 가른다 —
+    // 평면 nullable 컬럼을 직접 들추는 대신 sealed 한 곳에서 "WISH 엔 식별자 없음, TOURNAMENT 만 둘 다" 를 보장한다.
+    fun routing(): NotificationRouting? =
+        kind?.let { k ->
+            when (k) {
+                NotificationKind.WISH -> NotificationRouting.Wish
+                NotificationKind.TOURNAMENT ->
+                    NotificationRouting.Tournament(
+                        requireNotNull(tournamentId) { "TOURNAMENT 알림에 tournamentId 가 없다" },
+                        requireNotNull(tournamentItemId) { "TOURNAMENT 알림에 tournamentItemId 가 없다" },
+                    )
+            }
+        }
+
     companion object {
         // VARCHAR(255) 컬럼과 엔티티 불변식이 같은 상수를 공유한다.
         const val MAX_TEXT_LENGTH = 255
