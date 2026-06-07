@@ -147,7 +147,7 @@ class WithdrawalIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `DELETE users me - cascade 로 PII 가 파기되고 콘텐츠가 soft-delete 되며 닉네임이 익명화된다`() {
+    fun `DELETE users me - cascade 로 PII 와 콘텐츠가 즉시 하드삭제되고 닉네임이 익명화된다`() {
         val userId = UUID.randomUUID()
         insertUser(userId, "멤버닉네임", IdentityType.MEMBER)
         insertUserDetail(userId)
@@ -184,23 +184,23 @@ class WithdrawalIntegrationTest : IntegrationTestSupport() {
             )
         assertEquals(0L, deviceCount)
 
-        // wishes soft-delete (행은 남고 deleted_at 채워짐)
-        val wishDeletedAt =
+        // wishes 하드삭제 (행 자체가 사라짐)
+        val wishCount =
             jdbcTemplate.queryForObject(
-                "SELECT deleted_at FROM wishes WHERE id = ?",
-                java.sql.Timestamp::class.java,
+                "SELECT COUNT(*) FROM wishes WHERE id = ?",
+                Long::class.java,
                 wishId,
             )
-        assertNotNull(wishDeletedAt, "wish 가 soft-delete 되어야 한다")
+        assertEquals(0L, wishCount, "wish 가 하드삭제되어야 한다")
 
-        // notifications soft-delete
-        val notiDeletedAt =
+        // notifications 하드삭제
+        val notiCount =
             jdbcTemplate.queryForObject(
-                "SELECT deleted_at FROM notifications WHERE id = ?",
-                java.sql.Timestamp::class.java,
+                "SELECT COUNT(*) FROM notifications WHERE id = ?",
+                Long::class.java,
                 notificationId,
             )
-        assertNotNull(notiDeletedAt, "notification 이 soft-delete 되어야 한다")
+        assertEquals(0L, notiCount, "notification 이 하드삭제되어야 한다")
 
         // users tombstone — 행은 남고 닉네임이 익명화됨
         val nickname =

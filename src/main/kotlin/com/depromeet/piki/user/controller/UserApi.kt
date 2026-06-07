@@ -129,7 +129,7 @@ interface UserApi {
         summary = "회원 탈퇴",
         description =
             "현재 로그인된 MEMBER 의 계정을 탈퇴 처리한다. users 행은 익명 tombstone 으로 남겨 공유 토너먼트 참조를 보존하고, " +
-                "소셜 식별자(user_details)·기기 토큰(user_devices)은 즉시 하드삭제, 위시·알림은 soft-delete(30일 후 영구 파기) 한다. " +
+                "소셜 식별자(user_details)·기기 토큰(user_devices)·위시·알림은 즉시 하드삭제 한다(PIPA 지체없이 파기). " +
                 "refresh token 무효화·SSE 연결 종료까지 함께 처리한다. 게스트는 탈퇴 대상이 아니라 403 으로 거부한다. 멱등 — 재요청해도 200.",
     )
     @ApiResponses(

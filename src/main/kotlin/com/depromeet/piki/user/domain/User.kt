@@ -40,12 +40,6 @@ class User(
     var identityType: IdentityType = identityType
         protected set
 
-    // 탈퇴 콘텐츠(wishes·notifications) 영구 파기를 마친 시각. tombstone users 행은 영구 보존하므로
-    // deletedAt 만으로는 파기 완료를 구분할 수 없어, 파기 스케줄러가 이 표식으로 재스캔 대상에서 제외한다.
-    @Column(name = "content_purged_at")
-    var contentPurgedAt: LocalDateTime? = null
-        protected set
-
     fun promoteToMember() {
         if (identityType != IdentityType.GUEST) throw UserException.alreadyMember(id)
         identityType = IdentityType.MEMBER
@@ -62,11 +56,6 @@ class User(
 
     fun softDelete() {
         deletedAt = deletedAt ?: LocalDateTime.now()
-    }
-
-    // 탈퇴 콘텐츠 파기 완료 표식. deletedAt 처럼 멱등 — 이미 채워졌으면 첫 파기 시각을 유지한다.
-    fun markContentPurged() {
-        contentPurgedAt = contentPurgedAt ?: LocalDateTime.now()
     }
 
     // 탈퇴(soft-delete)되지 않은 활성 유저인지. deletedAt 이 채워졌으면 tombstone 이라 false.

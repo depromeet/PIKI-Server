@@ -4,7 +4,6 @@ import com.depromeet.piki.wishlist.domain.Wish
 import com.depromeet.piki.wishlist.domain.WishCursor
 import org.springframework.data.domain.Limit
 import org.springframework.stereotype.Repository
-import java.time.LocalDateTime
 import java.util.UUID
 
 @Repository
@@ -12,11 +11,6 @@ class WishRepositoryImpl(
     private val wishJpaRepository: WishJpaRepository,
 ) : WishRepository {
     override fun save(wish: Wish): Wish = wishJpaRepository.save(wish)
-
-    override fun softDeleteAllByUserId(
-        userId: UUID,
-        now: LocalDateTime,
-    ): Int = wishJpaRepository.softDeleteAllByUserId(userId, now)
 
     override fun hardDeleteAllByUserId(userId: UUID): Int = wishJpaRepository.hardDeleteAllByUserId(userId)
 

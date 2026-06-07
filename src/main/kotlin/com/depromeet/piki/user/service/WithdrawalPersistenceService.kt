@@ -9,7 +9,6 @@ import com.depromeet.piki.wishlist.repository.WishRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.time.LocalDateTime
 import java.util.UUID
 
 // 탈퇴의 DB 변경(cascade)만 짧은 단일 트랜잭션으로 묶는 빈. Redis/SSE 같은 외부 의존성은 여기서 다루지 않고
@@ -52,27 +51,13 @@ class WithdrawalPersistenceService(
         // 3. user_devices 하드삭제 — 기기 토큰 제거.
         userDeviceRepository.deleteAllByUserId(userId)
 
-        // 4. wishes soft-delete — 개인 데이터 가리기(30일 후 스케줄러가 하드삭제).
-        val now = LocalDateTime.now()
-        val wishes = wishRepository.softDeleteAllByUserId(userId, now)
+        // 4. wishes 하드삭제 — 개인 데이터 즉시 파기(PIPA "지체없이 파기"). 위시는 다른 데이터가 참조하지 않아
+        //    즉시 지워도 무결성 문제가 없다(공유 참조 보존은 tombstone users 행이 담당).
+        val wishes = wishRepository.hardDeleteAllByUserId(userId)
 
-        // 5. notifications soft-delete — 수신자 알림 가리기(30일 후 하드삭제).
-        val notifications = notificationRepository.softDeleteAllByUserId(userId, now)
+        // 5. notifications 하드삭제 — 수신자 알림 즉시 파기.
+        val notifications = notificationRepository.hardDeleteAllByUserId(userId)
 
         log.info("회원 탈퇴 cascade 완료 userId={} wishes={} notifications={}", userId, wishes, notifications)
-    }
-
-    // 30일 파기 — soft-delete 된 콘텐츠(wishes, notifications)를 영구 하드삭제. tombstone users 행 자체는 보존한다
-    // (익명·PII 없음, 공유 토너먼트 참조 유지 — 삭제하면 tournament_items.userId 등이 dangling 된다).
-    // 한 유저 단위로 묶어 짧은 트랜잭션 안에서 끝낸다(스케줄러가 chunk 를 돌며 유저별로 호출). 멱등(없으면 0건).
-    // 하드삭제 직후 같은 트랜잭션에서 content_purged_at 을 찍어, 다음 스캔에서 이 유저가 제외되게 한다(매일 영구 재스캔 방지).
-    @Transactional
-    fun purgeContent(userId: UUID) {
-        val wishes = wishRepository.hardDeleteAllByUserId(userId)
-        val notifications = notificationRepository.hardDeleteAllByUserId(userId)
-        val user = userRepository.findById(userId) ?: throw UserException.notFound(userId)
-        user.markContentPurged()
-        userRepository.save(user)
-        log.info("탈퇴 콘텐츠 파기 완료 userId={} wishes={} notifications={}", userId, wishes, notifications)
     }
 }
