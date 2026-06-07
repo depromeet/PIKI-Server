@@ -31,6 +31,10 @@ interface TournamentUserJpaRepository : JpaRepository<TournamentUser, Long> {
     // deletedAt 필터 없음 — 주최자가 토너먼트를 삭제(TU soft-delete)해도 그룹 결과에서 오너를 역조회할 수 있어야 한다.
     fun findByIdIn(ids: Collection<Long>): List<TournamentUser>
 
+    // completedAt 기준 — deletedAt 무관. 삭제한 주최자의 완료 내역도 그룹 결과에 반영해야 한다.
+    @Query("SELECT tu FROM TournamentUser tu WHERE tu.tournamentId = :tournamentId AND tu.completedAt IS NOT NULL")
+    fun findCompletedByTournamentId(@Param("tournamentId") tournamentId: Long): List<TournamentUser>
+
     @Modifying
     @Query("UPDATE TournamentUser tu SET tu.deletedAt = :now WHERE tu.tournamentId = :tournamentId AND tu.deletedAt IS NULL")
     fun softDeleteAllByTournamentId(@Param("tournamentId") tournamentId: Long, @Param("now") now: LocalDateTime)

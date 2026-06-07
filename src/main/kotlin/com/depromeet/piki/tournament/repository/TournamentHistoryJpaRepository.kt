@@ -10,6 +10,11 @@ import org.springframework.data.repository.query.Param
 interface TournamentHistoryJpaRepository : JpaRepository<TournamentHistory, Long> {
     fun findAllByTournamentIdAndDeletedAtIsNullOrderByCurrentRoundAscIdAsc(tournamentId: Long): List<TournamentHistory>
 
+    fun findAllByTournamentIdAndTournamentUserIdAndDeletedAtIsNullOrderByCurrentRoundAscIdAsc(
+        tournamentId: Long,
+        tournamentUserId: Long,
+    ): List<TournamentHistory>
+
     fun findAllByTournamentIdInAndDeletedAtIsNull(tournamentIds: List<Long>): List<TournamentHistory>
 
     @Modifying

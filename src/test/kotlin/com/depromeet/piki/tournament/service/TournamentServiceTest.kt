@@ -80,6 +80,12 @@ class TournamentServiceTest {
             users.find { it.tournamentId == tournamentId && it.userId == userId }?.softDelete()
         }
 
+        override fun countCompletedByTournamentId(tournamentId: Long): Int =
+            users.count { it.tournamentId == tournamentId && it.isCompleted() }
+
+        override fun findCompletedByTournamentId(tournamentId: Long): List<TournamentUser> =
+            users.filter { it.tournamentId == tournamentId && it.isCompleted() }
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
@@ -379,6 +385,12 @@ class TournamentServiceTest {
 
         override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
             histories.filter { it.tournamentId == tournamentId }
+
+        override fun findHistoriesByTournamentIdAndTournamentUserId(
+            tournamentId: Long,
+            tournamentUserId: Long,
+        ): List<TournamentHistory> =
+            histories.filter { it.tournamentId == tournamentId && it.tournamentUserId == tournamentUserId }
 
         override fun findHistoriesByTournamentIds(ids: List<Long>): List<TournamentHistory> =
             histories.filter { it.tournamentId in ids }

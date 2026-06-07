@@ -42,4 +42,10 @@ class TournamentUserRepositoryImpl(
     override fun softDeleteByTournamentIdAndUserId(tournamentId: Long, userId: UUID) {
         tournamentUserJpaRepository.softDeleteByTournamentIdAndUserId(tournamentId, userId, LocalDateTime.now())
     }
+
+    override fun countCompletedByTournamentId(tournamentId: Long): Int =
+        tournamentUserJpaRepository.findCompletedByTournamentId(tournamentId).size
+
+    override fun findCompletedByTournamentId(tournamentId: Long): List<TournamentUser> =
+        tournamentUserJpaRepository.findCompletedByTournamentId(tournamentId)
 }
