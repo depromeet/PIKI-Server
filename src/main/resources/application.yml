@@ -1,6 +1,10 @@
 spring:
   application:
     name: PIKI
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: UTC
   config:
     # .env 다음에 .env.local 을 읽어 로컬 개인 override 를 덮어쓴다(뒤가 우선). 둘 다 optional·gitignore.
     import:
