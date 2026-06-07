@@ -20,5 +20,8 @@ class ImageStorageException private constructor(
     companion object {
         fun uploadFailed(cause: Throwable? = null): ImageStorageException =
             ImageStorageException("이미지 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.", ErrorCategory.RETRYABLE, cause)
+
+        fun deleteFailed(cause: Throwable? = null): ImageStorageException =
+            ImageStorageException("이미지 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.", ErrorCategory.RETRYABLE, cause)
     }
 }

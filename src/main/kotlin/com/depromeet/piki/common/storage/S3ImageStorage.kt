@@ -37,7 +37,7 @@ class S3ImageStorage(
         }.getOrElse { e -> throw ImageStorageException.uploadFailed(e) }
 
     override fun deleteByPrefix(prefix: String) {
-        // AWS SDK 예외를 upload 와 동일하게 계약 예외(502)로 변환한다. 호출부(탈퇴)가 best-effort 로 감싸지만
+        // AWS SDK 예외를 삭제 실패 계약 예외(502)로 변환한다. 호출부(탈퇴)가 best-effort 로 감싸지만
         // 일관성을 위해 같은 변환을 둔다 — 던지는 예외 타입이 경계 전체에서 동일해야 호출부가 한 가지로 다룬다.
         runCatching {
             // ListObjectsV2 는 한 번에 최대 1000개를 돌려준다. isTruncated 면 continuation token 으로 다음 페이지를 이어 받는다.
@@ -68,7 +68,7 @@ class S3ImageStorage(
                     }
                 continuationToken = listed.nextContinuationToken().takeIf { listed.isTruncated } ?: break
             }
-        }.getOrElse { e -> throw ImageStorageException.uploadFailed(e) }
+        }.getOrElse { e -> throw ImageStorageException.deleteFailed(e) }
     }
 
     // key 의 각 경로 세그먼트를 URL 인코딩한다 ('/' 는 구분자로 보존). 공백/한글/예약문자 키도
