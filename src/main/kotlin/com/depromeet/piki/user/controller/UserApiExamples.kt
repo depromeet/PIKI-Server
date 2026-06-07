@@ -9,6 +9,7 @@ import com.depromeet.piki.common.storage.ImageStorageException
 import com.depromeet.piki.user.controller.dto.MyProfileResponse
 import com.depromeet.piki.user.controller.dto.NicknameCheckRequest
 import com.depromeet.piki.user.controller.dto.NicknameCheckResponse
+import com.depromeet.piki.user.controller.dto.UserResponse
 import com.depromeet.piki.user.controller.dto.UserUpdateRequest
 import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.user.domain.UserException
@@ -56,8 +57,8 @@ class UserApiExamples(
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.OK,
-                            name = "닉네임 수정 성공 (조회와 동일한 내 정보 모양)",
-                            payload = ApiResponseBody.ok(sampleMyProfile().copy(nickname = "새닉네임")),
+                            name = "닉네임 수정 성공",
+                            payload = ApiResponseBody.ok(sampleUser().copy(nickname = "새닉네임")),
                         )
                         add(
                             status = HttpStatus.BAD_REQUEST,
@@ -104,10 +105,10 @@ class UserApiExamples(
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.OK,
-                            name = "프로필 이미지 수정 성공 (조회와 동일한 내 정보 모양)",
+                            name = "프로필 이미지 수정 성공",
                             payload =
                                 ApiResponseBody.ok(
-                                    sampleMyProfile().copy(profileImage = "https://cdn.example.com/profiles/8f1a3c2b/9d44.jpg"),
+                                    sampleUser().copy(profileImage = "https://cdn.example.com/profiles/8f1a3c2b/9d44.jpg"),
                                 ),
                         )
                         // 미첨부·빈 파일은 같은 detail (클라 액션 동일: 파일 재첨부)
@@ -163,6 +164,14 @@ class UserApiExamples(
             }
             operation
         }
+
+    private fun sampleUser(): UserResponse =
+        UserResponse(
+            id = SAMPLE_USER_ID,
+            nickname = "뛰어다니는 강아지",
+            profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=$SAMPLE_USER_ID",
+            identityType = IdentityType.GUEST,
+        )
 
     private fun sampleMyProfile(): MyProfileResponse =
         MyProfileResponse(

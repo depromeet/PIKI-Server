@@ -4,6 +4,7 @@ import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.user.controller.dto.MyProfileResponse
 import com.depromeet.piki.user.controller.dto.NicknameCheckRequest
 import com.depromeet.piki.user.controller.dto.NicknameCheckResponse
+import com.depromeet.piki.user.controller.dto.UserResponse
 import com.depromeet.piki.user.controller.dto.UserUpdateRequest
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
@@ -72,7 +73,7 @@ interface UserApi {
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "수정 성공 (조회와 동일한 내 정보 모양, email 은 미수집·미동의 시 null)",
+                description = "수정 성공",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -125,7 +126,7 @@ interface UserApi {
     fun updateMe(
         @Parameter(hidden = true) userId: UUID,
         request: UserUpdateRequest,
-    ): ApiResponseBody<MyProfileResponse>
+    ): ApiResponseBody<UserResponse>
 
     @Operation(
         summary = "회원 탈퇴",
@@ -194,7 +195,7 @@ interface UserApi {
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "수정 성공 (갱신된 profileImage URL 포함, 조회와 동일한 내 정보 모양·email 포함)",
+                description = "수정 성공 (갱신된 profileImage URL 포함)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -269,7 +270,7 @@ interface UserApi {
     fun updateProfileImage(
         @Parameter(hidden = true) userId: UUID,
         image: MultipartFile?,
-    ): ApiResponseBody<MyProfileResponse>
+    ): ApiResponseBody<UserResponse>
 
     @Operation(
         summary = "닉네임 중복 체크",

@@ -4,6 +4,7 @@ import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.user.controller.dto.MyProfileResponse
 import com.depromeet.piki.user.controller.dto.NicknameCheckRequest
 import com.depromeet.piki.user.controller.dto.NicknameCheckResponse
+import com.depromeet.piki.user.controller.dto.UserResponse
 import com.depromeet.piki.user.controller.dto.UserUpdateRequest
 import com.depromeet.piki.user.domain.UserException
 import com.depromeet.piki.user.service.ProfileImageService
@@ -44,10 +45,12 @@ class UserController(
     override fun updateMe(
         @AuthenticationPrincipal userId: UUID,
         @Valid @RequestBody request: UserUpdateRequest,
-    ): ApiResponseBody<MyProfileResponse> {
-        request.nickname?.let { userService.updateNickname(userId, it) }
-        val profile = userService.getMyProfile(userId)
-        return ApiResponseBody.ok(MyProfileResponse.from(profile.user, profile.email))
+    ): ApiResponseBody<UserResponse> {
+        // email 은 수정 대상이 아니므로 수정 응답엔 담지 않는다 (PII 표면 최소화). 마이페이지 email 은 GET /me 가 제공.
+        val user =
+            request.nickname?.let { userService.updateNickname(userId, it) }
+                ?: userService.findById(userId)
+        return ApiResponseBody.ok(UserResponse.from(user))
     }
 
     @DeleteMapping("/me")
@@ -63,13 +66,13 @@ class UserController(
     override fun updateProfileImage(
         @AuthenticationPrincipal userId: UUID,
         @RequestParam("image", required = false) image: MultipartFile?,
-    ): ApiResponseBody<MyProfileResponse> {
+    ): ApiResponseBody<UserResponse> {
         // image 파트 미첨부는 Spring 이 진입 전 끊어 캐치올(500)로 가므로, required=false 로 받아
         // 도메인 검증(UserException.emptyProfileImage, 400)에 닿게 한다.
         val file = image ?: throw UserException.emptyProfileImage()
-        profileImageService.updateProfileImage(userId, file.bytes, file.contentType)
-        val profile = userService.getMyProfile(userId)
-        return ApiResponseBody.ok(MyProfileResponse.from(profile.user, profile.email))
+        // email 은 수정 대상이 아니므로 수정 응답엔 담지 않는다 (PII 표면 최소화). 마이페이지 email 은 GET /me 가 제공.
+        val user = profileImageService.updateProfileImage(userId, file.bytes, file.contentType)
+        return ApiResponseBody.ok(UserResponse.from(user))
     }
 
     @GetMapping("/nickname/check")
