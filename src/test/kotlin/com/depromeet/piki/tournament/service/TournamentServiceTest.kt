@@ -11,6 +11,8 @@ import com.depromeet.piki.tournament.domain.TournamentHistory
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.domain.TournamentUser
+import com.depromeet.piki.tournament.event.TournamentItemAdded
+import com.depromeet.piki.tournament.event.TournamentJoined
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentItemRoutingView
 import com.depromeet.piki.tournament.repository.TournamentRepository
@@ -26,7 +28,9 @@ import com.depromeet.piki.wishlist.domain.Wish
 import com.depromeet.piki.wishlist.domain.WishCursor
 import com.depromeet.piki.wishlist.repository.WishRepository
 import org.junit.jupiter.api.Test
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.http.HttpStatus
+import java.time.LocalDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -84,10 +88,8 @@ class TournamentServiceTest {
 
     private class TestItemRepository : ItemRepository {
         var validIds: Set<Long>? = null // null = 모든 ID 유효
-        val statusOverrides: MutableMap<Long, ItemStatus> = mutableMapOf()
-        // null 가격 시나리오를 명시적으로 테스트할 때 키를 추가한다. 키 없으면 DEFAULT_PRICE 사용.
-        val priceOverrides: MutableMap<Long, Int?> = mutableMapOf()
 
+        // item 은 정체성(link)만 들고 추출값·상태는 snapshot 이 보유한다(4a). 여기선 존재 확인용 빈 item 만 만든다.
         override fun save(item: Item): Item = item
 
         override fun saveAll(items: List<Item>): List<Item> = items
@@ -97,10 +99,7 @@ class TournamentServiceTest {
         override fun findByIds(ids: List<Long>): List<Item> {
             val effective = validIds?.let { valid -> ids.filter { it in valid } } ?: ids
             return effective.map { id ->
-                Item(
-                    status = statusOverrides[id] ?: ItemStatus.READY,
-                    currentPrice = if (id in priceOverrides) priceOverrides[id] else DEFAULT_PRICE,
-                ).also { item ->
+                Item().also { item ->
                     val field = LongBaseEntity::class.java.getDeclaredField("id")
                     field.isAccessible = true
                     field.set(item, id)
@@ -108,13 +107,7 @@ class TournamentServiceTest {
             }
         }
 
-        override fun findStaleProcessingIds(cutoff: java.time.LocalDateTime): List<Long> = emptyList()
-
         override fun findRecent(limit: Int): List<Item> = emptyList()
-
-        companion object {
-            const val DEFAULT_PRICE = 10_000
-        }
     }
 
     // 위시 등록의 축약 — itemId 마다 활성 snapshot(READY·기본가)을 만들고 그것을 가리키는 wish 를 만든다.
@@ -138,8 +131,9 @@ class TournamentServiceTest {
                         ItemSnapshot(
                             itemId = itemId,
                             name = "상품$itemId",
-                            currentPrice = TestItemRepository.DEFAULT_PRICE,
+                            currentPrice = TestItemSnapshotRepository.DEFAULT_PRICE,
                             status = ItemStatus.READY,
+                            extractedAt = LocalDateTime.now(),
                         ),
                     )
                 val wish = Wish(userId = userId, itemId = itemId, snapshotId = snapshot.getId())
@@ -190,8 +184,13 @@ class TournamentServiceTest {
     }
 
     // 고정/활성 snapshot 저장소. addWish 가 채운 snapshot 을 출전 후 조회 경로(getTournamentById 등)가 다시 읽는다.
+    // 추출값·상태가 snapshot 으로 모이면서(4a), start 가 검증하는 status·price 도 여기서 시나리오별로 덮어쓴다.
     private class TestItemSnapshotRepository : ItemSnapshotRepository {
         val snapshots = mutableListOf<ItemSnapshot>()
+        // itemId 별 상태/가격 시나리오. addWish 후에 설정되어도 읽기 시점에 반영되도록 조회 경로에서 적용한다.
+        val statusOverrides: MutableMap<Long, ItemStatus> = mutableMapOf()
+        // null 가격 시나리오를 명시적으로 테스트할 때 키를 추가한다. 키 없으면 snapshot 의 기존 가격 유지.
+        val priceOverrides: MutableMap<Long, Int?> = mutableMapOf()
         private var idSeq = 1L
 
         override fun save(snapshot: ItemSnapshot): ItemSnapshot {
@@ -202,11 +201,33 @@ class TournamentServiceTest {
 
         override fun saveAll(snapshots: List<ItemSnapshot>): List<ItemSnapshot> = snapshots.map { save(it) }
 
-        override fun findLatestByItemId(itemId: Long): ItemSnapshot? = snapshots.lastOrNull { it.itemId == itemId }
+        override fun findLatestByItemId(itemId: Long): ItemSnapshot? =
+            snapshots.lastOrNull { it.itemId == itemId }?.also { applyOverrides(it) }
 
-        override fun findById(id: Long): ItemSnapshot? = snapshots.find { it.getId() == id }
+        override fun findById(id: Long): ItemSnapshot? =
+            snapshots.find { it.getId() == id }?.also { applyOverrides(it) }
 
-        override fun findByIds(ids: List<Long>): List<ItemSnapshot> = snapshots.filter { it.getId() in ids }
+        override fun findByIds(ids: List<Long>): List<ItemSnapshot> =
+            snapshots.filter { it.getId() in ids }.onEach { applyOverrides(it) }
+
+        override fun findStaleProcessingItemIds(cutoff: LocalDateTime): List<Long> =
+            snapshots.filter { it.status == ItemStatus.PROCESSING }.map { it.itemId }
+
+        // status·currentPrice 는 protected setter 라 시나리오 덮어쓰기는 reflection 으로 박는다(엔티티 id 세팅과 같은 방식).
+        private fun applyOverrides(snapshot: ItemSnapshot) {
+            statusOverrides[snapshot.itemId]?.let { setField(snapshot, "status", it) }
+            if (snapshot.itemId in priceOverrides) setField(snapshot, "currentPrice", priceOverrides[snapshot.itemId])
+        }
+
+        private fun setField(
+            snapshot: ItemSnapshot,
+            name: String,
+            value: Any?,
+        ) {
+            val field = ItemSnapshot::class.java.getDeclaredField(name)
+            field.isAccessible = true
+            field.set(snapshot, value)
+        }
 
         private fun setEntityId(
             entity: LongBaseEntity,
@@ -215,6 +236,10 @@ class TournamentServiceTest {
             val field = LongBaseEntity::class.java.getDeclaredField("id")
             field.isAccessible = true
             field.set(entity, id)
+        }
+
+        companion object {
+            const val DEFAULT_PRICE = 10_000
         }
     }
 
@@ -387,6 +412,8 @@ class TournamentServiceTest {
     private val testItemRepository = TestItemRepository()
     private val testItemSnapshotRepository = TestItemSnapshotRepository()
     private val testWishRepository = TestWishRepository(testItemSnapshotRepository)
+    // 발행된 도메인 이벤트를 그대로 모으는 capturing publisher — 발행 단언에 쓴다.
+    private val publishedEvents = mutableListOf<Any>()
     private val service =
         TournamentService(
             tournamentUserRepository,
@@ -396,6 +423,7 @@ class TournamentServiceTest {
             testItemRepository,
             testItemSnapshotRepository,
             testWishRepository,
+            ApplicationEventPublisher { publishedEvents += it },
         )
     private val userId = UUID.randomUUID()
     private val otherUserId = UUID.randomUUID()
@@ -419,6 +447,25 @@ class TournamentServiceTest {
         assertEquals(1L, id)
         assertTrue(result.inviteCode.matches(Regex("[A-Z]{3}\\d{3}")))
         assertEquals(TournamentStatus.PENDING, repository.tournaments[id]!!.status)
+    }
+
+    @Test
+    fun `join 은 참여 후 TournamentJoined 이벤트를 발행한다`() {
+        val created = service.create(userId, CreateTournament("내 토너먼트"))
+
+        service.join(otherUserId, created.tournamentId, created.inviteCode)
+
+        assertEquals(listOf<Any>(TournamentJoined(created.tournamentId, otherUserId)), publishedEvents)
+    }
+
+    @Test
+    fun `addItemsFromWish 는 여러 개를 추가해도 TournamentItemAdded 를 한 번만 발행한다`() {
+        val tournamentId = service.create(userId, CreateTournament("내 토너먼트")).tournamentId
+        testWishRepository.addWish(userId, *(1L..3L).toList().toLongArray())
+
+        service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, (1L..3L).toList()))
+
+        assertEquals(listOf<Any>(TournamentItemAdded(tournamentId, userId)), publishedEvents)
     }
 
     @Test
@@ -546,7 +593,7 @@ class TournamentServiceTest {
         val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
-        testItemRepository.statusOverrides[1L] = ItemStatus.PROCESSING
+        testItemSnapshotRepository.statusOverrides[1L] = ItemStatus.PROCESSING
 
         val ex = assertFailsWith<TournamentException> { service.start(userId, tournamentId) }
         assertEquals(HttpStatus.CONFLICT, ex.httpStatus)
@@ -557,7 +604,7 @@ class TournamentServiceTest {
         val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
-        testItemRepository.statusOverrides[1L] = ItemStatus.FAILED
+        testItemSnapshotRepository.statusOverrides[1L] = ItemStatus.FAILED
 
         val ex = assertFailsWith<TournamentException> { service.start(userId, tournamentId) }
         assertEquals(HttpStatus.CONFLICT, ex.httpStatus)
@@ -568,7 +615,7 @@ class TournamentServiceTest {
         val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
-        testItemRepository.priceOverrides[1L] = null
+        testItemSnapshotRepository.priceOverrides[1L] = null
 
         val ex = assertFailsWith<TournamentException> { service.start(userId, tournamentId) }
         assertEquals(HttpStatus.CONFLICT, ex.httpStatus)

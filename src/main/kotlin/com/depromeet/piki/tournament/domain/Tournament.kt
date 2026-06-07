@@ -17,8 +17,8 @@ class Tournament(
     val name: String,
     @Column(name = "invite_code", nullable = false, length = 6)
     val inviteCode: String,
-    @Column(name = "invite_expires_at", nullable = false)
-    val inviteExpiresAt: LocalDateTime,
+    inviteExpiresAt: LocalDateTime,
+
     @Enumerated(value = EnumType.STRING)
     @Column(columnDefinition = "varchar(50)")
     var status: TournamentStatus = TournamentStatus.PENDING,
@@ -31,6 +31,11 @@ class Tournament(
     private var _ownerTournamentUserId: Long = ownerTournamentUserId
 
     val ownerTournamentUserId: Long get() = _ownerTournamentUserId
+
+    @Column(name = "invite_expires_at", nullable = false)
+    private var _inviteExpiresAt: LocalDateTime = inviteExpiresAt
+
+    val inviteExpiresAt: LocalDateTime get() = _inviteExpiresAt
 
     @Column(name = "play_link_expires_at")
     var playLinkExpiresAt: LocalDateTime? = null
@@ -66,9 +71,20 @@ class Tournament(
         deletedAt = java.time.LocalDateTime.now()
     }
 
-    fun isInviteValid(): Boolean = LocalDateTime.now().isBefore(inviteExpiresAt)
+    fun updateInviteExpiry(newExpiresAt: LocalDateTime) {
+        check(isPending()) { "updateInviteExpiry는 PENDING 상태에서만 호출 가능" }
+        _inviteExpiresAt = newExpiresAt
+    }
 
-    fun isPlayLinkValid(): Boolean = playLinkExpiresAt?.let { LocalDateTime.now().isBefore(it) } ?: false
+    fun isInviteValid(): Boolean = LocalDateTime
+        .now()
+        .isBefore(inviteExpiresAt)
+
+    fun isPlayLinkValid(): Boolean = playLinkExpiresAt?.let {
+        LocalDateTime
+            .now()
+            .isBefore(it)
+    } ?: false
 
     companion object {
         internal const val FINAL_ROUND_SIZE = 2
@@ -76,8 +92,12 @@ class Tournament(
         private val DIGITS = ('0'..'9').toList()
 
         fun generateInviteCode(): String {
-            val letters = (1..3).map { LETTERS[Random.nextInt(LETTERS.size)] }.joinToString("")
-            val digits = (1..3).map { DIGITS[Random.nextInt(DIGITS.size)] }.joinToString("")
+            val letters = (1..3)
+                .map { LETTERS[Random.nextInt(LETTERS.size)] }
+                .joinToString("")
+            val digits = (1..3)
+                .map { DIGITS[Random.nextInt(DIGITS.size)] }
+                .joinToString("")
             return letters + digits
         }
     }

@@ -3,12 +3,14 @@ package com.depromeet.piki.wishlist.controller
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.common.storage.ImageStorageException
 import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.service.ItemParsingService
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubImageStorage
 import com.depromeet.piki.support.uuidToBytes
 import com.depromeet.piki.user.domain.IdentityType
+import com.depromeet.piki.wishlist.controller.dto.WishlistUpdateRequest
 import com.depromeet.piki.wishlist.service.WishPersistenceService
 import org.hamcrest.Matchers.nullValue
 import org.hamcrest.Matchers.startsWith
@@ -48,6 +50,9 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     private lateinit var wishPersistenceService: WishPersistenceService
 
     @Autowired
+    private lateinit var itemParsingService: ItemParsingService
+
+    @Autowired
     private lateinit var stubImageStorage: StubImageStorage
 
     @Autowired
@@ -75,6 +80,8 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
     // 조회·수정·삭제 시나리오의 데이터 시딩. 등록 API(비동기)를 거치지 않고 영속화 빈으로 READY item+wish 를
     // 바로 만든다 — 이 테스트들의 관심사는 "완성된 위시가 있을 때"이지 등록 흐름이 아니기 때문.
+    // item 은 정체성(link)만 들고, 표시값·상태는 활성 snapshot 이 보유한다(4a). persist 가 PROCESSING snapshot 을 만들면
+    // markReady 로 그 snapshot 을 READY 로 전이시켜 추출값을 채운다 — 등록 후 파싱 성공과 동형이다.
     private fun seedReadyWish(
         userId: UUID,
         url: String,
@@ -82,43 +89,40 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         currentPrice: Int? = null,
         currency: String? = null,
         imageUrl: String? = null,
-    ): Long =
-        wishPersistenceService
-            .persist(
-                userId,
-                Item.from(
-                    ProductSnapshot(
-                        link = ProductLink.parse(url),
-                        name = name,
-                        currentPrice = currentPrice,
-                        currency = currency,
-                        imageUrl = imageUrl,
-                    ),
-                ),
-            ).wish
-            .getId()
+    ): Long {
+        val result = wishPersistenceService.persist(userId, Item(ProductLink.parse(url)))
+        itemParsingService.markReady(
+            result.item.getId(),
+            ProductSnapshot(
+                link = ProductLink.parse(url),
+                name = name,
+                currentPrice = currentPrice,
+                currency = currency,
+                imageUrl = imageUrl,
+            ),
+        )
+        return result.wish.getId()
+    }
 
     // FAILED 상태 item+wish 시딩 — 추출 실패 항목을 사용자가 직접 보정하는 시나리오용.
-    // 등록 API(비동기 파싱)를 거치지 않고 markFailed 로 FAILED 상태를 바로 만들어 영속화한다.
+    // 등록 API(비동기 파싱)를 거치지 않고 PROCESSING snapshot 을 markFailed 로 FAILED 로 전이시켜 영속화한다.
     private fun seedFailedWish(
         userId: UUID,
         url: String,
-    ): Long =
-        wishPersistenceService
-            .persist(
-                userId,
-                Item.processing(ProductLink.parse(url)).apply { markFailed() },
-            ).wish
-            .getId()
+    ): Long {
+        val result = wishPersistenceService.persist(userId, Item(ProductLink.parse(url)))
+        itemParsingService.markFailed(result.item.getId())
+        return result.wish.getId()
+    }
 
     // PROCESSING 상태 item+wish 시딩 — 파싱 중 항목에 클라이언트가 끼어드는(409) 시나리오용.
-    // 등록 API(워커 디스패치)를 거치지 않고 PROCESSING item 을 바로 영속화해 전이 전 상태에 멈춰 둔다.
+    // 등록 API(워커 디스패치)를 거치지 않고 PROCESSING snapshot 을 바로 영속화해 전이 전 상태에 멈춰 둔다.
     private fun seedProcessingWish(
         userId: UUID,
         url: String,
     ): Long =
         wishPersistenceService
-            .persist(userId, Item.processing(ProductLink.parse(url)))
+            .persist(userId, Item(ProductLink.parse(url)))
             .wish
             .getId()
 
@@ -451,6 +455,8 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isBadRequest)
+            // 응답 detail 이 OpenAPI example(WishlistApiExamples 가격 음수)과 같은 형식인지 contract 로 고정.
+            .andExpect(jsonPath("$.detail").value("currentPrice: ${WishlistUpdateRequest.PRICE_MIN_MESSAGE}"))
     }
 
     @Test

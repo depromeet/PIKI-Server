@@ -158,8 +158,11 @@ class UserService(
     @Transactional(readOnly = true)
     fun isNicknameAvailable(
         nickname: String,
-        userId: UUID,
-    ): Boolean = !userRepository.existsByNicknameAndIdNot(nickname, userId)
+        userId: UUID?,
+    ): Boolean =
+        userId
+            ?.let { !userRepository.existsByNicknameAndIdNot(nickname, it) }
+            ?: !userRepository.existsByNickname(nickname)
 
     @Transactional
     fun updateNickname(
@@ -180,6 +183,19 @@ class UserService(
         } catch (e: DataIntegrityViolationException) {
             throw UserException.duplicateNickname()
         }
+    }
+
+    // 프로필 이미지 URL 영속화만 담당하는 짧은 트랜잭션. S3 업로드(외부 호출)는 ProfileImageService 가
+    // 트랜잭션 밖에서 끝낸 뒤 그 결과 URL 만 여기로 위임한다 (## 트랜잭션 경계 — 외부 호출은 트랜잭션 밖).
+    @Transactional
+    fun updateProfileImageUrl(
+        userId: UUID,
+        profileImageUrl: String,
+    ): User {
+        val user = findById(userId)
+        user.deletedAt?.let { throw UserException.deletedUser(userId) }
+        user.updateProfileImage(profileImageUrl)
+        return userRepository.save(user)
     }
 
     @Transactional

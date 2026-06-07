@@ -6,6 +6,7 @@ import com.depromeet.piki.tournament.controller.dto.CreateTournamentResponse
 import com.depromeet.piki.tournament.controller.dto.GroupResultResponse
 import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestRequest
 import com.depromeet.piki.tournament.controller.dto.JoinTournamentAsGuestResponse
+import com.depromeet.piki.tournament.controller.dto.UpdateInviteDurationRequest
 import com.depromeet.piki.tournament.controller.dto.JoinTournamentRequest
 import com.depromeet.piki.tournament.controller.dto.PlayLinkInfoResponse
 import com.depromeet.piki.tournament.controller.dto.RecordMatchRequest
@@ -22,6 +23,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -58,6 +60,39 @@ class TournamentController(
         return ApiResponseBody.ok(TournamentDetailResponse.from(detail))
     }
 
+    @GetMapping("/{tournamentId}/invite-preview")
+    override fun getInvitePreview(
+        @PathVariable tournamentId: Long,
+    ): ApiResponseBody<TournamentInvitePreviewResponse> {
+        val preview = tournamentService.getInvitePreview(tournamentId)
+        return ApiResponseBody.ok(TournamentInvitePreviewResponse.from(preview))
+    }
+
+    @GetMapping("/by-invite-code")
+    override fun getInvitePreviewByCode(
+        @RequestParam code: String,
+    ): ApiResponseBody<TournamentInvitePreviewResponse> {
+        val preview = tournamentService.getInvitePreviewByCode(code)
+        return ApiResponseBody.ok(TournamentInvitePreviewResponse.from(preview))
+    }
+
+    @GetMapping("/{tournamentId}/play-link-info")
+    override fun getPlayLinkInfo(
+        @PathVariable tournamentId: Long,
+    ): ApiResponseBody<PlayLinkInfoResponse> {
+        val info = tournamentService.getPlayLinkInfo(tournamentId)
+        return ApiResponseBody.ok(PlayLinkInfoResponse.from(info))
+    }
+
+    @GetMapping("/{tournamentId}/group-result")
+    override fun getGroupResult(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+    ): ApiResponseBody<GroupResultResponse> {
+        val result = tournamentService.getGroupResult(userId, tournamentId)
+        return ApiResponseBody.ok(GroupResultResponse.from(result))
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     override fun create(
@@ -66,6 +101,15 @@ class TournamentController(
     ): ApiResponseBody<CreateTournamentResponse> {
         val result = tournamentService.create(userId, request.toCreateTournament())
         return ApiResponseBody.created(CreateTournamentResponse.from(result))
+    }
+
+    @PostMapping("/{tournamentId}/start")
+    override fun start(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+    ): ApiResponseBody<TournamentStartResponse> {
+        val result = tournamentService.start(userId, tournamentId)
+        return ApiResponseBody.ok(TournamentStartResponse.from(result))
     }
 
     @PostMapping("/{tournamentId}/join")
@@ -88,15 +132,6 @@ class TournamentController(
         return ApiResponseBody.created(JoinTournamentAsGuestResponse.from(result))
     }
 
-    @PostMapping("/{tournamentId}/start")
-    override fun start(
-        @AuthenticationPrincipal userId: UUID,
-        @PathVariable tournamentId: Long,
-    ): ApiResponseBody<TournamentStartResponse> {
-        val result = tournamentService.start(userId, tournamentId)
-        return ApiResponseBody.ok(TournamentStartResponse.from(result))
-    }
-
     @PostMapping("/{tournamentId}/matches")
     override fun recordMatch(
         @AuthenticationPrincipal userId: UUID,
@@ -107,31 +142,6 @@ class TournamentController(
         return ApiResponseBody.ok(result?.let { TournamentDetailResponse.CompletedData.from(it) })
     }
 
-    @DeleteMapping("/{tournamentId}")
-    override fun deleteTournament(
-        @AuthenticationPrincipal userId: UUID,
-        @PathVariable tournamentId: Long,
-    ): ApiResponseBody<Unit> {
-        tournamentService.deleteTournament(userId, tournamentId)
-        return ApiResponseBody.ok()
-    }
-
-    @GetMapping("/{tournamentId}/invite-preview")
-    override fun getInvitePreview(
-        @PathVariable tournamentId: Long,
-    ): ApiResponseBody<TournamentInvitePreviewResponse> {
-        val preview = tournamentService.getInvitePreview(tournamentId)
-        return ApiResponseBody.ok(TournamentInvitePreviewResponse.from(preview))
-    }
-
-    @GetMapping("/by-invite-code")
-    override fun getInvitePreviewByCode(
-        @RequestParam code: String,
-    ): ApiResponseBody<TournamentInvitePreviewResponse> {
-        val preview = tournamentService.getInvitePreviewByCode(code)
-        return ApiResponseBody.ok(TournamentInvitePreviewResponse.from(preview))
-    }
-
     @PostMapping("/{tournamentId}/play-link")
     override fun createPlayLink(
         @AuthenticationPrincipal userId: UUID,
@@ -139,14 +149,6 @@ class TournamentController(
     ): ApiResponseBody<LocalDateTime> {
         val expiresAt = tournamentService.createPlayLink(userId, tournamentId)
         return ApiResponseBody.ok(expiresAt)
-    }
-
-    @GetMapping("/{tournamentId}/play-link-info")
-    override fun getPlayLinkInfo(
-        @PathVariable tournamentId: Long,
-    ): ApiResponseBody<PlayLinkInfoResponse> {
-        val info = tournamentService.getPlayLinkInfo(tournamentId)
-        return ApiResponseBody.ok(PlayLinkInfoResponse.from(info))
     }
 
     @PostMapping("/{sourceTournamentId}/from-play-link")
@@ -159,12 +161,22 @@ class TournamentController(
         return ApiResponseBody.created(newTournamentId)
     }
 
-    @GetMapping("/{tournamentId}/group-result")
-    override fun getGroupResult(
+    @PatchMapping("/{tournamentId}/invite")
+    override fun updateInviteExpiry(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable tournamentId: Long,
-    ): ApiResponseBody<GroupResultResponse> {
-        val result = tournamentService.getGroupResult(userId, tournamentId)
-        return ApiResponseBody.ok(GroupResultResponse.from(result))
+        @Valid @RequestBody request: UpdateInviteDurationRequest,
+    ): ApiResponseBody<LocalDateTime> {
+        val newExpiresAt = tournamentService.updateInviteExpiry(userId, tournamentId, request.inviteDurationMinutes)
+        return ApiResponseBody.ok(newExpiresAt)
+    }
+
+    @DeleteMapping("/{tournamentId}")
+    override fun deleteTournament(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable tournamentId: Long,
+    ): ApiResponseBody<Unit> {
+        tournamentService.deleteTournament(userId, tournamentId)
+        return ApiResponseBody.ok()
     }
 }

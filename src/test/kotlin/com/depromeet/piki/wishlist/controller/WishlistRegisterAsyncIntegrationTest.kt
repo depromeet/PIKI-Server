@@ -3,8 +3,10 @@ package com.depromeet.piki.wishlist.controller
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.image.domain.BoundingBox
 import com.depromeet.piki.image.service.ImageExtraction
+import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemRepository
+import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.product.service.ProductSnapshotException
 import com.depromeet.piki.product.service.gemini.GeminiApiException
@@ -60,6 +62,9 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
     private lateinit var itemRepository: ItemRepository
 
     @Autowired
+    private lateinit var itemSnapshotRepository: ItemSnapshotRepository
+
+    @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
 
     @Autowired
@@ -104,13 +109,14 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             val itemId = registerAndGetItemId(mockMvc, userId, "https://shop.example.com/products/42")
 
             await().atMost(Duration.ofSeconds(5)).until {
-                itemRepository.findById(itemId)?.status == ItemStatus.READY
+                latestSnapshot(itemId)?.status == ItemStatus.READY
             }
 
-            val item = itemRepository.findById(itemId) ?: error("item $itemId 가 없다")
-            assertEquals("나이키 에어포스", item.name)
-            assertEquals(99_000, item.currentPrice)
-            assertEquals("KRW", item.currency)
+            // 표시값·상태는 활성 snapshot 이 보유한다(4a) — item 은 정체성(link)만 든다.
+            val snapshot = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
+            assertEquals("나이키 에어포스", snapshot.name)
+            assertEquals(99_000, snapshot.currentPrice)
+            assertEquals("KRW", snapshot.currency)
         } finally {
             cleanup(userId)
         }
@@ -127,13 +133,13 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             val itemId = registerAndGetItemId(mockMvc, userId, "https://shop.example.com/products/not-a-product")
 
             await().atMost(Duration.ofSeconds(5)).until {
-                itemRepository.findById(itemId)?.status == ItemStatus.FAILED
+                latestSnapshot(itemId)?.status == ItemStatus.FAILED
             }
 
-            val item = itemRepository.findById(itemId) ?: error("item $itemId 가 없다")
-            assertEquals(ItemStatus.FAILED, item.status)
+            val snapshot = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
+            assertEquals(ItemStatus.FAILED, snapshot.status)
             // 실패 항목은 추출 결과가 비어 있다.
-            assertNull(item.name)
+            assertNull(snapshot.name)
         } finally {
             cleanup(userId)
         }
@@ -151,12 +157,12 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             val itemId = registerAndGetItemId(mockMvc, userId, "https://shop.example.com/products/no-name")
 
             await().atMost(Duration.ofSeconds(5)).until {
-                itemRepository.findById(itemId)?.status == ItemStatus.FAILED
+                latestSnapshot(itemId)?.status == ItemStatus.FAILED
             }
 
-            val item = itemRepository.findById(itemId) ?: error("item $itemId 가 없다")
-            assertEquals(ItemStatus.FAILED, item.status)
-            assertNull(item.name)
+            val snapshot = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
+            assertEquals(ItemStatus.FAILED, snapshot.status)
+            assertNull(snapshot.name)
         } finally {
             cleanup(userId)
         }
@@ -212,13 +218,14 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             val itemId = registerImageAndGetItemId(mockMvc, userId, image)
 
             await().atMost(Duration.ofSeconds(5)).until {
-                itemRepository.findById(itemId)?.status == ItemStatus.READY
+                latestSnapshot(itemId)?.status == ItemStatus.READY
             }
+            val snapshot = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
+            assertEquals("나이키 에어포스", snapshot.name)
+            assertEquals(99_000, snapshot.currentPrice)
+            assertEquals("KRW", snapshot.currency)
+            // 이미지 등록은 link(원본 URL)가 없다 — link 는 정체성이라 item 에서 읽는다.
             val item = itemRepository.findById(itemId) ?: error("item $itemId 가 없다")
-            assertEquals("나이키 에어포스", item.name)
-            assertEquals(99_000, item.currentPrice)
-            assertEquals("KRW", item.currency)
-            // 이미지 등록은 link(원본 URL)가 없다.
             assertNull(item.link)
         } finally {
             cleanup(userId)
@@ -247,10 +254,10 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             val itemId = registerImageAndGetItemId(mockMvc, userId, image)
 
             await().atMost(Duration.ofSeconds(5)).until {
-                itemRepository.findById(itemId)?.status == ItemStatus.READY
+                latestSnapshot(itemId)?.status == ItemStatus.READY
             }
-            val item = itemRepository.findById(itemId) ?: error("item $itemId 가 없다")
-            assertEquals(true, item.imageUrl?.startsWith(StubImageStorage.BASE_URL))
+            val snapshot = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
+            assertEquals(true, snapshot.imageUrl?.startsWith(StubImageStorage.BASE_URL))
         } finally {
             cleanup(userId)
         }
@@ -269,11 +276,11 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             val itemId = registerImageAndGetItemId(mockMvc, userId, image)
 
             await().atMost(Duration.ofSeconds(5)).until {
-                itemRepository.findById(itemId)?.status == ItemStatus.FAILED
+                latestSnapshot(itemId)?.status == ItemStatus.FAILED
             }
-            val item = itemRepository.findById(itemId) ?: error("item $itemId 가 없다")
-            assertEquals(ItemStatus.FAILED, item.status)
-            assertNull(item.name)
+            val snapshot = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
+            assertEquals(ItemStatus.FAILED, snapshot.status)
+            assertNull(snapshot.name)
         } finally {
             cleanup(userId)
         }
@@ -318,7 +325,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
                 }
 
             await().atMost(Duration.ofSeconds(5)).until {
-                itemIds.all { itemRepository.findById(it)?.status == ItemStatus.READY }
+                itemIds.all { latestSnapshot(it)?.status == ItemStatus.READY }
             }
         } finally {
             cleanup(userId)
@@ -391,7 +398,10 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
 
     private fun memberToken(userId: UUID): String = jwtProvider.generateAccessToken(userId, IdentityType.MEMBER)
 
-    // @Transactional 자동 롤백이 없으므로 이 테스트가 만든 user·wish·item 을 직접 정리한다.
+    // 표시값·상태는 item 의 활성(최신) snapshot 이 보유한다(4a). 폴링·단언이 이 snapshot 을 읽는다.
+    private fun latestSnapshot(itemId: Long): ItemSnapshot? = itemSnapshotRepository.findLatestByItemId(itemId)
+
+    // @Transactional 자동 롤백이 없으므로 이 테스트가 만든 user·wish·item·snapshot 을 직접 정리한다.
     private fun cleanup(userId: UUID) {
         val itemIds =
             jdbcTemplate.queryForList(
@@ -401,6 +411,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             )
         jdbcTemplate.update("DELETE FROM wishes WHERE user_id = ?", uuidToBytes(userId))
         itemIds.takeIf { it.isNotEmpty() }?.let {
+            jdbcTemplate.update("DELETE FROM item_snapshots WHERE item_id IN (${it.joinToString(",")})")
             jdbcTemplate.update("DELETE FROM items WHERE id IN (${it.joinToString(",")})")
         }
         jdbcTemplate.update("DELETE FROM users WHERE id = ?", uuidToBytes(userId))

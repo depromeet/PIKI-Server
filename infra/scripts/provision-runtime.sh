@@ -18,6 +18,33 @@ else
   grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 fi
 
+# 1b) swappiness — swap 은 비상 쿠션으로만 쓰고 라이브 JVM heap 은 RAM 에 유지한다. 기본 60 은
+# 너무 공격적이라 평시에도 JVM 이 swap 으로 밀려 GC 가 느려진다(실측 ~140Mi swap). 10 으로 낮춰
+# 커널이 anon(힙)보다 page cache 를 먼저 회수하게 한다. sysctl 드롭인으로 영속화 + 즉시 적용(멱등).
+if [ "$(cat /proc/sys/vm/swappiness)" = "10" ]; then
+  echo "[swappiness] 이미 10 — skip"
+else
+  echo "[swappiness] 60 → 10 설정"
+  echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swappiness.conf
+  sudo sysctl -w vm.swappiness=10
+fi
+
+# 1c) swap 추가 증설 — overlap(blue+green) 때 1G swap 이 100% 꽉 차는 게 실측됐다(#420 검증 배포). 2G 를
+# 별도 파일로 더해 총 3G 로 만든다. 기존 /swapfile 을 리사이즈(swapoff)하지 않는 이유: swap 사용량이
+# free RAM 보다 클 때 swapoff 는 페이지를 RAM 으로 못 옮겨 OOM 위험이 있다(라이브 박스). 추가 파일은 안전·멱등.
+# swapon 활성 체크는 생성·활성화만 가르고, fstab 영속화는 활성 여부와 무관하게 항상 보장한다 —
+# "활성이지만 fstab 누락" 상태면 재부팅에 swap2 가 사라져 완화가 무력화되기 때문.
+if sudo swapon --show | grep -q '/swapfile2'; then
+  echo "[swap2] 이미 활성"
+else
+  echo "[swap2] /swapfile2 2G 추가 (총 3G)"
+  sudo fallocate -l 2G /swapfile2 || sudo dd if=/dev/zero of=/swapfile2 bs=1M count=2048
+  sudo chmod 600 /swapfile2
+  sudo mkswap /swapfile2
+  sudo swapon /swapfile2
+fi
+grep -q '^/swapfile2[[:space:]]' /etc/fstab || echo '/swapfile2 none swap sw 0 0' | sudo tee -a /etc/fstab
+
 # 2) redis — RefreshToken 저장소(RedisRefreshTokenStore). 없을 때만 named 볼륨(team3-redis-data)으로 기동.
 #    기존 컨테이너(익명 볼륨 포함)는 보존한다 — 멱등 skip. 새 인스턴스에서만 named 볼륨으로 생성돼,
 #    이후 컨테이너 재생성에도 refresh token 이 유지된다.

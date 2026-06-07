@@ -45,7 +45,7 @@ class WishlistService(
         userId: UUID,
     ): WishWithItem {
         val link = ProductLink.parse(rawUrl)
-        val result = wishPersistenceService.persist(userId, Item.processing(link))
+        val result = wishPersistenceService.persist(userId, Item(link))
         // 워커 디스패치가 큐 포화 등으로 거부되면 PROCESSING 으로 방치하지 않고 즉시 FAILED 로 떨어뜨린다.
         runCatching { itemParsingWorker.parse(result.item.getId(), link) }
             .onFailure { e ->
@@ -161,19 +161,23 @@ class WishlistService(
         wish.verifyOwnedBy(userId)
         // wish 가 가리키는 item 은 반드시 존재한다. 없으면 영속화 경로가 깨진 코드 버그다.
         val item = itemRepository.findById(wish.itemId) ?: error("wish ${wish.getId()} 의 item ${wish.itemId} 가 없다")
-        // FAILED 가 아니면 S3 에 올리기 전에 막는다(orphan 업로드 방지). recover 가 사유별 409 를 던진다.
-        if (!item.isFailed()) item.recover()
+        // 활성 snapshot 으로 사전 상태 검증 — FAILED 가 아니면 S3 에 올리기 전에 막는다(orphan 업로드 방지).
+        // recover 가 READY/PROCESSING 에 사유별 409 를 던진다(트랜잭션 밖 조회라 던지기 전용, 실제 보정은 recoverItem).
+        val activeSnapshot =
+            wish.snapshotId?.let { itemSnapshotRepository.findById(it) }
+                ?: error("wish ${wish.getId()} 의 snapshot ${wish.snapshotId} 가 없다")
+        if (!activeSnapshot.isFailed()) activeSnapshot.recover()
         // 이미지가 있으면 S3 업로드(트랜잭션 밖). 실패 시 ImageStorageException(502).
         val imageUrl =
             productImage?.let {
                 imageStorage.upload(it.bytes, "items/${UUID.randomUUID()}.${it.extension}", it.mimeType)
             }
-        val recovered = wishPersistenceService.recoverItem(wish.itemId, name, currentPrice, imageUrl, currency)
-        // recoverItem 이 같은 트랜잭션에서 활성 snapshot 도 보정해 두었다. 응답 표시값은 그 snapshot 에서 읽는다.
+        wishPersistenceService.recoverItem(wish.itemId, name, currentPrice, imageUrl, currency)
+        // recoverItem 이 같은 트랜잭션에서 활성 snapshot 을 보정했다. 응답 표시값은 그 snapshot 을 재조회해 읽는다.
         val snapshot =
             wish.snapshotId?.let { itemSnapshotRepository.findById(it) }
                 ?: error("wish ${wish.getId()} 의 snapshot ${wish.snapshotId} 가 없다")
-        return WishWithItem(wish = wish, item = recovered, snapshot = snapshot)
+        return WishWithItem(wish = wish, item = item, snapshot = snapshot)
     }
 
     // 멱등 삭제: 없거나 이미 삭제됐으면 "이미 목표 상태(없음)"이므로 성공으로 본다(no-op).

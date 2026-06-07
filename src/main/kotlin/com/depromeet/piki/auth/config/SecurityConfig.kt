@@ -107,10 +107,16 @@ class SecurityConfig(
                     // FCM 토큰 등록/해제 — 인증 유저가 자기 기기 토큰을 등록한다 (GUEST 포함, 토너먼트 푸시 대상).
                     .requestMatchers("/api/v1/fcm/**")
                     .authenticated()
-                    // /users/me 와 /users/nickname/check 는 게스트도 호출 가능 (닉네임 확정/수정 흐름)
-                    .requestMatchers(HttpMethod.GET, "/api/v1/users/me", "/api/v1/users/nickname/check")
+                    // 닉네임 중복 체크: 게스트 참여 화면에서 JWT 없는 상태로 호출하므로 인증 불필요
+                    .requestMatchers(HttpMethod.GET, "/api/v1/users/nickname/check")
+                    .permitAll()
+                    // /users/me 는 자기 프로필 조회/수정 — 게스트 포함 인증 필요
+                    .requestMatchers(HttpMethod.GET, "/api/v1/users/me")
                     .authenticated()
                     .requestMatchers(HttpMethod.PATCH, "/api/v1/users/me")
+                    .authenticated()
+                    // 프로필 이미지 업로드 — GET /me·PATCH /me 와 동일하게 게스트도 호출 가능
+                    .requestMatchers(HttpMethod.POST, "/api/v1/users/me/profile-image")
                     .authenticated()
                     .anyRequest()
                     .authenticated()

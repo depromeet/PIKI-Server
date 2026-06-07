@@ -126,11 +126,31 @@ class ItemSnapshotTest {
         }
     }
 
+    // --- recover 계약 검증 (4a: item 으로부터 승격) — 클라이언트 도달 가능한 409/400 을 도메인이 직접 던진다 ---
+
     @Test
-    fun `FAILED 가 아닌 스냅샷을 recover 하면 IllegalStateException`() {
+    fun `READY 스냅샷을 recover 하면 이미 완료라 ItemException(409)`() {
         val snapshot = ItemSnapshot(itemId = 1L)
-        assertFailsWith<IllegalStateException> {
-            snapshot.recover(name = "x", currentPrice = null, imageUrl = null, currency = null)
+        snapshot.markReady(ProductSnapshot(name = "나이키"))
+        assertFailsWith<ItemException> {
+            snapshot.recover(name = "수정", currentPrice = null, imageUrl = null, currency = null)
+        }
+    }
+
+    @Test
+    fun `PROCESSING 스냅샷을 recover 하면 처리 중이라 ItemException(409)`() {
+        val snapshot = ItemSnapshot(itemId = 1L)
+        assertFailsWith<ItemException> {
+            snapshot.recover(name = "수정", currentPrice = null, imageUrl = null, currency = null)
+        }
+    }
+
+    @Test
+    fun `FAILED 스냅샷을 보정해도 name 이 비면 ItemException(400)`() {
+        val snapshot = ItemSnapshot(itemId = 1L)
+        snapshot.markFailed()
+        assertFailsWith<ItemException> {
+            snapshot.recover(name = null, currentPrice = 1_000, imageUrl = null, currency = "KRW")
         }
     }
 }
