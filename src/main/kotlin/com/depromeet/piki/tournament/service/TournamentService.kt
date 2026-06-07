@@ -10,6 +10,7 @@ import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.event.TournamentItemAdded
 import com.depromeet.piki.tournament.event.TournamentJoined
+import com.depromeet.piki.tournament.event.TournamentStarted
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
@@ -162,8 +163,11 @@ class TournamentService(
         userId: UUID,
         tournamentId: Long,
     ): List<TournamentStartResult> {
+        // 상태 전이(PENDING→IN_PROGRESS) + 이벤트 발행을 하므로 행 락으로 읽는다. 락 없이 읽으면 동시 요청이 둘 다
+        // PENDING 검증을 통과해 TournamentStarted 를 중복 발행(참가자에게 시작 알림 중복 도달)할 수 있다.
+        // 다른 상태 전이 메서드(join·recordMatch 등)와 동일한 forUpdate 패턴.
         val tournament =
-            tournamentRepository.findTournamentById(tournamentId)
+            tournamentRepository.findTournamentByIdForUpdate(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
         val owner =
@@ -190,6 +194,8 @@ class TournamentService(
         }
 
         tournament.start()
+        // 시작이 커밋된 뒤에만 참가자에게 전달되도록 트랜잭션 안에서 발행한다 (롤백 시 미발행).
+        eventPublisher.publishEvent(TournamentStarted(tournamentId = tournamentId, actorId = userId))
         return tournamentItems
             .map { tournamentItem ->
                 val snapshot = tournamentItem.requireSnapshot(snapshotById)

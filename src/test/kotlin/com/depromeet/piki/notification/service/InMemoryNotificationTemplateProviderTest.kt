@@ -24,6 +24,12 @@ class InMemoryNotificationTemplateProviderTest {
     }
 
     @Test
+    fun `TOURNAMENT_STARTED 템플릿은 actorName 플레이스홀더를 담는다`() {
+        val template = provider.find(NotificationType.TOURNAMENT_STARTED)
+        assertTrue(template.title.contains("\${actorName}"))
+    }
+
+    @Test
     fun `변수가 없는 ITEM_PARSING_COMPLETED 템플릿은 플레이스홀더가 없다`() {
         val template = provider.find(NotificationType.ITEM_PARSING_COMPLETED)
         assertTrue(!template.title.contains("\${"))
