@@ -163,8 +163,11 @@ class TournamentService(
         userId: UUID,
         tournamentId: Long,
     ): List<TournamentStartResult> {
+        // 상태 전이(PENDING→IN_PROGRESS) + 이벤트 발행을 하므로 행 락으로 읽는다. 락 없이 읽으면 동시 요청이 둘 다
+        // PENDING 검증을 통과해 TournamentStarted 를 중복 발행(참가자에게 시작 알림 중복 도달)할 수 있다.
+        // 다른 상태 전이 메서드(join·recordMatch 등)와 동일한 forUpdate 패턴.
         val tournament =
-            tournamentRepository.findTournamentById(tournamentId)
+            tournamentRepository.findTournamentByIdForUpdate(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
         val owner =
