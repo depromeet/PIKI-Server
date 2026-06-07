@@ -3,7 +3,9 @@ package com.depromeet.piki.user.service
 import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.user.domain.User
 import com.depromeet.piki.user.domain.UserException
+import com.depromeet.piki.user.repository.UserDetailRepository
 import com.depromeet.piki.user.repository.UserRepository
+import com.depromeet.piki.user.service.dto.UserProfile
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -12,6 +14,7 @@ import java.util.UUID
 @Service
 class UserService(
     private val userRepository: UserRepository,
+    private val userDetailRepository: UserDetailRepository,
 ) {
     companion object {
         private const val DICEBEAR_BASE_URL = "https://api.dicebear.com/9.x/bottts/svg?seed="
@@ -152,6 +155,15 @@ class UserService(
 
     @Transactional(readOnly = true)
     fun findById(userId: UUID): User = userRepository.findById(userId) ?: throw UserException.notFound(userId)
+
+    // 마이페이지(GET /me) 조회 — User(정체성)와 UserDetail 의 email 을 한 트랜잭션에서 모은다.
+    // email 은 미수집(게스트)·미동의·backfill 전이면 UserDetail 이 없거나 null 이라 그대로 null 로 내려간다.
+    @Transactional(readOnly = true)
+    fun getMyProfile(userId: UUID): UserProfile {
+        val user = findById(userId)
+        val email = userDetailRepository.findByUserId(userId)?.email
+        return UserProfile(user, email)
+    }
 
     // 본인 닉네임은 중복으로 잡지 않는다 (#230). 게스트가 자기 닉네임 그대로 유지하거나, 본인이
     // 자기 닉네임으로 다시 변경하는 흐름이 자연스럽게 통과되도록 본인 제외 후 검사.

@@ -1,6 +1,7 @@
 package com.depromeet.piki.user.controller
 
 import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.user.controller.dto.MyProfileResponse
 import com.depromeet.piki.user.controller.dto.NicknameCheckRequest
 import com.depromeet.piki.user.controller.dto.NicknameCheckResponse
 import com.depromeet.piki.user.controller.dto.UserResponse
@@ -20,13 +21,15 @@ import java.util.UUID
 interface UserApi {
     @Operation(
         summary = "내 정보 조회",
-        description = "현재 로그인된 유저(GUEST 포함) 의 정보를 조회한다.",
+        description =
+            "현재 로그인된 유저(GUEST 포함) 의 정보를 조회한다. 소셜 계정 email 을 함께 내려준다 " +
+                "(미수집·미동의·backfill 전이면 null).",
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "조회 성공",
+                description = "조회 성공 (email 은 미수집·미동의 시 null)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -58,7 +61,7 @@ interface UserApi {
     )
     fun getMe(
         @Parameter(hidden = true) userId: UUID,
-    ): ApiResponseBody<UserResponse>
+    ): ApiResponseBody<MyProfileResponse>
 
     @Operation(
         summary = "내 정보 수정",

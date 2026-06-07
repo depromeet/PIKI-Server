@@ -1,6 +1,7 @@
 package com.depromeet.piki.user.controller
 
 import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.user.controller.dto.MyProfileResponse
 import com.depromeet.piki.user.controller.dto.NicknameCheckRequest
 import com.depromeet.piki.user.controller.dto.NicknameCheckResponse
 import com.depromeet.piki.user.controller.dto.UserResponse
@@ -35,9 +36,9 @@ class UserController(
     @GetMapping("/me")
     override fun getMe(
         @AuthenticationPrincipal userId: UUID,
-    ): ApiResponseBody<UserResponse> {
-        val user = userService.findById(userId)
-        return ApiResponseBody.ok(UserResponse.from(user))
+    ): ApiResponseBody<MyProfileResponse> {
+        val profile = userService.getMyProfile(userId)
+        return ApiResponseBody.ok(MyProfileResponse.from(profile.user, profile.email))
     }
 
     @PatchMapping("/me")
