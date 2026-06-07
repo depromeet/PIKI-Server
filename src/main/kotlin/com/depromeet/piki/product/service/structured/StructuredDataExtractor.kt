@@ -2,6 +2,7 @@ package com.depromeet.piki.product.service.structured
 
 import com.depromeet.piki.product.service.PageContent
 import com.depromeet.piki.product.service.ProductSnapshot
+import java.math.RoundingMode
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.springframework.stereotype.Component
@@ -29,15 +30,22 @@ class StructuredDataExtractor(
     private fun fromJsonLd(
         document: Document,
         page: PageContent,
-    ): ProductSnapshot? {
-        val product =
-            document
-                .select("script[type=application/ld+json]")
-                .firstNotNullOfOrNull { script ->
-                    val root = runCatching { objectMapper.readTree(script.data()) }.getOrNull()
-                    root?.let { findProductNode(it) }
-                } ?: return null
+    ): ProductSnapshot? =
+        // type 속성에 charset 파라미터·따옴표·공백 변형이 붙어도 application/ld+json 으로 인식한다(jsoup 이 파싱한 attr 기준).
+        document
+            .select("script[type]")
+            .filter { it.attr("type").trim().startsWith("application/ld+json", ignoreCase = true) }
+            .flatMap { script ->
+                val root = runCatching { objectMapper.readTree(script.data()) }.getOrNull()
+                root?.let { collectProductNodes(it) } ?: emptyList()
+            }
+            // 앞 Product 가 검증에 실패해도(요약용 불완전 노드 등) 뒤의 완전한 Product 까지 모두 시도한다.
+            .firstNotNullOfOrNull { product -> toSnapshotFromProduct(product, page) }
 
+    private fun toSnapshotFromProduct(
+        product: JsonNode,
+        page: PageContent,
+    ): ProductSnapshot? {
         val offer = firstOffer(product)
         return toSnapshotOrNull(
             page = page,
@@ -48,22 +56,29 @@ class StructuredDataExtractor(
         )
     }
 
-    // 최상위 배열 / @graph 래핑 / ItemList.itemListElement[].item 중첩을 재귀로 평탄화해 첫 Product 를 찾는다.
-    // JsonNode 순회는 Jackson 버전에 안전한 인덱스 접근(size/get)으로 한다.
-    private fun findProductNode(node: JsonNode): JsonNode? {
+    // 최상위 배열 / @graph 래핑 / ItemList.itemListElement[].item 중첩을 재귀로 평탄화해 모든 Product 노드를 모은다.
+    // 첫 후보가 불완전해도 뒤 후보로 넘어갈 수 있게 전부 수집한다. JsonNode 순회는 안전한 인덱스 접근(size/get)으로.
+    private fun collectProductNodes(node: JsonNode): List<JsonNode> {
+        val products = mutableListOf<JsonNode>()
+        collectProductNodesInto(node, products)
+        return products
+    }
+
+    private fun collectProductNodesInto(
+        node: JsonNode,
+        acc: MutableList<JsonNode>,
+    ) {
         if (node.isArray) {
-            for (i in 0 until node.size()) {
-                findProductNode(node.get(i))?.let { return it }
-            }
-            return null
+            for (i in 0 until node.size()) collectProductNodesInto(node.get(i), acc)
+            return
         }
-        node.get("@graph")?.let { graph -> findProductNode(graph)?.let { return it } }
+        node.get("@graph")?.let { collectProductNodesInto(it, acc) }
         node.get("itemListElement")?.let { list ->
             for (i in 0 until list.size()) {
-                list.get(i).get("item")?.let { item -> findProductNode(item)?.let { return it } }
+                list.get(i).get("item")?.let { collectProductNodesInto(it, acc) }
             }
         }
-        return node.takeIf { isProductType(it) }
+        if (isProductType(node)) acc.add(node)
     }
 
     private fun isProductType(node: JsonNode): Boolean {
@@ -178,7 +193,11 @@ class StructuredDataExtractor(
         val text = raw?.ifBlank { null } ?: return null
         val cleaned = text.replace(PRICE_NOISE, "")
         val decimal = cleaned.toBigDecimalOrNull() ?: return null
-        return decimal.toInt().takeIf { it >= 0 }
+        // toInt() 는 Int 범위를 넘으면 하위 비트로 wrap 해 이상값이 통과할 수 있다. 소수는 버리고(DOWN),
+        // 범위를 벗어나면 intValueExact 가 예외를 던지게 해 null 로 거른다.
+        return runCatching { decimal.setScale(0, RoundingMode.DOWN).intValueExact() }
+            .getOrNull()
+            ?.takeIf { it >= 0 }
     }
 
     companion object {

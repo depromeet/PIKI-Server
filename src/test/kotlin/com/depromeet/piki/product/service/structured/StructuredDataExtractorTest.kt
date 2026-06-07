@@ -149,6 +149,46 @@ class StructuredDataExtractorTest {
         assertEquals(40_000, snapshot?.currentPrice)
     }
 
+    @Test
+    fun `script type 에 charset 파라미터가 붙어도 JSON-LD 를 파싱한다`() {
+        val html =
+            """<html><head><script type="application/ld+json; charset=utf-8">{"@type":"Product","name":"차셋상품","offers":{"price":"12000"}}</script></head><body></body></html>"""
+
+        val snapshot = extractor.extract(pageOf(html))
+
+        assertEquals("차셋상품", snapshot?.name)
+        assertEquals(12_000, snapshot?.currentPrice)
+    }
+
+    @Test
+    fun `앞 Product 가 검증 미달이면 같은 배열의 뒤 완전한 Product 를 쓴다`() {
+        // 첫 Product 는 name 만(price 없음), 둘째 Product 는 name+price.
+        val snapshot =
+            extractor.extract(
+                pageOf(
+                    jsonLd(
+                        """[{"@type":"Product","name":"요약"},{"@type":"Product","name":"상세상품","offers":{"price":"45000"}}]""",
+                    ),
+                ),
+            )
+
+        assertEquals("상세상품", snapshot?.name)
+        assertEquals(45_000, snapshot?.currentPrice)
+    }
+
+    @Test
+    fun `앞 script 의 Product 가 검증 미달이면 다음 script 의 완전한 Product 를 쓴다`() {
+        val html =
+            """
+            <html><head>
+            <script type="application/ld+json">{"@type":"Product","name":"요약만"}</script>
+            <script type="application/ld+json">{"@type":"Product","name":"완전상품","offers":{"price":"30000"}}</script>
+            </head><body></body></html>
+            """.trimIndent()
+
+        assertEquals("완전상품", extractor.extract(pageOf(html))?.name)
+    }
+
     // --- 가격 문자열 파싱 ---
 
     @ParameterizedTest
@@ -187,6 +227,17 @@ class StructuredDataExtractorTest {
         val snapshot =
             extractor.extract(
                 pageOf(jsonLd("""{"@type":"Product","name":"상품","offers":{"price":"$priceText"}}""")),
+            )
+
+        assertNull(snapshot)
+    }
+
+    @Test
+    fun `가격이 Int 범위를 초과하면 null 을 반환한다`() {
+        // 999999999999 는 Int.MAX(약 21억)를 한참 초과 — toInt 로는 wrap 되지만 intValueExact 로 거른다.
+        val snapshot =
+            extractor.extract(
+                pageOf(jsonLd("""{"@type":"Product","name":"초대형가격","offers":{"price":"999999999999"}}""")),
             )
 
         assertNull(snapshot)
