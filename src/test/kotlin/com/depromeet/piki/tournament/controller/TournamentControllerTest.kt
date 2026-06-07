@@ -42,6 +42,8 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.hamcrest.Matchers.nullValue
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
@@ -207,8 +209,12 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"inviteCode":"$inviteCode","nickname":"새친구"}"""),
             ).andExpect(status().isCreated)
-            .andExpect(jsonPath("$.data.accessToken").isString)
-            .andExpect(jsonPath("$.data.refreshToken").isString)
+            .andExpect(cookie().exists("access_token"))
+            .andExpect(cookie().httpOnly("access_token", true))
+            .andExpect(cookie().exists("refresh_token"))
+            .andExpect(cookie().httpOnly("refresh_token", true))
+            .andExpect(jsonPath("$.data.accessToken").value(nullValue()))
+            .andExpect(jsonPath("$.data.refreshToken").value(nullValue()))
             .andExpect(jsonPath("$.data.userId").isString)
             .andExpect(jsonPath("$.data.nickname").value("새친구"))
             .andExpect(jsonPath("$.data.tournamentId").value(tournamentId))
