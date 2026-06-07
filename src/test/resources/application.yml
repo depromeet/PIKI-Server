@@ -3,6 +3,11 @@ spring:
     name: PIKI-test
   config:
     import: optional:file:.env.test[.properties]
+  # test classpath 의 application.yml 이 main 을 대체하므로, dicebear backfill 마이그레이션이 쓰는
+  # Flyway placeholder 를 여기에도 둔다. s3.public-base-url(아래 test 값)을 참조해 어디서 돌든 값이 있다.
+  flyway:
+    placeholders:
+      s3publicbaseurl: ${s3.public-base-url}
 
 # 운영 OAuthClientConfig 의 실제 클라이언트 빈을 테스트 컨텍스트에서는 끈다.
 # 그러면 IntegrationStubs 의 stub(googleOAuthClient/kakaoOAuthClient)만 남아 외부 호출 없이 격리된다.
