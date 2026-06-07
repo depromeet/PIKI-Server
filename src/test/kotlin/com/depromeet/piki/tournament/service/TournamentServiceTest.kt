@@ -260,18 +260,13 @@ class TournamentServiceTest {
         override fun findIdsByTournamentId(tournamentId: Long): List<Long> =
             items.filter { it.tournamentId == tournamentId && (it.deletedAt?.let { false } ?: true) }.map { it.getId() }
 
-        override fun findUserIdsByItemId(itemId: Long): List<UUID> =
-            items
-                .filter { it.itemId == itemId && (it.deletedAt?.let { false } ?: true) }
-                .map { it.userId }
-                .distinct()
-
         override fun findRoutingByItemId(itemId: Long): List<TournamentItemRoutingView> =
             items
                 .filter { it.itemId == itemId && (it.deletedAt?.let { false } ?: true) }
                 .sortedBy { it.getId() }
                 .map { item ->
                     object : TournamentItemRoutingView {
+                        override val userId = item.userId
                         override val tournamentId = item.tournamentId
                         override val tournamentItemId = item.getId()
                     }

@@ -6,6 +6,7 @@ import com.depromeet.piki.notification.domain.Notification
 import com.depromeet.piki.notification.domain.NotificationKind
 import com.depromeet.piki.notification.domain.NotificationRouting
 import com.depromeet.piki.notification.domain.NotificationType
+import com.depromeet.piki.notification.repository.NotificationJpaRepository
 import com.depromeet.piki.notification.repository.NotificationRepository
 import com.depromeet.piki.notification.service.NotificationChannel
 import com.depromeet.piki.support.IntegrationTestSupport
@@ -26,6 +27,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import jakarta.persistence.EntityManager
+import tools.jackson.databind.ObjectMapper
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.assertEquals
@@ -49,6 +52,12 @@ class NotificationSseIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var channels: List<NotificationChannel>
 
     @Autowired private lateinit var notificationRepository: NotificationRepository
+
+    @Autowired private lateinit var notificationJpaRepository: NotificationJpaRepository
+
+    @Autowired private lateinit var entityManager: EntityManager
+
+    @Autowired private lateinit var objectMapper: ObjectMapper
 
     private fun authHeader(userId: UUID): String = "Bearer ${jwtProvider.generateAccessToken(userId, IdentityType.MEMBER)}"
 
@@ -207,6 +216,40 @@ class NotificationSseIntegrationTest : IntegrationTestSupport() {
         val wish = assertIs<NotificationSsePayload.WishParsing>(payload)
         assertEquals(NotificationKind.WISH, wish.kind)
         assertEquals(11L, wish.refId)
+    }
+
+    @Test
+    fun `토너먼트 파싱 알림은 DB 재조회 후에도 라우팅이 보존되고 prod 직렬화로 식별자가 실린다`() {
+        val userId = UUID.randomUUID()
+        val saved =
+            notificationRepository.save(
+                Notification(
+                    userId,
+                    NotificationType.ITEM_PARSING_COMPLETED,
+                    "상품 정보가 저장됐어요",
+                    "",
+                    11L,
+                    NotificationRouting.Tournament(tournamentId = 99L, tournamentItemId = 555L),
+                ),
+            )
+        // DB 에서 noarg 하이드레이션으로 재조회 — @Column/@Enumerated 매핑 + routing() 복원이 인메모리 인스턴스가 아니라 실제 왕복에서도 맞는지 검증.
+        entityManager.flush()
+        entityManager.clear()
+        val reloaded = notificationJpaRepository.findById(saved.getId()).orElseThrow()
+
+        val payload = NotificationSsePayload.from(reloaded)
+        val tournament = assertIs<NotificationSsePayload.TournamentParsing>(payload)
+        assertEquals(NotificationKind.TOURNAMENT, tournament.kind)
+        assertEquals(99L, tournament.tournamentId)
+        assertEquals(555L, tournament.tournamentItemId)
+
+        // prod 가 쓰는 Spring 관리 Jackson(tools.jackson)으로 직렬화해 실제 SSE 와이어 셰입을 검증한다.
+        val json = objectMapper.writeValueAsString(payload)
+        assertTrue(json.contains("\"kind\":\"TOURNAMENT\""))
+        assertTrue(json.contains("\"tournamentId\":99"))
+        assertTrue(json.contains("\"tournamentItemId\":555"))
+        // Jackson3+kotlin module 은 isRead 를 그대로 직렬화한다(모듈 없는 Jackson2 였으면 "read" 로 나와 실패).
+        assertTrue(json.contains("\"isRead\":false"))
     }
 }
 
