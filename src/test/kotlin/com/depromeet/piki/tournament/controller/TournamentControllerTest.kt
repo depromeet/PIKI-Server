@@ -1753,7 +1753,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     // ── 초대 기한 수정 ──────────────────────────────────────────────────
 
     @Test
-    fun `PATCH tournaments-id-invite 는 주최자가 200 과 함께 새 inviteExpiresAt 을 반환한다`() {
+    fun `PATCH tournaments-id-invite 는 주최자가 200 과 함께 새 inviteExpiresAt 을 반환하고 DB 에도 반영된다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         val before = LocalDateTime.now()
@@ -1773,6 +1773,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val expectedMin = before.plusMinutes(60)
         val expectedMax = LocalDateTime.now().plusMinutes(60)
         assertTrue(expiresAt >= expectedMin && expiresAt <= expectedMax)
+
+        // 응답뿐 아니라 엔티티에 실제로 반영됐는지 확인 — backing field dirty-check가 깨져도 응답은 통과하므로
+        val saved = tournamentJpaRepository.findByIdAndDeletedAtIsNull(tournamentId)!!
+        assertTrue(saved.inviteExpiresAt >= expectedMin && saved.inviteExpiresAt <= expectedMax)
     }
 
     @Test
