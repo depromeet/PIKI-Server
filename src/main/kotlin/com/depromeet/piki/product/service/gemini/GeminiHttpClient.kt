@@ -25,7 +25,7 @@ class GeminiHttpClient(
     private val geminiProperties: GeminiProperties,
     private val objectMapper: ObjectMapper,
     observationRegistry: ObservationRegistry,
-) {
+) : GeminiClient {
     // ObservationRegistry 를 물려 Gemini 호출(최대 30s)이 trace 의 한 구간(HTTP client span)으로 잡히게 한다.
     // 한 요청 trace 에서 LLM 호출 latency 가 막대로 또렷이 보인다.
     private val restClient =
@@ -46,7 +46,7 @@ class GeminiHttpClient(
      * 임의 Request 본문으로 generateContent 를 호출하고, 응답 텍스트 파트를 [resultType] 으로
      * 역직렬화해 반환한다. 일시 장애는 [GeminiRetry] 정책으로 재시도된다.
      */
-    fun <Req : Any, Res : Any> generateContent(
+    override fun <Req : Any, Res : Any> generateContent(
         request: Req,
         resultType: Class<Res>,
     ): Res =

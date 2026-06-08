@@ -10,7 +10,9 @@ Grafana Cloud 가 호스팅하는 Grafana 이므로 셀프호스팅 provisioning
 3. 데이터소스 매핑:
    - **DS_PROM** → `grafanacloud-piki-prom` (Prometheus)
    - **DS_LOKI** → `grafanacloud-piki-logs` (Loki)
+   - **DS_TEMPO** → `grafanacloud-piki-traces` (Tempo)
 4. **Import**
+5. 상단 **환경** 드롭다운에서 `dev` / `prod` 를 골라 본다(기본 `prod`).
 
 ## 패널
 
@@ -27,6 +29,17 @@ Grafana Cloud 가 호스팅하는 Grafana 이므로 셀프호스팅 provisioning
 앱 메트릭은 `application="PIKI"` 라벨로 필터한다(Alloy 의 prometheus.scrape 가 붙임).
 blue-green 이라 한 시점에 한 슬롯만 활성이며 `instance` 라벨로 blue/green 을 구분한다.
 호스트 메트릭(`node_*`)은 application 라벨이 없다 — `prometheus.exporter.unix` 가 별도로 내보낸다.
+
+### 환경 구분 (dev / prod)
+
+dev·prod EC2 가 **같은 Grafana Cloud** 로 push 하므로, 상단 **환경** 변수(`$environment`)로 시계열을 가른다.
+이 라벨이 없으면 `instance`(team3-blue/green)가 양쪽 EC2 에서 같아 dev·prod 가 한 시계열로 섞인다.
+
+- **메트릭** — Alloy remote_write 의 `external_labels` 가 `environment` 라벨을 붙인다(앱·호스트 메트릭 모두). 모든 패널 쿼리가 `environment="$environment"` 로 필터한다.
+- **로그** — Loki `static_labels` 가 `environment` 를 붙인다. 로그 패널 stream selector 가 같은 라벨로 필터한다.
+- **트레이스** — Alloy `otelcol.processor.transform` 이 OTel 표준 `deployment.environment` 를 붙인다. trace 필터가 `resource.deployment.environment="$environment"` 로 거른다.
+
+`environment` 변수는 `label_values(environment)` 로 실제 존재하는 값만 드롭다운에 띄운다(dev push 가 없으면 prod 만 보인다).
 
 ### 알려진 한계 (계측이 더 필요한 것)
 - **Gemini(LLM) 호출 자체**는 직접 계측이 없어 `502` 서버 응답으로만 간접 관측된다. 호출 latency/실패율을 직접 보려면 `GeminiHttpClient` 의 RestClient 를 자동설정 builder/`@Observed` 로 바꿔야 한다.

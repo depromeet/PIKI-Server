@@ -1,6 +1,7 @@
 package com.depromeet.piki.auth.filter
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.piki.auth.infrastructure.redis.WithdrawnTokenStore
 import com.depromeet.piki.auth.web.TokenCookieWriter
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
@@ -15,6 +16,7 @@ import org.springframework.web.filter.OncePerRequestFilter
 @Component
 class JwtAuthenticationFilter(
     private val jwtProvider: JwtProvider,
+    private val withdrawnTokenStore: WithdrawnTokenStore,
 ) : OncePerRequestFilter() {
     override fun doFilterInternal(
         request: HttpServletRequest,
@@ -23,6 +25,9 @@ class JwtAuthenticationFilter(
     ) {
         extractToken(request)
             ?.let { jwtProvider.parseAccessToken(it) }
+            // 탈퇴 회원의 access token 거부 — stateless JWT 라 만료 전까진 유효하므로 denylist 로 즉시 차단한다.
+            // 인증 토큰이 있는 요청에서만 Redis 를 1회 조회한다(미인증 요청은 영향 없음).
+            ?.takeUnless { withdrawnTokenStore.isWithdrawn(it.userId) }
             ?.let { payload ->
                 val authority = SimpleGrantedAuthority(payload.identityType.name)
                 SecurityContextHolder.getContext().authentication =

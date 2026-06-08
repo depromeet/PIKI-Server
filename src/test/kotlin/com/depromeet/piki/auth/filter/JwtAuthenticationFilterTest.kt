@@ -2,6 +2,7 @@ package com.depromeet.piki.auth.filter
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProperties
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.piki.support.StubWithdrawnTokenStore
 import com.depromeet.piki.user.domain.IdentityType
 import org.springframework.http.HttpHeaders
 import org.springframework.mock.web.MockFilterChain
@@ -25,7 +26,8 @@ class JwtAuthenticationFilterTest {
                 refreshTokenExpiry = Duration.ofDays(14),
             ),
         )
-    private val filter = JwtAuthenticationFilter(jwtProvider)
+    private val withdrawnTokenStore = StubWithdrawnTokenStore()
+    private val filter = JwtAuthenticationFilter(jwtProvider, withdrawnTokenStore)
 
     @AfterTest
     fun clearSecurityContext() {
@@ -47,6 +49,21 @@ class JwtAuthenticationFilterTest {
         assertEquals(userId, authentication?.principal)
         val authorities = authentication?.authorities?.map { it.authority }.orEmpty()
         assertTrue(IdentityType.GUEST.name in authorities)
+    }
+
+    @Test
+    fun `탈퇴 회원의 access token 은 denylist 로 거부돼 SecurityContext 가 비어 있다`() {
+        val userId = UUID.randomUUID()
+        val token = jwtProvider.generateAccessToken(userId, IdentityType.MEMBER)
+        withdrawnTokenStore.markWithdrawn(userId)
+        val request =
+            MockHttpServletRequest().apply {
+                addHeader(HttpHeaders.AUTHORIZATION, "Bearer $token")
+            }
+
+        filter.doFilter(request, MockHttpServletResponse(), MockFilterChain())
+
+        assertNull(SecurityContextHolder.getContext().authentication)
     }
 
     @Test
