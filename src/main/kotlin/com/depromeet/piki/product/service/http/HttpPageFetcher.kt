@@ -51,8 +51,9 @@ class HttpPageFetcher(
                     throw PageFetchException.emptyBody()
                 }
             val truncated = if (body.length > MAX_HTML_CHARS) body.substring(0, MAX_HTML_CHARS) else body
-            // link 는 사용자가 등록한 원본 URL 을 유지하고, html 만 redirect 를 따라간 최종 페이지로 채운다.
-            return PageContent(link = link, html = truncated)
+            // link 는 사용자가 등록한 원본 URL 을 유지하고, html 은 redirect 를 따라간 최종 페이지로 채운다.
+            // finalUrl 은 그 최종 페이지의 URL(current) — 상대 URL resolve 의 baseUri 가 원본이 아닌 최종 host 기준이 되게 한다.
+            return PageContent(link = link, html = truncated, finalUrl = current)
         }
         log.warn("link fetch too many redirects url={}", link.safeLogString())
         throw PageFetchException.tooManyRedirects()

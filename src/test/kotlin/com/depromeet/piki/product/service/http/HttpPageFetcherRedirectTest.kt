@@ -43,6 +43,9 @@ class HttpPageFetcherRedirectTest {
         val page = fetcher.fetch(ProductLink.parse("https://www.zigzag.kr/p"))
 
         assertEquals("<html>product</html>", page.html)
+        // link 는 사용자 등록 원본, finalUrl 은 redirect 를 따라간 최종 URL(baseUri 용으로 구분).
+        assertEquals("https://www.zigzag.kr/p", page.link.value.toString())
+        assertEquals("https://zigzag.kr/p", page.finalUrl.value.toString())
     }
 
     @Test
@@ -122,5 +125,7 @@ class HttpPageFetcherRedirectTest {
         val page = fetcher.fetch(ProductLink.parse("https://zigzag.kr/p"))
 
         assertEquals("<html>direct</html>", page.html)
+        // redirect 가 없으면 finalUrl 은 원본 link 와 같다.
+        assertEquals(page.link, page.finalUrl)
     }
 }
