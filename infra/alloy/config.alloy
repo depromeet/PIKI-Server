@@ -169,6 +169,25 @@ otelcol.receiver.otlp "app" {
   http { endpoint = "0.0.0.0:4318" }
   grpc { endpoint = "0.0.0.0:4317" }
   output {
+    traces = [otelcol.processor.transform.add_env.input]
+  }
+}
+
+// dev/prod trace 를 가르는 deployment.environment resource attribute 주입(#380 후속).
+// 메트릭(remote_write external_labels)·로그(loki static_labels)의 environment 와 같은 결 —
+// dev/prod EC2 가 같은 Grafana Cloud(Tempo)로 push 하므로 이 라벨이 없으면 양쪽 trace 가 한데 섞인다.
+// OTel 표준 키 deployment.environment 를 써, Tempo TraceQL 에서 resource.deployment.environment 로 필터한다
+// (기존 식별자 resource.service.name 과 같은 resource attribute 계층). ENVIRONMENT 는 provision-runtime.sh 가
+// alloy 컨테이너에 -e 로 주입(배포 워크플로가 derive); 미주입 시 빈 값이나 메트릭·로그와 동일하게 둔다.
+otelcol.processor.transform "add_env" {
+  error_mode = "ignore"
+  trace_statements {
+    context    = "resource"
+    statements = [
+      "set(attributes[\"deployment.environment\"], \"" + sys.env("ENVIRONMENT") + "\")",
+    ]
+  }
+  output {
     traces = [otelcol.processor.batch.traces.input]
   }
 }
@@ -186,8 +205,8 @@ otelcol.processor.batch "traces" {
 // (GRAFANA_CLOUD_TOKEN, traces:write scope 포함).
 // GRAFANA_TRACES_URL 미설정(traces secret 미등록) 시 더미로 fallback 해 Alloy 부팅을 살린다(메트릭·로그는 계속
 // 수집되고 trace export 만 연결 실패 로그를 남긴다. skip 가드는 GRAFANA_METRICS_URL 기준이라 traces 만 비면 여기 닿는다).
-// dev/prod 구분(메트릭 external_labels·로그 static_labels 의 environment)은 trace 엔 아직 안 붙인다. trace 는
-// traceId 단건 조회·service.name(piki)으로 우선 식별하고, 환경 필터가 필요하면 후속에 resource attribute 로 추가한다.
+// dev/prod 구분은 위 otelcol.processor.transform.add_env 가 deployment.environment 로 붙인다(메트릭 external_labels·
+// 로그 static_labels 의 environment 와 같은 결). Tempo 에선 resource.deployment.environment 로 환경을 필터한다.
 otelcol.exporter.otlphttp "grafana_cloud" {
   client {
     endpoint = coalesce(sys.env("GRAFANA_TRACES_URL"), "https://otlp-unset.invalid/otlp")
