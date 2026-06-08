@@ -26,7 +26,7 @@ class TournamentUser(
     var completedAt: LocalDateTime? = null
 
     fun complete() {
-        completedAt = LocalDateTime.now()
+        completedAt = completedAt ?: LocalDateTime.now()
     }
 
     fun isCompleted() = completedAt?.let { true } ?: false
