@@ -29,7 +29,7 @@ class UserDetail(
     var socialId: String = socialId
         protected set
 
-    // 소셜에서 수집한 email (마케팅·알림·복구용). 애플 Private Relay 거부·카카오 미수집·기존 가입자는 null.
+    // 소셜에서 수집한 email (마케팅·알림·복구용). 미동의·애플 2회차 미제공·카카오 미인증/휴면·기존 가입자(backfill 전)는 null.
     @Column(name = "email", length = 255)
     var email: String? = email
         protected set
