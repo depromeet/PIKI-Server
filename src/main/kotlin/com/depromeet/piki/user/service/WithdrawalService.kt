@@ -1,6 +1,7 @@
 package com.depromeet.piki.user.service
 
 import com.depromeet.piki.auth.infrastructure.redis.RefreshTokenStore
+import com.depromeet.piki.auth.infrastructure.redis.WithdrawnTokenStore
 import com.depromeet.piki.common.storage.ImageStorage
 import com.depromeet.piki.notification.sse.LocalSseDelivery
 import com.depromeet.piki.user.domain.IdentityType
@@ -17,6 +18,7 @@ class WithdrawalService(
     private val userService: UserService,
     private val withdrawalPersistenceService: WithdrawalPersistenceService,
     private val refreshTokenStore: RefreshTokenStore,
+    private val withdrawnTokenStore: WithdrawnTokenStore,
     private val localSseDelivery: LocalSseDelivery,
     private val imageStorage: ImageStorage,
 ) {
@@ -33,6 +35,11 @@ class WithdrawalService(
 
         // 2. refresh token(Redis) 무효화 — 트랜잭션 밖(외부 의존성). 재발급 경로를 끊는다.
         refreshTokenStore.delete(userId)
+
+        // 2-1. access token 무효화 — 탈퇴 회원을 denylist 에 마킹. JwtAuthenticationFilter 가 이를 확인해
+        //      만료(최대 access token 수명) 전까지 남은 access token 을 즉시 거부한다. refresh 만 끊으면
+        //      access token 이 만료까지 살아있어 탈퇴 회원이 계속 접근 가능한 구멍이 생긴다.
+        withdrawnTokenStore.markWithdrawn(userId)
 
         // 3. SSE 연결 종료 — best-effort, 트랜잭션 밖. 인스턴스-로컬 연결만 끊는다.
         localSseDelivery.closeAll(userId)

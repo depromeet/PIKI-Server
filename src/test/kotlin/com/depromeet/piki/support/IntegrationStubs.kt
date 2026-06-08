@@ -67,6 +67,10 @@ class IntegrationStubs {
     @Primary
     fun refreshTokenStore(): StubRefreshTokenStore = StubRefreshTokenStore()
 
+    @Bean
+    @Primary
+    fun withdrawnTokenStore(): StubWithdrawnTokenStore = StubWithdrawnTokenStore()
+
     // oauth.client.enabled=false 로 운영 OAuthClientConfig 를 비활성화해 실제 외부 호출을 막는다.
     // stub 빈이 유일한 OAuthClient 라 @Primary 불필요.
     @Bean
