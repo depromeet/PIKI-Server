@@ -15,16 +15,18 @@ import java.util.UUID
 // 영속화만 별도 빈으로 분리. 같은 빈에서 호출하면 Spring AOP proxy 를
 // 거치지 않아 @Transactional 가 무력화되기 때문이다.
 //
-// item 은 정체성(link)만 들고 추출값·상태는 ItemSnapshot 이 보유한다. 등록 경로는 link 만 가진 item 과
-// PROCESSING snapshot 을 같은 트랜잭션에서 함께 저장하고, wish 가 그 snapshot 을 활성 포인터로 가리킨다.
+// item 은 정체성(link)만 들고 추출값·상태는 ItemSnapshot 이 보유한다. URL 등록 경로는 link 만 가진 item 과
+// PENDING snapshot(outbox 적재)을 같은 트랜잭션에서 함께 저장하고, wish 가 그 snapshot 을 활성 포인터로 가리킨다.
+// 파싱은 디스패처(@Scheduled)가 PENDING 을 집어 시작하므로, 여기선 워커를 트리거하지 않는다.
 @Service
 class WishPersistenceService(
     private val wishRepository: WishRepository,
     private val itemRepository: ItemRepository,
     private val itemSnapshotRepository: ItemSnapshotRepository,
 ) {
-    // item(정체성) → snapshot(PROCESSING 버전) → wish 순서로 같은 트랜잭션에서 저장한다.
+    // item(정체성) → snapshot(PENDING 버전) → wish 순서로 같은 트랜잭션에서 저장한다.
     // item 생성은 호출부가 트랜잭션 바깥에서 끝내고, 여기선 영속화만 한다.
+    // snapshot 을 PENDING 으로 커밋하는 것이 곧 outbox 적재다 — 디스패처가 이 행을 집어 PROCESSING 으로 claim 한다.
     @Transactional
     fun persist(
         userId: UUID,
@@ -32,7 +34,7 @@ class WishPersistenceService(
     ): WishWithItem {
         val saved = itemRepository.save(item)
         // 저장한 snapshot 의 id 를 wish 의 활성 포인터(snapshotId)로 박는다. 5단계 갱신에서 새 버전으로 스왑된다.
-        val snapshot = itemSnapshotRepository.save(ItemSnapshot.processing(saved.getId()))
+        val snapshot = itemSnapshotRepository.save(ItemSnapshot.pending(saved.getId()))
         val wish = wishRepository.save(Wish(userId = userId, itemId = saved.getId(), snapshotId = snapshot.getId()))
         return WishWithItem(wish = wish, item = saved, snapshot = snapshot)
     }

@@ -135,7 +135,7 @@ class TournamentService(
             wishRepository
                 .findByItemIdsAndUserId(command.itemIds, userId)
                 .associate { it.itemId to it.snapshotId }
-        // 비동기 파싱 중(PROCESSING)이거나 실패(FAILED)한 상품은 이름·가격이 비어 출전에 부적합하다. 활성 snapshot 이 READY 인 것만 허용.
+        // 파싱 대기·진행 중(PENDING·PROCESSING)이거나 실패(FAILED)한 상품은 이름·가격이 비어 출전에 부적합하다. 활성 snapshot 이 READY 인 것만 허용.
         val activeSnapshots = itemSnapshotRepository.findByIds(snapshotIdByItemId.values.filterNotNull())
         if (activeSnapshots.size != command.itemIds.size || activeSnapshots.any { !it.isReady() }) {
             throw TournamentException.itemNotReady()
