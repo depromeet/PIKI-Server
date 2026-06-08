@@ -61,6 +61,11 @@ dependencies {
     // 알림 템플릿 플레이스홀더 치환 (StringSubstitutor). Spring Boot BOM 미관리라 버전 명시 (Maven Central 최신 안정).
     implementation("org.apache.commons:commons-text:1.15.0")
 
+    // 상품 페이지 HTML 에서 구조화 데이터(JSON-LD <script type=ld+json>·OpenGraph <meta og:*>) 를 추출 (#425).
+    // LLM 호출 전 결정론적 우선 파싱용 — 마크업에서 script/meta 블록을 정확히 꺼내는 책임만 진다(값은 Jackson 3 트리).
+    // Spring Boot 4.0.5 BOM 미관리라 버전 명시 (Maven Central 최신 안정).
+    implementation("org.jsoup:jsoup:1.22.2")
+
     // 옵저버빌리티: Actuator 로 health/metrics 노출 + Micrometer Prometheus 레지스트리로
     // /actuator/prometheus 텍스트 포맷 export. 수집은 EC2 의 Grafana Alloy → Grafana Cloud (별도 PR).
     // 버전은 Spring Boot BOM 이 관리한다.

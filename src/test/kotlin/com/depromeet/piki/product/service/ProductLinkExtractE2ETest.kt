@@ -1,10 +1,11 @@
 package com.depromeet.piki.product.service
 
 import com.depromeet.piki.product.domain.ProductLink
+import com.depromeet.piki.product.service.gemini.GeminiHtmlExtractor
 import com.depromeet.piki.product.service.gemini.GeminiHttpClient
-import com.depromeet.piki.product.service.gemini.GeminiProductLinkExtractor
 import com.depromeet.piki.product.service.gemini.GeminiProperties
 import com.depromeet.piki.product.service.http.HttpPageFetcher
+import com.depromeet.piki.product.service.structured.StructuredDataExtractor
 import io.micrometer.observation.ObservationRegistry
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
@@ -28,10 +29,13 @@ class ProductLinkExtractE2ETest {
             model = "gemini-3-flash-preview",
         )
     private val httpClient = GeminiHttpClient(properties, objectMapper, ObservationRegistry.NOOP)
+
+    // fetch → 구조화 우선 → Gemini fallback 전체 경로를 측정한다 (오케스트레이터 그대로).
     private val extractor =
-        GeminiProductLinkExtractor(
-            geminiHttpClient = httpClient,
+        DefaultProductLinkExtractor(
             pageFetcher = pageFetcher,
+            structuredDataExtractor = StructuredDataExtractor(objectMapper),
+            geminiHtmlExtractor = GeminiHtmlExtractor(httpClient),
         )
 
     @Test

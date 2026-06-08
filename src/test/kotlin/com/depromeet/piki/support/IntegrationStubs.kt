@@ -21,6 +21,19 @@ class IntegrationStubs {
     @Primary
     fun productLinkExtractor(): StubProductLinkExtractor = StubProductLinkExtractor()
 
+    // 상품 페이지 fetch(HTTP) 외부 경계. StructuredFirstExtractionIntegrationTest 가 구조화/LLM fallback 분기를
+    // 실제 오케스트레이터(DefaultProductLinkExtractor)로 검증할 때 HTML 을 제어하려고 격리한다.
+    // 위시 통합 테스트는 ProductLinkExtractor 진입점을 통째 stub 하므로 이 빈을 호출하지 않아 영향이 없다.
+    @Bean
+    @Primary
+    fun pageFetcher(): StubPageFetcher = StubPageFetcher()
+
+    // Gemini 호출 외부 경계. 호출 카운터로 "구조화 우선 파싱 성공 시 LLM 미호출"을 단언한다.
+    // GeminiHtmlExtractor·GeminiProductImageExtractor 가 주입받지만, 위 두 stub 으로 격리돼 평소엔 호출되지 않는다.
+    @Bean
+    @Primary
+    fun geminiClient(): StubGeminiClient = StubGeminiClient()
+
     @Bean
     @Primary
     fun productImageExtractor(): StubProductImageExtractor = StubProductImageExtractor()
