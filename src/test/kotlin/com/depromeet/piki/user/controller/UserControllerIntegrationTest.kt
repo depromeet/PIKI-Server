@@ -12,29 +12,24 @@ import org.hamcrest.Matchers.startsWith
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
-import org.springframework.http.MediaType
+import org.springframework.http.HttpMethod
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
-import tools.jackson.databind.ObjectMapper
 import java.util.UUID
 
 @Transactional
 class UserControllerIntegrationTest : IntegrationTestSupport() {
     @Autowired
     private lateinit var webApplicationContext: WebApplicationContext
-
-    @Autowired
-    private lateinit var objectMapper: ObjectMapper
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
@@ -160,7 +155,7 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `PATCH users me - 게스트가 닉네임을 수정하면 200 과 변경된 닉네임이 반환된다`() {
+    fun `PATCH users me - 게스트가 닉네임만 수정하면 200 과 변경된 닉네임이 반환된다`() {
         val mockMvc =
             MockMvcBuilders
                 .webAppContextSetup(webApplicationContext)
@@ -168,16 +163,134 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
                 .build()
         val userId = UUID.randomUUID()
         insertUser(userId, nickname = "초기닉네임", identityType = IdentityType.GUEST)
-        val body = objectMapper.writeValueAsString(mapOf("nickname" to "새닉네임"))
 
         mockMvc
             .perform(
-                patch("/api/v1/users/me")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.GUEST)}")
-                    .content(body),
+                multipart(HttpMethod.PATCH, "/api/v1/users/me")
+                    .param("nickname", "새닉네임")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.GUEST)}"),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.data.nickname").value("새닉네임"))
+    }
+
+    @Test
+    fun `PATCH users me - 회원이 이미지만 업로드하면 200 과 갱신된 프로필 URL 을 반환한다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId, nickname = "초기닉네임", identityType = IdentityType.MEMBER)
+        val image = MockMultipartFile("image", "photo.jpg", "image/jpeg", jpegBytes())
+
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/users/me")
+                    .file(image)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.MEMBER)}"),
+            ).andExpect(status().isOk)
+            // 닉네임은 안 보냈으니 그대로, 프로필만 갱신된다.
+            .andExpect(jsonPath("$.data.nickname").value("초기닉네임"))
+            // key 규칙 profiles/{userId}/{uuid}.jpg 로 업로드되어 stub URL 이 내려온다.
+            .andExpect(
+                jsonPath("$.data.profileImage")
+                    .value(startsWith("${StubImageStorage.BASE_URL}/profiles/$userId/")),
+            )
+    }
+
+    @Test
+    fun `PATCH users me - 회원이 닉네임과 이미지를 함께 보내면 둘 다 갱신된 200 을 반환한다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId, nickname = "초기닉네임", identityType = IdentityType.MEMBER)
+        val image = MockMultipartFile("image", "photo.jpg", "image/jpeg", jpegBytes())
+
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/users/me")
+                    .file(image)
+                    .param("nickname", "새닉네임")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.MEMBER)}"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.nickname").value("새닉네임"))
+            .andExpect(
+                jsonPath("$.data.profileImage")
+                    .value(startsWith("${StubImageStorage.BASE_URL}/profiles/$userId/")),
+            )
+    }
+
+    @Test
+    fun `PATCH users me - 게스트가 이미지를 보내면 403 이 반환된다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId, nickname = "게스트닉네임", identityType = IdentityType.GUEST)
+        val image = MockMultipartFile("image", "photo.jpg", "image/jpeg", jpegBytes())
+
+        // 이미지 수정은 MEMBER 전용 — 게스트는 닉네임 동반 여부·이미지 형식과 무관하게 요청 전체가 403.
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/users/me")
+                    .file(image)
+                    .param("nickname", "새닉네임")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.GUEST)}"),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value("프로필 이미지는 회원만 수정할 수 있습니다."))
+    }
+
+    @Test
+    fun `PATCH users me - 게스트가 이미지를 보내면 닉네임도 함께 거부되어 변경되지 않는다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId, nickname = "게스트닉네임", identityType = IdentityType.GUEST)
+        val image = MockMultipartFile("image", "photo.jpg", "image/jpeg", jpegBytes())
+
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/users/me")
+                    .file(image)
+                    .param("nickname", "새닉네임")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.GUEST)}"),
+            ).andExpect(status().isForbidden)
+
+        // 403 으로 요청 전체가 거부됐으니 닉네임도 그대로여야 한다 (부분 적용 없음).
+        mockMvc
+            .perform(
+                get("/api/v1/users/me")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.GUEST)}"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.nickname").value("게스트닉네임"))
+    }
+
+    @Test
+    fun `PATCH users me - 아무 필드도 안 보내면 200 으로 통과하고 기존 값이 유지된다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId, nickname = "그대로닉네임")
+
+        // 닉네임도 이미지도 없는 빈 PATCH — 더 이상 400 이 아니라(이미지 필수였던 옛 POST 와 달리) 무동작 200.
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/users/me")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.nickname").value("그대로닉네임"))
     }
 
     @Test
@@ -189,16 +302,14 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
                 .build()
         val userId = UUID.randomUUID()
         insertUser(userId)
-        val body = objectMapper.writeValueAsString(mapOf("nickname" to "12345678901"))
 
         mockMvc
             .perform(
-                patch("/api/v1/users/me")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}")
-                    .content(body),
+                multipart(HttpMethod.PATCH, "/api/v1/users/me")
+                    .param("nickname", "12345678901")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}"),
             ).andExpect(status().isBadRequest)
-            // @RequestBody 검증 실패 응답 detail 이 OpenAPI example(UserApiExamples updateMe 400)과 같은 형식인지 고정.
+            // @ModelAttribute(multipart) 검증 실패 응답 detail 이 OpenAPI example(UserApiExamples updateMe 400)과 같은 형식인지 고정.
             .andExpect(jsonPath("$.detail").value("nickname: ${UserUpdateRequest.NICKNAME_SIZE_MESSAGE}"))
     }
 
@@ -213,15 +324,94 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
         insertUser(otherUserId, nickname = "점유닉네임")
         val myUserId = UUID.randomUUID()
         insertUser(myUserId, nickname = "내닉네임")
-        val body = objectMapper.writeValueAsString(mapOf("nickname" to "점유닉네임"))
 
         mockMvc
             .perform(
-                patch("/api/v1/users/me")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(myUserId)}")
-                    .content(body),
+                multipart(HttpMethod.PATCH, "/api/v1/users/me")
+                    .param("nickname", "점유닉네임")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(myUserId)}"),
             ).andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `PATCH users me - 본인이 자기 닉네임 그대로 보내면 200 으로 통과한다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId, nickname = "내닉네임")
+
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/users/me")
+                    .param("nickname", "내닉네임")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.nickname").value("내닉네임"))
+    }
+
+    @Test
+    fun `PATCH users me - gif 는 지원하지 않아 400 이 반환된다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId, identityType = IdentityType.MEMBER)
+        val gif = MockMultipartFile("image", "anim.gif", "image/gif", byteArrayOf(1, 2, 3))
+
+        // 이미지 형식 분기(빈파일·미지원·시그니처 불일치)는 ProfileImageFileTest 가 단위로 망라한다.
+        // 여기선 회원이 올린 이미지의 형식 검증 실패를 컨트롤러가 400 contract 로 잇는지만 대표로 고정한다.
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/users/me")
+                    .file(gif)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.MEMBER)}"),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.detail").value(startsWith("지원하지 않는 이미지 형식입니다.")))
+    }
+
+    @Test
+    fun `PATCH users me - S3 업로드 실패 시 502 가 반환된다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId, identityType = IdentityType.MEMBER)
+        val image = MockMultipartFile("image", "photo.jpg", "image/jpeg", jpegBytes())
+        stubImageStorage.behavior = { _, _, _ -> throw ImageStorageException.uploadFailed() }
+
+        try {
+            mockMvc
+                .perform(
+                    multipart(HttpMethod.PATCH, "/api/v1/users/me")
+                        .file(image)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.MEMBER)}"),
+                ).andExpect(status().isBadGateway)
+        } finally {
+            // 공유 컨텍스트의 stub mutable state 를 복원해 다른 테스트로 누수되지 않게 한다.
+            stubImageStorage.behavior = stubImageStorage.defaultBehavior
+        }
+    }
+
+    @Test
+    fun `PATCH users me - 토큰이 없으면 401 이 반환된다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val image = MockMultipartFile("image", "photo.png", "image/png", byteArrayOf(1, 2, 3))
+
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/users/me").file(image),
+            ).andExpect(status().isUnauthorized)
     }
 
     @Test
@@ -300,27 +490,6 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `PATCH users me - 본인이 자기 닉네임 그대로 보내면 200 으로 통과한다`() {
-        val mockMvc =
-            MockMvcBuilders
-                .webAppContextSetup(webApplicationContext)
-                .apply<DefaultMockMvcBuilder>(springSecurity())
-                .build()
-        val userId = UUID.randomUUID()
-        insertUser(userId, nickname = "내닉네임")
-        val body = objectMapper.writeValueAsString(mapOf("nickname" to "내닉네임"))
-
-        mockMvc
-            .perform(
-                patch("/api/v1/users/me")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}")
-                    .content(body),
-            ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.nickname").value("내닉네임"))
-    }
-
-    @Test
     fun `GET users nickname check - 11자 닉네임은 400 이 반환된다`() {
         val mockMvc =
             MockMvcBuilders
@@ -338,150 +507,5 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
             ).andExpect(status().isBadRequest)
             // 쿼리 파라미터 POJO(암묵 @ModelAttribute) 검증 실패도 같은 "필드명: 메시지" 형식인지 실측·고정.
             .andExpect(jsonPath("$.detail").value("nickname: ${NicknameCheckRequest.NICKNAME_SIZE_MESSAGE}"))
-    }
-
-    @Test
-    fun `POST users me profile-image - 이미지를 업로드하면 200 과 갱신된 프로필 URL 을 반환한다`() {
-        val mockMvc =
-            MockMvcBuilders
-                .webAppContextSetup(webApplicationContext)
-                .apply<DefaultMockMvcBuilder>(springSecurity())
-                .build()
-        val userId = UUID.randomUUID()
-        insertUser(userId)
-        val image = MockMultipartFile("image", "photo.jpg", "image/jpeg", jpegBytes())
-
-        mockMvc
-            .perform(
-                multipart("/api/v1/users/me/profile-image")
-                    .file(image)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}"),
-            ).andExpect(status().isOk)
-            // key 규칙 profiles/{userId}/{uuid}.jpg 로 업로드되어 stub URL 이 내려온다.
-            .andExpect(
-                jsonPath("$.data.profileImage")
-                    .value(startsWith("${StubImageStorage.BASE_URL}/profiles/$userId/")),
-            )
-    }
-
-    @Test
-    fun `POST users me profile-image - gif 는 지원하지 않아 400 이 반환된다`() {
-        val mockMvc =
-            MockMvcBuilders
-                .webAppContextSetup(webApplicationContext)
-                .apply<DefaultMockMvcBuilder>(springSecurity())
-                .build()
-        val userId = UUID.randomUUID()
-        insertUser(userId)
-        val gif = MockMultipartFile("image", "anim.gif", "image/gif", byteArrayOf(1, 2, 3))
-
-        mockMvc
-            .perform(
-                multipart("/api/v1/users/me/profile-image")
-                    .file(gif)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}"),
-            ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value(startsWith("지원하지 않는 이미지 형식입니다.")))
-    }
-
-    @Test
-    fun `POST users me profile-image - 빈 이미지 파일은 400 이 반환된다`() {
-        val mockMvc =
-            MockMvcBuilders
-                .webAppContextSetup(webApplicationContext)
-                .apply<DefaultMockMvcBuilder>(springSecurity())
-                .build()
-        val userId = UUID.randomUUID()
-        insertUser(userId)
-        val empty = MockMultipartFile("image", "empty.png", "image/png", ByteArray(0))
-
-        mockMvc
-            .perform(
-                multipart("/api/v1/users/me/profile-image")
-                    .file(empty)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}"),
-            ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value("빈 이미지 파일은 업로드할 수 없습니다."))
-    }
-
-    @Test
-    fun `POST users me profile-image - 토큰이 없으면 401 이 반환된다`() {
-        val mockMvc =
-            MockMvcBuilders
-                .webAppContextSetup(webApplicationContext)
-                .apply<DefaultMockMvcBuilder>(springSecurity())
-                .build()
-        val image = MockMultipartFile("image", "photo.png", "image/png", byteArrayOf(1, 2, 3))
-
-        mockMvc
-            .perform(
-                multipart("/api/v1/users/me/profile-image").file(image),
-            ).andExpect(status().isUnauthorized)
-    }
-
-    @Test
-    fun `POST users me profile-image - S3 업로드 실패 시 502 가 반환된다`() {
-        val mockMvc =
-            MockMvcBuilders
-                .webAppContextSetup(webApplicationContext)
-                .apply<DefaultMockMvcBuilder>(springSecurity())
-                .build()
-        val userId = UUID.randomUUID()
-        insertUser(userId)
-        val image = MockMultipartFile("image", "photo.jpg", "image/jpeg", jpegBytes())
-        stubImageStorage.behavior = { _, _, _ -> throw ImageStorageException.uploadFailed() }
-
-        try {
-            mockMvc
-                .perform(
-                    multipart("/api/v1/users/me/profile-image")
-                        .file(image)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}"),
-                ).andExpect(status().isBadGateway)
-        } finally {
-            // 공유 컨텍스트의 stub mutable state 를 복원해 다른 테스트로 누수되지 않게 한다.
-            stubImageStorage.behavior = stubImageStorage.defaultBehavior
-        }
-    }
-
-    @Test
-    fun `POST users me profile-image - 선언한 형식과 실제 파일 내용이 다르면 400 이 반환된다`() {
-        val mockMvc =
-            MockMvcBuilders
-                .webAppContextSetup(webApplicationContext)
-                .apply<DefaultMockMvcBuilder>(springSecurity())
-                .build()
-        val userId = UUID.randomUUID()
-        insertUser(userId)
-        // Content-Type 은 image/png 로 선언했지만 실제 바이트는 JPEG 시그니처 (헤더 위조 시나리오).
-        val mismatched = MockMultipartFile("image", "fake.png", "image/png", jpegBytes())
-
-        mockMvc
-            .perform(
-                multipart("/api/v1/users/me/profile-image")
-                    .file(mismatched)
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}"),
-            ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value("이미지 파일이 손상되었거나 형식과 내용이 일치하지 않습니다."))
-    }
-
-    @Test
-    fun `POST users me profile-image - image 파트가 아예 없으면 400 이 반환된다`() {
-        val mockMvc =
-            MockMvcBuilders
-                .webAppContextSetup(webApplicationContext)
-                .apply<DefaultMockMvcBuilder>(springSecurity())
-                .build()
-        val userId = UUID.randomUUID()
-        insertUser(userId)
-
-        // 파일 파트 없이 호출 — 컨트롤러의 `image ?: throw emptyProfileImage()` 분기가 프레임워크 500 이 아닌
-        // 400 도메인 응답으로 떨어지는지 고정한다 (required=false + Elvis 방어).
-        mockMvc
-            .perform(
-                multipart("/api/v1/users/me/profile-image")
-                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}"),
-            ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value("빈 이미지 파일은 업로드할 수 없습니다."))
     }
 }
