@@ -21,16 +21,16 @@ interface WishlistApi {
         summary = "위시리스트 등록 (URL)",
         description = """
             상품 페이지 URL 을 받아 위시리스트에 등록한다. 메타데이터(이름/가격/이미지) 추출은 외부 LLM 호출이라
-            오래 걸리므로 동기로 기다리지 않는다. 등록 즉시 item.status=PROCESSING 인 항목을 201 로 반환하고,
-            실제 파싱은 백그라운드에서 진행되어 READY(완료) 또는 FAILED(파싱 실패) 로 전이한다.
-            클라이언트는 위시리스트 조회를 폴링해 status 변화를 확인한다. URL 형식 오류는 등록 전에 400 으로 거른다.
+            오래 걸리므로 동기로 기다리지 않는다. 등록 즉시 item.status=PENDING 인 항목을 201 로 반환하고,
+            실제 파싱은 백그라운드 디스패처가 PENDING 을 집어 PROCESSING 으로 전이한 뒤 READY(완료) 또는 FAILED(파싱 실패) 로 전이한다.
+            클라이언트는 위시리스트 조회를 폴링해 status 변화(PENDING→PROCESSING→READY/FAILED)를 확인한다. URL 형식 오류는 등록 전에 400 으로 거른다.
         """,
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "201",
-                description = "위시리스트 등록 접수 (item.status=PROCESSING, 파싱은 백그라운드)",
+                description = "위시리스트 등록 접수 (item.status=PENDING, 파싱은 백그라운드)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -82,8 +82,8 @@ interface WishlistApi {
             cursor 페이지네이션: 직전 응답의 pageResponse.nextCursor 를 다음 요청 cursor 로 그대로 전달한다.
             마지막 페이지면 nextCursor 는 null, hasNext 는 false.
             size 는 미지정 시 20, 1~50 범위를 벗어나면 양 끝으로 보정된다.
-            각 항목의 item.status 로 파싱 상태(PROCESSING/READY/FAILED)를 구분한다 —
-            등록 직후 PROCESSING 인 항목은 이 조회를 폴링해 READY/FAILED 로 전이되는지 확인한다.
+            각 항목의 item.status 로 파싱 상태(PENDING/PROCESSING/READY/FAILED)를 구분한다 —
+            등록 직후 PENDING·PROCESSING 인 항목은 이 조회를 폴링해 READY/FAILED 로 전이되는지 확인한다.
         """,
     )
     @ApiResponses(
@@ -143,7 +143,7 @@ interface WishlistApi {
         description = """
             wishId 로 위시 항목 하나를 조회한다. 응답 모양은 목록 조회 항목과 같은 WishItemResponse(wish + item).
             본인 위시만 조회 가능하며, item 을 직접 노출하지 않고 위시 소유 단위로 권한을 검증한다.
-            item.status 로 파싱 상태(PROCESSING/READY/FAILED)를 구분한다 — 상세 화면 진입 시 단건 폴링에 쓸 수 있다.
+            item.status 로 파싱 상태(PENDING/PROCESSING/READY/FAILED)를 구분한다 — 상세 화면 진입 시 단건 폴링에 쓸 수 있다.
         """,
     )
     @ApiResponses(
@@ -202,7 +202,7 @@ interface WishlistApi {
             텍스트(이름·현재가·통화)는 form 필드로, 이미지는 image 파트로 받는다 — 이미지는 URL 이 아니라 파일로만 받아
             서버가 그대로 S3 에 올려 대표 이미지로 채운다(추출·크롭 없음). 들어온 값만 갱신하고, 보정에 성공하면 READY 로 복구된다.
             item 데이터는 링크에서 기계 추출한 사실이라, 이미 완성(READY)된 항목은 수정할 수 없고(409 CONFLICT),
-            파싱 중(PROCESSING)인 항목은 백그라운드 워커 소관이라 끼어들 수 없다(409 CONFLICT).
+            대기·파싱 중(PENDING·PROCESSING)인 항목은 백그라운드 워커 소관이라 끼어들 수 없다(409 CONFLICT).
             본인 위시만 보정 가능하며, item 을 직접 노출하지 않고 위시 소유 단위로 권한을 검증한다.
         """,
     )
@@ -262,7 +262,7 @@ interface WishlistApi {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "수정할 수 없는 상태 (이미 등록 완료(READY) · 아직 처리 중(PROCESSING))",
+                description = "수정할 수 없는 상태 (이미 등록 완료(READY) · 아직 대기·처리 중(PENDING·PROCESSING))",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

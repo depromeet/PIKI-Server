@@ -83,6 +83,14 @@ class ItemSnapshot(
         this.currency = newCurrency
     }
 
+    // PENDING → PROCESSING. 디스패처가 outbox 에서 작업을 집어(claim) 실행을 시작할 때 전이한다.
+    // PENDING 이 아닌데 호출되면 디스패처가 잘못된 버전을 집은 코드 버그이므로 check(500).
+    // 이 전이로 updated_at 이 갱신돼, recover 의 stale 판정(claim 시각 기준)이 이 시각을 본다.
+    fun markProcessing() {
+        check(status == ItemStatus.PENDING) { "PENDING 이 아닌 snapshot(status=$status)은 PROCESSING 으로 claim 할 수 없다" }
+        status = ItemStatus.PROCESSING
+    }
+
     // PROCESSING → READY. 백그라운드 파싱이 성공해 추출 결과(snapshot)를 채우며 전이한다.
     // 전이 가능 상태가 아닌데 호출되면 워커가 잘못된 버전을 집은 코드 버그이므로 check(500).
     // extractedAt 은 전이 시점의 now() — Wish.delete() 등 도메인이 시간을 만드는 프로젝트 관례를 따른다.
@@ -118,7 +126,8 @@ class ItemSnapshot(
     ) {
         when (status) {
             ItemStatus.READY -> throw ItemException.alreadyReady()
-            ItemStatus.PROCESSING -> throw ItemException.stillProcessing()
+            // PENDING(아직 claim 전)·PROCESSING(파싱 중) 모두 워커 소관이라 클라이언트가 끼어들 수 없다(409).
+            ItemStatus.PENDING, ItemStatus.PROCESSING -> throw ItemException.stillProcessing()
             ItemStatus.FAILED -> {
                 apply(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
                 // 입력 경계 계약 — 보정 후에도 이름이 없으면 쓸 수 없는 버전이 READY 로 새어 들어간다(409 아닌 400).
@@ -161,9 +170,14 @@ class ItemSnapshot(
         const val IMAGE_URL_MAX_LENGTH = 2048
         const val CURRENCY_MAX_LENGTH = 8
 
-        // 신규 등록 시작점 — 추출 전 PROCESSING 버전. link 추출·이미지 추출 모두 비동기라 PROCESSING 으로 시작하고,
-        // 파싱이 끝나면 markReady/markFailed 로 전이한다. 추출값은 비어 있고 extractedAt 도 null.
-        // item 의 정체성(itemId)만 알면 되고 item 의 추출 상태를 읽지 않는다 — 등록 경로는 항상 PROCESSING 으로 출발한다.
+        // URL 등록 시작점 — 추출 전 PENDING 버전(outbox 적재). 등록은 이 행을 커밋만 하고 즉시 반환하며,
+        // 디스패처가 PENDING 을 집어 markProcessing 으로 claim 한 뒤 워커가 파싱한다. @Async 유실(인스턴스 재시작 등)과
+        // 무관하게 DB 의 PENDING 행이 작업의 진실 원천이라, 반드시 한 번은 claim 돼 실행이 시작된다(최소 1회 실행 보장).
+        fun pending(itemId: Long): ItemSnapshot = ItemSnapshot(itemId = itemId, status = ItemStatus.PENDING)
+
+        // 이미지 등록 시작점 — 추출 전 PROCESSING 버전. 이미지 경로는 outbox(PENDING)를 거치지 않고 @Async 워커를
+        // 등록 즉시 직접 트리거하므로 곧장 PROCESSING 으로 출발한다. 파싱이 끝나면 markReady/markFailed 로 전이한다.
+        // (이미지 원본이 메모리 ByteArray 라 durable 적재가 선행돼야 outbox 화할 수 있어, 그 비대칭은 후속 범위다.)
         fun processing(itemId: Long): ItemSnapshot = ItemSnapshot(itemId = itemId, status = ItemStatus.PROCESSING)
     }
 }

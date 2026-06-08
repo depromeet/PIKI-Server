@@ -1,8 +1,11 @@
 package com.depromeet.piki.tournament.controller.dto
 
-import com.depromeet.piki.tournament.service.dto.TournamentStartResult
+import com.depromeet.piki.tournament.service.dto.StartResult
 
-data class TournamentStartResponse(val items: List<ItemResponse>) {
+data class TournamentStartResponse(
+    val tournamentId: Long,
+    val items: List<ItemResponse>,
+) {
     data class ItemResponse(
         val tournamentItemId: Long,
         val name: String?,
@@ -12,15 +15,16 @@ data class TournamentStartResponse(val items: List<ItemResponse>) {
     )
 
     companion object {
-        fun from(results: List<TournamentStartResult>): TournamentStartResponse =
+        fun from(result: StartResult): TournamentStartResponse =
             TournamentStartResponse(
-                items = results.map { result ->
+                tournamentId = result.tournamentId,
+                items = result.items.map { item ->
                     ItemResponse(
-                        tournamentItemId = result.tournamentItemId,
-                        name = result.name,
-                        price = result.price,
-                        currency = result.currency,
-                        imageUrl = result.imageUrl,
+                        tournamentItemId = item.tournamentItemId,
+                        name = item.name,
+                        price = item.price,
+                        currency = item.currency,
+                        imageUrl = item.imageUrl,
                     )
                 },
             )

@@ -24,7 +24,7 @@ class UserDetailTest {
     }
 
     @Test
-    fun `email 없이 생성하면 null 이다 (카카오 등 미수집 provider)`() {
+    fun `email 없이 생성하면 null 이다 (게스트·미동의 등 email 미제공)`() {
         val detail = UserDetail(UUID.randomUUID(), "KAKAO", "social-2")
 
         assertEquals(null, detail.email)

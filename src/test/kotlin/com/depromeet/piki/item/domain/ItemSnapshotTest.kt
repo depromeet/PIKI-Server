@@ -1,10 +1,12 @@
 package com.depromeet.piki.item.domain
 
 import com.depromeet.piki.product.service.ProductSnapshot
+import org.springframework.http.HttpStatus
 import java.time.LocalDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -152,5 +154,40 @@ class ItemSnapshotTest {
         assertFailsWith<ItemException> {
             snapshot.recover(name = null, currentPrice = 1_000, imageUrl = null, currency = "KRW")
         }
+    }
+
+    // --- outbox claim 전이 (PENDING → PROCESSING) ---
+
+    @Test
+    fun `pending 팩토리는 PENDING 스냅샷을 만들고 isReady 는 false 다`() {
+        val snapshot = ItemSnapshot.pending(itemId = 1L)
+        assertEquals(ItemStatus.PENDING, snapshot.status)
+        assertFalse(snapshot.isReady())
+    }
+
+    @Test
+    fun `PENDING 스냅샷을 markProcessing 하면 PROCESSING 이 된다`() {
+        val snapshot = ItemSnapshot.pending(itemId = 1L)
+        snapshot.markProcessing()
+        assertEquals(ItemStatus.PROCESSING, snapshot.status)
+    }
+
+    @Test
+    fun `PENDING 이 아닌 스냅샷을 markProcessing 하면 IllegalStateException`() {
+        // 이미 claim 된(PROCESSING)·완료(READY)·실패(FAILED)는 다시 claim 할 수 없다 — 디스패처 중복 집기 방어.
+        assertFailsWith<IllegalStateException> { ItemSnapshot.processing(1L).markProcessing() }
+        assertFailsWith<IllegalStateException> {
+            ItemSnapshot(itemId = 1L).apply { markReady(ProductSnapshot(name = "x")) }.markProcessing()
+        }
+        assertFailsWith<IllegalStateException> { ItemSnapshot(itemId = 1L).apply { markFailed() }.markProcessing() }
+    }
+
+    @Test
+    fun `PENDING 스냅샷을 recover 하면 워커 소관이라 stillProcessing(409)로 거부된다`() {
+        // 디스패처가 집기 전(PENDING)이라도 status 전이는 워커 경로가 책임진다 — 클라이언트 보정이 끼어들 수 없다.
+        val snapshot = ItemSnapshot.pending(itemId = 1L)
+        val ex = assertFailsWith<ItemException> { snapshot.recover(name = "끼어든 수정") }
+        assertEquals(HttpStatus.CONFLICT, ex.httpStatus)
+        assertEquals(ItemStatus.PENDING, snapshot.status)
     }
 }

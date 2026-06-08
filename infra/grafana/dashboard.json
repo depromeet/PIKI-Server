@@ -74,26 +74,26 @@
         "name": "traceFilter",
         "type": "custom",
         "label": "trace 필터",
-        "query": "전체 : ,느린(>500ms) :  && trace:duration > 500ms,에러 :  && status = error",
+        "query": "전체 : resource.service.name = \"PIKI\",느린(>500ms) : resource.service.name = \"PIKI\" && trace:duration > 500ms,에러 : resource.service.name = \"PIKI\" && status = error",
         "current": {
           "text": "전체",
-          "value": "",
+          "value": "resource.service.name = \"PIKI\"",
           "selected": true
         },
         "options": [
           {
             "text": "전체",
-            "value": "",
+            "value": "resource.service.name = \"PIKI\"",
             "selected": true
           },
           {
             "text": "느린(>500ms)",
-            "value": " && trace:duration > 500ms",
+            "value": "resource.service.name = \"PIKI\" && trace:duration > 500ms",
             "selected": false
           },
           {
             "text": "에러",
-            "value": " && status = error",
+            "value": "resource.service.name = \"PIKI\" && status = error",
             "selected": false
           }
         ],
@@ -140,7 +140,7 @@
             "uid": "${DS_TEMPO}"
           },
           "queryType": "traceql",
-          "query": "{ resource.service.name = \"PIKI\" && resource.deployment.environment = \"$environment\"${traceFilter:raw} }",
+          "query": "{ ${traceFilter:raw} && resource.deployment.environment = \"$environment\" }",
           "tableType": "traces",
           "limit": 20,
           "filters": []

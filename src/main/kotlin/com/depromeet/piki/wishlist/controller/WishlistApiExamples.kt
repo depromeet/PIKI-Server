@@ -31,8 +31,8 @@ class WishlistApiExamples(
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.CREATED,
-                        name = "등록 접수 (파싱 중)",
-                        payload = ApiResponseBody.created(processingSampleEntry),
+                        name = "등록 접수 (파싱 대기 — PENDING)",
+                        payload = ApiResponseBody.created(pendingSampleEntry),
                     )
                     add(ProductLinkException.invalidFormat(urlFormatCause), name = "유효하지 않은 URL 형식")
                     add(ProductLinkException.unsupportedScheme(), name = "https 외 스킴")
@@ -44,10 +44,10 @@ class WishlistApiExamples(
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.OK,
-                        name = "조회 성공 (담는 중 + 완성 혼재, 마지막 페이지)",
+                        name = "조회 성공 (대기·담는 중 + 완성 혼재, 마지막 페이지)",
                         payload =
                             ApiResponseBody.ok(
-                                data = listOf(processingSampleEntry, sampleEntry),
+                                data = listOf(pendingSampleEntry, processingSampleEntry, sampleEntry),
                                 pageResponse = PageResponse(nextCursor = null, hasNext = false),
                             ),
                     )
@@ -107,7 +107,7 @@ class WishlistApiExamples(
                     add(WishException.forbiddenWishItems(), name = "본인 위시 아님")
                     add(WishException.notFound(), name = "존재하지 않는 위시 항목")
                     add(ItemException.alreadyReady(), name = "이미 등록 완료(READY) 항목 — 수정 불가")
-                    add(ItemException.stillProcessing(), name = "아직 처리 중(PROCESSING) 항목 — 수정 불가")
+                    add(ItemException.stillProcessing(), name = "아직 대기·처리 중(PENDING·PROCESSING) 항목 — 수정 불가")
                     add(ImageStorageException.uploadFailed(), name = "이미지 저장 실패")
                     unauthorized()
                 }
@@ -183,7 +183,27 @@ class WishlistApiExamples(
                 ),
         )
 
-    // 등록 직후 파싱 중 항목 (PROCESSING) — link 만 있고 name·가격·이미지는 아직 비어 있다.
+    // URL 등록 직후 항목 (PENDING) — link 만 있고 name·가격·이미지는 비어 있다. 디스패처가 집어 PROCESSING 으로 전이한다.
+    private val pendingSampleEntry =
+        WishItemResponse(
+            wish =
+                WishItemResponse.WishView(
+                    id = 1027,
+                    createdAt = LocalDateTime.of(2026, 5, 21, 10, 11, 0),
+                ),
+            item =
+                WishItemResponse.ItemView(
+                    id = 515,
+                    status = ItemStatus.PENDING,
+                    name = null,
+                    currentPrice = null,
+                    currency = null,
+                    imageUrl = null,
+                    sourceUrl = "https://www.example-shop.com/products/67891",
+                ),
+        )
+
+    // 파싱 진행 중 항목 (PROCESSING) — 디스패처가 집어 추출 중인 상태. 목록·단건 폴링에서 등장한다.
     private val processingSampleEntry =
         WishItemResponse(
             wish =

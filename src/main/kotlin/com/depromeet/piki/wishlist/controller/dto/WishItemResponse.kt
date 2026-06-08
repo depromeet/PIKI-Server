@@ -47,18 +47,20 @@ data class WishItemResponse(
         @field:Schema(description = "상품 ID", example = "512")
         val id: Long,
         @field:Schema(
-            description = "파싱 상태 — PROCESSING(담는 중)/READY(완료)/FAILED(파싱 실패). PROCESSING 동안은 name·currentPrice·imageUrl 이 비어 있다.",
+            description = "파싱 상태 — PENDING(URL 등록 접수, 파싱 대기)/PROCESSING(파싱 중)/READY(완료)/FAILED(파싱 실패). " +
+                "URL 등록은 PENDING 으로 시작해 디스패처가 집어 PROCESSING→READY/FAILED 로 전이하고, 이미지 등록은 PROCESSING 으로 시작한다. " +
+                "PENDING·PROCESSING 동안은 name·currentPrice·imageUrl 이 비어 있다.",
             example = "READY",
         )
         val status: ItemStatus,
-        @field:Schema(description = "상품명 (PROCESSING·실패 시 null)", example = "에어 조던 1 미드", nullable = true)
+        @field:Schema(description = "상품명 (PENDING·PROCESSING·실패 시 null)", example = "에어 조던 1 미드", nullable = true)
         val name: String?,
-        @field:Schema(description = "스냅샷 시점의 현재 판매가 (PROCESSING·실패 시 null)", example = "119000", nullable = true)
+        @field:Schema(description = "스냅샷 시점의 현재 판매가 (PENDING·PROCESSING·실패 시 null)", example = "119000", nullable = true)
         val currentPrice: Int?,
         @field:Schema(description = "통화 코드 (ISO 4217)", example = "KRW", nullable = true)
         val currency: String?,
         @field:Schema(
-            description = "상품 대표 이미지 URL (PROCESSING·실패 시 null)",
+            description = "상품 대표 이미지 URL (PENDING·PROCESSING·실패 시 null)",
             example = "https://cdn.example.com/p/512.jpg",
             nullable = true,
         )

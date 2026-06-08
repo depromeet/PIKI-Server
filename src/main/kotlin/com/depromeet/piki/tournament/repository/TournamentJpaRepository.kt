@@ -3,9 +3,12 @@ package com.depromeet.piki.tournament.repository
 import com.depromeet.piki.tournament.domain.Tournament
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import jakarta.persistence.LockModeType
+import java.time.LocalDateTime
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 
 interface TournamentJpaRepository : JpaRepository<Tournament, Long> {
     fun findByIdAndDeletedAtIsNull(id: Long): Tournament?
@@ -29,4 +32,8 @@ interface TournamentJpaRepository : JpaRepository<Tournament, Long> {
     fun findFirstByInviteCodeAndDeletedAtIsNull(inviteCode: String): Tournament?
 
     fun existsByInviteCodeAndDeletedAtIsNull(inviteCode: String): Boolean
+
+    @Modifying
+    @Query("UPDATE Tournament t SET t.deletedAt = :now WHERE t.id = :id AND t.deletedAt IS NULL")
+    fun softDeleteById(@Param("id") id: Long, @Param("now") now: LocalDateTime)
 }

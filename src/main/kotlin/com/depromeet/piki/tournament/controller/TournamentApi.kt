@@ -74,7 +74,7 @@ interface TournamentApi {
             isOwner: 요청자가 토너먼트 소유자이면 true. 클라이언트는 이 값으로 위시 추가·플레이링크 공유 버튼 등 소유자 전용 UI를 제어한다.
             응답의 status 필드에 따라 포함되는 데이터가 달라진다.
             - PENDING: pending 필드 (아이템 목록, 참여자 목록)
-              - 각 아이템에 status 포함 (READY / PROCESSING / FAILED). PROCESSING 이면 name·price·imageUrl 은 null 이라 응답에서 제외됨
+              - 각 아이템에 status 포함 (READY / PENDING / PROCESSING / FAILED). PENDING·PROCESSING 이면 name·price·imageUrl 은 null 이라 응답에서 제외됨
             - IN_PROGRESS: inProgress 필드
               - currentRound: 다음에 진행할 라운드 번호
               - lastHistory: 가장 최근에 기록된 매치 결과. 라운드 전환 직후에는 currentRound와 다른 라운드의 매치일 수 있음. 매치 기록이 없으면 null
@@ -519,8 +519,9 @@ interface TournamentApi {
         description = """
             IN_PROGRESS 상태의 토너먼트에서 한 매치의 결과(승자)를 기록한다.
             currentRound 는 해당 시점에 서버가 기대하는 라운드와 일치해야 한다.
-            결승(currentRound=2) 결과 기록 시 토너먼트가 COMPLETED 로 자동 전환되고,
-            응답 data 에 1위~최대 4위의 순위 결과(이름·가격·이미지)가 포함된다.
+            결승(currentRound=2) 결과 기록 시 본인의 순위 결과(1위~최대 4위)가 즉시 반환된다.
+            소셜 토너먼트라도 각 인스턴스(ROOT·CLONE)는 해당 인스턴스의 결승이 완료되는 즉시 COMPLETED 로 전환된다.
+            다른 참여자의 진행 여부와 무관하게 내 결과는 바로 확인할 수 있으며, 전체 그룹 결과는 2명 이상이 완료한 뒤 hasGroupResult=true 로 활성화된다.
             결승이 아닌 라운드는 data=null 을 반환한다.
         """,
     )
