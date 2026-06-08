@@ -13,6 +13,9 @@ data class TournamentDetailResponse(
     val name: String,
     val status: TournamentStatus,
     val isOwner: Boolean,
+    // ROOT(소셜 토너먼트 원본) 이면 true, CLONE(멤버·플레이링크용 복사본) 이면 false.
+    // 플레이 링크 공유는 isRoot && isOwner 일 때만 허용된다.
+    val isRoot: Boolean,
     val pending: PendingData?,
     val inProgress: InProgressData?,
     val completed: CompletedData?,
@@ -105,6 +108,7 @@ data class TournamentDetailResponse(
                         // ownerStarted=true 이면 실제 tournament 상태는 IN_PROGRESS 다.
                         status = if (detail.ownerStarted) TournamentStatus.IN_PROGRESS else TournamentStatus.PENDING,
                         isOwner = detail.isOwner,
+                        isRoot = detail.isRoot,
                         pending =
                             PendingData(
                                 inviteCode = if (detail.ownerStarted) null else detail.inviteCode,
@@ -123,6 +127,7 @@ data class TournamentDetailResponse(
                         name = detail.name,
                         status = TournamentStatus.IN_PROGRESS,
                         isOwner = detail.isOwner,
+                        isRoot = detail.isRoot,
                         pending = null,
                         inProgress =
                             InProgressData(
@@ -139,6 +144,7 @@ data class TournamentDetailResponse(
                         name = detail.name,
                         status = TournamentStatus.COMPLETED,
                         isOwner = detail.isOwner,
+                        isRoot = detail.isRoot,
                         pending = null,
                         inProgress = null,
                         completed = CompletedData.from(detail),

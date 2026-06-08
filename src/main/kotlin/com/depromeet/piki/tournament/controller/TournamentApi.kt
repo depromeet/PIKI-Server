@@ -71,7 +71,9 @@ interface TournamentApi {
         summary = "토너먼트 단건 조회",
         description = """
             토너먼트 ID로 상태에 따른 상세 정보를 조회한다.
-            isOwner: 요청자가 토너먼트 소유자이면 true. 클라이언트는 이 값으로 위시 추가·플레이링크 공유 버튼 등 소유자 전용 UI를 제어한다.
+            isOwner: 요청자가 해당 토너먼트 인스턴스(ROOT 또는 CLONE)의 소유자이면 true.
+            isRoot: 소셜 토너먼트 원본(ROOT)이면 true, 멤버·플레이링크용 복사본(CLONE)이면 false. 솔로 토너먼트는 항상 true.
+            플레이 링크 공유는 isRoot && isOwner 일 때만 허용된다. isOwner 단독으로 분기하면 CLONE 소유자에게도 공유 버튼이 노출되어 시안 위반이다.
             응답의 status 필드에 따라 포함되는 데이터가 달라진다.
             - PENDING: pending 필드 (아이템 목록, 참여자 목록)
               - 각 아이템에 status 포함 (READY / PENDING / PROCESSING / FAILED). PENDING·PROCESSING 이면 name·price·imageUrl 은 null 이라 응답에서 제외됨

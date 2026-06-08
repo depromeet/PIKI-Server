@@ -283,6 +283,7 @@ class TournamentService(
         val currentUser = tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
         val isOwner = currentUser.getId() == tournament.ownerTournamentUserId
+        val isRoot = tournament.sourceTournamentId?.let { false } ?: true
 
         return when (tournament.status) {
             TournamentStatus.PENDING -> {
@@ -314,6 +315,7 @@ class TournamentService(
                             }
                         },
                     isOwner = isOwner,
+                    isRoot = isRoot,
                 )
             }
 
@@ -359,6 +361,7 @@ class TournamentService(
                                 }
                             },
                             isOwner = false,
+                            isRoot = true,
                             ownerStarted = true,
                         )
                     }
@@ -395,6 +398,7 @@ class TournamentService(
                     lastHistory = lastHistory,
                     remainingItems = remainingItems,
                     isOwner = isOwner,
+                    isRoot = isRoot,
                 )
             }
 
@@ -571,6 +575,7 @@ class TournamentService(
         hasGroupResult: Boolean,
         isOwner: Boolean,
     ): TournamentDetail.Completed {
+        val isRoot = tournament.sourceTournamentId?.let { false } ?: true
         val rankedPairs = computeRanking(histories)
         val tournamentItemById = tournamentItemRepository
             .findByIds(rankedPairs.map { it.first })
@@ -594,6 +599,7 @@ class TournamentService(
             },
             hasGroupResult = hasGroupResult,
             isOwner = isOwner,
+            isRoot = isRoot,
             playLinkExpiresAt = tournament.playLinkExpiresAt,
         )
     }
