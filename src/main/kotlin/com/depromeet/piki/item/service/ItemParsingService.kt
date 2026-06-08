@@ -76,20 +76,48 @@ class ItemParsingService(
         }
     }
 
-    // 워커가 죽어(인스턴스 크래시 등) PROCESSING 에 갇힌 stale 작업을 FAILED 로 정리한다 (재시도/재큐잉 없음 — 사용자가 재등록).
-    // snapshot 은 FOR UPDATE 로 PROCESSING 으로 잠겨 markFailed 가 throw 하지 않으므로 batch poison 이 없다.
-    // 정리 건수를 반환해 호출부가 요약 로그를 남긴다.
+    // stale PROCESSING(워커 크래시·실행 누락·일시 오류로 단건 실행이 끝나지 않은 행)을 집어 재실행 또는 종결한다.
+    // claim-at-least-once 를 execution at-least-once 로 끌어올리는 핵심(#461) — 기존의 "무조건 FAILED" 를 "재실행 우선"으로 바꿨다.
+    //
+    // 단건 시도는 워커가 60s 안에 끝내므로(외부 timeout 합 ≤ 약 55s, Gemini 내부 재시도 off), updated_at 이 60s 보다 오래된
+    // PROCESSING 은 워커가 더는 돌고 있지 않다는 뜻이다. 그런 행을:
+    //   - link 가 없으면(이미지 경로 — 원본이 메모리 ByteArray 라 크래시 시 소실) 되살릴 수 없으므로 즉시 FAILED.
+    //   - attempt 가 상한(maxAttempts)에 도달했으면 더 시도하지 않고 FAILED (무한 재큐잉 방지, 절대 3분 초과 금지).
+    //   - 그 외에는 reclaim(attempt++, PROCESSING 유지)해 재실행 대상으로 반환한다 — 실제 워커 제출은 스케줄러가 트랜잭션 밖에서 한다.
+    //
+    // snapshot 은 FOR UPDATE 로 PROCESSING 으로 잠겨 reclaim·markFailed 가 throw 하지 않으므로 batch poison 이 없다.
     @Transactional
-    fun recoverStaleProcessing(
+    fun retryOrFailStaleProcessing(
         threshold: LocalDateTime,
         batchSize: Int,
-    ): Int {
+        maxAttempts: Int,
+    ): StaleProcessingOutcome {
         val stale = itemSnapshotRepository.findStaleProcessing(threshold, batchSize)
-        if (stale.isEmpty()) return 0
+        if (stale.isEmpty()) return StaleProcessingOutcome(emptyList(), 0)
+        // per-snapshot N+1 대신 link 를 item 에서 한 번에 로드한다 (snapshot 은 itemId 만 들고 link 는 item 소관).
+        val linkByItemId = itemRepository.findByIds(stale.map { it.itemId }).associateBy({ it.getId() }, { it.link })
+        val toRetry = mutableListOf<ClaimedItem>()
+        var failedCount = 0
         stale.forEach { snapshot ->
-            snapshot.markFailed()
-            eventPublisher.publishEvent(ItemParsingFailed(snapshot.itemId))
+            // link 없음(이미지·orphan): 되살릴 원본이 없으므로 종결. associateBy 값이 null(이미지)이든 키 부재(orphan)든 Elvis 로 동일 처리.
+            val link =
+                linkByItemId[snapshot.itemId] ?: run {
+                    snapshot.markFailed()
+                    eventPublisher.publishEvent(ItemParsingFailed(snapshot.itemId))
+                    failedCount++
+                    return@forEach
+                }
+            // 재시도 상한 도달: 더 되살리지 않고 종결.
+            if (snapshot.attemptCount >= maxAttempts) {
+                snapshot.markFailed()
+                eventPublisher.publishEvent(ItemParsingFailed(snapshot.itemId))
+                failedCount++
+                return@forEach
+            }
+            // 재실행: PROCESSING 유지 + attempt++ (updated_at 갱신으로 stale 시계 리셋). 디스패치는 스케줄러가.
+            snapshot.reclaim()
+            toRetry.add(ClaimedItem(itemId = snapshot.itemId, link = link))
         }
-        return stale.size
+        return StaleProcessingOutcome(toRetry, failedCount)
     }
 }
