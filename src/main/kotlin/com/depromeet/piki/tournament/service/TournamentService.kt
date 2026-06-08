@@ -283,6 +283,7 @@ class TournamentService(
         val currentUser = tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
         val isOwner = currentUser.getId() == tournament.ownerTournamentUserId
+        val isRoot = tournament.sourceTournamentId?.let { false } ?: true
 
         return when (tournament.status) {
             TournamentStatus.PENDING -> {
@@ -314,6 +315,7 @@ class TournamentService(
                             }
                         },
                     isOwner = isOwner,
+                    isRoot = isRoot,
                 )
             }
 
@@ -330,6 +332,40 @@ class TournamentService(
                 val histories = tournamentRepository.findHistoriesByTournamentIdAndTournamentUserId(
                     tournamentId, currentUser.getId(),
                 )
+
+                // ROOT 가 IN_PROGRESS 인데 멤버 본인의 히스토리가 없으면, CLONE 을 아직 시작하지 않은 대기 상태다.
+                // sourceTournamentId 가 없으면(ROOT) pending 형태로 아이템·참여자를 내려준다.
+                // 클라이언트는 ownerStarted=true 로 "주최자가 시작했습니다, 지금 시작하세요" UI 를 분기한다.
+                if (!isOwner && histories.isEmpty()) {
+                    tournament.sourceTournamentId ?: run {
+                        val tournamentItems = tournamentItemRepository.findAllByTournamentId(tournamentId)
+                        val snapshotById = snapshotsOf(tournamentItems)
+                        val tournamentUsers = tournamentUserRepository.findByTournamentId(tournamentId)
+                        val userById = userRepository
+                            .findByIds(tournamentUsers.map { it.userId }.toSet())
+                            .associateBy { it.id }
+                        return TournamentDetail.Pending(
+                            tournamentId = tournament.getId(),
+                            name = tournament.name,
+                            inviteCode = tournament.inviteCode,
+                            inviteExpiresAt = tournament.inviteExpiresAt,
+                            items = tournamentItems.map { toItemDetail(it, snapshotById) },
+                            participants = tournamentUsers.mapNotNull { tu ->
+                                userById[tu.userId]?.let { user ->
+                                    TournamentDetail.ParticipantDetail(
+                                        userId = user.id,
+                                        nickname = user.nickname,
+                                        profileImage = user.profileImage,
+                                        isWithdrawn = !user.isActive(),
+                                    )
+                                }
+                            },
+                            isOwner = false,
+                            isRoot = true,
+                            ownerStarted = true,
+                        )
+                    }
+                }
                 // 히스토리는 currentRound ASC, id ASC 정렬이라 lastOrNull()은 라운드가 바뀌면 틀림 — ID 최대값이 가장 최근 매치
                 val lastHistory = histories
                     .maxByOrNull { it.getId() }
@@ -362,6 +398,7 @@ class TournamentService(
                     lastHistory = lastHistory,
                     remainingItems = remainingItems,
                     isOwner = isOwner,
+                    isRoot = isRoot,
                 )
             }
 
@@ -538,6 +575,7 @@ class TournamentService(
         hasGroupResult: Boolean,
         isOwner: Boolean,
     ): TournamentDetail.Completed {
+        val isRoot = tournament.sourceTournamentId?.let { false } ?: true
         val rankedPairs = computeRanking(histories)
         val tournamentItemById = tournamentItemRepository
             .findByIds(rankedPairs.map { it.first })
@@ -561,6 +599,7 @@ class TournamentService(
             },
             hasGroupResult = hasGroupResult,
             isOwner = isOwner,
+            isRoot = isRoot,
             playLinkExpiresAt = tournament.playLinkExpiresAt,
         )
     }
