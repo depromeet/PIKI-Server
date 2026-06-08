@@ -2,6 +2,7 @@ package com.depromeet.piki.item.repository
 
 import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.domain.ItemStatus
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Repository
 import java.time.LocalDateTime
 
@@ -22,6 +23,16 @@ class ItemSnapshotRepositoryImpl(
     override fun findByIds(ids: List<Long>): List<ItemSnapshot> =
         itemSnapshotJpaRepository.findByIdInAndDeletedAtIsNull(ids)
 
-    override fun findStaleProcessingItemIds(cutoff: LocalDateTime): List<Long> =
-        itemSnapshotJpaRepository.findItemIdsByStatusAndCreatedAtBefore(ItemStatus.PROCESSING, cutoff)
+    override fun findDuePending(batchSize: Int): List<ItemSnapshot> =
+        itemSnapshotJpaRepository.findByStatusForUpdate(ItemStatus.PENDING, PageRequest.of(0, batchSize))
+
+    override fun findStaleProcessing(
+        threshold: LocalDateTime,
+        batchSize: Int,
+    ): List<ItemSnapshot> =
+        itemSnapshotJpaRepository.findStaleByStatusForUpdate(
+            ItemStatus.PROCESSING,
+            threshold,
+            PageRequest.of(0, batchSize),
+        )
 }

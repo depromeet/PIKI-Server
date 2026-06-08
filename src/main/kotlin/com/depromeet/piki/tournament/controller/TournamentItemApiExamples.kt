@@ -57,7 +57,7 @@ class TournamentItemApiExamples(
                         add(TournamentException.notFoundItems(), name = "존재하지 않는 아이템 포함")
                         add(TournamentException.notPendingTournament(), name = "PENDING 상태 아님")
                         add(TournamentException.duplicateTournamentItem(), name = "이미 등록된/중복 아이템")
-                        add(TournamentException.itemNotReady(), name = "PROCESSING/FAILED 상품 포함")
+                        add(TournamentException.itemNotReady(), name = "PENDING/PROCESSING/FAILED 등 미완료 상품 포함")
                     }
 
                 handlerMethod.binds(TournamentItemController::addItemFromLink) ->
@@ -163,6 +163,23 @@ class TournamentItemApiExamples(
                                         price = 189_000,
                                         currency = "KRW",
                                         status = ItemStatus.READY,
+                                    ),
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.OK,
+                            name = "PENDING - 파싱 대기 (URL 등록 직후)",
+                            payload =
+                                ApiResponseBody.ok(
+                                    TournamentItemDetailResponse(
+                                        tournamentItemId = 10,
+                                        itemId = 100,
+                                        sourceUrl = "https://www.nike.com/kr/t/air-max/example",
+                                        name = null,
+                                        imageUrl = null,
+                                        price = null,
+                                        currency = null,
+                                        status = ItemStatus.PENDING,
                                     ),
                                 ),
                         )

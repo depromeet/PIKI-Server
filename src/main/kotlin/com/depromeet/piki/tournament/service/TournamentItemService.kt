@@ -5,7 +5,6 @@ import com.depromeet.piki.image.domain.ProductImage
 import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.item.service.ImageParsingWorker
 import com.depromeet.piki.item.service.ItemParsingService
-import com.depromeet.piki.item.service.ItemParsingWorker
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentRepository
@@ -17,7 +16,6 @@ import java.util.UUID
 
 @Service
 class TournamentItemService(
-    private val itemParsingWorker: ItemParsingWorker,
     private val imageParsingWorker: ImageParsingWorker,
     private val itemParsingService: ItemParsingService,
     private val tournamentItemPersistenceService: TournamentItemPersistenceService,
@@ -34,16 +32,10 @@ class TournamentItemService(
         url: String,
     ): Long {
         val link = ProductLink.parse(url)
+        // URL 경로는 PENDING snapshot 을 커밋만 하고(outbox 적재) 즉시 반환한다. 파싱은 디스패처(@Scheduled)가
+        // PENDING 을 집어 워커에 넘긴다 — @Async 유실과 무관하게 최소 1회는 claim 된다(at-least-once).
         // 파싱·상태 전이는 item PK 를, 클라이언트 응답은 tournament_item PK 를 쓴다 (PersistedTournamentItem).
         val persisted = tournamentItemPersistenceService.persistLinkItem(userId, tournamentId, link)
-        val itemId = persisted.itemId
-        try {
-            itemParsingWorker.parse(itemId, link)
-        } catch (e: TaskRejectedException) {
-            log.warn("item {} async 디스패치 거부 → FAILED 처리", itemId, e)
-            runCatching { itemParsingService.markFailed(itemId) }
-                .onFailure { ex -> log.error("item {} FAILED 전이 실패, PROCESSING 방치 위험", itemId, ex) }
-        }
         return persisted.tournamentItemId
     }
 

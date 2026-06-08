@@ -74,7 +74,7 @@ interface TournamentApi {
             isOwner: 요청자가 토너먼트 소유자이면 true. 클라이언트는 이 값으로 위시 추가·플레이링크 공유 버튼 등 소유자 전용 UI를 제어한다.
             응답의 status 필드에 따라 포함되는 데이터가 달라진다.
             - PENDING: pending 필드 (아이템 목록, 참여자 목록)
-              - 각 아이템에 status 포함 (READY / PROCESSING / FAILED). PROCESSING 이면 name·price·imageUrl 은 null 이라 응답에서 제외됨
+              - 각 아이템에 status 포함 (READY / PENDING / PROCESSING / FAILED). PENDING·PROCESSING 이면 name·price·imageUrl 은 null 이라 응답에서 제외됨
             - IN_PROGRESS: inProgress 필드
               - currentRound: 다음에 진행할 라운드 번호
               - lastHistory: 가장 최근에 기록된 매치 결과. 라운드 전환 직후에는 currentRound와 다른 라운드의 매치일 수 있음. 매치 기록이 없으면 null
