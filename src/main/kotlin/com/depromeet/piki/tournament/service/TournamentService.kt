@@ -347,10 +347,15 @@ class TournamentService(
         statuses: List<TournamentStatus>?,
     ): List<TournamentSummary> {
         val tournamentIds = tournamentUserRepository.findTournamentIdsByUserId(userId)
-        val tournaments = tournamentRepository.findByIdsAndStatuses(tournamentIds, statuses)
+        if (tournamentIds.isEmpty()) return emptyList()
+        // DB status 필터 없이 전체 조회 — 유효 상태(effective status)는 인메모리에서 계산한다.
+        // 본인이 완료했으나 다른 참여자가 아직 진행 중인 소셜 토너먼트는 DB 상 IN_PROGRESS 이지만
+        // 본인 화면에서는 COMPLETED 로 표시해야 하므로, DB 필터 후 인메모리 필터로 교체한다.
+        val tournaments = tournamentRepository.findByIdsAndStatuses(tournamentIds, null)
         if (tournaments.isEmpty()) return emptyList()
 
         val tournamentUsers = tournamentUserRepository.findByTournamentIds(tournaments.map { it.getId() })
+        val myTUByTournamentId = tournamentUsers.filter { it.userId == userId }.associateBy { it.tournamentId }
         val userIds =
             tournamentUsers
                 .map { it.userId }
@@ -364,12 +369,20 @@ class TournamentService(
                 .groupBy { it.tournamentId }
                 .mapValues { (_, users) -> users.mapNotNull { profileImageByUserId[it.userId] } }
 
-        return tournaments.map { tournament ->
-            TournamentSummary.of(
-                tournament = tournament,
-                participantProfileImages = profileImagesByTournamentId[tournament.getId()] ?: emptyList(),
-            )
-        }
+        return tournaments
+            .map { tournament ->
+                val effectiveStatus =
+                    if (myTUByTournamentId[tournament.getId()]?.isCompleted() == true)
+                        TournamentStatus.COMPLETED
+                    else
+                        tournament.status
+                TournamentSummary.of(
+                    tournament = tournament,
+                    participantProfileImages = profileImagesByTournamentId[tournament.getId()] ?: emptyList(),
+                    effectiveStatus = effectiveStatus,
+                )
+            }
+            .filter { statuses.isNullOrEmpty() || it.status in statuses }
     }
 
     @Transactional

@@ -1196,6 +1196,25 @@ class TournamentServiceTest {
     }
 
     @Test
+    fun `getTournaments 에서 본인이 결승을 완료한 소셜 토너먼트는 tournament_status 가 IN_PROGRESS 여도 COMPLETED 로 표시된다`() {
+        val tournamentId = service.create(userId, CreateTournament("소셜")).tournamentId
+        testWishRepository.addWish(userId, 1L, 2L)
+        service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
+        // 두 번째 참여자가 아직 완료하지 않아 tournament.status 는 IN_PROGRESS 에 머문다
+        tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
+        service.start(userId, tournamentId)
+        val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
+        service.recordMatch(userId, RecordMatch(tournamentId, 2, items[0].getId(), items[1].getId(), items[0].getId()))
+
+        assertEquals(TournamentStatus.IN_PROGRESS, repository.tournaments[tournamentId]!!.status)
+
+        val result = service.getTournaments(userId, null)
+
+        assertEquals(1, result.size)
+        assertEquals(TournamentStatus.COMPLETED, result[0].status)
+    }
+
+    @Test
     fun `getTournaments 에서 참여자 프로필 이미지를 반환한다`() {
         testUserRepository.add(
             User(
