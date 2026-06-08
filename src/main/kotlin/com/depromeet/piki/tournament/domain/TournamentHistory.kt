@@ -4,7 +4,6 @@ import com.depromeet.piki.common.domain.LongBaseEntity
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
-import java.time.LocalDateTime
 
 @Entity
 @Table(name = "tournament_histories")
@@ -26,9 +25,5 @@ class TournamentHistory(
 ) : LongBaseEntity() {
     init {
         requireNotNull(tournamentUserId) { "tournamentUserId 는 반드시 있어야 한다" }
-    }
-
-    fun softDelete() {
-        deletedAt = LocalDateTime.now()
     }
 }
