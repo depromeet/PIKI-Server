@@ -44,7 +44,7 @@ class TournamentUserRepositoryImpl(
     }
 
     override fun countCompletedByTournamentId(tournamentId: Long): Int =
-        tournamentUserJpaRepository.findCompletedByTournamentId(tournamentId).size
+        tournamentUserJpaRepository.countCompletedByTournamentId(tournamentId)
 
     override fun findCompletedByTournamentId(tournamentId: Long): List<TournamentUser> =
         tournamentUserJpaRepository.findCompletedByTournamentId(tournamentId)

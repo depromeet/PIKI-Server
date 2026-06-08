@@ -35,6 +35,9 @@ interface TournamentUserJpaRepository : JpaRepository<TournamentUser, Long> {
     @Query("SELECT tu FROM TournamentUser tu WHERE tu.tournamentId = :tournamentId AND tu.completedAt IS NOT NULL")
     fun findCompletedByTournamentId(@Param("tournamentId") tournamentId: Long): List<TournamentUser>
 
+    @Query("SELECT COUNT(tu) FROM TournamentUser tu WHERE tu.tournamentId = :tournamentId AND tu.completedAt IS NOT NULL")
+    fun countCompletedByTournamentId(@Param("tournamentId") tournamentId: Long): Int
+
     @Modifying
     @Query("UPDATE TournamentUser tu SET tu.deletedAt = :now WHERE tu.tournamentId = :tournamentId AND tu.userId = :userId AND tu.deletedAt IS NULL")
     fun softDeleteByTournamentIdAndUserId(
