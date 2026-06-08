@@ -62,7 +62,7 @@
           "selected": true
         },
         "options": [],
-        "refresh": 2,
+        "refresh": 1,
         "regex": "",
         "sort": 1,
         "includeAll": false,
@@ -74,26 +74,26 @@
         "name": "traceFilter",
         "type": "custom",
         "label": "trace 필터",
-        "query": "전체 : { resource.service.name = \"PIKI\" && resource.deployment.environment = \"$environment\" },느린(>500ms) : { resource.service.name = \"PIKI\" && resource.deployment.environment = \"$environment\" && trace:duration > 500ms },에러 : { resource.service.name = \"PIKI\" && resource.deployment.environment = \"$environment\" && status = error }",
+        "query": "전체 : ,느린(>500ms) :  && trace:duration > 500ms,에러 :  && status = error",
         "current": {
           "text": "전체",
-          "value": "{ resource.service.name = \"PIKI\" && resource.deployment.environment = \"$environment\" }",
+          "value": "",
           "selected": true
         },
         "options": [
           {
             "text": "전체",
-            "value": "{ resource.service.name = \"PIKI\" && resource.deployment.environment = \"$environment\" }",
+            "value": "",
             "selected": true
           },
           {
             "text": "느린(>500ms)",
-            "value": "{ resource.service.name = \"PIKI\" && resource.deployment.environment = \"$environment\" && trace:duration > 500ms }",
+            "value": " && trace:duration > 500ms",
             "selected": false
           },
           {
             "text": "에러",
-            "value": "{ resource.service.name = \"PIKI\" && resource.deployment.environment = \"$environment\" && status = error }",
+            "value": " && status = error",
             "selected": false
           }
         ],
@@ -140,7 +140,7 @@
             "uid": "${DS_TEMPO}"
           },
           "queryType": "traceql",
-          "query": "${traceFilter:raw}",
+          "query": "{ resource.service.name = \"PIKI\" && resource.deployment.environment = \"$environment\"${traceFilter:raw} }",
           "tableType": "traces",
           "limit": 20,
           "filters": []
