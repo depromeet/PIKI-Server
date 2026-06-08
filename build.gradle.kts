@@ -66,6 +66,11 @@ dependencies {
     // Spring Boot 4.0.5 BOM 미관리라 버전 명시 (Maven Central 최신 안정).
     implementation("org.jsoup:jsoup:1.22.2")
 
+    // 상품 페이지 redirect 추적 시 "같은 회사 도메인(eTLD+1)" 판정에 Public Suffix List 가 필요 (#440).
+    // guava InternetDomainName 으로 정확히 가른다 — 단순 점 개수 어림은 a.co.kr↔b.co.kr 을 같은 회사로 오판해 SSRF 구멍.
+    // Spring Boot BOM 미관리라 버전 명시 (Maven Central 최신 안정).
+    implementation("com.google.guava:guava:33.6.0-jre")
+
     // 옵저버빌리티: Actuator 로 health/metrics 노출 + Micrometer Prometheus 레지스트리로
     // /actuator/prometheus 텍스트 포맷 export. 수집은 EC2 의 Grafana Alloy → Grafana Cloud (별도 PR).
     // 버전은 Spring Boot BOM 이 관리한다.

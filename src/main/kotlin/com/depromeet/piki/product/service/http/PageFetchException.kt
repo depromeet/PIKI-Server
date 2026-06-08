@@ -42,6 +42,14 @@ class PageFetchException private constructor(
                 HttpStatus.BAD_GATEWAY,
             )
 
+        // redirect 가 hop 상한을 넘어 무한·체인 의심. 대상 서버 문제로 보고 재시도 가능 신호.
+        fun tooManyRedirects(): PageFetchException =
+            PageFetchException(
+                "링크 페이지의 redirect 가 너무 많습니다.",
+                ErrorCategory.RETRYABLE,
+                HttpStatus.BAD_GATEWAY,
+            )
+
         // host 가 사설/메타데이터/loopback 영역으로 resolve 될 때 SSRF 차단 신호.
         fun blockedHost(): PageFetchException =
             PageFetchException(
