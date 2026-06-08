@@ -59,6 +59,10 @@ class Tournament(
         playLinkExpiresAt = expiresAt
     }
 
+    fun expirePlayLink() {
+        playLinkExpiresAt = LocalDateTime.now().minusSeconds(1)
+    }
+
     fun isFinalRound(currentRound: Int): Boolean = currentRound == FINAL_ROUND_SIZE
 
     fun isPending(): Boolean = status == TournamentStatus.PENDING

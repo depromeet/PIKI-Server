@@ -55,7 +55,9 @@ class TournamentServiceTest {
         override fun findByTournamentIdAndUserId(
             tournamentId: Long,
             userId: UUID,
-        ): TournamentUser? = users.find { it.tournamentId == tournamentId && it.userId == userId }
+        ): TournamentUser? = users.find {
+            it.tournamentId == tournamentId && it.userId == userId && (it.deletedAt?.let { false } ?: true)
+        }
 
         override fun findTournamentIdsByUserId(userId: UUID): List<Long> =
             users.filter { it.userId == userId && (it.deletedAt?.let { false } ?: true) }.map { it.tournamentId }
@@ -74,6 +76,12 @@ class TournamentServiceTest {
 
         override fun softDeleteByTournamentIdAndUserId(tournamentId: Long, userId: UUID) {
             users.find { it.tournamentId == tournamentId && it.userId == userId }?.softDelete()
+        }
+
+        override fun softDeleteAllByTournamentId(tournamentId: Long) {
+            users.filter { it.tournamentId == tournamentId }.forEach { tu ->
+                tu.deletedAt ?: tu.softDelete()
+            }
         }
 
         override fun countCompletedByTournamentId(tournamentId: Long): Int =
@@ -335,6 +343,12 @@ class TournamentServiceTest {
             return 1
         }
 
+        override fun softDeleteAllByTournamentId(tournamentId: Long) {
+            items.filter { it.tournamentId == tournamentId }.forEach { item ->
+                item.deletedAt ?: item.softDelete()
+            }
+        }
+
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
@@ -401,6 +415,10 @@ class TournamentServiceTest {
 
         override fun existsTournamentByInviteCode(code: String): Boolean =
             tournaments.values.any { it.inviteCode == code && (it.deletedAt?.let { false } ?: true) }
+
+        override fun softDeleteTournament(tournamentId: Long) {
+            tournaments[tournamentId]?.run { deletedAt = LocalDateTime.now() }
+        }
 
         private fun setEntityId(
             entity: LongBaseEntity,
@@ -1196,17 +1214,18 @@ class TournamentServiceTest {
     }
 
     @Test
-    fun `getTournaments 에서 본인이 결승을 완료한 소셜 토너먼트는 tournament_status 가 IN_PROGRESS 여도 COMPLETED 로 표시된다`() {
+    fun `getTournaments 에서 주최자가 결승을 완료한 소셜 토너먼트는 즉시 COMPLETED 가 되어 목록에 COMPLETED 로 표시된다`() {
         val tournamentId = service.create(userId, CreateTournament("소셜")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
-        // 두 번째 참여자가 아직 완료하지 않아 tournament.status 는 IN_PROGRESS 에 머문다
+        // Design B: 멤버 TU 가 ROOT 에 있어도 주최자 완료 시 ROOT 가 즉시 COMPLETED 된다
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
         service.start(userId, tournamentId)
         val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
         service.recordMatch(userId, RecordMatch(tournamentId, 2, items[0].getId(), items[1].getId(), items[0].getId()))
 
-        assertEquals(TournamentStatus.IN_PROGRESS, repository.tournaments[tournamentId]!!.status)
+        // Design B: 주최자 완료 즉시 ROOT 가 COMPLETED 된다
+        assertEquals(TournamentStatus.COMPLETED, repository.tournaments[tournamentId]!!.status)
 
         val result = service.getTournaments(userId, null)
 
@@ -1327,7 +1346,7 @@ class TournamentServiceTest {
     }
 
     @Test
-    fun `deleteTournament 는 소유자의 TournamentUser 만 소프트 딜리트하고 토너먼트와 아이템은 유지한다`() {
+    fun `deleteTournament 는 PENDING 토너먼트를 cascade 소프트 딜리트한다`() {
         val tournamentId = service.create(userId, CreateTournament("삭제 대상")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
@@ -1335,15 +1354,17 @@ class TournamentServiceTest {
 
         service.deleteTournament(userId, tournamentId)
 
-        // 토너먼트·아이템은 유지된다
-        assertNull(repository.tournaments[tournamentId]!!.deletedAt)
-        assertTrue(tournamentItemRepository.items.filter { it.tournamentId == tournamentId }.all { it.deletedAt?.let { false } ?: true })
-        // 소유자의 TournamentUser 만 soft-delete 됐다
+        // 토너먼트·아이템·모든 TU 가 cascade 소프트 딜리트된다
+        assertNotNull(repository.tournaments[tournamentId]!!.deletedAt)
+        assertTrue(
+            tournamentItemRepository.items
+                .filter { it.tournamentId == tournamentId }
+                .all { it.deletedAt?.let { true } ?: false },
+        )
         val ownerTu = tournamentUserRepository.users.find { it.tournamentId == tournamentId && it.userId == userId }!!
         assertNotNull(ownerTu.deletedAt)
-        // 다른 참여자의 TournamentUser 는 유지된다
         val memberTu = tournamentUserRepository.users.find { it.tournamentId == tournamentId && it.userId == otherUserId }!!
-        assertNull(memberTu.deletedAt)
+        assertNotNull(memberTu.deletedAt)
         // 소유자는 더 이상 목록에서 보이지 않는다
         assertTrue(service.getTournaments(userId, null).none { it.tournamentId == tournamentId })
     }

@@ -3,6 +3,7 @@ package com.depromeet.piki.tournament.repository
 import com.depromeet.piki.tournament.domain.Tournament
 import com.depromeet.piki.tournament.domain.TournamentHistory
 import com.depromeet.piki.tournament.domain.TournamentStatus
+import java.time.LocalDateTime
 import org.springframework.stereotype.Repository
 
 @Repository
@@ -54,4 +55,8 @@ class TournamentRepositoryImpl(
 
     override fun existsTournamentByInviteCode(code: String): Boolean =
         tournamentJpaRepository.existsByInviteCodeAndDeletedAtIsNull(code)
+
+    override fun softDeleteTournament(tournamentId: Long) {
+        tournamentJpaRepository.softDeleteById(tournamentId, LocalDateTime.now())
+    }
 }

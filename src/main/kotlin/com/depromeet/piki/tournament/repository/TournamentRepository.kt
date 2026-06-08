@@ -30,4 +30,6 @@ interface TournamentRepository {
     fun findTournamentByInviteCode(code: String): Tournament?
 
     fun existsTournamentByInviteCode(code: String): Boolean
+
+    fun softDeleteTournament(tournamentId: Long)
 }

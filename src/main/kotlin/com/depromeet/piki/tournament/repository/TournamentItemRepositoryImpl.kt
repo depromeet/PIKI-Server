@@ -39,4 +39,7 @@ class TournamentItemRepositoryImpl(
         tournamentId: Long,
     ): Int = tournamentItemJpaRepository.softDeleteIfPending(id, tournamentId, now = LocalDateTime.now())
 
+    override fun softDeleteAllByTournamentId(tournamentId: Long) {
+        tournamentItemJpaRepository.softDeleteAllByTournamentId(tournamentId, LocalDateTime.now())
+    }
 }
