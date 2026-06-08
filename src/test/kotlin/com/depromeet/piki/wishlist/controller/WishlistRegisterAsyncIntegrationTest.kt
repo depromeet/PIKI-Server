@@ -8,7 +8,7 @@ import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.item.repository.ItemSnapshotRepository
-import com.depromeet.piki.item.service.ItemParsingService
+import com.depromeet.piki.item.service.ItemParsingScheduler
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.product.service.ProductSnapshotException
@@ -42,6 +42,7 @@ import java.io.ByteArrayOutputStream
 import java.time.Duration
 import java.time.LocalDateTime
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import javax.imageio.ImageIO
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -69,7 +70,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
     private lateinit var itemSnapshotRepository: ItemSnapshotRepository
 
     @Autowired
-    private lateinit var itemParsingService: ItemParsingService
+    private lateinit var itemParsingScheduler: ItemParsingScheduler
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
@@ -340,27 +341,99 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `updated_at 이 오래된 PROCESSING snapshot 을 recover 가 FAILED 로 정리한다`() {
-        // 워커가 죽어 PROCESSING 에 갇힌 상황 — 디스패처는 PENDING 만 집으므로 이 행은 recover 가 책임진다.
-        val item = itemRepository.save(Item(ProductLink.parse("https://shop.example.com/products/stale")))
-        val snapshot = itemSnapshotRepository.save(ItemSnapshot.processing(item.getId()))
+    fun `link 있는 stale PROCESSING 을 recover 가 재실행해 READY 로 되살린다`() {
+        // 디스패처가 claim(attempt 1)한 직후 워커가 크래시해 실행 0회로 PROCESSING 에 갇힌 상황.
+        // recover 가 재실행(reclaim)해 완성시킨다 — claim-at-least-once 를 execution at-least-once 로 끌어올리는 핵심(#461).
+        stubProductLinkExtractor.build = {
+            ProductSnapshot(link = it, name = "되살아난 상품", currentPrice = 1_000, currency = "KRW")
+        }
+        val item = itemRepository.save(Item(ProductLink.parse("https://shop.example.com/products/revive")))
+        val snapshot = itemSnapshotRepository.save(ItemSnapshot.pending(item.getId()).apply { markProcessing() })
         val itemId = item.getId()
         try {
-            // 이 snapshot 의 updated_at 만 과거로 밀어 stale 로 만들고, 현실적 threshold(now-5분)로 recover 를 부른다.
-            // future threshold 로 부르면 다른 테스트가 막 만든 PROCESSING(updated_at 최근)까지 쓸어버리므로(공유 컨텍스트),
-            // updated_at 기반 stale 판정을 실제로 검증하면서 자기 snapshot 만 대상이 되도록 격리한다.
+            // 이 행의 updated_at 만 과거로 밀어 stale 로 만든다. 현실적 threshold(스케줄러의 now-60초)라
+            // 다른 테스트가 막 만든 최근 PROCESSING 은 안 건드리고, 이 행만 대상이 된다(공유 컨텍스트 격리).
             jdbcTemplate.update(
                 "UPDATE item_snapshots SET updated_at = ? WHERE id = ?",
-                LocalDateTime.now().minusMinutes(10),
+                LocalDateTime.now().minusSeconds(120),
                 snapshot.getId(),
             )
 
-            itemParsingService.recoverStaleProcessing(LocalDateTime.now().minusMinutes(5), 100)
+            itemParsingScheduler.recover() // reclaim(attempt 2) + 재실행 디스패치
 
-            assertEquals(ItemStatus.FAILED, itemSnapshotRepository.findLatestByItemId(itemId)?.status)
+            await().atMost(Duration.ofSeconds(5)).until { latestSnapshot(itemId)?.status == ItemStatus.READY }
+            val recovered = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
+            assertEquals("되살아난 상품", recovered.name)
+            assertEquals(2, recovered.attemptCount) // 초회 claim 1 + 재실행 1
         } finally {
             jdbcTemplate.update("DELETE FROM item_snapshots WHERE item_id = ?", itemId)
             jdbcTemplate.update("DELETE FROM items WHERE id = ?", itemId)
+        }
+    }
+
+    @Test
+    fun `재시도 상한에 도달한 stale PROCESSING 은 recover 가 FAILED 로 종결한다`() {
+        // 이미 상한(2회)까지 시도된 채 stale — 더 되살리지 않고 종결한다 (무한 재큐잉 방지, 절대 3분 초과 금지).
+        val item = itemRepository.save(Item(ProductLink.parse("https://shop.example.com/products/exhausted")))
+        val snapshot = itemSnapshotRepository.save(ItemSnapshot.pending(item.getId()).apply { markProcessing() })
+        val itemId = item.getId()
+        try {
+            jdbcTemplate.update(
+                "UPDATE item_snapshots SET attempt_count = 2, updated_at = ? WHERE id = ?",
+                LocalDateTime.now().minusSeconds(120),
+                snapshot.getId(),
+            )
+
+            itemParsingScheduler.recover() // attempt 2 >= 2 → FAILED (재실행 없음, 동기 종결)
+
+            assertEquals(ItemStatus.FAILED, latestSnapshot(itemId)?.status)
+        } finally {
+            jdbcTemplate.update("DELETE FROM item_snapshots WHERE item_id = ?", itemId)
+            jdbcTemplate.update("DELETE FROM items WHERE id = ?", itemId)
+        }
+    }
+
+    @Test
+    fun `link 없는 이미지 stale PROCESSING 은 recover 가 FAILED 로 종결한다`() {
+        // 이미지 경로(link 없음)는 원본이 메모리 ByteArray 라 크래시 시 소실 — 되살릴 수 없으므로 attempt 와 무관하게 종결한다.
+        val item = itemRepository.save(Item(link = null))
+        val snapshot = itemSnapshotRepository.save(ItemSnapshot.processing(item.getId()))
+        val itemId = item.getId()
+        try {
+            jdbcTemplate.update(
+                "UPDATE item_snapshots SET updated_at = ? WHERE id = ?",
+                LocalDateTime.now().minusSeconds(120),
+                snapshot.getId(),
+            )
+
+            itemParsingScheduler.recover() // link 없음 → FAILED
+
+            assertEquals(ItemStatus.FAILED, latestSnapshot(itemId)?.status)
+        } finally {
+            jdbcTemplate.update("DELETE FROM item_snapshots WHERE item_id = ?", itemId)
+            jdbcTemplate.update("DELETE FROM items WHERE id = ?", itemId)
+        }
+    }
+
+    @Test
+    fun `URL 파싱이 일시 외부 오류면 FAILED 가 아니라 PROCESSING 으로 남아 recover 재시도 대상이 된다`() {
+        // 일시 외부 오류(Gemini 5xx 등)는 워커가 FAILED 로 종결하지 않고 PROCESSING 그대로 둔다 — 재시도 판정은 recover 몫(#461).
+        val calls = AtomicInteger(0)
+        stubProductLinkExtractor.build = {
+            calls.incrementAndGet()
+            throw GeminiApiException.upstreamError(RuntimeException("transient 503"))
+        }
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            val itemId = registerAndGetItemId(mockMvc, userId, "https://shop.example.com/products/transient")
+            // 디스패처 claim → 워커가 일시 오류로 throw → 워커가 실제로 한 번 실행됐는지 확인.
+            await().atMost(Duration.ofSeconds(5)).until { calls.get() >= 1 }
+            // 확정 실패가 아니므로 FAILED 로 떨어지지 않고 PROCESSING 으로 남아야 한다 (recover 재시도 대상).
+            assertEquals(ItemStatus.PROCESSING, latestSnapshot(itemId)?.status)
+        } finally {
+            cleanup(userId)
         }
     }
 

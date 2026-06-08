@@ -8,3 +8,11 @@ data class ClaimedItem(
     val itemId: Long,
     val link: ProductLink,
 )
+
+// recover 한 사이클의 결과. toRetry 는 재실행(reclaim)해 워커에 다시 넘길 작업, failedCount 는 이번에 종결(FAILED)한 건수.
+// 재실행 디스패치는 트랜잭션 밖에서 스케줄러가 하므로(트랜잭션 안에서 외부 호출 금지), 서비스는 재실행 대상만 반환하고
+// 실제 워커 제출은 호출부(ItemParsingScheduler)가 한다.
+data class StaleProcessingOutcome(
+    val toRetry: List<ClaimedItem>,
+    val failedCount: Int,
+)
