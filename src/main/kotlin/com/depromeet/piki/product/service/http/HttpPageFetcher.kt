@@ -14,17 +14,27 @@ import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.URI
 
-// fetch 용 RestClient 와 host→IP 해석(resolveAddresses)을 생성자로 주입받는다. 둘 다 밖에서 교체할 수 있어야
+// fetch 용 RestClient 와 host→IP 해석(dnsResolver)을 생성자로 주입받는다. 둘 다 밖에서 교체할 수 있어야
 // 네트워크 없이 redirect 루프(3xx 따라가기·cross-domain 차단·hop 상한)를 단위 테스트로 검증할 수 있다.
-// 운영 RestClient 는 PageFetchHttpClientConfig 빈(instanceFollowRedirects=false), resolveAddresses 는 기본값(실제 DNS).
+//
+// dnsResolver 는 PageFetchHttpClientConfig 의 RestClient 와 같은 인스턴스를 공유한다 — 가드가 검증한 IP 로 실제
+// 연결도 이뤄지게(IP pin) 해 DNS rebinding/TOCTOU 를 닫는다. 한 fetch 가 끝나면 clear() 로 캐시를 비운다.
 @Component
 class HttpPageFetcher(
     private val restClient: RestClient,
-    private val resolveAddresses: (String) -> Array<InetAddress> = { InetAddress.getAllByName(it) },
+    private val dnsResolver: RequestScopedDnsResolver,
 ) : PageFetcher {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    override fun fetch(link: ProductLink): PageContent {
+    override fun fetch(link: ProductLink): PageContent =
+        try {
+            fetchFollowingRedirects(link)
+        } finally {
+            // 요청 스코프 DNS 캐시를 비워 다음 fetch 와 격리한다(이번 요청이 본 IP 가 다음 요청으로 새지 않게).
+            dnsResolver.clear()
+        }
+
+    private fun fetchFollowingRedirects(link: ProductLink): PageContent {
         var current = link
         repeat(MAX_REDIRECTS + 1) {
             guardAgainstInternalHost(current)
@@ -120,7 +130,7 @@ class HttpPageFetcher(
             }
         val addresses =
             try {
-                resolveAddresses(host)
+                dnsResolver.resolve(host)
             } catch (e: java.net.UnknownHostException) {
                 log.info("link fetch unknown host url={}", link.safeLogString())
                 throw PageFetchException.upstreamError(e)

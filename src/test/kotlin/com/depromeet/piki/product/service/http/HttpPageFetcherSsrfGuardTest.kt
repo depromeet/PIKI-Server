@@ -10,7 +10,11 @@ import kotlin.test.assertTrue
 // SSRF 가드의 internal-address 판정을 검증한다. redirect 가 매 hop 새 host 를 허용하므로 이 판정이 보안의 최종 방어선이다.
 // 특히 IPv6 ULA(fc00::/7)는 Java 의 isSiteLocalAddress 가 못 잡아 별도로 막는다.
 class HttpPageFetcherSsrfGuardTest {
-    private val fetcher = HttpPageFetcher(PageFetchHttpClientConfig().pageFetchRestClient(ObservationRegistry.NOOP))
+    private val fetcher =
+        HttpPageFetcher(
+            PageFetchHttpClientConfig().pageFetchRestClient(ObservationRegistry.NOOP, RequestScopedDnsResolver()),
+            RequestScopedDnsResolver(),
+        )
 
     @ParameterizedTest
     @ValueSource(

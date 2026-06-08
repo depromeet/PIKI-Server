@@ -71,6 +71,11 @@ dependencies {
     // guava 는 firebase-admin 으로 이미 transitive 하나, 그 버전 드리프트에 RedirectPolicy 가 깨지지 않게 직접 버전을 고정한다(Maven Central 최신 안정).
     implementation("com.google.guava:guava:33.6.0-jre")
 
+    // SSRF IP-pin: 가드가 검증한 IP 로만 연결하도록 HttpClient5 의 DnsResolver 를 끼운다 (#440).
+    // JDK HttpURLConnection 은 IP pin 시 TLS SNI·인증서를 수동 복구해야 해 깨지기 쉬운데(JDK-8144566 등), HttpClient5 는
+    // IP 만 바꾸고 SNI·인증서·Host 헤더는 원 도메인을 유지한다. 버전은 Spring Boot BOM 관리(이미 transitive).
+    implementation("org.apache.httpcomponents.client5:httpclient5")
+
     // 옵저버빌리티: Actuator 로 health/metrics 노출 + Micrometer Prometheus 레지스트리로
     // /actuator/prometheus 텍스트 포맷 export. 수집은 EC2 의 Grafana Alloy → Grafana Cloud (별도 PR).
     // 버전은 Spring Boot BOM 이 관리한다.

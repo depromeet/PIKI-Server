@@ -13,7 +13,12 @@ import kotlin.test.assertTrue
  */
 @Disabled("실제 외부 페이지 fetch (지그재그 www redirect). 검증 필요 시 수동 enable.")
 class HttpPageFetcherRedirectE2ETest {
-    private val fetcher = HttpPageFetcher(PageFetchHttpClientConfig().pageFetchRestClient(ObservationRegistry.NOOP))
+    private val dnsResolver = RequestScopedDnsResolver()
+    private val fetcher =
+        HttpPageFetcher(
+            PageFetchHttpClientConfig().pageFetchRestClient(ObservationRegistry.NOOP, dnsResolver),
+            dnsResolver,
+        )
 
     @Test
     @Timeout(value = 30, unit = TimeUnit.SECONDS)

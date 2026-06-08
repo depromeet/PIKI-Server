@@ -24,7 +24,7 @@ class HttpPageFetcherRedirectTest {
         val builder = RestClient.builder()
         val server = MockRestServiceServer.bindTo(builder).build()
         configure(server)
-        return HttpPageFetcher(builder.build(), publicIp)
+        return HttpPageFetcher(builder.build(), RequestScopedDnsResolver(publicIp))
     }
 
     @Test
