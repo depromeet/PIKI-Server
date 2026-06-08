@@ -768,10 +768,9 @@ class TournamentService(
             .findByIds(plays.map { it.userUUID }.toSet())
             .associateBy { it.id }
 
-        // 각 참여자의 결과를 itemId + rank 로 집계
-        data class RankKey(val itemId: Long, val rank: Int)
-
-        val chosenByMap = mutableMapOf<RankKey, MutableList<ParticipantSummary>>()
+        // "선택자" = 해당 아이템을 자신의 1위(우승)로 고른 참여자
+        // itemId 단위로 집계하고 정렬 후 그룹 rank 를 부여한다.
+        val winnersByItemId = mutableMapOf<Long, MutableList<ParticipantSummary>>()
         val referenceItemsById: MutableMap<Long, RankedItem> = mutableMapOf()
 
         val allTournamentIds = plays.map { it.tournamentId }.distinct()
@@ -804,13 +803,17 @@ class TournamentService(
                 val snapshot =
                     tItem.snapshotId?.let { snapshotById[it] }
                         ?: error("tournamentItem $tournamentItemId 의 snapshot ${tItem.snapshotId} 가 없다")
-                val key = RankKey(tItem.itemId, rank)
-                chosenByMap.getOrPut(key) { mutableListOf() }.add(participant)
+                // 우승 아이템(rank==1)을 고른 참여자만 집계 — 참여자마다 같은 아이템의 rank 가 다를 수 있으므로
+                // RankKey 로 묶으면 누락이 생긴다. itemId 기준으로 1위 선택자만 모은다.
+                if (rank == 1) {
+                    winnersByItemId.getOrPut(tItem.itemId) { mutableListOf() }.add(participant)
+                }
                 // 모든 play 가 ROOT 의 tournamentItemId 를 공유하므로, 첫 번째로 처리되는 play 의 값으로 고정한다.
+                // rank 는 이후 정렬 순위로 재계산되므로 여기서는 0 으로 채운다.
                 referenceItemsById.putIfAbsent(
                     tItem.itemId,
                     RankedItem(
-                        rank = rank,
+                        rank = 0,
                         tournamentItemId = tournamentItemId,
                         itemId = tItem.itemId,
                         name = snapshot.name,
@@ -823,19 +826,18 @@ class TournamentService(
         }
 
         val items = referenceItemsById.values
-            .map { ref ->
-                val key = RankKey(ref.itemId, ref.rank)
+            .sortedByDescending { winnersByItemId[it.itemId]?.size ?: 0 }
+            .mapIndexed { idx, ref ->
                 GroupResultItem(
-                    rank = ref.rank,
+                    rank = idx + 1,
                     itemId = ref.itemId,
                     name = ref.name,
                     price = ref.price,
                     currency = ref.currency,
                     imageUrl = ref.imageUrl,
-                    chosenBy = chosenByMap[key] ?: emptyList(),
+                    chosenBy = winnersByItemId[ref.itemId] ?: emptyList(),
                 )
             }
-            .sortedByDescending { it.chosenBy.size }
         return GroupResult(items = items)
     }
 
