@@ -111,6 +111,7 @@ class SecurityConfig(
                     .requestMatchers(HttpMethod.GET, "/api/v1/users/nickname/check")
                     .permitAll()
                     // /users/me 는 자기 프로필 조회/수정 — 게스트 포함 인증 필요
+                    // PATCH 는 닉네임·프로필 이미지를 한 요청(multipart)으로 수정한다 (멤버/게스트 권한 차이 없음).
                     .requestMatchers(HttpMethod.GET, "/api/v1/users/me")
                     .authenticated()
                     .requestMatchers(HttpMethod.PATCH, "/api/v1/users/me")
@@ -120,9 +121,6 @@ class SecurityConfig(
                     // Security 에서 MEMBER 만 허용하면 게스트가 권한 없음 403(detail 없음)으로 떨어져
                     // "게스트는 탈퇴 불가" 라는 구체 사유를 못 전달하기 때문.
                     .requestMatchers(HttpMethod.DELETE, "/api/v1/users/me")
-                    .authenticated()
-                    // 프로필 이미지 업로드 — GET /me·PATCH /me 와 동일하게 게스트도 호출 가능
-                    .requestMatchers(HttpMethod.POST, "/api/v1/users/me/profile-image")
                     .authenticated()
                     .anyRequest()
                     .authenticated()

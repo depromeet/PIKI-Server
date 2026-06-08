@@ -57,8 +57,14 @@ class UserApiExamples(
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.OK,
-                            name = "닉네임 수정 성공",
-                            payload = ApiResponseBody.ok(sampleUser().copy(nickname = "새닉네임")),
+                            name = "수정 성공 (닉네임·프로필 이미지)",
+                            payload =
+                                ApiResponseBody.ok(
+                                    sampleUser().copy(
+                                        nickname = "새닉네임",
+                                        profileImage = "https://cdn.example.com/profiles/8f1a3c2b/9d44.jpg",
+                                    ),
+                                ),
                         )
                         add(
                             status = HttpStatus.BAD_REQUEST,
@@ -66,12 +72,20 @@ class UserApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    // @RequestBody Bean Validation 위반은 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
+                                    // @ModelAttribute(multipart) Bean Validation 위반도 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
                                     detail = "nickname: ${UserUpdateRequest.NICKNAME_SIZE_MESSAGE}",
                                 ),
                         )
+                        // 빈 파일은 같은 detail (클라 액션 동일: 파일 재첨부)
+                        add(UserException.emptyProfileImage(), name = "빈 이미지 파일")
+                        // 타입 미지정·미지원 형식은 같은 detail (클라 액션 동일: 허용 형식으로 변경)
+                        add(UserException.unsupportedProfileImageType(), name = "지원하지 않는 이미지 형식")
+                        // 선언한 Content-Type 과 실제 파일 시그니처가 어긋남 (헤더 위조·손상)
+                        add(UserException.malformedProfileImage(), name = "형식과 내용 불일치")
                         add(UserException.duplicateNickname(), name = "닉네임 중복")
+                        add(UserException.deletedUser(SAMPLE_USER_ID), name = "탈퇴한 유저")
                         unauthorized()
+                        add(UserException.guestCannotUpdateProfileImage(), name = "게스트의 프로필 이미지 수정 거부")
                         add(
                             status = HttpStatus.NOT_FOUND,
                             name = "유저 없음 (JWT 유효하나 DB에 없음)",
@@ -80,6 +94,14 @@ class UserApiExamples(
                                     category = ErrorCategory.NOT_FOUND,
                                 ),
                         )
+                        // multipart 한도 초과 — ResponseEntityExceptionHandler 가 표준으로 413 처리하고
+                        // handleExceptionInternal 이 ApiResponseBody(category=INVALID_INPUT, 기본 detail)로 감싼다.
+                        add(
+                            status = HttpStatus.PAYLOAD_TOO_LARGE,
+                            name = "파일 크기 초과",
+                            payload = ApiResponseBody.fail<Unit>(category = ErrorCategory.INVALID_INPUT),
+                        )
+                        add(ImageStorageException.uploadFailed(), name = "이미지 저장소(S3) 업로드 실패")
                     }
 
                 handlerMethod.binds(UserController::withdraw) ->
@@ -99,42 +121,6 @@ class UserApiExamples(
                                     category = ErrorCategory.NOT_FOUND,
                                 ),
                         )
-                    }
-
-                handlerMethod.binds(UserController::updateProfileImage) ->
-                    operation.examples(openApiObjectMapper.delegate) {
-                        add(
-                            status = HttpStatus.OK,
-                            name = "프로필 이미지 수정 성공",
-                            payload =
-                                ApiResponseBody.ok(
-                                    sampleUser().copy(profileImage = "https://cdn.example.com/profiles/8f1a3c2b/9d44.jpg"),
-                                ),
-                        )
-                        // 미첨부·빈 파일은 같은 detail (클라 액션 동일: 파일 재첨부)
-                        add(UserException.emptyProfileImage(), name = "이미지 미첨부 또는 빈 파일")
-                        // 타입 미지정·미지원 형식은 같은 detail (클라 액션 동일: 허용 형식으로 변경)
-                        add(UserException.unsupportedProfileImageType(), name = "지원하지 않는 이미지 형식")
-                        // 선언한 Content-Type 과 실제 파일 시그니처가 어긋남 (헤더 위조·손상)
-                        add(UserException.malformedProfileImage(), name = "형식과 내용 불일치")
-                        unauthorized()
-                        add(
-                            status = HttpStatus.NOT_FOUND,
-                            name = "유저 없음 (JWT 유효하나 DB에 없음)",
-                            payload =
-                                ApiResponseBody.fail<Unit>(
-                                    category = ErrorCategory.NOT_FOUND,
-                                ),
-                        )
-                        add(UserException.deletedUser(SAMPLE_USER_ID), name = "탈퇴한 유저")
-                        // multipart 한도 초과 — ResponseEntityExceptionHandler 가 표준으로 413 처리하고
-                        // handleExceptionInternal 이 ApiResponseBody(category=INVALID_INPUT, 기본 detail)로 감싼다.
-                        add(
-                            status = HttpStatus.PAYLOAD_TOO_LARGE,
-                            name = "파일 크기 초과",
-                            payload = ApiResponseBody.fail<Unit>(category = ErrorCategory.INVALID_INPUT),
-                        )
-                        add(ImageStorageException.uploadFailed(), name = "이미지 저장소(S3) 업로드 실패")
                     }
 
                 handlerMethod.binds(UserController::checkNickname) ->
