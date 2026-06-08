@@ -14,7 +14,7 @@ import kotlin.test.assertEquals
 class GoogleUserInfoResponseTest {
     private val objectMapper: ObjectMapper = jacksonObjectMapper()
 
-    // email 은 빈 값(null·빈문자열·공백)이면 null 로 정규화하고, 값이 있으면 그대로 옮긴다.
+    // 인증된(verified_email=true) email 은 빈 값(null·빈문자열·공백)이면 null 로 정규화하고, 값이 있으면 그대로 옮긴다.
     @ParameterizedTest(name = "[{index}] {2}")
     @MethodSource("emailNormalizationCases")
     fun `email 정규화 - 빈 값은 null, 값이 있으면 그대로`(
@@ -22,14 +22,22 @@ class GoogleUserInfoResponseTest {
         expected: String?,
         @Suppress("UNUSED_PARAMETER") description: String,
     ) {
-        val result = GoogleUserInfoResponse(id = "google-123", email = email).toOAuthUserInfo()
+        val result = GoogleUserInfoResponse(id = "google-123", email = email, verifiedEmail = true).toOAuthUserInfo()
 
         assertEquals(expected, result.email)
     }
 
     @Test
+    fun `verified_email 이 false 면 email 이 있어도 null 이다`() {
+        val result = GoogleUserInfoResponse(id = "google-123", email = "user@gmail.com", verifiedEmail = false).toOAuthUserInfo()
+
+        assertEquals(null, result.email)
+    }
+
+    @Test
     fun `응답은 provider·socialId·profileImage·email 을 모두 매핑한다`() {
-        val result = GoogleUserInfoResponse(id = "google-123", picture = "https://img/p.png", email = "user@gmail.com").toOAuthUserInfo()
+        val result =
+            GoogleUserInfoResponse(id = "google-123", picture = "https://img/p.png", email = "user@gmail.com", verifiedEmail = true).toOAuthUserInfo()
 
         assertEquals(OAuthProvider.GOOGLE, result.provider)
         assertEquals("google-123", result.socialId)
@@ -76,6 +84,21 @@ class GoogleUserInfoResponseTest {
             """
             {
               "id": "google-123",
+              "verified_email": false,
+              "picture": "https://img/p.png"
+            }
+            """.trimIndent()
+
+        assertEquals(null, objectMapper.readValue<GoogleUserInfoResponse>(json).toOAuthUserInfo().email)
+    }
+
+    @Test
+    fun `verified_email 이 false 인 userinfo JSON 은 email 이 있어도 null 이다`() {
+        val json =
+            """
+            {
+              "id": "google-123",
+              "email": "user@gmail.com",
               "verified_email": false,
               "picture": "https://img/p.png"
             }
