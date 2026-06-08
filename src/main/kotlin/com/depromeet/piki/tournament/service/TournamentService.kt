@@ -188,7 +188,7 @@ class TournamentService(
         tournamentId: Long,
     ): StartResult {
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
-        val tournamentItems = tournamentItemRepository.findAllByTournamentId(tournamentId)
+        val tournamentItems = getEffectiveTournamentItems(tournament)
         if (tournamentItems.size !in TOURNAMENT_MIN_ITEM_COUNT..TOURNAMENT_MAX_ITEM_COUNT) {
             throw TournamentException.invalidItemCount()
         }
