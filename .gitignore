@@ -28,3 +28,6 @@ out/
 
 # Kotlin
 .kotlin/
+
+# superpowers AI 워크플로 산출물 (로컬 전용) — 로컬 세팅 차이로 새어나가지 않도록 레포에서 무시
+docs/superpowers/

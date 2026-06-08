@@ -47,16 +47,7 @@ class KakaoOAuthClient(
 
     // v2 — 클라이언트 SDK 가 받은 access_token 으로 user_info 만 조회.
     // Kakao 의 access_token 은 v1/v2 모두 같은 종류라 추가 검증 로직 없이 그대로 재활용 가능하다.
-    override fun fetchUserInfoByAccessToken(accessToken: String): OAuthUserInfo {
-        val userInfo = fetchKakaoUserInfo(accessToken)
-        return OAuthUserInfo(
-            provider = OAuthProvider.KAKAO,
-            socialId = userInfo.id.toString(),
-            profileImage =
-                userInfo.kakaoAccount.profile.profileImageUrl
-                    .ifBlank { null },
-        )
-    }
+    override fun fetchUserInfoByAccessToken(accessToken: String): OAuthUserInfo = fetchKakaoUserInfo(accessToken).toOAuthUserInfo()
 
     private fun fetchAccessToken(
         code: String,
