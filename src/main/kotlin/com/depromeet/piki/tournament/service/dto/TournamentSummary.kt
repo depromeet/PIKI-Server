@@ -15,11 +15,12 @@ data class TournamentSummary(
         fun of(
             tournament: Tournament,
             participantProfileImages: List<String>,
+            effectiveStatus: TournamentStatus = tournament.status,
         ): TournamentSummary =
             TournamentSummary(
                 tournamentId = tournament.getId(),
                 name = tournament.name,
-                status = tournament.status,
+                status = effectiveStatus,
                 createdAt = tournament.createdAt,
                 participantProfileImages = participantProfileImages,
             )

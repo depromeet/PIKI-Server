@@ -23,16 +23,18 @@ class TournamentRepositoryImpl(
     override fun findTournamentByIdForUpdate(tournamentId: Long): Tournament? =
         tournamentJpaRepository.findByIdForUpdate(tournamentId)
 
-    override fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory> =
-        tournamentHistoryJpaRepository.findAllByTournamentIdAndDeletedAtIsNullOrderByCurrentRoundAscIdAsc(tournamentId)
+    override fun findHistoriesByTournamentIdAndTournamentUserId(
+        tournamentId: Long,
+        tournamentUserId: Long,
+    ): List<TournamentHistory> =
+        tournamentHistoryJpaRepository
+            .findAllByTournamentIdAndTournamentUserIdAndDeletedAtIsNullOrderByCurrentRoundAscIdAsc(
+                tournamentId, tournamentUserId,
+            )
 
     override fun findHistoriesByTournamentIds(ids: List<Long>): List<TournamentHistory> =
         if (ids.isEmpty()) emptyList()
         else tournamentHistoryJpaRepository.findAllByTournamentIdInAndDeletedAtIsNull(ids)
-
-    override fun softDeleteHistoriesByTournamentId(tournamentId: Long) {
-        tournamentHistoryJpaRepository.softDeleteAllByTournamentId(tournamentId, LocalDateTime.now())
-    }
 
     override fun findByIdsAndStatuses(
         ids: List<Long>,
@@ -53,4 +55,8 @@ class TournamentRepositoryImpl(
 
     override fun existsTournamentByInviteCode(code: String): Boolean =
         tournamentJpaRepository.existsByInviteCodeAndDeletedAtIsNull(code)
+
+    override fun softDeleteTournament(tournamentId: Long) {
+        tournamentJpaRepository.softDeleteById(tournamentId, LocalDateTime.now())
+    }
 }

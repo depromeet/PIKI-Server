@@ -33,6 +33,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 // 일반 통합 테스트와 달리 @Transactional 을 사용하지 않는다 — 별도 트랜잭션 동시 진행이
 // race 시뮬레이션의 본질이다. 데이터 격리는 매 테스트가 새 UUID 를 사용하고 finally 에서 직접 정리한다.
@@ -172,21 +173,19 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
         )
         assertEquals(1L, cloneCount, "복제본은 정확히 1개여야 한다")
 
-        // 복제 토너먼트가 원본의 고정 snapshot_id 를 그대로 가져왔는지 검증한다(복제본 개수만으로는 잘못된 snapshot 연결을 못 잡는다).
-        val sourcePairs = jdbcTemplate.queryForList(
-            "SELECT item_id, snapshot_id FROM tournament_items WHERE tournament_id = ? ORDER BY item_id",
-            sourceTournamentId,
-        )
-        val clonedPairs = jdbcTemplate.queryForList(
-            """SELECT ti.item_id, ti.snapshot_id
-               FROM tournament_items ti
+        // Design B: CLONE 은 아이템을 DB 에 복사하지 않는다. sourceTournamentId 로 원본 아이템을 참조한다.
+        val sourceItemCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM tournament_items WHERE tournament_id = ?",
+            Long::class.java, sourceTournamentId,
+        )!!
+        val cloneItemCount = jdbcTemplate.queryForObject(
+            """SELECT COUNT(*) FROM tournament_items ti
                JOIN tournaments t ON t.id = ti.tournament_id
-               JOIN tournament_users tu ON tu.tournament_id = t.id
-               WHERE t.source_tournament_id = ? AND tu.user_id = ? AND tu.deleted_at IS NULL
-               ORDER BY ti.item_id""",
-            sourceTournamentId, uuidToBytes(clonerId),
-        )
-        assertEquals(sourcePairs, clonedPairs, "복제 토너먼트는 원본 snapshot_id 를 그대로 가져야 한다")
+               WHERE t.source_tournament_id = ?""",
+            Long::class.java, sourceTournamentId,
+        )!!
+        assertEquals(0L, cloneItemCount, "CLONE 은 아이템을 DB 에 갖지 않는다")
+        assertTrue(sourceItemCount > 0, "원본에는 아이템이 있어야 한다")
 
         // 정리
         jdbcTemplate.update("DELETE FROM tournament_histories WHERE tournament_id = ?", sourceTournamentId)

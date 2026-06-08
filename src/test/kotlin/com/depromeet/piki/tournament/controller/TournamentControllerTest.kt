@@ -1820,7 +1820,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `DELETE tournaments-id 삭제 후 소유자가 조회하면 403 을 반환한다`() {
+    fun `DELETE tournaments-id PENDING 토너먼트 삭제 후 소유자가 조회하면 404 를 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         mockMvc.perform(
@@ -1828,11 +1828,12 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
         )
 
+        // Design B: PENDING 삭제는 토너먼트 자체를 소프트 딜리트하므로 조회 시 404
         mockMvc
             .perform(
                 get("/api/v1/tournaments/$tournamentId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
-            ).andExpect(status().isForbidden)
+            ).andExpect(status().isNotFound)
     }
 
     // ── 초대 기한 수정 ──────────────────────────────────────────────────
@@ -2113,9 +2114,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val cloned = tournamentJpaRepository.findByIdAndDeletedAtIsNull(newTournamentId)!!
         assertEquals(tournamentId, cloned.sourceTournamentId)
 
-        val sourceItemIds = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).map { it.itemId }.toSet()
-        val clonedItemIds = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(newTournamentId).map { it.itemId }.toSet()
-        assertEquals(sourceItemIds, clonedItemIds)
+        // Design B: CLONE 은 아이템을 DB 에 복사하지 않는다. sourceTournamentId 를 통해 원본 아이템을 참조한다.
+        assertTrue(tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(newTournamentId).isEmpty())
+        assertTrue(tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).isNotEmpty())
     }
 
     @Test
@@ -2147,7 +2148,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `GET group-result 는 완료된 토너먼트의 그룹 결과를 반환하고 활성 참여자는 isWithdrawn=false 다`() {
         val mockMvc = buildMockMvc()
         saveUser(userId, userProfileImage, "활성유저")
-        val (tournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+        // Design B: group-result 는 2명 이상 완료 시에만 조회 가능하다.
+        val tournamentId = completeSocialTournamentWith2Players(mockMvc)
 
         mockMvc
             .perform(
@@ -2162,7 +2164,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `GET group-result 의 참여자가 탈퇴 유저면 isWithdrawn=true 로 내려온다`() {
         val mockMvc = buildMockMvc()
         val owner = saveUser(userId, userProfileImage, "곧나갈사람")
-        val (tournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+        // Design B: group-result 는 2명 이상 완료 시에만 조회 가능하다.
+        val tournamentId = completeSocialTournamentWith2Players(mockMvc)
         // 그룹 결과 참여자(= 토너먼트 owner)를 탈퇴 tombstone 으로 전이시킨다.
         owner.withdraw()
         userJpaRepository.save(owner)
@@ -2206,6 +2209,50 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 .content("""{"currentRound":2,"firstTournamentItemId":$ti1,"secondTournamentItemId":$ti2,"selectedTournamentItemId":$ti1}"""),
         )
         return TournamentStart(tournamentId = tournamentId, item1Id = ti1, item2Id = ti2)
+    }
+
+    // Design B: ROOT(owner) + CLONE(member) 각 1명이 완료한 소셜 토너먼트 준비.
+    // group-result 는 2명 이상 완료 시에만 조회 가능하므로 이 헬퍼로 전제 조건을 만든다.
+    private fun completeSocialTournamentWith2Players(mockMvc: MockMvc): Long {
+        val rootTournamentId = createTournament(mockMvc)
+        // otherUserId 가 ROOT 에 멤버로 참여 (초대 코드 없이 링크 직접 접근)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$rootTournamentId/join")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"inviteCode":null}"""),
+        )
+        val item1Id = saveWishItem(name = "소셜아이템1")
+        val item2Id = saveWishItem(name = "소셜아이템2")
+        addItemsToTournament(mockMvc, rootTournamentId, userId, item1Id, item2Id)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$rootTournamentId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+        val rootItems = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(rootTournamentId)
+        val ti1 = rootItems[0].getId()
+        val ti2 = rootItems[1].getId()
+        // Owner 가 ROOT 결승 완료 → ROOT 즉시 COMPLETED
+        mockMvc.perform(
+            post("/api/v1/tournaments/$rootTournamentId/matches")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"currentRound":2,"firstTournamentItemId":$ti1,"secondTournamentItemId":$ti2,"selectedTournamentItemId":$ti1}"""),
+        )
+        // otherUserId 가 ROOT start → CLONE 생성
+        val startResult = mockMvc.perform(
+            post("/api/v1/tournaments/$rootTournamentId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+        ).andReturn()
+        val cloneTournamentId = objectMapper.readTree(startResult.response.contentAsString)["data"]["tournamentId"].asLong()
+        // otherUserId 가 CLONE 결승 완료 (ROOT 의 아이템 ID 를 그대로 사용)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$cloneTournamentId/matches")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"currentRound":2,"firstTournamentItemId":$ti1,"secondTournamentItemId":$ti2,"selectedTournamentItemId":$ti1}"""),
+        )
+        return rootTournamentId
     }
 
     private fun startTournamentWith2Items(mockMvc: MockMvc): TournamentStart {

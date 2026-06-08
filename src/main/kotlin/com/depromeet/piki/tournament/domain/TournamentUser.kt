@@ -22,6 +22,15 @@ class TournamentUser(
         require(tournamentId > 0) { "tournamentId 는 양수여야 한다: $tournamentId" }
     }
 
+    @Column(name = "completed_at")
+    var completedAt: LocalDateTime? = null
+
+    fun complete() {
+        completedAt = completedAt ?: LocalDateTime.now()
+    }
+
+    fun isCompleted() = completedAt?.let { true } ?: false
+
     fun softDelete() {
         deletedAt = LocalDateTime.now()
     }
