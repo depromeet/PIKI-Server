@@ -59,6 +59,10 @@ class Tournament(
         playLinkExpiresAt = expiresAt
     }
 
+    fun expirePlayLink() {
+        playLinkExpiresAt = LocalDateTime.now().minusSeconds(1)
+    }
+
     fun isFinalRound(currentRound: Int): Boolean = currentRound == FINAL_ROUND_SIZE
 
     fun isPending(): Boolean = status == TournamentStatus.PENDING
@@ -66,10 +70,6 @@ class Tournament(
     fun isInProgress(): Boolean = status == TournamentStatus.IN_PROGRESS
 
     fun isCompleted(): Boolean = status == TournamentStatus.COMPLETED
-
-    fun softDelete() {
-        deletedAt = java.time.LocalDateTime.now()
-    }
 
     fun updateInviteExpiry(newExpiresAt: LocalDateTime) {
         check(isPending()) { "updateInviteExpiry는 PENDING 상태에서만 호출 가능" }

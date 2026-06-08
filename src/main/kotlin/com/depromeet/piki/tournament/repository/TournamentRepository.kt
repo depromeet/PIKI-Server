@@ -13,7 +13,10 @@ interface TournamentRepository {
 
     fun findTournamentByIdForUpdate(tournamentId: Long): Tournament?
 
-    fun findTournamentHistoriesByTournamentId(tournamentId: Long): List<TournamentHistory>
+    fun findHistoriesByTournamentIdAndTournamentUserId(
+        tournamentId: Long,
+        tournamentUserId: Long,
+    ): List<TournamentHistory>
 
     fun findHistoriesByTournamentIds(ids: List<Long>): List<TournamentHistory>
 
@@ -22,11 +25,11 @@ interface TournamentRepository {
         statuses: List<TournamentStatus>?,
     ): List<Tournament>
 
-    fun softDeleteHistoriesByTournamentId(tournamentId: Long)
-
     fun findBySourceTournamentId(sourceTournamentId: Long): List<Tournament>
 
     fun findTournamentByInviteCode(code: String): Tournament?
 
     fun existsTournamentByInviteCode(code: String): Boolean
+
+    fun softDeleteTournament(tournamentId: Long)
 }

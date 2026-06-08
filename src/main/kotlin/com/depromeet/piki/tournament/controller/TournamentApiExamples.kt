@@ -126,6 +126,7 @@ class TournamentApiExamples(
                             payload =
                                 ApiResponseBody.ok(
                                     TournamentStartResponse(
+                                        tournamentId = 1,
                                         items =
                                             listOf(
                                                 TournamentStartResponse.ItemResponse(

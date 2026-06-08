@@ -16,7 +16,6 @@ import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.service.TournamentInviteService
-import com.depromeet.piki.tournament.service.TournamentItemService
 import com.depromeet.piki.tournament.service.TournamentService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
@@ -38,7 +37,6 @@ import java.util.UUID
 @RequestMapping("/api/v1/tournaments")
 class TournamentController(
     private val tournamentService: TournamentService,
-    private val tournamentItemService: TournamentItemService,
     private val tournamentInviteService: TournamentInviteService,
 ) : TournamentApi {
 

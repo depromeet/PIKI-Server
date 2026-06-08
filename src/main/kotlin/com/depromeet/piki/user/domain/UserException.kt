@@ -64,6 +64,15 @@ class UserException private constructor(
                 HttpStatus.FORBIDDEN,
             )
 
+        // 프로필 이미지 수정은 MEMBER 전용 — 게스트가 이미지 파트를 담아 PATCH /me 를 호출하면 닿는 계약 응답(403).
+        // 게스트 토큰으로 정상 요청을 보낼 수 있으므로 require/check(500)가 아니라 커스텀 예외다(guestCannotWithdraw 와 같은 결).
+        fun guestCannotUpdateProfileImage(): UserException =
+            UserException(
+                "프로필 이미지는 회원만 수정할 수 있습니다.",
+                ErrorCategory.FORBIDDEN,
+                HttpStatus.FORBIDDEN,
+            )
+
         fun emptyProfileImage(): UserException =
             UserException(
                 "빈 이미지 파일은 업로드할 수 없습니다.",
