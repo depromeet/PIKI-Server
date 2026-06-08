@@ -100,8 +100,9 @@ class HttpPageFetcher(
         }
     }
 
-    // Location 헤더를 URI 로 읽는다. 외부 서버가 깨진 Location(잘못된 이스케이프 등)을 주면 Spring 의 getLocation 이
-    // URI 파싱 단계에서 IllegalArgumentException 을 던지는데, 우리 버그가 아니라 대상 서버 문제이므로 upstreamError(502)로 귀결시킨다.
+    // Location 헤더를 URI 로 읽는다. 외부 서버가 깨진 Location(잘못된 이스케이프 등)을 주거나 3xx 인데 Location 을
+    // 안 주면, 우리 버그가 아니라 대상 서버의 비정상 redirect 응답이므로 malformedRedirect(SERVER_ERROR/502)로 귀결시킨다.
+    // 둘 다 재시도해도 결정론적으로 재실패하는 영구 오류라 RETRYABLE(upstreamError)이 아니다.
     private fun redirectLocation(
         current: ProductLink,
         response: ResponseEntity<String>,
@@ -111,11 +112,11 @@ class HttpPageFetcher(
                 response.headers.location
             } catch (e: IllegalArgumentException) {
                 log.warn("link fetch malformed Location url={}", current.safeLogString())
-                throw PageFetchException.upstreamError(e)
+                throw PageFetchException.malformedRedirect(e)
             }
         return location ?: run {
             log.warn("link fetch redirect without Location url={}", current.safeLogString())
-            throw PageFetchException.upstreamError(IllegalStateException("redirect without Location"))
+            throw PageFetchException.malformedRedirect()
         }
     }
 

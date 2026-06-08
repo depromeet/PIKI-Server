@@ -1,5 +1,6 @@
 package com.depromeet.piki.product.service.http
 
+import com.depromeet.piki.common.exception.ErrorCategory
 import com.depromeet.piki.product.domain.ProductLink
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpStatus
@@ -84,9 +85,12 @@ class HttpPageFetcherRedirectTest {
                 }
             }
 
-        assertFailsWith<PageFetchException> {
-            fetcher.fetch(ProductLink.parse("https://zigzag.kr/loop"))
-        }
+        val ex =
+            assertFailsWith<PageFetchException> {
+                fetcher.fetch(ProductLink.parse("https://zigzag.kr/loop"))
+            }
+        // redirect 루프는 재시도해도 결정론적 재실패라 RETRYABLE 이 아니라 SERVER_ERROR(재시도 불가).
+        assertEquals(ErrorCategory.SERVER_ERROR, ex.category)
     }
 
     @Test
