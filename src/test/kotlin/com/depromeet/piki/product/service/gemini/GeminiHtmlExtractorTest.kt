@@ -2,6 +2,7 @@ package com.depromeet.piki.product.service.gemini
 
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.http.HttpPageFetcher
+import com.depromeet.piki.product.service.http.PageFetchHttpClientConfig
 import io.micrometer.observation.ObservationRegistry
 import org.jsoup.Jsoup
 import org.junit.jupiter.api.Disabled
@@ -22,7 +23,7 @@ import kotlin.test.assertNotNull
  */
 @Disabled("실제 Gemini API 호출. 검증 필요 시 수동으로 enable 후 실행.")
 class GeminiHtmlExtractorTest {
-    private val pageFetcher = HttpPageFetcher(ObservationRegistry.NOOP)
+    private val pageFetcher = HttpPageFetcher(PageFetchHttpClientConfig().pageFetchRestClient(ObservationRegistry.NOOP))
     private val objectMapper = jacksonObjectMapper()
     private val properties =
         GeminiProperties(

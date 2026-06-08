@@ -4,53 +4,25 @@ import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.domain.ProductLinkException
 import com.depromeet.piki.product.service.PageContent
 import com.depromeet.piki.product.service.PageFetcher
-import io.micrometer.observation.ObservationRegistry
 import org.slf4j.LoggerFactory
-import org.springframework.http.HttpHeaders
 import org.springframework.http.ResponseEntity
-import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.client.ResourceAccessException
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestClientResponseException
-import java.net.HttpURLConnection
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.URI
 
+// fetch 용 RestClient 와 host→IP 해석(resolveAddresses)을 생성자로 주입받는다. 둘 다 밖에서 교체할 수 있어야
+// 네트워크 없이 redirect 루프(3xx 따라가기·cross-domain 차단·hop 상한)를 단위 테스트로 검증할 수 있다.
+// 운영 RestClient 는 PageFetchHttpClientConfig 빈(instanceFollowRedirects=false), resolveAddresses 는 기본값(실제 DNS).
 @Component
 class HttpPageFetcher(
-    observationRegistry: ObservationRegistry,
+    private val restClient: RestClient,
+    private val resolveAddresses: (String) -> Array<InetAddress> = { InetAddress.getAllByName(it) },
 ) : PageFetcher {
     private val log = LoggerFactory.getLogger(javaClass)
-
-    // JDK 레벨 자동 redirect 추적은 끈다(instanceFollowRedirects=false). 자동 추적은 Location 점프 전에 SSRF·도메인
-    // 검증을 끼울 수 없어 사설 IP·외부 도메인 우회를 연다. 대신 fetch() 가 3xx 를 직접 받아 같은 회사 도메인 + SSRF
-    // 가드를 통과한 redirect 만 수동으로 따라간다.
-    private val requestFactory =
-        object : SimpleClientHttpRequestFactory() {
-            override fun prepareConnection(
-                connection: HttpURLConnection,
-                httpMethod: String,
-            ) {
-                super.prepareConnection(connection, httpMethod)
-                connection.instanceFollowRedirects = false
-            }
-        }.apply {
-            setConnectTimeout(CONNECT_TIMEOUT_MS)
-            setReadTimeout(READ_TIMEOUT_MS)
-        }
-
-    private val restClient =
-        RestClient
-            .builder()
-            .requestFactory(requestFactory)
-            .defaultHeader(HttpHeaders.USER_AGENT, USER_AGENT)
-            .defaultHeader(HttpHeaders.ACCEPT, "text/html,application/xhtml+xml,*/*;q=0.8")
-            .defaultHeader(HttpHeaders.ACCEPT_LANGUAGE, "ko,en;q=0.9")
-            // 상품 페이지 fetch 가 trace 의 한 구간(HTTP client span)으로 잡히게 한다.
-            .observationRegistry(observationRegistry)
-            .build()
 
     override fun fetch(link: ProductLink): PageContent {
         var current = link
@@ -148,7 +120,7 @@ class HttpPageFetcher(
             }
         val addresses =
             try {
-                InetAddress.getAllByName(host)
+                resolveAddresses(host)
             } catch (e: java.net.UnknownHostException) {
                 log.info("link fetch unknown host url={}", link.safeLogString())
                 throw PageFetchException.upstreamError(e)
@@ -176,9 +148,6 @@ class HttpPageFetcher(
         addr is Inet6Address && (((addr.address.firstOrNull()?.toInt() ?: 0) and 0xfe) == 0xfc)
 
     companion object {
-        private const val CONNECT_TIMEOUT_MS = 5_000
-        private const val READ_TIMEOUT_MS = 15_000
-
         // 같은 회사 도메인 안에서의 www↔non-www·http→https 정도라 한두 번이면 충분. 무한·체인 redirect 는 여기서 끊는다.
         private const val MAX_REDIRECTS = 3
 
@@ -187,10 +156,5 @@ class HttpPageFetcher(
 
         // LLM 토큰 비용 상한. 대형 쇼핑몰(쿠팡 등)은 1MB 가 넘는 경우도 있음.
         private const val MAX_HTML_CHARS = 200_000
-
-        // 기본 RestClient UA 는 일부 사이트에서 차단되므로 실제 브라우저 UA 로 위장.
-        private const val USER_AGENT =
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
     }
 }
