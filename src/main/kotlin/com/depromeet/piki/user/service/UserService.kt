@@ -175,20 +175,25 @@ class UserService(
             ?.let { !userRepository.existsByNicknameAndIdNot(nickname, it) }
             ?: !userRepository.existsByNickname(nickname)
 
+    // 내 정보(닉네임·프로필 이미지) 부분 수정 영속화 — 들어온 필드만 갱신한다. 둘을 한 트랜잭션에 묶어
+    // "닉네임은 됐는데 이미지는 실패" 같은 부분 성공을 막는다. 이미지 S3 업로드(외부 호출)는 ProfileUpdateService 가
+    // 트랜잭션 밖에서 끝낸 뒤 그 결과 URL 만 여기로 위임한다 (## 트랜잭션 경계 — 외부 호출은 트랜잭션 밖).
     @Transactional
-    fun updateNickname(
+    fun updateProfile(
         userId: UUID,
-        newNickname: String,
+        nickname: String?,
+        profileImageUrl: String?,
     ): User {
         val user = findById(userId)
         user.deletedAt?.let { throw UserException.deletedUser(userId) }
-        if (userRepository.existsByNicknameAndIdNot(newNickname, userId)) {
-            throw UserException.duplicateNickname()
+        nickname?.let {
+            if (userRepository.existsByNicknameAndIdNot(it, userId)) throw UserException.duplicateNickname()
+            user.updateNickname(it)
         }
-        user.updateNickname(newNickname)
-        // existsByNicknameAndIdNot 체크와 save 사이에 다른 트랜잭션이 같은 nickname 으로
-        // update / insert 하면 DB unique constraint (uq_users_nickname) 위반이 떠 race 케이스에서
-        // 500 이 새어나갈 수 있다. createMember 와 같은 패턴으로 catch → 409 로 매핑.
+        profileImageUrl?.let { user.updateProfileImage(it) }
+        // existsByNicknameAndIdNot 체크와 save 사이에 다른 트랜잭션이 같은 nickname 으로 update / insert 하면
+        // DB unique constraint (uq_users_nickname) 위반이 떠 race 케이스에서 500 이 새어나갈 수 있다.
+        // createMember 와 같은 패턴으로 catch → 409 로 매핑.
         return try {
             userRepository.save(user)
         } catch (e: DataIntegrityViolationException) {
@@ -196,8 +201,8 @@ class UserService(
         }
     }
 
-    // 프로필 이미지 URL 영속화만 담당하는 짧은 트랜잭션. S3 업로드(외부 호출)는 ProfileImageService 가
-    // 트랜잭션 밖에서 끝낸 뒤 그 결과 URL 만 여기로 위임한다 (## 트랜잭션 경계 — 외부 호출은 트랜잭션 밖).
+    // 소셜 가입/연동 시 provider 가 준 프로필 이미지 URL 영속화만 담당하는 짧은 트랜잭션 (SocialAccountWriter 전용).
+    // 내 정보 수정(PATCH /me) 경로는 ProfileUpdateService → updateProfile 로 가며, 이 메서드는 닉네임과 무관한 auth 경로다.
     @Transactional
     fun updateProfileImageUrl(
         userId: UUID,
