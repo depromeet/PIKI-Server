@@ -3,10 +3,13 @@ package com.depromeet.piki.wishlist.controller
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.image.domain.BoundingBox
 import com.depromeet.piki.image.service.ImageExtraction
+import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.item.repository.ItemSnapshotRepository
+import com.depromeet.piki.item.service.ItemParsingService
+import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.product.service.ProductSnapshotException
 import com.depromeet.piki.product.service.gemini.GeminiApiException
@@ -37,6 +40,7 @@ import tools.jackson.databind.ObjectMapper
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.time.Duration
+import java.time.LocalDateTime
 import java.util.UUID
 import javax.imageio.ImageIO
 import kotlin.test.assertEquals
@@ -65,13 +69,16 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
     private lateinit var itemSnapshotRepository: ItemSnapshotRepository
 
     @Autowired
+    private lateinit var itemParsingService: ItemParsingService
+
+    @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
 
     @Autowired
     private lateinit var jwtProvider: JwtProvider
 
     @Test
-    fun `등록하면 추출을 기다리지 않고 PROCESSING 상태로 201 이 즉시 반환된다`() {
+    fun `등록하면 추출을 기다리지 않고 PENDING 상태로 201 이 즉시 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
@@ -87,7 +94,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
                         .content(body),
                 ).andExpect(status().isCreated)
                 .andExpect(jsonPath("$.data.wish.id").isNumber)
-                .andExpect(jsonPath("$.data.item.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.data.item.status").value("PENDING"))
                 // 파싱 전이라 추출 결과는 아직 비어 있고, 입력으로 받은 sourceUrl 만 채워진다.
                 .andExpect(jsonPath("$.data.item.name").value(nullValue()))
                 .andExpect(jsonPath("$.data.item.currentPrice").value(nullValue()))
@@ -169,7 +176,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `같은 URL 을 두 번 등록해도 dedup 없이 둘 다 201 PROCESSING 으로 별개 등록된다`() {
+    fun `같은 URL 을 두 번 등록해도 dedup 없이 둘 다 201 PENDING 으로 별개 등록된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
@@ -186,7 +193,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
                             .header(HttpHeaders.AUTHORIZATION, auth)
                             .content(body),
                     ).andExpect(status().isCreated)
-                    .andExpect(jsonPath("$.data.item.status").value("PROCESSING"))
+                    .andExpect(jsonPath("$.data.item.status").value("PENDING"))
             }
 
             // dedup 없는 multi-record 모델 — 같은 URL 이라도 별개 wish 2건이 쌓인다 (persist 는 동기라 즉시 반영).
@@ -329,6 +336,31 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             }
         } finally {
             cleanup(userId)
+        }
+    }
+
+    @Test
+    fun `updated_at 이 오래된 PROCESSING snapshot 을 recover 가 FAILED 로 정리한다`() {
+        // 워커가 죽어 PROCESSING 에 갇힌 상황 — 디스패처는 PENDING 만 집으므로 이 행은 recover 가 책임진다.
+        val item = itemRepository.save(Item(ProductLink.parse("https://shop.example.com/products/stale")))
+        val snapshot = itemSnapshotRepository.save(ItemSnapshot.processing(item.getId()))
+        val itemId = item.getId()
+        try {
+            // 이 snapshot 의 updated_at 만 과거로 밀어 stale 로 만들고, 현실적 threshold(now-5분)로 recover 를 부른다.
+            // future threshold 로 부르면 다른 테스트가 막 만든 PROCESSING(updated_at 최근)까지 쓸어버리므로(공유 컨텍스트),
+            // updated_at 기반 stale 판정을 실제로 검증하면서 자기 snapshot 만 대상이 되도록 격리한다.
+            jdbcTemplate.update(
+                "UPDATE item_snapshots SET updated_at = ? WHERE id = ?",
+                LocalDateTime.now().minusMinutes(10),
+                snapshot.getId(),
+            )
+
+            itemParsingService.recoverStaleProcessing(LocalDateTime.now().minusMinutes(5), 100)
+
+            assertEquals(ItemStatus.FAILED, itemSnapshotRepository.findLatestByItemId(itemId)?.status)
+        } finally {
+            jdbcTemplate.update("DELETE FROM item_snapshots WHERE item_id = ?", itemId)
+            jdbcTemplate.update("DELETE FROM items WHERE id = ?", itemId)
         }
     }
 

@@ -220,8 +220,14 @@ class TournamentServiceTest {
         override fun findByIds(ids: List<Long>): List<ItemSnapshot> =
             snapshots.filter { it.getId() in ids }.onEach { applyOverrides(it) }
 
-        override fun findStaleProcessingItemIds(cutoff: LocalDateTime): List<Long> =
-            snapshots.filter { it.status == ItemStatus.PROCESSING }.map { it.itemId }
+        override fun findDuePending(batchSize: Int): List<ItemSnapshot> =
+            snapshots.filter { it.status == ItemStatus.PENDING }.take(batchSize)
+
+        override fun findStaleProcessing(
+            threshold: LocalDateTime,
+            batchSize: Int,
+        ): List<ItemSnapshot> =
+            snapshots.filter { it.status == ItemStatus.PROCESSING }.take(batchSize)
 
         // status·currentPrice 는 protected setter 라 시나리오 덮어쓰기는 reflection 으로 박는다(엔티티 id 세팅과 같은 방식).
         private fun applyOverrides(snapshot: ItemSnapshot) {
