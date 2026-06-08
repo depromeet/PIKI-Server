@@ -21,8 +21,6 @@ interface TournamentUserRepository {
 
     fun findByIds(ids: Collection<Long>): List<TournamentUser>
 
-    fun softDeleteAllByTournamentId(tournamentId: Long)
-
     fun softDeleteByTournamentIdAndUserId(tournamentId: Long, userId: UUID)
 
     fun countCompletedByTournamentId(tournamentId: Long): Int

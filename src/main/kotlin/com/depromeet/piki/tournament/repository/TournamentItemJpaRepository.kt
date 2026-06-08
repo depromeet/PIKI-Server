@@ -48,7 +48,4 @@ interface TournamentItemJpaRepository : JpaRepository<TournamentItem, Long> {
         @Param("now") now: LocalDateTime,
     ): Int
 
-    @Modifying
-    @Query("UPDATE TournamentItem t SET t.deletedAt = :now WHERE t.tournamentId = :tournamentId AND t.deletedAt IS NULL")
-    fun softDeleteAllByTournamentId(@Param("tournamentId") tournamentId: Long, @Param("now") now: LocalDateTime)
 }

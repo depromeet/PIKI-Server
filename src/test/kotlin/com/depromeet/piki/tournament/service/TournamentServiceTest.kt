@@ -69,10 +69,6 @@ class TournamentServiceTest {
         override fun findByTournamentIds(tournamentIds: List<Long>): List<TournamentUser> =
             users.filter { it.tournamentId in tournamentIds }
 
-        override fun softDeleteAllByTournamentId(tournamentId: Long) {
-            users.filter { it.tournamentId == tournamentId }.forEach { it.softDelete() }
-        }
-
         override fun findByIds(ids: Collection<Long>): List<TournamentUser> =
             users.filter { it.getId() in ids }
 
@@ -339,10 +335,6 @@ class TournamentServiceTest {
             return 1
         }
 
-        override fun softDeleteAllByTournamentId(tournamentId: Long) {
-            items.filter { it.tournamentId == tournamentId }.forEach { it.softDelete() }
-        }
-
         private fun setEntityId(
             entity: LongBaseEntity,
             id: Long,
@@ -400,10 +392,6 @@ class TournamentServiceTest {
                 .filter { it.getId() in ids }
                 .filter { statuses.isNullOrEmpty() || it.status in statuses }
                 .sortedByDescending { it.createdAt }
-
-        override fun softDeleteHistoriesByTournamentId(tournamentId: Long) {
-            histories.filter { it.tournamentId == tournamentId }.forEach { it.softDelete() }
-        }
 
         override fun findBySourceTournamentId(sourceTournamentId: Long): List<Tournament> =
             tournaments.values.filter { it.sourceTournamentId == sourceTournamentId && (it.deletedAt?.let { false } ?: true) }

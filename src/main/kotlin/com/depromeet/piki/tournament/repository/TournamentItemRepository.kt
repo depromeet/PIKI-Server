@@ -28,6 +28,4 @@ interface TournamentItemRepository {
         id: Long,
         tournamentId: Long,
     ): Int
-
-    fun softDeleteAllByTournamentId(tournamentId: Long)
 }
