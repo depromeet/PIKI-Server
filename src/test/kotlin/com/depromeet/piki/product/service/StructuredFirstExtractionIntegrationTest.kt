@@ -7,6 +7,7 @@ import com.depromeet.piki.product.service.gemini.GeminiExtractionResult
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubGeminiClient
 import com.depromeet.piki.support.StubPageFetcher
+import io.micrometer.core.instrument.MeterRegistry
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import kotlin.test.assertEquals
@@ -28,6 +29,9 @@ class StructuredFirstExtractionIntegrationTest : IntegrationTestSupport() {
     @Autowired
     private lateinit var stubGeminiClient: StubGeminiClient
 
+    @Autowired
+    private lateinit var meterRegistry: MeterRegistry
+
     private val link = ProductLink.parse("https://shop.example.com/products/42")
 
     @Test
@@ -36,11 +40,13 @@ class StructuredFirstExtractionIntegrationTest : IntegrationTestSupport() {
         stubGeminiClient.build = { error("구조화 성공 경로에서는 LLM 이 호출되면 안 된다") }
         stubPageFetcher.build = { PageContent(it, productJsonLdHtml(name = "나이키 에어포스", price = "99000")) }
 
+        val before = extractCount("via", "structured", "reason", "none")
         val snapshot = extractor.extract(link)
 
         assertEquals("나이키 에어포스", snapshot.name)
         assertEquals(99_000, snapshot.currentPrice)
         assertEquals(0, stubGeminiClient.invocations)
+        assertEquals(1.0, extractCount("via", "structured", "reason", "none") - before)
     }
 
     @Test
@@ -49,24 +55,29 @@ class StructuredFirstExtractionIntegrationTest : IntegrationTestSupport() {
         stubGeminiClient.build = { GeminiExtractionResult(isProductPage = true, name = "엘엘엠상품", currentPrice = 50_000) }
         stubPageFetcher.build = { PageContent(it, "<html><body>구조화 데이터 없음</body></html>") }
 
+        // 구조화 데이터 자체가 없어 reason=no_data 로 LLM fallback.
+        val before = extractCount("via", "llm", "reason", "no_data")
         val snapshot = extractor.extract(link)
 
         assertEquals("엘엘엠상품", snapshot.name)
         assertEquals(50_000, snapshot.currentPrice)
         assertEquals(1, stubGeminiClient.invocations)
+        assertEquals(1.0, extractCount("via", "llm", "reason", "no_data") - before)
     }
 
     @Test
     fun `구조화 데이터의 필수 필드가 미달이면 LLM fallback 으로 간다`() {
         stubGeminiClient.reset()
         stubGeminiClient.build = { GeminiExtractionResult(isProductPage = true, name = "보충상품", currentPrice = 30_000) }
-        // JSON-LD 에 price 만 있고 name 이 없어 구조화 파서가 null → fallback.
+        // JSON-LD 에 price 만 있고 name 이 없어 구조화 파서가 missing_field → fallback.
         stubPageFetcher.build = { PageContent(it, priceOnlyJsonLdHtml(price = "30000")) }
 
+        val before = extractCount("via", "llm", "reason", "missing_field")
         val snapshot = extractor.extract(link)
 
         assertEquals("보충상품", snapshot.name)
         assertEquals(1, stubGeminiClient.invocations)
+        assertEquals(1.0, extractCount("via", "llm", "reason", "missing_field") - before)
     }
 
     @Test
@@ -75,8 +86,11 @@ class StructuredFirstExtractionIntegrationTest : IntegrationTestSupport() {
         stubGeminiClient.build = { throw GeminiApiException.upstreamError(RuntimeException("gemini down")) }
         stubPageFetcher.build = { PageContent(it, "<html><body>구조화 없음</body></html>") }
 
+        // 카운터는 LLM 호출 직전에 증가하므로, LLM 이 throw 해도 via=llm,reason=no_data 는 +1 이어야 한다("직접 파싱으로 못 끝내 LLM 에 의존한 비율"에 포함).
+        val before = extractCount("via", "llm", "reason", "no_data")
         assertFailsWith<GeminiApiException> { extractor.extract(link) }
         assertEquals(1, stubGeminiClient.invocations)
+        assertEquals(1.0, extractCount("via", "llm", "reason", "no_data") - before)
     }
 
     @Test
@@ -103,6 +117,9 @@ class StructuredFirstExtractionIntegrationTest : IntegrationTestSupport() {
         assertFalse(sentHtml.contains("color:red"), "style 은 제거돼야 한다")
         assertFalse(sentHtml.contains("제거대상주석"), "주석은 제거돼야 한다")
     }
+
+    // product.extract 카운터의 현재 값. 컨텍스트 공유로 다른 테스트와 누적되므로 호출 전후 증가분(delta)으로 단언한다.
+    private fun extractCount(vararg tags: String): Double = meterRegistry.counter("product.extract", *tags).count()
 
     // GeminiExtractionRequest 의 HTML part(마지막 Part)에서 sanitize 된 LLM 입력 HTML 을 꺼낸다.
     private fun llmInputHtmlOf(request: Any?): String {
