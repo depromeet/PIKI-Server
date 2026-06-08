@@ -372,13 +372,11 @@ class TournamentService(
                 // Design B: 멤버는 ROOT 가 아닌 본인 CLONE 에서 플레이한다.
                 // ROOT 가 COMPLETED 이고 멤버의 ROOT history 가 없으면 CLONE 의 결과로 대신 응답한다.
                 if (!isOwner && histories.isEmpty()) {
-                    val myClone = tournamentRepository.findBySourceTournamentId(tournamentId)
-                        .firstOrNull { clone ->
-                            tournamentUserRepository.findByTournamentIdAndUserId(clone.getId(), userId)
-                                ?.let { true } ?: false
-                        } ?: throw TournamentException.forbiddenTournament()
-                    val cloneTU = tournamentUserRepository.findByTournamentIdAndUserId(myClone.getId(), userId)
+                    val sourceTournamentClones = tournamentRepository.findBySourceTournamentId(tournamentId)
+                    val sourceTournamentCloneTUs = tournamentUserRepository.findByTournamentIds(sourceTournamentClones.map { it.getId() })
+                    val cloneTU = sourceTournamentCloneTUs.firstOrNull { it.userId == userId }
                         ?: throw TournamentException.forbiddenTournament()
+                    val myClone = sourceTournamentClones.first { it.getId() == cloneTU.tournamentId }
                     if (!cloneTU.isCompleted()) throw TournamentException.forbiddenTournament()
                     val cloneHistories = tournamentRepository.findHistoriesByTournamentIdAndTournamentUserId(
                         myClone.getId(), cloneTU.getId(),
@@ -735,13 +733,13 @@ class TournamentService(
         tournament.sourceTournamentId?.let { throw TournamentException.clonedTournamentCannotViewGroupResult() }
         val requesterRootTU = tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
+        val allClones = tournamentRepository.findBySourceTournamentId(tournamentId)
         // Progressive gate: 요청자 본인이 완료했고 전체 완료 인원 ≥2 일 때 그룹 결과를 조회할 수 있다.
         val requesterHasCompleted = if (requesterRootTU.getId() == tournament.ownerTournamentUserId) {
             requesterRootTU.isCompleted()
         } else {
-            tournamentRepository.findBySourceTournamentId(tournamentId).any { clone ->
-                tournamentUserRepository.findByTournamentIdAndUserId(clone.getId(), userId)?.isCompleted() == true
-            }
+            val cloneTUs = tournamentUserRepository.findByTournamentIds(allClones.map { it.getId() })
+            cloneTUs.any { it.userId == userId && it.isCompleted() }
         }
         if (!requesterHasCompleted || !computeHasGroupResult(tournament)) {
             throw TournamentException.groupResultNotAvailable()
@@ -752,7 +750,7 @@ class TournamentService(
         data class Play(val tournamentId: Long, val tuId: Long, val userUUID: UUID)
 
         val completedRootTUs = tournamentUserRepository.findCompletedByTournamentId(tournamentId)
-        val completedClones = tournamentRepository.findBySourceTournamentId(tournamentId).filter { it.isCompleted() }
+        val completedClones = allClones.filter { it.isCompleted() }
         val cloneOwnerTUs = tournamentUserRepository.findByIds(completedClones.map { it.ownerTournamentUserId }.toSet())
         val cloneOwnerTUById = cloneOwnerTUs.associateBy { it.getId() }
 
