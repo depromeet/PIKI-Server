@@ -60,9 +60,12 @@ class UserApiExamples(
                             name = "수정 성공 (닉네임·프로필 이미지)",
                             payload =
                                 ApiResponseBody.ok(
+                                    // 이미지 수정 성공 예시라 MEMBER 로 둔다 — sampleUser() 기본값(GUEST)을 그대로 쓰면
+                                    // "게스트가 프로필 이미지를 수정 성공" 으로 읽혀, 같은 블록의 게스트 이미지 403 계약과 충돌한다.
                                     sampleUser().copy(
                                         nickname = "새닉네임",
                                         profileImage = "https://cdn.example.com/profiles/8f1a3c2b/9d44.jpg",
+                                        identityType = IdentityType.MEMBER,
                                     ),
                                 ),
                         )
