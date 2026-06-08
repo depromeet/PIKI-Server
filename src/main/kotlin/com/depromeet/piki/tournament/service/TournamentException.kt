@@ -236,7 +236,7 @@ class TournamentException private constructor(
 
         fun clonedTournamentCannotViewGroupResult(): TournamentException =
             TournamentException(
-                "플레이링크로 참여한 토너먼트에서는 친구 결과를 조회할 수 없습니다.",
+                "플레이 링크로 참여한 토너먼트에서는 친구 결과를 조회할 수 없습니다.",
                 ErrorCategory.FORBIDDEN,
                 HttpStatus.FORBIDDEN,
             )
