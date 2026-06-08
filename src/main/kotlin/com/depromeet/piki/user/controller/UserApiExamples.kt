@@ -6,6 +6,7 @@ import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.common.storage.ImageStorageException
+import com.depromeet.piki.user.controller.dto.MyProfileResponse
 import com.depromeet.piki.user.controller.dto.NicknameCheckRequest
 import com.depromeet.piki.user.controller.dto.NicknameCheckResponse
 import com.depromeet.piki.user.controller.dto.UserResponse
@@ -30,8 +31,16 @@ class UserApiExamples(
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
                             status = HttpStatus.OK,
-                            name = "내 정보 조회 성공",
-                            payload = ApiResponseBody.ok(sampleUser()),
+                            name = "내 정보 조회 성공 (email 있음)",
+                            payload = ApiResponseBody.ok(sampleMyProfile()),
+                        )
+                        add(
+                            status = HttpStatus.OK,
+                            name = "내 정보 조회 성공 (email 미수집·게스트)",
+                            payload =
+                                ApiResponseBody.ok(
+                                    sampleMyProfile().copy(identityType = IdentityType.GUEST, email = null),
+                                ),
                         )
                         unauthorized()
                         add(
@@ -160,8 +169,17 @@ class UserApiExamples(
         UserResponse(
             id = SAMPLE_USER_ID,
             nickname = "뛰어다니는 강아지",
-            profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=$SAMPLE_USER_ID",
+            profileImage = "https://piki-assets.s3.ap-northeast-2.amazonaws.com/defaults/user-profile-1.png",
             identityType = IdentityType.GUEST,
+        )
+
+    private fun sampleMyProfile(): MyProfileResponse =
+        MyProfileResponse(
+            id = SAMPLE_USER_ID,
+            nickname = "뛰어다니는 강아지",
+            profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=$SAMPLE_USER_ID",
+            identityType = IdentityType.MEMBER,
+            email = "user@gmail.com",
         )
 
     companion object {

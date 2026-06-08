@@ -10,6 +10,7 @@ import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.event.TournamentItemAdded
 import com.depromeet.piki.tournament.event.TournamentJoined
+import com.depromeet.piki.tournament.event.TournamentStarted
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
@@ -106,6 +107,7 @@ class TournamentService(
             tournamentRepository.findTournamentById(command.tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
+        tournament.sourceTournamentId?.let { throw TournamentException.clonedTournamentCannotAddItems() }
         tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
         val existingItemIds =
@@ -162,8 +164,11 @@ class TournamentService(
         userId: UUID,
         tournamentId: Long,
     ): List<TournamentStartResult> {
+        // 상태 전이(PENDING→IN_PROGRESS) + 이벤트 발행을 하므로 행 락으로 읽는다. 락 없이 읽으면 동시 요청이 둘 다
+        // PENDING 검증을 통과해 TournamentStarted 를 중복 발행(참가자에게 시작 알림 중복 도달)할 수 있다.
+        // 다른 상태 전이 메서드(join·recordMatch 등)와 동일한 forUpdate 패턴.
         val tournament =
-            tournamentRepository.findTournamentById(tournamentId)
+            tournamentRepository.findTournamentByIdForUpdate(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
         val owner =
@@ -190,6 +195,8 @@ class TournamentService(
         }
 
         tournament.start()
+        // 시작이 커밋된 뒤에만 참가자에게 전달되도록 트랜잭션 안에서 발행한다 (롤백 시 미발행).
+        eventPublisher.publishEvent(TournamentStarted(tournamentId = tournamentId, actorId = userId))
         return tournamentItems
             .map { tournamentItem ->
                 val snapshot = tournamentItem.requireSnapshot(snapshotById)
@@ -465,10 +472,10 @@ class TournamentService(
                 ?: throw TournamentException.forbiddenTournament()
         if (tournamentUser.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
         if (tournament.isInProgress()) throw TournamentException.inProgressTournamentCannotBeDeleted()
-        tournamentRepository.softDeleteHistoriesByTournamentId(tournamentId)
-        tournamentItemRepository.softDeleteAllByTournamentId(tournamentId)
-        tournamentUserRepository.softDeleteAllByTournamentId(tournamentId)
-        tournament.softDelete()
+        // 주최자의 TournamentUser 만 soft-delete 한다.
+        // 토너먼트·아이템·히스토리는 유지되어 다른 참여자들이 계속 접근할 수 있고,
+        // 그룹 결과에서도 주최자 내역이 보존된다.
+        tournamentUserRepository.softDeleteByTournamentIdAndUserId(tournamentId, userId)
     }
 
     @Transactional
@@ -624,6 +631,7 @@ class TournamentService(
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isCompleted()) throw TournamentException.groupResultNotAvailable()
+        tournament.sourceTournamentId?.let { throw TournamentException.clonedTournamentCannotViewGroupResult() }
         tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
 
@@ -643,9 +651,9 @@ class TournamentService(
             val ownerTuIds = allRelated
                 .map { it.ownerTournamentUserId }
                 .toSet()
+            // findByIds 는 deletedAt 필터 없음 — 주최자가 토너먼트를 삭제(TU soft-delete)해도 그룹 결과에 반영된다.
             tournamentUserRepository
-                .findByTournamentIds(allRelated.map { it.getId() })
-                .filter { it.getId() in ownerTuIds }
+                .findByIds(ownerTuIds)
                 .associate { it.tournamentId to it.userId }
         }
         val userById = userRepository
@@ -713,7 +721,6 @@ class TournamentService(
         }
 
         val items = referenceItemsById.values
-            .sortedBy { it.rank }
             .map { ref ->
                 val key = RankKey(ref.itemId, ref.rank)
                 GroupResultItem(
@@ -726,6 +733,7 @@ class TournamentService(
                     chosenBy = chosenByMap[key] ?: emptyList(),
                 )
             }
+            .sortedByDescending { it.chosenBy.size }
         return GroupResult(items = items)
     }
 

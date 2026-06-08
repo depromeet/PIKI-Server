@@ -100,7 +100,7 @@ class TournamentApiExamples(
                                         ),
                                         userId = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
                                         nickname = "멋진친구",
-                                        profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
+                                        profileImage = "https://piki-assets.s3.ap-northeast-2.amazonaws.com/defaults/user-profile-3.png",
                                         tournamentId = 1,
                                     ),
                                 ),
@@ -510,6 +510,10 @@ class TournamentApiExamples(
                 handlerMethod.binds(TournamentController::getGroupResult) ->
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
+                            TournamentException.clonedTournamentCannotViewGroupResult(),
+                            name = "플레이링크 복제 토너먼트에서 그룹 결과 조회 불가",
+                        )
+                        add(
                             status = HttpStatus.OK,
                             name = "그룹 결과 조회 성공",
                             payload =
@@ -532,7 +536,7 @@ class TournamentApiExamples(
                                                                         "11111111-2222-3333-4444-555555555555",
                                                                     ),
                                                                 nickname = "참여자A",
-                                                                profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
+                                                                profileImage = "https://piki-assets.s3.ap-northeast-2.amazonaws.com/defaults/user-profile-3.png",
                                                                 isWithdrawn = false,
                                                             ),
                                                             GroupResultResponse.ParticipantSummaryResponse(
@@ -562,7 +566,7 @@ class TournamentApiExamples(
                                                                         "11111111-2222-3333-4444-555555555555",
                                                                     ),
                                                                 nickname = "참여자A",
-                                                                profileImage = "https://api.dicebear.com/9.x/bottts/svg?seed=aaaaaaaa",
+                                                                profileImage = "https://piki-assets.s3.ap-northeast-2.amazonaws.com/defaults/user-profile-3.png",
                                                                 isWithdrawn = false,
                                                             ),
                                                         ),

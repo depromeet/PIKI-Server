@@ -13,6 +13,7 @@ import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.event.TournamentItemAdded
 import com.depromeet.piki.tournament.event.TournamentJoined
+import com.depromeet.piki.tournament.event.TournamentStarted
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentItemRoutingView
 import com.depromeet.piki.tournament.repository.TournamentRepository
@@ -57,7 +58,7 @@ class TournamentServiceTest {
         ): TournamentUser? = users.find { it.tournamentId == tournamentId && it.userId == userId }
 
         override fun findTournamentIdsByUserId(userId: UUID): List<Long> =
-            users.filter { it.userId == userId }.map { it.tournamentId }
+            users.filter { it.userId == userId && (it.deletedAt?.let { false } ?: true) }.map { it.tournamentId }
 
         override fun findByTournamentId(tournamentId: Long): List<TournamentUser> =
             users.filter { it.tournamentId == tournamentId }
@@ -71,6 +72,9 @@ class TournamentServiceTest {
         override fun softDeleteAllByTournamentId(tournamentId: Long) {
             users.filter { it.tournamentId == tournamentId }.forEach { it.softDelete() }
         }
+
+        override fun findByIds(ids: Collection<Long>): List<TournamentUser> =
+            users.filter { it.getId() in ids }
 
         override fun softDeleteByTournamentIdAndUserId(tournamentId: Long, userId: UUID) {
             users.find { it.tournamentId == tournamentId && it.userId == userId }?.softDelete()
@@ -572,6 +576,18 @@ class TournamentServiceTest {
         service.start(userId, tournamentId)
 
         assertEquals(TournamentStatus.IN_PROGRESS, repository.tournaments[tournamentId]!!.status)
+    }
+
+    @Test
+    fun `start 는 시작 후 시작시킨 주최자를 actor 로 하는 TournamentStarted 이벤트를 발행한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
+        testWishRepository.addWish(userId, 1L, 2L)
+        service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
+        publishedEvents.clear() // addItemsFromWish 가 발행한 TournamentItemAdded 를 비우고 start 발행만 본다
+
+        service.start(userId, tournamentId)
+
+        assertEquals(listOf<Any>(TournamentStarted(tournamentId, userId)), publishedEvents)
     }
 
     @Test
@@ -1295,22 +1311,29 @@ class TournamentServiceTest {
     }
 
     @Test
-    fun `deleteTournament 는 PENDING 토너먼트를 소유자가 소프트 딜리트하고 연관 데이터도 함께 소프트 딜리트한다`() {
+    fun `deleteTournament 는 소유자의 TournamentUser 만 소프트 딜리트하고 토너먼트와 아이템은 유지한다`() {
         val tournamentId = service.create(userId, CreateTournament("삭제 대상")).tournamentId
         testWishRepository.addWish(userId, 1L, 2L)
         service.addItemsFromWish(userId, AddTournamentItemsFromWish(tournamentId, listOf(1L, 2L)))
+        tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
 
         service.deleteTournament(userId, tournamentId)
 
-        assertNotNull(repository.tournaments[tournamentId]!!.deletedAt)
-        assertTrue(tournamentItemRepository.items.filter { it.tournamentId == tournamentId }.all { it.deletedAt?.let { true } ?: false })
-        assertTrue(tournamentUserRepository.users.filter { it.tournamentId == tournamentId }.all { it.deletedAt?.let { true } ?: false })
-        // 소프트 딜리트 후 findTournamentById 는 null 을 반환한다
-        assertNull(repository.findTournamentById(tournamentId))
+        // 토너먼트·아이템은 유지된다
+        assertNull(repository.tournaments[tournamentId]!!.deletedAt)
+        assertTrue(tournamentItemRepository.items.filter { it.tournamentId == tournamentId }.all { it.deletedAt?.let { false } ?: true })
+        // 소유자의 TournamentUser 만 soft-delete 됐다
+        val ownerTu = tournamentUserRepository.users.find { it.tournamentId == tournamentId && it.userId == userId }!!
+        assertNotNull(ownerTu.deletedAt)
+        // 다른 참여자의 TournamentUser 는 유지된다
+        val memberTu = tournamentUserRepository.users.find { it.tournamentId == tournamentId && it.userId == otherUserId }!!
+        assertNull(memberTu.deletedAt)
+        // 소유자는 더 이상 목록에서 보이지 않는다
+        assertTrue(service.getTournaments(userId, null).none { it.tournamentId == tournamentId })
     }
 
     @Test
-    fun `deleteTournament 는 COMPLETED 토너먼트도 소프트 딜리트할 수 있다`() {
+    fun `deleteTournament 는 COMPLETED 토너먼트에서 소유자 TournamentUser 만 소프트 딜리트하고 히스토리는 유지한다`() {
         val tournamentId = createAndStart(listOf(1L, 2L))
         val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
         service.recordMatch(
@@ -1320,8 +1343,12 @@ class TournamentServiceTest {
 
         service.deleteTournament(userId, tournamentId)
 
-        assertNotNull(repository.tournaments[tournamentId]!!.deletedAt)
-        assertTrue(repository.histories.filter { it.tournamentId == tournamentId }.all { it.deletedAt?.let { true } ?: false })
+        // 토너먼트와 히스토리는 유지된다
+        assertNull(repository.tournaments[tournamentId]!!.deletedAt)
+        assertTrue(repository.histories.filter { it.tournamentId == tournamentId }.all { it.deletedAt?.let { false } ?: true })
+        // 소유자의 TournamentUser 만 soft-delete 됐다
+        val ownerTu = tournamentUserRepository.users.find { it.tournamentId == tournamentId && it.userId == userId }!!
+        assertNotNull(ownerTu.deletedAt)
     }
 
     @Test
@@ -1354,5 +1381,68 @@ class TournamentServiceTest {
     fun `deleteTournament 는 존재하지 않는 토너먼트면 404 예외가 발생한다`() {
         val ex = assertFailsWith<TournamentException> { service.deleteTournament(userId, 999L) }
         assertEquals(HttpStatus.NOT_FOUND, ex.httpStatus)
+    }
+
+    // helper: 완료된 (sourceTournamentId 있는) 복제 토너먼트를 직접 생성하고 사용자를 참여시킨다.
+    private fun createCompletedClone(cloneUserId: UUID, sourceTournamentId: Long): Long {
+        val clone = Tournament(
+            ownerTournamentUserId = 0L,
+            name = "클론",
+            inviteCode = "ZZZ000",
+            inviteExpiresAt = java.time.LocalDateTime.now().plusMinutes(30),
+            sourceTournamentId = sourceTournamentId,
+        )
+        repository.saveTournament(clone)
+        val cloneUser = tournamentUserRepository.save(TournamentUser(tournamentId = clone.getId(), userId = cloneUserId))
+        clone.assignOwner(cloneUser.getId())
+        clone.start()
+        clone.complete()
+        return clone.getId()
+    }
+
+    @Test
+    fun `getGroupResult 는 복제 토너먼트(sourceTournamentId 가 있는)에서 호출하면 403 예외가 발생한다`() {
+        val cloneTournamentId = createCompletedClone(userId, sourceTournamentId = 999L)
+
+        val ex = assertFailsWith<TournamentException> { service.getGroupResult(userId, cloneTournamentId) }
+        assertEquals(HttpStatus.FORBIDDEN, ex.httpStatus)
+    }
+
+    @Test
+    fun `getGroupResult 는 완료되지 않은 토너먼트에서 호출하면 409 예외가 발생한다`() {
+        val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
+
+        val ex = assertFailsWith<TournamentException> { service.getGroupResult(userId, tournamentId) }
+        assertEquals(HttpStatus.CONFLICT, ex.httpStatus)
+    }
+
+    @Test
+    fun `getGroupResult 는 참가자가 아니면 403 예외가 발생한다`() {
+        val tournamentId = createAndStart(listOf(1L, 2L))
+        val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
+        service.recordMatch(userId, RecordMatch(tournamentId, 2, items[0].getId(), items[1].getId(), items[0].getId()))
+
+        val ex = assertFailsWith<TournamentException> { service.getGroupResult(otherUserId, tournamentId) }
+        assertEquals(HttpStatus.FORBIDDEN, ex.httpStatus)
+    }
+
+    @Test
+    fun `addItemsFromWish 는 복제 토너먼트(sourceTournamentId 가 있는)에서 호출하면 403 예외가 발생한다`() {
+        val clone = Tournament(
+            ownerTournamentUserId = 0L,
+            name = "클론",
+            inviteCode = "ZZZ001",
+            inviteExpiresAt = java.time.LocalDateTime.now().plusMinutes(30),
+            sourceTournamentId = 999L,
+        )
+        repository.saveTournament(clone)
+        val cloneUser = tournamentUserRepository.save(TournamentUser(tournamentId = clone.getId(), userId = userId))
+        clone.assignOwner(cloneUser.getId())
+        testWishRepository.addWish(userId, 1L)
+
+        val ex = assertFailsWith<TournamentException> {
+            service.addItemsFromWish(userId, AddTournamentItemsFromWish(clone.getId(), listOf(1L)))
+        }
+        assertEquals(HttpStatus.FORBIDDEN, ex.httpStatus)
     }
 }

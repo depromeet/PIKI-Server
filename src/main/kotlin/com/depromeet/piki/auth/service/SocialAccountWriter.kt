@@ -43,7 +43,27 @@ class SocialAccountWriter(
         guest.deletedAt?.let { return null } // 탈퇴 게스트 → 연결 대상 아님
         if (guest.identityType != IdentityType.GUEST) return null // 이미 MEMBER → 게스트-연결 케이스 아님
         link(guestId, userInfo)
+        // 가입(승격) 시점에만 provider 프사로 전환한다. provider 가 프사를 안 주거나 빈 값이면(null/blank)
+        // 게스트가 갖고 있던 랜덤 기본 아바타를 그대로 유지한다. (기존 유저 재로그인은 findExisting 경로라
+        // 여기 닿지 않으므로, 사용자가 직접 바꾼 프사는 보존된다 — 매 로그인 동기화하지 않는다.)
+        userInfo.profileImage
+            ?.takeIf { it.isNotBlank() }
+            ?.let { userService.updateProfileImageUrl(guestId, it) }
         return userService.promoteToMember(guestId)
+    }
+
+    // 기존 가입자 재로그인 시 email upsert (#442). provider 가 준 email 로 갱신해 backfill·최신 유지한다.
+    // email 이 null 이면(미수집·미동의) UserDetail.updateEmail 이 기존 값을 보존한다.
+    // resolveUser(비트랜잭션)가 호출하므로 proxy 경계를 위해 별도 빈의 @Transactional 메서드로 둔다.
+    @Transactional
+    fun updateEmail(
+        userId: UUID,
+        email: String?,
+    ) {
+        email ?: return // null 이면 조회·갱신 자체를 생략(불필요한 쿼리 방지)
+        val detail = userDetailRepository.findByUserId(userId) ?: return
+        detail.updateEmail(email)
+        userDetailRepository.save(detail)
     }
 
     private fun link(
@@ -51,7 +71,12 @@ class SocialAccountWriter(
         userInfo: OAuthUserInfo,
     ) {
         userDetailRepository.save(
-            UserDetail(userId = userId, provider = userInfo.provider.name, socialId = userInfo.socialId),
+            UserDetail(
+                userId = userId,
+                provider = userInfo.provider.name,
+                socialId = userInfo.socialId,
+                email = userInfo.email,
+            ),
         )
     }
 }

@@ -4,6 +4,7 @@ import com.depromeet.piki.auth.infrastructure.oauth.OAuthUserInfo
 import com.depromeet.piki.user.domain.User
 import com.depromeet.piki.user.repository.UserDetailRepository
 import com.depromeet.piki.user.service.UserService
+import org.slf4j.LoggerFactory
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import java.util.UUID
@@ -17,12 +18,14 @@ class SocialAccountService(
     private val userDetailRepository: UserDetailRepository,
     private val socialAccountWriter: SocialAccountWriter,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     fun resolveUser(
         userInfo: OAuthUserInfo,
         currentUserId: UUID?,
     ): User {
         // 1. 이미 가입된 소셜 → 그 user 로 로그인. (재방문 / 게스트의 소셜이 이미 타계정 → 그 계정 로그인 = 게스트 포기)
-        findExisting(userInfo)?.let { return it }
+        loginExisting(userInfo)?.let { return it }
 
         // 2. 신규 소셜 + 현재 게스트면 → 게스트 계정에 연결 + 승격 (위시·토너먼트 데이터 이어줌)
         currentUserId?.let { guestId ->
@@ -30,7 +33,7 @@ class SocialAccountService(
                 socialAccountWriter.linkGuestAndPromote(guestId, userInfo)?.let { return it }
             } catch (e: DataIntegrityViolationException) {
                 // 동시 충돌: 다른 요청이 이 소셜을 먼저 선점 → 그 계정으로 합류 (게스트 포기)
-                return findExisting(userInfo) ?: throw e
+                return loginExisting(userInfo) ?: throw e
             }
         }
 
@@ -39,9 +42,22 @@ class SocialAccountService(
             socialAccountWriter.createSocialUserAndLink(userInfo)
         } catch (e: DataIntegrityViolationException) {
             // 동시 충돌: 다른 요청이 먼저 같은 소셜로 가입 → 그 user 로 합류 (내가 만든 user 는 REQUIRED tx 롤백으로 폐기)
-            findExisting(userInfo) ?: throw e
+            loginExisting(userInfo) ?: throw e
         }
     }
+
+    // 기존 가입자로 로그인할 때마다 email 을 upsert 한다 (#442) — 재방문·동시 충돌 합류 모두 같은 경로를 타게 해
+    // "매 로그인 갱신"을 일관되게 보장한다. null 이면 UserDetail.updateEmail 이 기존 값을 보존한다.
+    // email 은 부가 정보라 upsert 실패(락 경합·일시 DB 오류 등)가 로그인 자체를 막아선 안 된다.
+    // updateEmail 은 REQUIRED 새 트랜잭션(호출자 비트랜잭션)이라 실패해도 rollback-only 오염 없이 흡수 가능하다.
+    // 실패는 warn 으로 남기고(email 값은 PII 라 미기록) 기존 user 로그인은 그대로 성공시킨다.
+    private fun loginExisting(userInfo: OAuthUserInfo): User? =
+        findExisting(userInfo)?.also { user ->
+            runCatching { socialAccountWriter.updateEmail(user.id, userInfo.email) }
+                .onFailure { e ->
+                    log.warn("소셜 로그인 email upsert 실패. userId={}, provider={}", user.id, userInfo.provider, e)
+                }
+        }
 
     // 탈퇴(tombstone) 유저는 없는 것으로 취급해 신규 가입 경로를 타게 한다. 탈퇴 시 user_details 는 하드삭제되므로
     // 보통 여기서 user_detail 자체가 안 잡히지만, 파기 전 잔존이나 경합 상황을 방어해 deletedAt 까지 확인한다 —

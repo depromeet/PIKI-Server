@@ -145,6 +145,41 @@ class AppleOAuthClientTest {
         }
 
         @Test
+        fun `email 클레임이 있으면 OAuthUserInfo,email 로 추출한다 (최초 동의)`() {
+            val client = AppleOAuthClient(props())
+            val idToken =
+                signAppleIdToken(
+                    audience = "com.test.service",
+                    subject = "001234.abcdef.5678",
+                    email = "user@privaterelay.appleid.com",
+                )
+
+            val result = verifyIntegrated(client, idToken, expectedAud = "com.test.service", jwksJson = testJwksJson)
+
+            assertEquals("user@privaterelay.appleid.com", result.email)
+        }
+
+        @Test
+        fun `email 클레임이 없으면 email 은 null 이다 (2회차·미동의)`() {
+            val client = AppleOAuthClient(props())
+            val idToken = signAppleIdToken(audience = "com.test.service", subject = "001234.abcdef.5678")
+
+            val result = verifyIntegrated(client, idToken, expectedAud = "com.test.service", jwksJson = testJwksJson)
+
+            assertEquals(null, result.email)
+        }
+
+        @Test
+        fun `email 클레임이 빈 문자열이면 null 로 정규화된다`() {
+            val client = AppleOAuthClient(props())
+            val idToken = signAppleIdToken(audience = "com.test.service", subject = "001234.abcdef.5678", email = "")
+
+            val result = verifyIntegrated(client, idToken, expectedAud = "com.test.service", jwksJson = testJwksJson)
+
+            assertEquals(null, result.email)
+        }
+
+        @Test
         fun `sub 누락 - OAuthException providerError 를 던진다 (500 누출 방지)`() {
             val client = AppleOAuthClient(props())
             val now = Date()
@@ -301,22 +336,25 @@ class AppleOAuthClientTest {
         issuer: String = "https://appleid.apple.com",
         kid: String = testKid,
         privateKey: java.security.PrivateKey = testKeyPair.private,
+        email: String? = null,
     ): String {
         val now = Date()
-        return Jwts
-            .builder()
-            .header()
-            .add("kid", kid)
-            .and()
-            .issuer(issuer)
-            .subject(subject)
-            .audience()
-            .add(audience)
-            .and()
-            .issuedAt(now)
-            .expiration(Date(now.time + 60_000))
-            .signWith(privateKey)
-            .compact()
+        val builder =
+            Jwts
+                .builder()
+                .header()
+                .add("kid", kid)
+                .and()
+                .issuer(issuer)
+                .subject(subject)
+                .audience()
+                .add(audience)
+                .and()
+                .issuedAt(now)
+                .expiration(Date(now.time + 60_000))
+        // email 클레임은 최초 동의 시에만 들어온다. null 이면 클레임 자체를 넣지 않아 2회차·미동의를 흉내낸다.
+        email?.let { builder.claim("email", it) }
+        return builder.signWith(privateKey).compact()
     }
 
     private fun generateEcKeyPair(): KeyPair {
