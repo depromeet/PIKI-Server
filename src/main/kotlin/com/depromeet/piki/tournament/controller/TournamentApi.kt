@@ -75,10 +75,15 @@ interface TournamentApi {
             응답의 status 필드에 따라 포함되는 데이터가 달라진다.
             - PENDING: pending 필드 (아이템 목록, 참여자 목록)
               - 각 아이템에 status 포함 (READY / PENDING / PROCESSING / FAILED). PENDING·PROCESSING 이면 name·price·imageUrl 은 null 이라 응답에서 제외됨
-            - IN_PROGRESS: inProgress 필드
-              - currentRound: 다음에 진행할 라운드 번호
-              - lastHistory: 가장 최근에 기록된 매치 결과. 라운드 전환 직후에는 currentRound와 다른 라운드의 매치일 수 있음. 매치 기록이 없으면 null
-              - remainingItems: 현재 라운드에서 아직 대결하지 않은 생존 아이템 목록, 가격 오름차순. 이 순서가 클라이언트의 매치 페어링 순서([0]vs[1], [2]vs[3] …)를 결정함. 각 아이템에 status 포함
+              - pending.ownerStarted = false
+            - IN_PROGRESS: 요청자 역할에 따라 두 가지 응답이 있다.
+              - 소유자(isOwner=true) 또는 이미 매치를 시작한 멤버: inProgress 필드
+                - currentRound: 다음에 진행할 라운드 번호
+                - lastHistory: 가장 최근에 기록된 매치 결과. 라운드 전환 직후에는 currentRound와 다른 라운드의 매치일 수 있음. 매치 기록이 없으면 null
+                - remainingItems: 현재 라운드에서 아직 대결하지 않은 생존 아이템 목록, 가격 오름차순. 이 순서가 클라이언트의 매치 페어링 순서([0]vs[1], [2]vs[3] …)를 결정함
+              - 아직 매치를 시작하지 않은 멤버(isOwner=false): pending 필드 (ROOT 아이템·참여자 목록)
+                - pending.ownerStarted = true. 클라이언트는 이 플래그로 "주최자 대기" vs "주최자 시작 완료·지금 시작하세요" UI 를 분기한다
+                - pending.inviteCode, pending.inviteExpiresAt 은 null (초대 기간 종료)
             - COMPLETED: completed 필드
               - result: 1위부터 최대 4위까지 순위 아이템 목록
               - hasGroupResult: 참여자 2명 이상이면 true. 클라이언트는 이 값으로 친구 토너먼트 결과 보기 버튼을 제어한다.
