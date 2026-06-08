@@ -47,7 +47,7 @@ jwt:
   # secret 은 환경변수로만 주입한다 (default 없음). 운영에서 env 누락 시 부팅 실패가 의도.
   secret: ${JWT_SECRET}
   # Spring 의 Duration 파싱은 1h / 14d / 30m / PT1H30M 등 다양한 형식 지원.
-  access-token-expiry: ${JWT_ACCESS_EXPIRY:1h}
+  access-token-expiry: ${JWT_ACCESS_EXPIRY:15m}
   refresh-token-expiry: ${JWT_REFRESH_EXPIRY:14d}
 
 auth:
