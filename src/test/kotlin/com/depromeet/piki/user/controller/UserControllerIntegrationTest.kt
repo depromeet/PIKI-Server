@@ -275,6 +275,29 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `PATCH users me - 게스트가 잘못된 형식 이미지를 보내도 형식 검증 전에 403 이 반환된다`() {
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+        val userId = UUID.randomUUID()
+        insertUser(userId, nickname = "게스트닉네임", identityType = IdentityType.GUEST)
+        // 미지원 형식(gif) — 회원이었다면 400 이 날 입력이다.
+        val gif = MockMultipartFile("image", "anim.gif", "image/gif", byteArrayOf(1, 2, 3))
+
+        // 권한 확인이 형식 검증보다 먼저라는 계약을 고정한다 — 게스트는 형식이 틀려도 400 이 아니라 403.
+        // (순서가 뒤집혀 형식 검증이 먼저 실행되면 400 이 새어 이 단언이 깨진다.)
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/users/me")
+                    .file(gif)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.GUEST)}"),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value("프로필 이미지는 회원만 수정할 수 있습니다."))
+    }
+
+    @Test
     fun `PATCH users me - 아무 필드도 안 보내면 200 으로 통과하고 기존 값이 유지된다`() {
         val mockMvc =
             MockMvcBuilders
@@ -382,21 +405,31 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
                 .apply<DefaultMockMvcBuilder>(springSecurity())
                 .build()
         val userId = UUID.randomUUID()
-        insertUser(userId, identityType = IdentityType.MEMBER)
+        insertUser(userId, nickname = "원래닉네임", identityType = IdentityType.MEMBER)
         val image = MockMultipartFile("image", "photo.jpg", "image/jpeg", jpegBytes())
         stubImageStorage.behavior = { _, _, _ -> throw ImageStorageException.uploadFailed() }
 
         try {
+            // 닉네임을 함께 보낸다 — S3 업로드가 영속화보다 먼저라, 업로드가 깨지면 닉네임도 반영되면 안 된다(원자성).
             mockMvc
                 .perform(
                     multipart(HttpMethod.PATCH, "/api/v1/users/me")
                         .file(image)
+                        .param("nickname", "새닉네임")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.MEMBER)}"),
                 ).andExpect(status().isBadGateway)
         } finally {
             // 공유 컨텍스트의 stub mutable state 를 복원해 다른 테스트로 누수되지 않게 한다.
             stubImageStorage.behavior = stubImageStorage.defaultBehavior
         }
+
+        // 502 로 끝났으니 닉네임도 반영되지 않아야 한다 — 업로드(트랜잭션 밖)가 영속화 전에 깨져 부분 적용이 없다.
+        mockMvc
+            .perform(
+                get("/api/v1/users/me")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.MEMBER)}"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.nickname").value("원래닉네임"))
     }
 
     @Test
