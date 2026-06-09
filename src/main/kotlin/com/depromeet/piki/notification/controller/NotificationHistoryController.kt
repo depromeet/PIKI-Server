@@ -4,6 +4,7 @@ import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.common.response.PageResponse
 import com.depromeet.piki.notification.controller.dto.NotificationHistoryResponse
 import com.depromeet.piki.notification.controller.dto.NotificationReadRequest
+import com.depromeet.piki.notification.controller.dto.NotificationReadResponse
 import com.depromeet.piki.notification.service.NotificationService
 import jakarta.validation.Valid
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -37,8 +38,8 @@ class NotificationHistoryController(
     override fun read(
         @AuthenticationPrincipal userId: UUID,
         @Valid @RequestBody request: NotificationReadRequest,
-    ): ApiResponseBody<Unit> {
-        notificationService.read(userId = userId, command = request.toCommand())
-        return ApiResponseBody.ok()
+    ): ApiResponseBody<NotificationReadResponse> {
+        val unreadCount = notificationService.read(userId = userId, command = request.toCommand())
+        return ApiResponseBody.ok(data = NotificationReadResponse.of(unreadCount))
     }
 }

@@ -37,14 +37,16 @@ class NotificationService(
     }
 
     // 읽음 처리 — 명령(All/Ids)별 벌크 UPDATE. 본인 소유만 반영(소유 검증은 쿼리의 user_id 조건이 겸한다). 멱등.
+    // 처리 후 안읽음 수를 같은 트랜잭션에서 세어 반환한다 — 클라가 badge 를 서버 권위 값으로 미러링하게 해 +1/-1 산수 drift 를 없앤다.
     @Transactional
     fun read(
         userId: UUID,
         command: NotificationReadCommand,
-    ) {
+    ): Long {
         when (command) {
             NotificationReadCommand.All -> notificationRepository.markAllRead(userId)
             is NotificationReadCommand.Ids -> notificationRepository.markRead(userId, command.ids)
         }
+        return notificationRepository.countUnread(userId)
     }
 }

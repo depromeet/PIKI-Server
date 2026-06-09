@@ -3,6 +3,7 @@ package com.depromeet.piki.notification.controller
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.notification.controller.dto.NotificationHistoryResponse
 import com.depromeet.piki.notification.controller.dto.NotificationReadRequest
+import com.depromeet.piki.notification.controller.dto.NotificationReadResponse
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
@@ -75,14 +76,14 @@ interface NotificationHistoryApi {
             - all=true → 본인 안읽음 알림 전부 읽음 (전체 읽음 버튼, 화면 이동 없음)
             - ids=[...] → 지정한 알림만 읽음 (단건 클릭은 [id] 1개, 클릭 후 FE 가 딥링크로 이동)
             둘 다 보내거나 둘 다 비우면(빈 ids 포함) 400. ids 는 본인 소유만 반영되고 타인·없는 id 는 무시된다. 멱등(이미 읽음도 성공).
-            data 는 없다(200 OK, 204 미사용). 안읽음 수는 클라가 로컬에서 줄이거나 목록 재조회 시 갱신한다.
+            응답 data 의 unreadCount 로 처리 후 안읽음 수(badge)를 서버 권위 값으로 내려준다 — 클라는 이 값을 그대로 badge 로 미러링한다(별도 카운트 조회 불필요).
         """,
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "읽음 처리 성공 (data 없음, 멱등)",
+                description = "읽음 처리 성공 (처리 후 unreadCount 동봉, 멱등)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -115,5 +116,5 @@ interface NotificationHistoryApi {
     fun read(
         @Parameter(hidden = true) userId: UUID,
         request: NotificationReadRequest,
-    ): ApiResponseBody<Unit>
+    ): ApiResponseBody<NotificationReadResponse>
 }

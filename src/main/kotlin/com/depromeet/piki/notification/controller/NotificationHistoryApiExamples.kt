@@ -8,6 +8,7 @@ import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.common.response.PageResponse
 import com.depromeet.piki.notification.controller.dto.NotificationHistoryResponse
 import com.depromeet.piki.notification.controller.dto.NotificationReadRequest
+import com.depromeet.piki.notification.controller.dto.NotificationReadResponse
 import com.depromeet.piki.notification.controller.dto.NotificationSsePayload
 import com.depromeet.piki.notification.domain.NotificationException
 import com.depromeet.piki.notification.domain.NotificationType
@@ -61,8 +62,8 @@ class NotificationHistoryApiExamples(
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.OK,
-                        name = "읽음 처리 성공",
-                        payload = ApiResponseBody.ok<Unit>(),
+                        name = "읽음 처리 성공 (처리 후 unreadCount 동봉)",
+                        payload = ApiResponseBody.ok(data = NotificationReadResponse.of(unreadCount = 2)),
                     )
                     add(
                         status = HttpStatus.BAD_REQUEST,

@@ -160,6 +160,8 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
                     .content("""{"all":true}""")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
+            // 처리 후 안읽음 수를 응답으로 바로 내려준다(badge 미러링용) — 별도 GET 불필요.
+            .andExpect(jsonPath("$.data.unreadCount").value(0))
 
         mockMvc
             .perform(get("/api/v1/notifications").header(HttpHeaders.AUTHORIZATION, authHeader(userId)))
@@ -184,6 +186,8 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
                     .content("""{"ids":[$target,$others]}""")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
+            // target 만 본인 소유라 읽힘 → 본인 안읽음은 untouched 1건 남는다(others 는 타인이라 무영향).
+            .andExpect(jsonPath("$.data.unreadCount").value(1))
 
         // 지정 + 본인 소유만 read. 미지정 본인 것·타인 것은 그대로(소유 검증은 쿼리 user_id 가 겸한다).
         assertTrue(notificationJpaRepository.findById(target).get().isRead)
@@ -231,6 +235,8 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
                         .content("""{"all":true}""")
                         .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
                 ).andExpect(status().isOk)
+                // 멱등 — 이미 읽은 뒤 재요청해도 응답 unreadCount 는 0 으로 흔들리지 않는다.
+                .andExpect(jsonPath("$.data.unreadCount").value(0))
         }
 
         mockMvc
