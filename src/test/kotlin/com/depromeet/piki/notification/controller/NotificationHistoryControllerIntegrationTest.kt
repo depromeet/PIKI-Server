@@ -205,6 +205,19 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `빈 ids 만 보내면 400 이고 detail 에 위반 메시지가 실린다`() {
+        val userId = UUID.randomUUID()
+        buildMockMvc()
+            .perform(
+                post("/api/v1/notifications/read")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"ids":[]}""")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.detail").value("validSelection: ${NotificationReadRequest.VALID_SELECTION_MESSAGE}"))
+    }
+
+    @Test
     fun `read 는 멱등이라 이미 읽은 알림에 다시 보내도 200 이다`() {
         val userId = UUID.randomUUID()
         seed(userId, isRead = false)
