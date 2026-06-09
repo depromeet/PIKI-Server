@@ -2,6 +2,9 @@ package com.depromeet.piki.product.service.http
 
 import org.junit.jupiter.api.Test
 import java.net.InetAddress
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
 
 // 요청 스코프 DNS 캐시가 "한 fetch 동안 host 당 실제 조회 1회"를 보장하는지 검증한다.
@@ -52,5 +55,38 @@ class RequestScopedDnsResolverTest {
         resolver.resolve("29cm.co.kr")
 
         assertEquals(2, calls)
+    }
+
+    @Test
+    fun `스레드(요청) 간 캐시는 공유되지 않는다`() {
+        val calls = AtomicInteger(0)
+        val resolver =
+            RequestScopedDnsResolver {
+                calls.incrementAndGet()
+                arrayOf(InetAddress.getByName("93.184.216.34"))
+            }
+        val threads = 2
+        val ready = CountDownLatch(threads)
+        val start = CountDownLatch(1)
+        val done = CountDownLatch(threads)
+        val executor = Executors.newFixedThreadPool(threads)
+
+        repeat(threads) {
+            executor.submit {
+                ready.countDown()
+                start.await()
+                resolver.resolve("zigzag.kr")
+                resolver.resolve("zigzag.kr") // 같은 스레드 캐시라 1회
+                done.countDown()
+            }
+        }
+        ready.await()
+        start.countDown() // 동시 출발 강제
+        done.await()
+        executor.shutdown()
+
+        // ThreadLocal 이라 스레드(요청)별 캐시가 분리 → 각 스레드가 1회씩 실제 조회 = threads 회.
+        // 캐시가 스레드 간 공유되면 1회로 떨어져 IP pin 의 요청 격리 계약이 깨진다.
+        assertEquals(threads, calls.get())
     }
 }
