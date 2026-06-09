@@ -96,14 +96,36 @@ class AppleOAuthClient(
     // 재사용해 JWKS 캐시를 한 인스턴스에서 공유한다. 알림 JWT 는 aud 가 우리 client_id(Services ID) 또는
     // bundleId 이고, payload 의 events 클레임을 들고 온다. 검증·파싱 실패는 모두 AppleNotificationException(401)로
     // 변환한다 — 이 엔드포인트는 permitAll 이라 서명이 유일한 진위 방어선이고, 위조/비정상 호출은 401 로 거부한다.
-    override fun verify(payloadJwt: String): AppleNotificationEvent {
-        val claims =
+    override fun verify(payloadJwt: String): AppleNotificationEvent = toNotificationEvent(parseNotificationClaims(payloadJwt))
+
+    // 알림 JWT 파싱. id_token 경로(parseWithKidRotationRetry)와 같은 JWKS·kid 회전 로직을 따르되 예외 매핑이 다르다 —
+    // JWKS fetch 실패(외부 의존성)는 providerError(502)로, 서명·claims 파싱 실패(위조)는 invalidSignature(401)로 분기한다.
+    // parseWithKidRotationRetry 를 그대로 쓰면 둘 다 OAuthException.providerError 로 뭉쳐 구분이 불가능해 따로 둔다.
+    private fun parseNotificationClaims(payloadJwt: String): Claims {
+        val jwks =
             try {
-                parseWithKidRotationRetry(payloadJwt)
+                getJwks()
             } catch (e: Exception) {
-                throw AppleNotificationException.invalidSignature(e)
+                throw AppleNotificationException.providerError(e)
             }
-        return toNotificationEvent(claims)
+        return try {
+            parseIdToken(payloadJwt, jwks)
+        } catch (e: Exception) {
+            // 캐시 JWKS 에 없는 kid = Apple 키 회전 가능성 → 캐시 무효화 후 1회 재시도. 그 외(서명 위조·exp·issuer)는 401.
+            if (!isKidRotation(e)) throw AppleNotificationException.invalidSignature(e)
+            jwksCachedAt = 0L
+            val refreshed =
+                try {
+                    getJwks()
+                } catch (re: Exception) {
+                    throw AppleNotificationException.providerError(re)
+                }
+            try {
+                parseIdToken(payloadJwt, refreshed)
+            } catch (retry: Exception) {
+                throw AppleNotificationException.invalidSignature(retry)
+            }
+        }
     }
 
     // 서명·issuer 검증이 끝난 claims 에서 aud 를 확인하고 events 를 파싱한다. 외부 호출(JWKS) 없는 순수 검증이라

@@ -1,7 +1,10 @@
 package com.depromeet.piki.auth.infrastructure.oauth.apple
 
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 class AppleNotificationEventTest {
@@ -22,21 +25,28 @@ class AppleNotificationEventTest {
         assertEquals(AppleNotificationEventType.UNKNOWN, AppleNotificationEvent.parse(json).type)
     }
 
-    @Test
-    fun `sub 가 없으면 null 이다`() {
-        val json = """{"type":"consent-revoked","event_time":1}"""
+    @ParameterizedTest
+    @ValueSource(strings = ["account-delete", "consent-revoked"])
+    fun `탈퇴·세션종료 이벤트는 sub 가 없으면 예외를 던진다`(type: String) {
+        // sub 누락은 비정상 payload — 멱등 무시(200)로 삼키지 않고 형식 오류로 막아 호출자가 401 로 거부하게 한다.
+        val json = """{"type":"$type","event_time":1}"""
 
-        val event = AppleNotificationEvent.parse(json)
+        assertFailsWith<IllegalArgumentException> { AppleNotificationEvent.parse(json) }
+    }
 
-        assertEquals(AppleNotificationEventType.CONSENT_REVOKED, event.type)
-        assertNull(event.sub)
+    @ParameterizedTest
+    @ValueSource(strings = ["account-delete", "consent-revoked"])
+    fun `탈퇴·세션종료 이벤트는 sub 가 공백이면 예외를 던진다`(type: String) {
+        val json = """{"type":"$type","sub":"   "}"""
+
+        assertFailsWith<IllegalArgumentException> { AppleNotificationEvent.parse(json) }
     }
 
     @Test
-    fun `sub 가 공백이면 null 로 정규화한다`() {
-        val json = """{"type":"account-delete","sub":"   "}"""
-
-        assertNull(AppleNotificationEvent.parse(json).sub)
+    fun `email·unknown 이벤트는 sub 가 없어도 허용한다 (로그만 하므로 대상 유저 불필요)`() {
+        assertNull(AppleNotificationEvent.parse("""{"type":"email-disabled"}""").sub)
+        assertNull(AppleNotificationEvent.parse("""{"type":"email-enabled"}""").sub)
+        assertNull(AppleNotificationEvent.parse("""{"type":"foo-bar"}""").sub)
     }
 
     @Test

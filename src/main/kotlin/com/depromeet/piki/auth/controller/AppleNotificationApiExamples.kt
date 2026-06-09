@@ -26,6 +26,8 @@ class AppleNotificationApiExamples(
                     )
                     // 서명/issuer/aud 검증 실패 → 401. detail·category 를 예외 정의에서 자동 추출(손으로 박지 않음).
                     add(AppleNotificationException.invalidSignature(), name = "유효하지 않은 Apple 알림")
+                    // JWKS 조회 실패 → 502. add(exception) 은 message·category·status 만 쓰므로 cause 는 더미.
+                    add(AppleNotificationException.providerError(RuntimeException()), name = "Apple 키 조회 실패 (재시도 가능)")
                 }
             }
             operation

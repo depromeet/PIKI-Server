@@ -25,5 +25,15 @@ class AppleNotificationException private constructor(
                 HttpStatus.UNAUTHORIZED,
                 cause,
             )
+
+        // 서명 검증에 필요한 Apple JWKS(/auth/keys) 조회 실패 — 우리 밖 의존성 장애라 위조와 구분해 502 로 올린다.
+        // 위조(invalidSignature, 401)와 한데 묶으면 JWKS 일시 장애가 위조 공격으로 오진돼 운영 알람·재시도 해석이 어긋난다.
+        fun providerError(cause: Throwable): AppleNotificationException =
+            AppleNotificationException(
+                "Apple 알림 검증 중 외부 키 조회에 실패했습니다.",
+                ErrorCategory.RETRYABLE,
+                HttpStatus.BAD_GATEWAY,
+                cause,
+            )
     }
 }

@@ -55,6 +55,16 @@ interface AppleNotificationApi {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "502",
+                description = "외부 의존성 실패 (서명 검증에 필요한 Apple JWKS 조회 실패 — 재시도 가능)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
         ],
     )
     fun handle(

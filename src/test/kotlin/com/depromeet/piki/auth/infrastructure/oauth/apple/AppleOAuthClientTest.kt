@@ -407,6 +407,15 @@ class AppleOAuthClientTest {
             val ex = assertFailsWith<AppleNotificationException> { client.toNotificationEvent(claims) }
             assertEquals(401, ex.httpStatus.value())
         }
+
+        @Test
+        fun `events JSON 이 손상되면 401 로 거부한다`() {
+            val client = AppleOAuthClient(props())
+            val claims = eventClaims(audience = "com.test.service", eventsJson = "{not-json")
+
+            val ex = assertFailsWith<AppleNotificationException> { client.toNotificationEvent(claims) }
+            assertEquals(401, ex.httpStatus.value())
+        }
     }
 
     // ---- helpers ----

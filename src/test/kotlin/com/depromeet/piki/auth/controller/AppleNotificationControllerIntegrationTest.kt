@@ -11,6 +11,8 @@ import com.depromeet.piki.user.domain.IdentityType
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceContext
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
@@ -191,27 +193,29 @@ class AppleNotificationControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data").value(null))
     }
 
-    @Test
-    fun `email 릴레이 이벤트는 아무 상태 변경 없이 200 이 반환된다`() {
+    @ParameterizedTest
+    @EnumSource(
+        value = AppleNotificationEventType::class,
+        names = ["EMAIL_DISABLED", "EMAIL_ENABLED", "UNKNOWN"],
+    )
+    fun `상태 변경 없는 이벤트는 계정을 건드리지 않고 200 으로 흡수한다`(type: AppleNotificationEventType) {
+        // no-op 계열(email 릴레이 on·off, 미지원 타입). UNKNOWN→200 계약이 깨지면 Apple 재시도로 운영 부담이 커지므로 함께 고정한다.
         val userId = UUID.randomUUID()
         val socialId = "apple_sub_${userId.toString().take(8)}"
         insertAppleUser(userId, socialId, nickname = "애플멤버")
-        stubAppleNotificationVerifier.verifyStub = {
-            AppleNotificationEvent(AppleNotificationEventType.EMAIL_DISABLED, socialId)
-        }
+        stubAppleNotificationVerifier.verifyStub = { AppleNotificationEvent(type, socialId) }
 
         postNotification().andExpect(status().isOk)
 
         entityManager.flush()
         entityManager.clear()
 
-        // 계정 그대로
         val deletedAt =
             jdbcTemplate.queryForObject(
                 "SELECT deleted_at FROM users WHERE id = ?",
                 java.sql.Timestamp::class.java,
                 uuidToBytes(userId),
             )
-        assertNull(deletedAt, "email 이벤트는 계정 상태를 바꾸지 않는다")
+        assertNull(deletedAt, "$type 이벤트는 계정 상태를 바꾸지 않는다")
     }
 }
