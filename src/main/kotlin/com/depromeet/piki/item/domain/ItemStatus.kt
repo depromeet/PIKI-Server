@@ -9,12 +9,14 @@ enum class ItemStatus {
     PENDING,
 
     // 디스패처가 claim 했거나(URL) 등록 즉시 시작된(이미지) 파싱 진행 중. name·currentPrice·imageUrl 은 아직 비어 있다.
+    // 워커 크래시·실행 누락으로 여기 갇힌 행은 recover 가 재실행으로 되살린다(execution at-least-once, #461) — 재시도 중도 이 상태다.
     PROCESSING,
 
     // 파싱 완료. 추출된 상품 정보가 채워졌다.
     READY,
 
-    // 파싱 실패. 상품 페이지가 아니거나(notProductPage) 추출값을 신뢰할 수 없거나(untrustworthyValue)
-    // 인스턴스 크래시 등으로 타임아웃됐다. 동기 400 이 아니라 상태로 표현해 클라이언트가 폴링으로 인지한다.
+    // 파싱 실패. 두 갈래다: (1) 확정 실패 — 상품 페이지가 아니거나(notProductPage) 추출값을 신뢰할 수 없음(untrustworthyValue).
+    // 재시도해도 결과가 같으므로 워커가 즉시 종결한다. (2) 재시도 소진 — 일시 외부 오류·크래시로 실행이 끝나지 않은 행을
+    // recover 가 재실행 상한(현재 2회)까지 되살려봤으나 끝내 완료하지 못함. 동기 400 이 아니라 상태로 표현해 클라이언트가 폴링으로 인지한다.
     FAILED,
 }

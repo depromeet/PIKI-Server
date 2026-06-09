@@ -8,7 +8,8 @@ import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 import java.util.concurrent.Executor
 
-// 등록 시 item 파싱(외부 LLM 호출, read-timeout 60s)을 HTTP 응답과 분리해 백그라운드로 돌리기 위한 executor.
+// 등록 시 item 파싱(외부 LLM 호출)을 HTTP 응답과 분리해 백그라운드로 돌리기 위한 executor.
+// 단건 파싱은 60s 안에 끝나도록 외부 timeout 을 잡아 둔다(#461, Gemini read 30s + 내부 재시도 off + fetch 약 20s ≤ 약 55s).
 // 단일 인스턴스 MVP 기준의 보수적 풀 크기다. 운영 트래픽이 보이면 application.yml 로 빼 튜닝한다.
 @Configuration
 @EnableAsync
@@ -28,9 +29,10 @@ class AsyncConfig {
             // ContextSnapshot 으로 등록된 모든 ThreadLocalAccessor(brave trace context·MDC 등)를 전파한다.
             setTaskDecorator(ContextPropagatingTaskDecorator())
             // 포화 시 기본 AbortPolicy 로 거부한다. 호출 스레드(톰캣)에서 동기 실행하는 CallerRunsPolicy 는
-            // 외부 LLM 호출(최대 60s)로 톰캣 워커 풀을 고갈시켜 무관한 API 까지 번지므로 쓰지 않는다.
-            // 거부는 호출부(WishlistService.register, TournamentItemService.addItemsFromImages 등)가 잡아
-            // 해당 item 을 즉시 FAILED 로 떨어뜨린다(PROCESSING 방치 금지).
+            // 외부 LLM 호출로 톰캣 워커 풀을 고갈시켜 무관한 API 까지 번지므로 쓰지 않는다.
+            // 거부 처리는 경로마다 다르다: URL 파싱은 디스패처(ItemParsingScheduler)가 거부 시 PROCESSING 그대로 둬
+            // recover 가 재실행하고(execution at-least-once, #461), 이미지 파싱은 등록 경로가 거부를 잡아 즉시 FAILED 로
+            // 떨어뜨린다(이미지는 원본이 메모리 ByteArray 라 되살릴 수 없음).
             initialize()
         }
 
