@@ -27,7 +27,8 @@ import java.util.Date
 
 class AppleOAuthClient(
     private val props: AppleProperties,
-) : OAuthClient {
+) : OAuthClient,
+    AppleNotificationVerifier {
     override val provider = OAuthProvider.APPLE
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -90,6 +91,37 @@ class AppleOAuthClient(
     // v2: iOS SDK 가 발급한 identityToken(JWT)을 직접 검증. aud = bundleId (Bundle ID).
     override fun fetchUserInfoByAccessToken(accessToken: String): OAuthUserInfo =
         verifyIdTokenAndExtract(accessToken, expectedAud = props.bundleId)
+
+    // Apple 서버-서버 알림 검증. id_token 과 같은 JWKS·issuer·kid 회전 인프라(parseWithKidRotationRetry)를
+    // 재사용해 JWKS 캐시를 한 인스턴스에서 공유한다. 알림 JWT 는 aud 가 우리 client_id(Services ID) 또는
+    // bundleId 이고, payload 의 events 클레임을 들고 온다. 검증·파싱 실패는 모두 AppleNotificationException(401)로
+    // 변환한다 — 이 엔드포인트는 permitAll 이라 서명이 유일한 진위 방어선이고, 위조/비정상 호출은 401 로 거부한다.
+    override fun verify(payloadJwt: String): AppleNotificationEvent {
+        val claims =
+            try {
+                parseWithKidRotationRetry(payloadJwt)
+            } catch (e: Exception) {
+                throw AppleNotificationException.invalidSignature(e)
+            }
+        return toNotificationEvent(claims)
+    }
+
+    // 서명·issuer 검증이 끝난 claims 에서 aud 를 확인하고 events 를 파싱한다. 외부 호출(JWKS) 없는 순수 검증이라
+    // 단위 테스트가 직접 호출한다 — aud 위조·events 누락 같은 보안 경로를 stub 없이 망라한다.
+    // aud 는 우리 client_id(Services ID) 또는 bundleId 여야 한다. 불일치·형식 오류는 AppleNotificationException(401).
+    internal fun toNotificationEvent(claims: Claims): AppleNotificationEvent {
+        val aud = claims.audience ?: emptySet()
+        if (aud.none { it == props.clientId || it == props.bundleId }) {
+            log.warn("Apple 알림 aud 불일치: actual={}", aud)
+            throw AppleNotificationException.invalidSignature()
+        }
+        val eventsJson = claims["events"] as? String ?: throw AppleNotificationException.invalidSignature()
+        return try {
+            AppleNotificationEvent.parse(eventsJson)
+        } catch (e: Exception) {
+            throw AppleNotificationException.invalidSignature(e)
+        }
+    }
 
     private fun verifyIdTokenAndExtract(
         idToken: String,

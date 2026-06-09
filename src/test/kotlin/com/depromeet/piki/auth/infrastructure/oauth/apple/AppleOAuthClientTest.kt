@@ -328,6 +328,87 @@ class AppleOAuthClientTest {
         }
     }
 
+    @Nested
+    inner class VerifyNotification {
+        // 서버-서버 알림 검증의 순수 부분(aud 검증 + events 파싱)을 외부 호출(JWKS) 없이 망라한다.
+        // 서명·issuer·kid 검증은 id_token 과 같은 parseIdToken 경로라 위 VerifyIdToken·KidRotation 테스트가 커버한다.
+
+        private fun eventClaims(
+            audience: String,
+            eventsJson: String?,
+        ): io.jsonwebtoken.Claims {
+            val client = AppleOAuthClient(props())
+            val now = Date()
+            val builder =
+                Jwts
+                    .builder()
+                    .header()
+                    .add("kid", testKid)
+                    .and()
+                    .issuer("https://appleid.apple.com")
+                    .audience()
+                    .add(audience)
+                    .and()
+                    .issuedAt(now)
+                    .expiration(Date(now.time + 60_000))
+            eventsJson?.let { builder.claim("events", it) }
+            val token = builder.signWith(testKeyPair.private).compact()
+            return client.parseIdToken(token, testJwksJson)
+        }
+
+        @Test
+        fun `aud 가 clientId 와 일치하면 events 를 파싱해 반환한다`() {
+            val client = AppleOAuthClient(props())
+            val claims =
+                eventClaims(
+                    audience = "com.test.service",
+                    eventsJson = """{"type":"account-delete","sub":"001234.abc","event_time":1700000000000}""",
+                )
+
+            val event = client.toNotificationEvent(claims)
+
+            assertEquals(AppleNotificationEventType.ACCOUNT_DELETE, event.type)
+            assertEquals("001234.abc", event.sub)
+        }
+
+        @Test
+        fun `aud 가 bundleId 와 일치해도 통과한다`() {
+            val client = AppleOAuthClient(props())
+            val claims =
+                eventClaims(
+                    audience = "com.test.app",
+                    eventsJson = """{"type":"consent-revoked","sub":"002.def"}""",
+                )
+
+            val event = client.toNotificationEvent(claims)
+
+            assertEquals(AppleNotificationEventType.CONSENT_REVOKED, event.type)
+            assertEquals("002.def", event.sub)
+        }
+
+        @Test
+        fun `aud 가 우리 client_id 가 아니면 401 로 거부한다 (위조 방어)`() {
+            val client = AppleOAuthClient(props())
+            val claims =
+                eventClaims(
+                    audience = "com.attacker.service",
+                    eventsJson = """{"type":"account-delete","sub":"001"}""",
+                )
+
+            val ex = assertFailsWith<AppleNotificationException> { client.toNotificationEvent(claims) }
+            assertEquals(401, ex.httpStatus.value())
+        }
+
+        @Test
+        fun `events 클레임이 없으면 401 로 거부한다`() {
+            val client = AppleOAuthClient(props())
+            val claims = eventClaims(audience = "com.test.service", eventsJson = null)
+
+            val ex = assertFailsWith<AppleNotificationException> { client.toNotificationEvent(claims) }
+            assertEquals(401, ex.httpStatus.value())
+        }
+    }
+
     // ---- helpers ----
 
     private fun signAppleIdToken(
