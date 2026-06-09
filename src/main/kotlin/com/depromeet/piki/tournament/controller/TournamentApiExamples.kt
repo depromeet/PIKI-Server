@@ -245,6 +245,7 @@ class TournamentApiExamples(
                                         status = TournamentStatus.PENDING,
                                         isOwner = true,
                                         isRoot = true,
+                                        sourceTournamentId = null,
                                         pending =
                                             TournamentDetailResponse.PendingData(
                                                 inviteCode = "ABC123",
@@ -299,6 +300,7 @@ class TournamentApiExamples(
                                         status = TournamentStatus.IN_PROGRESS,
                                         isOwner = false,
                                         isRoot = true,
+                                        sourceTournamentId = null,
                                         pending =
                                             TournamentDetailResponse.PendingData(
                                                 inviteCode = null,
@@ -348,15 +350,16 @@ class TournamentApiExamples(
                         )
                         add(
                             status = HttpStatus.OK,
-                            name = "IN_PROGRESS - 진행 중 복원",
+                            name = "IN_PROGRESS - 진행 중 복원 (CLONE)",
                             payload =
                                 ApiResponseBody.ok(
                                     TournamentDetailResponse(
-                                        tournamentId = 1,
+                                        tournamentId = 2,
                                         name = "내 토너먼트",
                                         status = TournamentStatus.IN_PROGRESS,
                                         isOwner = false,
                                         isRoot = false,
+                                        sourceTournamentId = 1,
                                         pending = null,
                                         inProgress =
                                             TournamentDetailResponse.InProgressData(
@@ -405,6 +408,7 @@ class TournamentApiExamples(
                                         status = TournamentStatus.COMPLETED,
                                         isOwner = true,
                                         isRoot = true,
+                                        sourceTournamentId = null,
                                         pending = null,
                                         inProgress = null,
                                         completed =
