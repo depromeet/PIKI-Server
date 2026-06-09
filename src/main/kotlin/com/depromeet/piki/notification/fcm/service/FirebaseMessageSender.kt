@@ -130,20 +130,24 @@ class FirebaseMessageSender(
         internal fun isStaleToken(code: MessagingErrorCode?): Boolean = code == MessagingErrorCode.UNREGISTERED
 
         // 백그라운드 수신 시 클라가 딥링크를 복원하려고 읽는 data 키 — FE 와 공유하는 contract.
-        // 값은 NotificationSsePayload 의 필드명(type·refId·kind·tournamentId·tournamentItemId)과 일치시켜,
-        // 클라가 SSE/FCM 어느 채널로 받든 같은 키로 딥링크를 읽게 한다. (SSE 는 data class 프로퍼티명을 Jackson 이
+        // 값은 NotificationSsePayload 의 필드명(id·type·refId·kind·tournamentId·tournamentItemId)과 일치시켜,
+        // 클라가 SSE/FCM 어느 채널로 받든 같은 키로 같은 알림을 다루게 한다. (SSE 는 data class 프로퍼티명을 Jackson 이
         //  직렬화하므로 그 쪽은 같은 문자열을 상수로 빼지 못한다 — 이 상수의 값으로 일치를 맞춘다.)
+        // id 는 채널 무관 dedup(SSE·FCM 중복 수신 시 같은 알림으로 합침)과 푸시 탭 → 읽음 처리(POST /read {ids:[id]})의 키다(#246).
+        private const val DATA_KEY_ID = "id"
         private const val DATA_KEY_TYPE = "type"
         private const val DATA_KEY_REF_ID = "refId"
         private const val DATA_KEY_KIND = "kind"
         private const val DATA_KEY_TOURNAMENT_ID = "tournamentId"
         private const val DATA_KEY_TOURNAMENT_ITEM_ID = "tournamentItemId"
 
-        // FCM data payload(키→값) 구성 — type·refId 는 항상, 라우팅 컨텍스트(kind·tournamentId·tournamentItemId)는
+        // FCM data payload(키→값) 구성 — id·type·refId 는 항상, 라우팅 컨텍스트(kind·tournamentId·tournamentItemId)는
         // 있을 때만 싣는다. FCM data 는 값이 null 일 수 없어 null 키는 아예 넣지 않는다(#408). FirebaseMessaging
         // 호출과 무관한 순수 매핑이라 companion 으로 분리해 단위 테스트로 분기를 망라한다(FirebaseApp 없이 검증).
+        // notification 은 dispatcher 가 이미 저장한 영속 엔티티라 getId() 가 보장된다(SsePayload.from 과 동일 전제).
         internal fun buildDataPayload(notification: Notification): Map<String, String> =
             buildMap {
+                put(DATA_KEY_ID, notification.getId().toString())
                 put(DATA_KEY_TYPE, notification.type.name)
                 put(DATA_KEY_REF_ID, notification.refId.toString())
                 // SSE payload 와 같은 routing() sealed 를 분기해 두 채널이 한 소스를 쓴다. FCM data 는 값이 null 일 수 없어
