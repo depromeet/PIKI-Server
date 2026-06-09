@@ -17,6 +17,7 @@ sealed class TournamentDetail {
         // ROOT 가 IN_PROGRESS 로 전환됐으나 이 멤버는 아직 매치를 시작하지 않은 상태.
         // true 이면 클라이언트가 "주최자가 시작했습니다, 지금 시작하세요" UI 를 보여야 한다.
         val ownerStarted: Boolean = false,
+        val sourceTournamentId: Long? = null,
     ) : TournamentDetail()
 
     data class InProgress(
@@ -27,6 +28,7 @@ sealed class TournamentDetail {
         val remainingItems: List<ItemDetail>,
         val isOwner: Boolean,
         val isRoot: Boolean,
+        val sourceTournamentId: Long? = null,
     ) : TournamentDetail()
 
     data class Completed(
@@ -37,6 +39,7 @@ sealed class TournamentDetail {
         val isOwner: Boolean,
         val isRoot: Boolean,
         val playLinkExpiresAt: java.time.LocalDateTime?,
+        val sourceTournamentId: Long? = null,
     ) : TournamentDetail()
 
     data class ItemDetail(

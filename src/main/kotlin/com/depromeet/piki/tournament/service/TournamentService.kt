@@ -321,6 +321,7 @@ class TournamentService(
                         },
                     isOwner = isOwner,
                     isRoot = isRoot,
+                    sourceTournamentId = tournament.sourceTournamentId,
                 )
             }
 
@@ -376,6 +377,7 @@ class TournamentService(
                     remainingItems = remainingItems,
                     isOwner = isOwner,
                     isRoot = isRoot,
+                    sourceTournamentId = tournament.sourceTournamentId,
                 )
             }
 
@@ -614,6 +616,7 @@ class TournamentService(
             isOwner = isOwner,
             isRoot = isRoot,
             playLinkExpiresAt = tournament.playLinkExpiresAt,
+            sourceTournamentId = tournament.sourceTournamentId,
         )
     }
 

@@ -73,6 +73,7 @@ interface TournamentApi {
             토너먼트 ID로 상태에 따른 상세 정보를 조회한다.
             isOwner: 요청자가 해당 토너먼트 인스턴스(ROOT 또는 CLONE)의 소유자이면 true.
             isRoot: 소셜 토너먼트 원본(ROOT)이면 true, 멤버·플레이링크용 복사본(CLONE)이면 false. 솔로 토너먼트는 항상 true.
+            sourceTournamentId: CLONE 토너먼트이면 원본 ROOT의 id, ROOT이면 null. 게스트는 이 id로 GET /tournaments/{sourceTournamentId}/group-result를 호출한다.
             플레이 링크 공유는 isRoot && isOwner 일 때만 허용된다. isOwner 단독으로 분기하면 CLONE 소유자에게도 공유 버튼이 노출되어 시안 위반이다.
             응답의 status 필드에 따라 포함되는 데이터가 달라진다.
             - PENDING: pending 필드 (아이템 목록, 참여자 목록)
