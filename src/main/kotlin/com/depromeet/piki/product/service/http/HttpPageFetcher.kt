@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component
 import org.springframework.web.client.ResourceAccessException
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestClientResponseException
+import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.URI
@@ -152,12 +153,23 @@ class HttpPageFetcher(
             addr.isLinkLocalAddress ||
             addr.isMulticastAddress ||
             isUniqueLocalIpv6(addr) ||
+            isCarrierGradeNatIpv4(addr) ||
             // AWS / GCP IPv4 메타데이터(169.254.169.254 는 link-local 이라 위에서 잡히지만 방어적으로 명시).
             addr.hostAddress == "169.254.169.254"
 
     // IPv6 Unique Local Address(fc00::/7). 첫 바이트의 상위 7비트가 1111110 (0xfc 또는 0xfd)이면 ULA 다.
     private fun isUniqueLocalIpv6(addr: InetAddress): Boolean =
         addr is Inet6Address && (((addr.address.firstOrNull()?.toInt() ?: 0) and 0xfe) == 0xfc)
+
+    // IPv4 Carrier-Grade NAT(100.64.0.0/10). 외부 라우팅이 안 되는 캐리어 NAT 대역으로, 일부 클라우드
+    // 메타데이터 엔드포인트(예: 100.100.100.200)가 여기 속해 SSRF 차단 대상이다.
+    private fun isCarrierGradeNatIpv4(addr: InetAddress): Boolean {
+        if (addr !is Inet4Address) return false
+        val bytes = addr.address
+        val first = bytes[0].toInt() and 0xFF
+        val second = bytes[1].toInt() and 0xFF
+        return first == 100 && second in 64..127
+    }
 
     companion object {
         // 같은 회사 도메인 안에서의 www↔non-www·http→https 정도라 한두 번이면 충분. 무한·체인 redirect 는 여기서 끊는다.

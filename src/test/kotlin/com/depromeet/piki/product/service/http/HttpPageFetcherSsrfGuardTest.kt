@@ -29,6 +29,8 @@ class HttpPageFetcherSsrfGuardTest {
             "::1", // IPv6 loopback
             "fc00::1", // IPv6 ULA
             "fd00:ec2::254", // IPv6 ULA (클라우드 IPv6 메타데이터 대역)
+            "100.64.0.1", // CGNAT (100.64.0.0/10)
+            "100.100.100.200", // CGNAT — 일부 클라우드 메타데이터 엔드포인트
         ],
     )
     fun `내부·메타데이터 주소는 차단된다`(ip: String) {
