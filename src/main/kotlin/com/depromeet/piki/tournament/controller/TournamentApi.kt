@@ -650,13 +650,15 @@ interface TournamentApi {
         description = """
             플레이 링크가 유효한 토너먼트와 동일한 아이템 구성으로 새 토너먼트를 생성한다.
             생성된 토너먼트는 PENDING 상태이며 아이템이 미리 복사되어 있어 바로 시작할 수 있다.
+            idempotent: 같은 사용자가 같은 원본의 플레이 링크를 다시 호출하면 새로 만들지 않고
+            기존 본인 클론의 tournamentId 를 그대로 반환한다 (원본 링크 만료와 무관하게 이어서 진행 가능).
         """,
     )
     @ApiResponses(
         value = [
             ApiResponse(
-                responseCode = "201",
-                description = "복제 토너먼트 생성 성공 (tournamentId 반환)",
+                responseCode = "200",
+                description = "복제 토너먼트 생성 또는 기존 본인 클론 반환 (tournamentId 반환)",
                 content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
             ApiResponse(
@@ -671,7 +673,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "상태 충돌 (플레이 링크 만료 · 이미 해당 플레이 링크로 토너먼트를 생성한 경우)",
+                description = "상태 충돌 (플레이 링크 만료)",
                 content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
         ],

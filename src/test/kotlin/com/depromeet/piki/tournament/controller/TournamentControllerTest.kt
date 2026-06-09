@@ -2108,7 +2108,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .perform(
                 post("/api/v1/tournaments/$tournamentId/from-play-link")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
-            ).andExpect(status().isCreated)
+            ).andExpect(status().isOk)
             .andExpect(jsonPath("$.data").isNumber)
             .andReturn()
 
@@ -2122,7 +2122,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `POST from-play-link 는 같은 유저가 동일 플레이 링크로 재복제 시 409 를 반환한다`() {
+    fun `POST from-play-link 는 같은 유저가 동일 플레이 링크로 재호출 시 200 으로 기존 클론 id 를 반환한다`() {
         val mockMvc = buildMockMvc()
         saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
         val (tournamentId, _, _) = completeTournamentWith2Items(mockMvc)
@@ -2132,11 +2132,75 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"),
         )
-        mockMvc.perform(
-            post("/api/v1/tournaments/$tournamentId/from-play-link")
-                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
-        )
+        val firstResult = mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/from-play-link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isOk)
+            .andReturn()
+        val firstCloneId = objectMapper.readTree(firstResult.response.contentAsString)["data"].asLong()
 
+        // 재호출은 새로 만들지 않고 기존 본인 클론 id 를 그대로 반환한다 (idempotent get-or-create).
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/from-play-link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data").value(firstCloneId))
+
+        // 클론은 정확히 1개만 생성된다.
+        assertEquals(1, tournamentJpaRepository.findAll().count { it.sourceTournamentId == tournamentId })
+    }
+
+    @Test
+    fun `POST from-play-link 는 원본 플레이 링크가 만료돼도 이미 만든 본인 클론 id 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+        val (tournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+        val firstResult = mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/from-play-link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isOk)
+            .andReturn()
+        val cloneId = objectMapper.readTree(firstResult.response.contentAsString)["data"].asLong()
+
+        // 원본 플레이 링크를 만료시킨다.
+        val source = tournamentJpaRepository.findByIdAndDeletedAtIsNull(tournamentId)!!
+        source.expirePlayLink()
+        tournamentJpaRepository.save(source)
+
+        // 이미 만든 본인 클론은 원본 링크 만료와 무관하게 그대로 반환된다 (이어서 진행하기).
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/from-play-link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data").value(cloneId))
+    }
+
+    @Test
+    fun `POST from-play-link 는 클론이 없는 유저가 만료된 플레이 링크로 호출하면 409 를 반환한다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+        val (tournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+        val source = tournamentJpaRepository.findByIdAndDeletedAtIsNull(tournamentId)!!
+        source.expirePlayLink()
+        tournamentJpaRepository.save(source)
+
+        // 아직 본인 클론이 없는 유저는 신규 생성 경로의 만료 검증에 걸려 409.
         mockMvc
             .perform(
                 post("/api/v1/tournaments/$tournamentId/from-play-link")

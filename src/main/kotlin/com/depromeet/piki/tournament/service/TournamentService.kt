@@ -730,16 +730,20 @@ class TournamentService(
         val sourceTournament =
             tournamentRepository.findTournamentByIdForUpdate(sourceTournamentId)
                 ?: throw TournamentException.notFoundTournament()
-        sourceTournament.playLinkExpiresAt ?: throw TournamentException.playLinkNotCreated()
-        if (!sourceTournament.isPlayLinkValid()) throw TournamentException.playLinkExpired()
 
+        // get-or-create: 이미 본인 클론이 있으면 그 id 로 "이어서 진행하기".
+        // 원본 플레이링크 만료와 무관하게 돌려준다 — 클론은 자체 라이프사이클을 가진다.
         val existingTournamentIds = tournamentUserRepository
             .findTournamentIdsByUserId(userId)
             .toSet()
-        val alreadyCloned = tournamentRepository
+        tournamentRepository
             .findBySourceTournamentId(sourceTournamentId)
-            .any { it.getId() in existingTournamentIds }
-        if (alreadyCloned) throw TournamentException.alreadyCloned()
+            .firstOrNull { it.getId() in existingTournamentIds }
+            ?.let { return it.getId() }
+
+        // 신규 클론 생성 경로에서만 플레이링크 유효성을 검증한다.
+        sourceTournament.playLinkExpiresAt ?: throw TournamentException.playLinkNotCreated()
+        if (!sourceTournament.isPlayLinkValid()) throw TournamentException.playLinkExpired()
 
         val inviteCode = generateUniqueInviteCode()
         val newTournament = tournamentRepository.saveTournament(

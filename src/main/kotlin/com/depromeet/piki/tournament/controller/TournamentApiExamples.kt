@@ -563,10 +563,14 @@ class TournamentApiExamples(
                 handlerMethod.binds(TournamentController::createFromPlayLink) ->
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
-                            status = HttpStatus.CREATED,
-                            name = "복제 토너먼트 생성 성공",
-                            payload = ApiResponseBody.created(42L),
+                            status = HttpStatus.OK,
+                            name = "복제 토너먼트 생성 또는 기존 본인 클론 반환",
+                            payload = ApiResponseBody.ok(42L),
                         )
+                        unauthorized()
+                        add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
+                        add(TournamentException.playLinkNotCreated(), name = "플레이 링크가 생성되지 않은 토너먼트")
+                        add(TournamentException.playLinkExpired(), name = "플레이 링크 만료")
                     }
 
                 handlerMethod.binds(TournamentController::getGroupResult) ->
