@@ -791,15 +791,24 @@ class TournamentService(
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         tournament.sourceTournamentId?.let { throw TournamentException.clonedTournamentCannotViewGroupResult() }
-        val requesterRootTU = tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
-            ?: throw TournamentException.forbiddenTournament()
         val allClones = tournamentRepository.findBySourceTournamentId(tournamentId)
-        // Progressive gate: 요청자 본인이 완료했고 전체 완료 인원 ≥2 일 때 그룹 결과를 조회할 수 있다.
-        val requesterHasCompleted = if (requesterRootTU.getId() == tournament.ownerTournamentUserId) {
-            requesterRootTU.isCompleted()
+        val requesterRootTU = tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+        val cloneOwnerTUById = tournamentUserRepository
+            .findByIds(allClones.map { it.ownerTournamentUserId }.toSet())
+            .associateBy { it.getId() }
+        // 본인이 소유한 CLONE (멤버·게스트). 게스트는 ROOT TU 없이 본인 CLONE 만 가진다.
+        val requesterOwnedClone = allClones.firstOrNull { cloneOwnerTUById[it.ownerTournamentUserId]?.userId == userId }
+        // 참여자(ROOT TU 또는 ROOT 클론 소유자)가 아니면 조회 불가.
+        // 정책 변경: 게스트(완료된 플레이링크 CLONE 소유자)도 그룹 결과를 조회할 수 있다.
+        requesterRootTU ?: requesterOwnedClone ?: throw TournamentException.forbiddenTournament()
+
+        // Progressive gate: 본인 플레이가 완료됐고 전체 완료 인원 ≥2 일 때만 조회 가능하다.
+        // 주최자는 ROOT 진행, 멤버·게스트는 본인 CLONE 진행이 완료 기준이다.
+        val requesterIsOwner = requesterRootTU?.getId() == tournament.ownerTournamentUserId
+        val requesterHasCompleted = if (requesterIsOwner) {
+            requesterRootTU?.isCompleted() ?: false
         } else {
-            val cloneTUs = tournamentUserRepository.findByTournamentIds(allClones.map { it.getId() })
-            cloneTUs.any { it.userId == userId && it.isCompleted() }
+            requesterOwnedClone?.isCompleted() ?: false
         }
         if (!requesterHasCompleted || !computeHasGroupResult(tournament)) {
             throw TournamentException.groupResultNotAvailable()
@@ -811,8 +820,7 @@ class TournamentService(
 
         val completedRootTUs = tournamentUserRepository.findCompletedByTournamentId(tournamentId)
         val completedClones = allClones.filter { it.isCompleted() }
-        val cloneOwnerTUs = tournamentUserRepository.findByIds(completedClones.map { it.ownerTournamentUserId }.toSet())
-        val cloneOwnerTUById = cloneOwnerTUs.associateBy { it.getId() }
+        // cloneOwnerTUById 는 위 권한 게이트에서 allClones 전체로 구해 재사용한다 (completedClones ⊆ allClones).
 
         val plays = buildList {
             completedRootTUs.forEach { tu -> add(Play(tournamentId, tu.getId(), tu.userId)) }
