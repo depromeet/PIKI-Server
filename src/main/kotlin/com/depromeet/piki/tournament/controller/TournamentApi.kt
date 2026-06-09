@@ -71,14 +71,21 @@ interface TournamentApi {
         summary = "토너먼트 단건 조회",
         description = """
             토너먼트 ID로 상태에 따른 상세 정보를 조회한다.
-            isOwner: 요청자가 토너먼트 소유자이면 true. 클라이언트는 이 값으로 위시 추가·플레이링크 공유 버튼 등 소유자 전용 UI를 제어한다.
+            isOwner: 요청자가 해당 토너먼트 인스턴스(ROOT 또는 CLONE)의 소유자이면 true.
+            isRoot: 소셜 토너먼트 원본(ROOT)이면 true, 멤버·플레이링크용 복사본(CLONE)이면 false. 솔로 토너먼트는 항상 true.
+            플레이 링크 공유는 isRoot && isOwner 일 때만 허용된다. isOwner 단독으로 분기하면 CLONE 소유자에게도 공유 버튼이 노출되어 시안 위반이다.
             응답의 status 필드에 따라 포함되는 데이터가 달라진다.
             - PENDING: pending 필드 (아이템 목록, 참여자 목록)
-              - 각 아이템에 status 포함 (READY / PROCESSING / FAILED). PROCESSING 이면 name·price·imageUrl 은 null 이라 응답에서 제외됨
-            - IN_PROGRESS: inProgress 필드
-              - currentRound: 다음에 진행할 라운드 번호
-              - lastHistory: 가장 최근에 기록된 매치 결과. 라운드 전환 직후에는 currentRound와 다른 라운드의 매치일 수 있음. 매치 기록이 없으면 null
-              - remainingItems: 현재 라운드에서 아직 대결하지 않은 생존 아이템 목록, 가격 오름차순. 이 순서가 클라이언트의 매치 페어링 순서([0]vs[1], [2]vs[3] …)를 결정함. 각 아이템에 status 포함
+              - 각 아이템에 status 포함 (READY / PENDING / PROCESSING / FAILED). PENDING·PROCESSING 이면 name·price·imageUrl 은 null 이라 응답에서 제외됨
+              - pending.ownerStarted = false
+            - IN_PROGRESS: 요청자 역할에 따라 두 가지 응답이 있다.
+              - 소유자(isOwner=true) 또는 이미 매치를 시작한 멤버: inProgress 필드
+                - currentRound: 다음에 진행할 라운드 번호
+                - lastHistory: 가장 최근에 기록된 매치 결과. 라운드 전환 직후에는 currentRound와 다른 라운드의 매치일 수 있음. 매치 기록이 없으면 null
+                - remainingItems: 현재 라운드에서 아직 대결하지 않은 생존 아이템 목록, 가격 오름차순. 이 순서가 클라이언트의 매치 페어링 순서([0]vs[1], [2]vs[3] …)를 결정함
+              - 아직 매치를 시작하지 않은 멤버(isOwner=false): pending 필드 (ROOT 아이템·참여자 목록)
+                - pending.ownerStarted = true. 클라이언트는 이 플래그로 "주최자 대기" vs "주최자 시작 완료·지금 시작하세요" UI 를 분기한다
+                - pending.inviteCode, pending.inviteExpiresAt 은 null (초대 기간 종료)
             - COMPLETED: completed 필드
               - result: 1위부터 최대 4위까지 순위 아이템 목록
               - hasGroupResult: 참여자 2명 이상이면 true. 클라이언트는 이 값으로 친구 토너먼트 결과 보기 버튼을 제어한다.
@@ -519,8 +526,9 @@ interface TournamentApi {
         description = """
             IN_PROGRESS 상태의 토너먼트에서 한 매치의 결과(승자)를 기록한다.
             currentRound 는 해당 시점에 서버가 기대하는 라운드와 일치해야 한다.
-            결승(currentRound=2) 결과 기록 시 토너먼트가 COMPLETED 로 자동 전환되고,
-            응답 data 에 1위~최대 4위의 순위 결과(이름·가격·이미지)가 포함된다.
+            결승(currentRound=2) 결과 기록 시 본인의 순위 결과(1위~최대 4위)가 즉시 반환된다.
+            소셜 토너먼트라도 각 인스턴스(ROOT·CLONE)는 해당 인스턴스의 결승이 완료되는 즉시 COMPLETED 로 전환된다.
+            다른 참여자의 진행 여부와 무관하게 내 결과는 바로 확인할 수 있으며, 전체 그룹 결과는 2명 이상이 완료한 뒤 hasGroupResult=true 로 활성화된다.
             결승이 아닌 라운드는 data=null 을 반환한다.
         """,
     )
@@ -642,13 +650,15 @@ interface TournamentApi {
         description = """
             플레이 링크가 유효한 토너먼트와 동일한 아이템 구성으로 새 토너먼트를 생성한다.
             생성된 토너먼트는 PENDING 상태이며 아이템이 미리 복사되어 있어 바로 시작할 수 있다.
+            idempotent: 같은 사용자가 같은 원본의 플레이 링크를 다시 호출하면 새로 만들지 않고
+            기존 본인 클론의 tournamentId 를 그대로 반환한다 (원본 링크 만료와 무관하게 이어서 진행 가능).
         """,
     )
     @ApiResponses(
         value = [
             ApiResponse(
-                responseCode = "201",
-                description = "복제 토너먼트 생성 성공 (tournamentId 반환)",
+                responseCode = "200",
+                description = "복제 토너먼트 생성 또는 기존 본인 클론 반환 (tournamentId 반환)",
                 content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
             ApiResponse(
@@ -663,7 +673,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "상태 충돌 (플레이 링크 만료 · 이미 해당 플레이 링크로 토너먼트를 생성한 경우)",
+                description = "상태 충돌 (플레이 링크 만료)",
                 content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
         ],

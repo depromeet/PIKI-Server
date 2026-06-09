@@ -7,7 +7,6 @@ import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.item.service.ImageParsingWorker
 import com.depromeet.piki.item.service.ItemParsingService
-import com.depromeet.piki.item.service.ItemParsingWorker
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.wishlist.domain.WishCursor
 import com.depromeet.piki.wishlist.domain.WishDeleteIds
@@ -25,7 +24,6 @@ import java.util.UUID
 
 @Service
 class WishlistService(
-    private val itemParsingWorker: ItemParsingWorker,
     private val imageParsingWorker: ImageParsingWorker,
     private val itemParsingService: ItemParsingService,
     private val wishPersistenceService: WishPersistenceService,
@@ -37,22 +35,16 @@ class WishlistService(
     private val log = LoggerFactory.getLogger(javaClass)
 
     // registerFromUrl 는 외부 LLM 호출(read-timeout 60s)을 동기로 기다리지 않는다.
-    // link 만 가진 PROCESSING item 을 즉시 저장해 응답을 돌려주고(클라이언트는 "담는 중" 표시),
-    // 실제 파싱은 itemParsingWorker 가 백그라운드에서 수행해 READY/FAILED 로 전이시킨다.
+    // link 만 가진 item 과 PENDING snapshot 을 즉시 커밋해 응답을 돌려주고(클라이언트는 "담는 중" 표시),
+    // 실제 파싱은 디스패처(@Scheduled)가 PENDING 을 집어 워커에 넘겨 READY/FAILED 로 전이시킨다.
+    // DB 의 PENDING 행이 작업의 진실 원천이라 @Async 큐 유실(인스턴스 재시작 등)과 무관하게 최소 1회는 claim 된다(at-least-once).
     // URL 형식 같은 계약 위반은 ProductLink.parse 가 동기로 거른다(400). 파싱 결과 실패만 FAILED 로 간다.
     fun registerFromUrl(
         rawUrl: String,
         userId: UUID,
     ): WishWithItem {
         val link = ProductLink.parse(rawUrl)
-        val result = wishPersistenceService.persist(userId, Item(link))
-        // 워커 디스패치가 큐 포화 등으로 거부되면 PROCESSING 으로 방치하지 않고 즉시 FAILED 로 떨어뜨린다.
-        runCatching { itemParsingWorker.parse(result.item.getId(), link) }
-            .onFailure { e ->
-                log.warn("파싱 워커 디스패치 실패, item {} 를 FAILED 처리: {}", result.item.getId(), e.message)
-                itemParsingService.markFailed(result.item.getId())
-            }
-        return result
+        return wishPersistenceService.persist(userId, Item(link))
     }
 
     // 이미지 등록은 registerFromUrl(link)와 같은 비동기 흐름 — 입력이 이미지(다건)일 뿐이다.

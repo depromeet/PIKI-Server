@@ -33,6 +33,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 // 일반 통합 테스트와 달리 @Transactional 을 사용하지 않는다 — 별도 트랜잭션 동시 진행이
 // race 시뮬레이션의 본질이다. 데이터 격리는 매 테스트가 새 UUID 를 사용하고 finally 에서 직접 정리한다.
@@ -49,7 +50,7 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
     @Autowired private lateinit var jdbcTemplate: JdbcTemplate
 
     @Test
-    fun `같은 유저가 from-play-link 를 동시에 두 번 요청하면 하나만 201 나머지는 409 로 처리된다`() {
+    fun `같은 유저가 from-play-link 를 동시에 두 번 요청해도 클론은 하나만 생성되고 둘 다 200 으로 같은 id 를 받는다`() {
         val ownerId = UUID.randomUUID()
         val clonerId = UUID.randomUUID()
         userJpaRepository.save(User(id = ownerId, nickname = "race-owner", profileImage = "https://cdn.example.com/o.jpg", identityType = IdentityType.GUEST))
@@ -130,8 +131,10 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
             tId
         }
 
-        val status201 = AtomicInteger(0)
-        val status409 = AtomicInteger(0)
+        // idempotent get-or-create: 동시 두 호출 모두 200 이고, source 행 FOR UPDATE 락으로 직렬화되어
+        // 먼저 들어온 쪽이 클론을 만들고 뒤이은 쪽은 그 클론 id 를 그대로 받는다.
+        val status200 = AtomicInteger(0)
+        val returnedIds = java.util.concurrent.ConcurrentLinkedQueue<Long>()
         val executor = Executors.newFixedThreadPool(2)
         val ready = CountDownLatch(2)
         val start = CountDownLatch(1)
@@ -146,9 +149,9 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
                         post("/api/v1/tournaments/$sourceTournamentId/from-play-link")
                             .header(HttpHeaders.AUTHORIZATION, clonerAuth),
                     ).andReturn()
-                    when (res.response.status) {
-                        201 -> status201.incrementAndGet()
-                        409 -> status409.incrementAndGet()
+                    if (res.response.status == 200) {
+                        status200.incrementAndGet()
+                        returnedIds.add(objectMapper.readTree(res.response.contentAsString)["data"].asLong())
                     }
                 } finally {
                     done.countDown()
@@ -161,8 +164,8 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
         done.await(10, TimeUnit.SECONDS)
         executor.shutdown()
 
-        assertEquals(1, status201.get(), "정확히 하나만 201 이어야 한다")
-        assertEquals(1, status409.get(), "정확히 하나만 409 이어야 한다")
+        assertEquals(2, status200.get(), "두 호출 모두 200 이어야 한다")
+        assertEquals(1, returnedIds.toSet().size, "두 호출이 같은 클론 id 를 받아야 한다")
 
         val cloneCount = jdbcTemplate.queryForObject(
             """SELECT COUNT(*) FROM tournaments t
@@ -172,21 +175,19 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
         )
         assertEquals(1L, cloneCount, "복제본은 정확히 1개여야 한다")
 
-        // 복제 토너먼트가 원본의 고정 snapshot_id 를 그대로 가져왔는지 검증한다(복제본 개수만으로는 잘못된 snapshot 연결을 못 잡는다).
-        val sourcePairs = jdbcTemplate.queryForList(
-            "SELECT item_id, snapshot_id FROM tournament_items WHERE tournament_id = ? ORDER BY item_id",
-            sourceTournamentId,
-        )
-        val clonedPairs = jdbcTemplate.queryForList(
-            """SELECT ti.item_id, ti.snapshot_id
-               FROM tournament_items ti
+        // Design B: CLONE 은 아이템을 DB 에 복사하지 않는다. sourceTournamentId 로 원본 아이템을 참조한다.
+        val sourceItemCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM tournament_items WHERE tournament_id = ?",
+            Long::class.java, sourceTournamentId,
+        )!!
+        val cloneItemCount = jdbcTemplate.queryForObject(
+            """SELECT COUNT(*) FROM tournament_items ti
                JOIN tournaments t ON t.id = ti.tournament_id
-               JOIN tournament_users tu ON tu.tournament_id = t.id
-               WHERE t.source_tournament_id = ? AND tu.user_id = ? AND tu.deleted_at IS NULL
-               ORDER BY ti.item_id""",
-            sourceTournamentId, uuidToBytes(clonerId),
-        )
-        assertEquals(sourcePairs, clonedPairs, "복제 토너먼트는 원본 snapshot_id 를 그대로 가져야 한다")
+               WHERE t.source_tournament_id = ?""",
+            Long::class.java, sourceTournamentId,
+        )!!
+        assertEquals(0L, cloneItemCount, "CLONE 은 아이템을 DB 에 갖지 않는다")
+        assertTrue(sourceItemCount > 0, "원본에는 아이템이 있어야 한다")
 
         // 정리
         jdbcTemplate.update("DELETE FROM tournament_histories WHERE tournament_id = ?", sourceTournamentId)

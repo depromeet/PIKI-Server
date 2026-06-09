@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component
 //
 // 단일 인스턴스 기준이지만, 멀티 인스턴스로 확장돼도 각 인스턴스가 "자기 메모리의 연결만" ping 하므로 중복
 // 실행 방지(ShedLock 등)가 필요 없다 — SseEmitter 는 자기 소켓에 묶인 인스턴스-로컬 객체라, @Scheduled 가
-// 인스턴스마다 독립적으로 도는 게 오히려 맞다. (StaleProcessingItemSweeper 의 단일 인스턴스 @Scheduled 와 동일 결.)
+// 인스턴스마다 독립적으로 도는 게 오히려 맞다. (ItemParsingScheduler 의 단일 인스턴스 @Scheduled 와 동일 결.)
 @Component
 class SseHeartbeatScheduler(
     private val localDelivery: LocalSseDelivery,

@@ -5,6 +5,7 @@ import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubImageStorage
 import com.depromeet.piki.support.uuidToBytes
 import com.depromeet.piki.user.domain.IdentityType
+import com.depromeet.piki.user.service.WithdrawalService
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceContext
 import org.junit.jupiter.api.Test
@@ -14,6 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
@@ -39,6 +41,9 @@ class WithdrawalIntegrationTest : IntegrationTestSupport() {
 
     @Autowired
     private lateinit var stubImageStorage: StubImageStorage
+
+    @Autowired
+    private lateinit var withdrawalService: WithdrawalService
 
     @PersistenceContext
     private lateinit var entityManager: EntityManager
@@ -123,6 +128,25 @@ class WithdrawalIntegrationTest : IntegrationTestSupport() {
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.data").value(null))
             .andExpect(jsonPath("$.detail").value("정상적으로 처리되었습니다."))
+    }
+
+    @Test
+    fun `DELETE users me - 탈퇴 후 같은 access token 으로 접근하면 401 이 반환된다`() {
+        val userId = UUID.randomUUID()
+        insertUser(userId, "멤버닉네임", IdentityType.MEMBER)
+        val accessToken = token(userId, IdentityType.MEMBER)
+
+        // 탈퇴 — access token denylist 에 마킹된다.
+        mockMvc()
+            .perform(
+                delete("/api/v1/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer $accessToken"),
+            ).andExpect(status().isOk)
+
+        // 탈퇴 직후, 아직 만료 안 된 같은 access token 으로 인증 엔드포인트 호출 → denylist 로 거부(401).
+        mockMvc()
+            .perform(
+                get("/api/v1/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer $accessToken"),
+            ).andExpect(status().isUnauthorized)
     }
 
     @Test
@@ -265,17 +289,14 @@ class WithdrawalIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `DELETE users me - 두 번 호출해도 멱등하게 200 이 반환된다`() {
+    fun `withdraw 를 두 번 호출해도 멱등하게 tombstone 이 유지된다`() {
+        // HTTP 로는 첫 탈퇴 후 그 토큰이 denylist 로 막혀(401) 두 번째 호출이 서비스까지 못 닿으므로,
+        // 서비스 멱등성(이미 tombstone 이어도 안전)은 withdrawalService 를 직접 두 번 호출해 검증한다.
         val userId = UUID.randomUUID()
         insertUser(userId, "멤버닉네임", IdentityType.MEMBER)
 
-        repeat(2) {
-            mockMvc()
-                .perform(
-                    delete("/api/v1/users/me")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.MEMBER)}"),
-                ).andExpect(status().isOk)
-        }
+        withdrawalService.withdraw(userId)
+        withdrawalService.withdraw(userId) // 두 번째도 예외 없이 멱등 통과
 
         // tombstone UPDATE 가 세션에 버퍼만 된 상태이므로 jdbcTemplate 검증 전 flush 한다.
         entityManager.flush()

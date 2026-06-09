@@ -16,7 +16,6 @@ import com.depromeet.piki.tournament.controller.dto.TournamentStartResponse
 import com.depromeet.piki.tournament.controller.dto.TournamentSummaryResponse
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.service.TournamentInviteService
-import com.depromeet.piki.tournament.service.TournamentItemService
 import com.depromeet.piki.tournament.service.TournamentService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
@@ -38,7 +37,6 @@ import java.util.UUID
 @RequestMapping("/api/v1/tournaments")
 class TournamentController(
     private val tournamentService: TournamentService,
-    private val tournamentItemService: TournamentItemService,
     private val tournamentInviteService: TournamentInviteService,
 ) : TournamentApi {
 
@@ -152,13 +150,13 @@ class TournamentController(
     }
 
     @PostMapping("/{sourceTournamentId}/from-play-link")
-    @ResponseStatus(HttpStatus.CREATED)
     override fun createFromPlayLink(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable sourceTournamentId: Long,
     ): ApiResponseBody<Long> {
-        val newTournamentId = tournamentService.createFromPlayLink(userId, sourceTournamentId)
-        return ApiResponseBody.created(newTournamentId)
+        // idempotent get-or-create: 신규 생성·기존 클론 반환 모두 200. 항상 "생성"이 아니므로 201 을 쓰지 않는다.
+        val tournamentId = tournamentService.createFromPlayLink(userId, sourceTournamentId)
+        return ApiResponseBody.ok(tournamentId)
     }
 
     @PatchMapping("/{tournamentId}/invite")

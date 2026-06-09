@@ -28,6 +28,7 @@ class ItemSnapshot(
     currency: String? = null,
     status: ItemStatus = ItemStatus.PROCESSING,
     extractedAt: LocalDateTime? = null,
+    attemptCount: Int = 0,
 ) : LongBaseEntity() {
     // 추출 필드 — setter 직접 노출 대신, 의도가 박힌 명령(markReady·markFailed·recover)으로만 바꾼다.
     @Column(name = "name", length = 512)
@@ -57,6 +58,13 @@ class ItemSnapshot(
     var extractedAt: LocalDateTime? = extractedAt
         protected set
 
+    // 파싱 실행 시도 횟수 (execution at-least-once, #461). claim(markProcessing)에서 1 이 되고, recover 의 재실행(reclaim)마다 +1.
+    // recover 가 이 값으로 "상한 도달 → FAILED 종결" 여부를 판단한다(무한 재큐잉 방지). 증가 자체가 updated_at 을
+    // 갱신(dirty checking)해 재실행 시점부터 stale 시계를 다시 흐르게 한다 — recover 가 막 재실행한 행을 또 stale 로 오판하지 않는다.
+    @Column(name = "attempt_count", nullable = false)
+    var attemptCount: Int = attemptCount
+        protected set
+
     // 엔티티 불변식 — 최후의 보루. 범위·길이만 보고 null 은 통과시킨다.
     // kotlin("plugin.jpa") 가 합성하는 no-arg 생성자가 Hibernate 하이드레이션 시점에 이 init 을 실행하는데,
     // 그 순간 필드는 아직 주입 전이라 전부 null/기본값이다. 그래서 상태-의존·필수값 불변식은 여기 두지 않고
@@ -81,6 +89,25 @@ class ItemSnapshot(
         this.currentPrice = newCurrentPrice
         this.imageUrl = newImageUrl
         this.currency = newCurrency
+    }
+
+    // PENDING → PROCESSING. 디스패처가 outbox 에서 작업을 집어(claim) 실행을 시작할 때 전이한다.
+    // PENDING 이 아닌데 호출되면 디스패처가 잘못된 버전을 집은 코드 버그이므로 check(500).
+    // attemptCount 를 1 로 올려 "첫 실행 시도"를 기록한다. 이 전이로 updated_at 이 갱신돼, recover 의 stale 판정이 이 시각을 본다.
+    fun markProcessing() {
+        check(status == ItemStatus.PENDING) { "PENDING 이 아닌 snapshot(status=$status)은 PROCESSING 으로 claim 할 수 없다" }
+        status = ItemStatus.PROCESSING
+        attemptCount++
+    }
+
+    // PROCESSING 유지 + 시도 횟수 +1. recover 가 stale PROCESSING(워커 크래시·실행 누락 등으로 실행이 끝나지 않은 행)을
+    // 재실행할 때 호출한다 — claim-at-least-once 를 execution at-least-once 로 끌어올리는 핵심 전이다(#461).
+    // PROCESSING 이 아닌데 호출되면 recover 가 잘못된 행을 집은 코드 버그이므로 check(500).
+    // 상태는 그대로 두되 attemptCount 증가가 updated_at 을 갱신(dirty checking)해, 이번 재실행 시점부터 stale 윈도가 다시 흐른다.
+    // 상한 도달 여부 판단은 호출부(recover)가 attemptCount 로 한다 — 도메인은 전이만, 정책(상한 수)은 스케줄러가 쥔다.
+    fun reclaim() {
+        check(status == ItemStatus.PROCESSING) { "PROCESSING 이 아닌 snapshot(status=$status)은 재실행 claim 할 수 없다" }
+        attemptCount++
     }
 
     // PROCESSING → READY. 백그라운드 파싱이 성공해 추출 결과(snapshot)를 채우며 전이한다.
@@ -118,7 +145,8 @@ class ItemSnapshot(
     ) {
         when (status) {
             ItemStatus.READY -> throw ItemException.alreadyReady()
-            ItemStatus.PROCESSING -> throw ItemException.stillProcessing()
+            // PENDING(아직 claim 전)·PROCESSING(파싱 중) 모두 워커 소관이라 클라이언트가 끼어들 수 없다(409).
+            ItemStatus.PENDING, ItemStatus.PROCESSING -> throw ItemException.stillProcessing()
             ItemStatus.FAILED -> {
                 apply(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
                 // 입력 경계 계약 — 보정 후에도 이름이 없으면 쓸 수 없는 버전이 READY 로 새어 들어간다(409 아닌 400).
@@ -161,9 +189,14 @@ class ItemSnapshot(
         const val IMAGE_URL_MAX_LENGTH = 2048
         const val CURRENCY_MAX_LENGTH = 8
 
-        // 신규 등록 시작점 — 추출 전 PROCESSING 버전. link 추출·이미지 추출 모두 비동기라 PROCESSING 으로 시작하고,
-        // 파싱이 끝나면 markReady/markFailed 로 전이한다. 추출값은 비어 있고 extractedAt 도 null.
-        // item 의 정체성(itemId)만 알면 되고 item 의 추출 상태를 읽지 않는다 — 등록 경로는 항상 PROCESSING 으로 출발한다.
+        // URL 등록 시작점 — 추출 전 PENDING 버전(outbox 적재). 등록은 이 행을 커밋만 하고 즉시 반환하며,
+        // 디스패처가 PENDING 을 집어 markProcessing 으로 claim 한 뒤 워커가 파싱한다. @Async 유실(인스턴스 재시작 등)과
+        // 무관하게 DB 의 PENDING 행이 작업의 진실 원천이라, 반드시 한 번은 claim 돼 실행이 시작된다(최소 1회 실행 보장).
+        fun pending(itemId: Long): ItemSnapshot = ItemSnapshot(itemId = itemId, status = ItemStatus.PENDING)
+
+        // 이미지 등록 시작점 — 추출 전 PROCESSING 버전. 이미지 경로는 outbox(PENDING)를 거치지 않고 @Async 워커를
+        // 등록 즉시 직접 트리거하므로 곧장 PROCESSING 으로 출발한다. 파싱이 끝나면 markReady/markFailed 로 전이한다.
+        // (이미지 원본이 메모리 ByteArray 라 durable 적재가 선행돼야 outbox 화할 수 있어, 그 비대칭은 후속 범위다.)
         fun processing(itemId: Long): ItemSnapshot = ItemSnapshot(itemId = itemId, status = ItemStatus.PROCESSING)
     }
 }

@@ -76,9 +76,10 @@ interface DevAuthApi {
 
     @Operation(
         summary = "기존 user 의 토큰 발급 (임의 user 가장)",
-        description = "이미 존재하는 user (GUEST·MEMBER 모두) 의 access·refresh 토큰을 발급한다. " +
-            "개발·테스트에서 특정 user 시나리오를 재현할 때 사용. GUEST 토큰으로 호출해야 한다. " +
-            "OAuth 통합 전까지의 임시 endpoint 로, 다른 dev API 들과 함께 운영에서 차단 예정.",
+        description = "이미 존재하는 user (GUEST·MEMBER 모두)의 access·refresh 토큰을 발급한다. " +
+            "개발·테스트에서 특정 user 시나리오를 재현할 때 사용한다.\n\n" +
+            "- GUEST 토큰으로 호출해야 한다.\n" +
+            "- OAuth 통합 전까지의 임시 endpoint 로, 다른 dev API 들과 함께 운영에서 차단 예정.",
     )
     @ApiResponses(
         value = [

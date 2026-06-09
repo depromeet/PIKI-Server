@@ -3,10 +3,13 @@ package com.depromeet.piki.wishlist.controller
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.image.domain.BoundingBox
 import com.depromeet.piki.image.service.ImageExtraction
+import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.item.repository.ItemSnapshotRepository
+import com.depromeet.piki.item.service.ItemParsingScheduler
+import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.product.service.ProductSnapshotException
 import com.depromeet.piki.product.service.gemini.GeminiApiException
@@ -37,7 +40,9 @@ import tools.jackson.databind.ObjectMapper
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.time.Duration
+import java.time.LocalDateTime
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import javax.imageio.ImageIO
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -65,13 +70,16 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
     private lateinit var itemSnapshotRepository: ItemSnapshotRepository
 
     @Autowired
+    private lateinit var itemParsingScheduler: ItemParsingScheduler
+
+    @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
 
     @Autowired
     private lateinit var jwtProvider: JwtProvider
 
     @Test
-    fun `등록하면 추출을 기다리지 않고 PROCESSING 상태로 201 이 즉시 반환된다`() {
+    fun `등록하면 추출을 기다리지 않고 PENDING 상태로 201 이 즉시 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
@@ -87,7 +95,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
                         .content(body),
                 ).andExpect(status().isCreated)
                 .andExpect(jsonPath("$.data.wish.id").isNumber)
-                .andExpect(jsonPath("$.data.item.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.data.item.status").value("PENDING"))
                 // 파싱 전이라 추출 결과는 아직 비어 있고, 입력으로 받은 sourceUrl 만 채워진다.
                 .andExpect(jsonPath("$.data.item.name").value(nullValue()))
                 .andExpect(jsonPath("$.data.item.currentPrice").value(nullValue()))
@@ -169,7 +177,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `같은 URL 을 두 번 등록해도 dedup 없이 둘 다 201 PROCESSING 으로 별개 등록된다`() {
+    fun `같은 URL 을 두 번 등록해도 dedup 없이 둘 다 201 PENDING 으로 별개 등록된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
@@ -186,7 +194,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
                             .header(HttpHeaders.AUTHORIZATION, auth)
                             .content(body),
                     ).andExpect(status().isCreated)
-                    .andExpect(jsonPath("$.data.item.status").value("PROCESSING"))
+                    .andExpect(jsonPath("$.data.item.status").value("PENDING"))
             }
 
             // dedup 없는 multi-record 모델 — 같은 URL 이라도 별개 wish 2건이 쌓인다 (persist 는 동기라 즉시 반영).
@@ -327,6 +335,103 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             await().atMost(Duration.ofSeconds(5)).until {
                 itemIds.all { latestSnapshot(it)?.status == ItemStatus.READY }
             }
+        } finally {
+            cleanup(userId)
+        }
+    }
+
+    @Test
+    fun `link 있는 stale PROCESSING 을 recover 가 재실행해 READY 로 되살린다`() {
+        // 디스패처가 claim(attempt 1)한 직후 워커가 크래시해 실행 0회로 PROCESSING 에 갇힌 상황.
+        // recover 가 재실행(reclaim)해 완성시킨다 — claim-at-least-once 를 execution at-least-once 로 끌어올리는 핵심(#461).
+        stubProductLinkExtractor.build = {
+            ProductSnapshot(link = it, name = "되살아난 상품", currentPrice = 1_000, currency = "KRW")
+        }
+        val item = itemRepository.save(Item(ProductLink.parse("https://shop.example.com/products/revive")))
+        val snapshot = itemSnapshotRepository.save(ItemSnapshot.pending(item.getId()).apply { markProcessing() })
+        val itemId = item.getId()
+        try {
+            // 이 행의 updated_at 만 과거로 밀어 stale 로 만든다. 현실적 threshold(스케줄러의 now-60초)라
+            // 다른 테스트가 막 만든 최근 PROCESSING 은 안 건드리고, 이 행만 대상이 된다(공유 컨텍스트 격리).
+            jdbcTemplate.update(
+                "UPDATE item_snapshots SET updated_at = ? WHERE id = ?",
+                LocalDateTime.now().minusSeconds(120),
+                snapshot.getId(),
+            )
+
+            itemParsingScheduler.recover() // reclaim(attempt 2) + 재실행 디스패치
+
+            await().atMost(Duration.ofSeconds(5)).until { latestSnapshot(itemId)?.status == ItemStatus.READY }
+            val recovered = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
+            assertEquals("되살아난 상품", recovered.name)
+            assertEquals(2, recovered.attemptCount) // 초회 claim 1 + 재실행 1
+        } finally {
+            jdbcTemplate.update("DELETE FROM item_snapshots WHERE item_id = ?", itemId)
+            jdbcTemplate.update("DELETE FROM items WHERE id = ?", itemId)
+        }
+    }
+
+    @Test
+    fun `재시도 상한에 도달한 stale PROCESSING 은 recover 가 FAILED 로 종결한다`() {
+        // 이미 상한(2회)까지 시도된 채 stale — 더 되살리지 않고 종결한다 (무한 재큐잉 방지, 절대 3분 초과 금지).
+        val item = itemRepository.save(Item(ProductLink.parse("https://shop.example.com/products/exhausted")))
+        val snapshot = itemSnapshotRepository.save(ItemSnapshot.pending(item.getId()).apply { markProcessing() })
+        val itemId = item.getId()
+        try {
+            jdbcTemplate.update(
+                "UPDATE item_snapshots SET attempt_count = 2, updated_at = ? WHERE id = ?",
+                LocalDateTime.now().minusSeconds(120),
+                snapshot.getId(),
+            )
+
+            itemParsingScheduler.recover() // attempt 2 >= 2 → FAILED (재실행 없음, 동기 종결)
+
+            assertEquals(ItemStatus.FAILED, latestSnapshot(itemId)?.status)
+        } finally {
+            jdbcTemplate.update("DELETE FROM item_snapshots WHERE item_id = ?", itemId)
+            jdbcTemplate.update("DELETE FROM items WHERE id = ?", itemId)
+        }
+    }
+
+    @Test
+    fun `link 없는 이미지 stale PROCESSING 은 recover 가 FAILED 로 종결한다`() {
+        // 이미지 경로(link 없음)는 원본이 메모리 ByteArray 라 크래시 시 소실 — 되살릴 수 없으므로 attempt 와 무관하게 종결한다.
+        val item = itemRepository.save(Item(link = null))
+        val snapshot = itemSnapshotRepository.save(ItemSnapshot.processing(item.getId()))
+        val itemId = item.getId()
+        try {
+            jdbcTemplate.update(
+                "UPDATE item_snapshots SET updated_at = ? WHERE id = ?",
+                LocalDateTime.now().minusSeconds(120),
+                snapshot.getId(),
+            )
+
+            itemParsingScheduler.recover() // link 없음 → FAILED
+
+            assertEquals(ItemStatus.FAILED, latestSnapshot(itemId)?.status)
+        } finally {
+            jdbcTemplate.update("DELETE FROM item_snapshots WHERE item_id = ?", itemId)
+            jdbcTemplate.update("DELETE FROM items WHERE id = ?", itemId)
+        }
+    }
+
+    @Test
+    fun `URL 파싱이 일시 외부 오류면 FAILED 가 아니라 PROCESSING 으로 남아 recover 재시도 대상이 된다`() {
+        // 일시 외부 오류(Gemini 5xx 등)는 워커가 FAILED 로 종결하지 않고 PROCESSING 그대로 둔다 — 재시도 판정은 recover 몫(#461).
+        val calls = AtomicInteger(0)
+        stubProductLinkExtractor.build = {
+            calls.incrementAndGet()
+            throw GeminiApiException.upstreamError(RuntimeException("transient 503"))
+        }
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            val itemId = registerAndGetItemId(mockMvc, userId, "https://shop.example.com/products/transient")
+            // 디스패처 claim → 워커가 일시 오류로 throw → 워커가 실제로 한 번 실행됐는지 확인.
+            await().atMost(Duration.ofSeconds(5)).until { calls.get() >= 1 }
+            // 확정 실패가 아니므로 FAILED 로 떨어지지 않고 PROCESSING 으로 남아야 한다 (recover 재시도 대상).
+            assertEquals(ItemStatus.PROCESSING, latestSnapshot(itemId)?.status)
         } finally {
             cleanup(userId)
         }

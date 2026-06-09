@@ -27,7 +27,8 @@ interface TournamentItemApi {
         description = """
             토너먼트 아이템의 상세 정보와 파싱 상태를 조회한다.
             링크·이미지로 아이템을 추가하면 비동기 파싱이 진행되므로,
-            클라이언트가 status 필드를 폴링해 PROCESSING → READY/FAILED 전환을 감지할 수 있다.
+            클라이언트가 status 필드를 폴링해 PENDING → PROCESSING → READY/FAILED 전환을 감지할 수 있다.
+            - PENDING: URL 등록 접수 후 파싱 대기 (디스패처가 집기 전, name·price·imageUrl 은 null). 이미지 등록은 PROCESSING 으로 시작.
             - PROCESSING: 파싱 진행 중 (name·price·imageUrl 은 null)
             - READY: 파싱 완료 (모든 필드 채워짐)
             - FAILED: 파싱 실패 (상품 페이지 아님 또는 추출 불가)
@@ -148,7 +149,7 @@ interface TournamentItemApi {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 이미 등록된 아이템 · 요청 내 중복 아이템 · PROCESSING/FAILED 상품 포함)",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트 · 이미 등록된 아이템 · 요청 내 중복 아이템 · PENDING/PROCESSING/FAILED 등 미완료 상품 포함)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -169,8 +170,8 @@ interface TournamentItemApi {
         description = """
             PENDING 상태의 토너먼트에 URL 링크를 통해 아이템을 추가한다.
             플레이 링크로 생성된 복제 토너먼트에는 추가 불가. 토너먼트 참여자만 추가할 수 있다.
-            아이템이 PROCESSING 상태로 즉시 생성되어 tournamentItemId 가 반환된다.
-            파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다.
+            아이템이 PENDING 상태로 즉시 생성되어 tournamentItemId 가 반환된다.
+            파싱은 비동기로 진행되며, 디스패처가 PENDING 을 집어 PROCESSING 으로 전이한 뒤 READY 또는 FAILED 상태로 전환된다.
             클라이언트는 tournamentItemId 로 GET /tournaments/{id}/items/{tournamentItemId} 를 폴링한다.
         """,
     )
@@ -178,7 +179,7 @@ interface TournamentItemApi {
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "아이템 추가 성공 (item.status=PROCESSING, 파싱은 백그라운드)",
+                description = "아이템 추가 성공 (item.status=PENDING, 파싱은 백그라운드)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -331,7 +332,7 @@ interface TournamentItemApi {
             수정 성공 시 아이템 상태가 FAILED → READY 로 전환된다.
             수정 가능 필드: 이름, 가격, 가격 단위, 이미지(multipart/form-data 의 image 파트) — null 이면 기존 값 유지.
             이미지는 파일로 업로드하며 서버가 S3 에 저장한 URL 로 item.imageUrl 을 갱신한다.
-            READY·PROCESSING 아이템은 수정 불가(409). 아이템을 등록한 본인만 수정 가능.
+            READY·PENDING·PROCESSING 아이템은 수정 불가(409). 아이템을 등록한 본인만 수정 가능.
             이름은 수정 후에도 반드시 존재해야 한다 — 기존 이름이 없고 name 도 미입력이면 400.
         """,
     )
@@ -389,7 +390,7 @@ interface TournamentItemApi {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "상태 충돌 (PENDING이 아닌 토너먼트 · READY 또는 PROCESSING 상태 아이템)",
+                description = "상태 충돌 (PENDING이 아닌 토너먼트 · READY·PENDING·PROCESSING 상태 아이템)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

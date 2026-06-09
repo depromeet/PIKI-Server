@@ -43,29 +43,57 @@
   "templating": {
     "list": [
       {
+        "name": "environment",
+        "type": "query",
+        "label": "환경",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROM}"
+        },
+        "definition": "label_values(environment)",
+        "query": {
+          "qryType": 1,
+          "query": "label_values(environment)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "current": {
+          "text": "prod",
+          "value": "prod",
+          "selected": true
+        },
+        "options": [],
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "includeAll": false,
+        "multi": false,
+        "skipUrlSync": false,
+        "hide": 0
+      },
+      {
         "name": "traceFilter",
         "type": "custom",
         "label": "trace 필터",
-        "query": "전체 : { resource.service.name = \"PIKI\" },느린(>500ms) : { resource.service.name = \"PIKI\" && trace:duration > 500ms },에러 : { resource.service.name = \"PIKI\" && status = error }",
+        "query": "전체 : resource.service.name = \"PIKI\",느린(>500ms) : resource.service.name = \"PIKI\" && trace:duration > 500ms,에러 : resource.service.name = \"PIKI\" && status = error",
         "current": {
           "text": "전체",
-          "value": "{ resource.service.name = \"PIKI\" }",
+          "value": "resource.service.name = \"PIKI\"",
           "selected": true
         },
         "options": [
           {
             "text": "전체",
-            "value": "{ resource.service.name = \"PIKI\" }",
+            "value": "resource.service.name = \"PIKI\"",
             "selected": true
           },
           {
             "text": "느린(>500ms)",
-            "value": "{ resource.service.name = \"PIKI\" && trace:duration > 500ms }",
+            "value": "resource.service.name = \"PIKI\" && trace:duration > 500ms",
             "selected": false
           },
           {
             "text": "에러",
-            "value": "{ resource.service.name = \"PIKI\" && status = error }",
+            "value": "resource.service.name = \"PIKI\" && status = error",
             "selected": false
           }
         ],
@@ -112,7 +140,7 @@
             "uid": "${DS_TEMPO}"
           },
           "queryType": "traceql",
-          "query": "${traceFilter:raw}",
+          "query": "{ ${traceFilter:raw} && resource.deployment.environment = \"$environment\" }",
           "tableType": "traces",
           "limit": 20,
           "filters": []
@@ -213,7 +241,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "max(up{job=\"prometheus.scrape.app\"})"
+          "expr": "max(up{job=\"prometheus.scrape.app\", environment=\"$environment\"})"
         }
       ]
     },
@@ -271,7 +299,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum(rate(http_server_requests_seconds_count{application=\"PIKI\", status=~\"5..\"}[$__rate_interval])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"PIKI\"}[$__rate_interval])), 0.001) * 100"
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"PIKI\", environment=\"$environment\", status=~\"5..\"}[$__rate_interval])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"PIKI\", environment=\"$environment\"}[$__rate_interval])), 0.001) * 100"
         }
       ]
     },
@@ -329,7 +357,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"PIKI\"}[$__rate_interval])))"
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"PIKI\", environment=\"$environment\"}[$__rate_interval])))"
         }
       ]
     },
@@ -387,7 +415,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum(jvm_memory_used_bytes{application=\"PIKI\", area=\"heap\"}) / sum(jvm_memory_max_bytes{application=\"PIKI\", area=\"heap\"}) * 100"
+          "expr": "sum(jvm_memory_used_bytes{application=\"PIKI\", environment=\"$environment\", area=\"heap\"}) / sum(jvm_memory_max_bytes{application=\"PIKI\", environment=\"$environment\", area=\"heap\"}) * 100"
         }
       ]
     },
@@ -445,7 +473,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100"
+          "expr": "(1 - node_memory_MemAvailable_bytes{environment=\"$environment\"} / node_memory_MemTotal_bytes{environment=\"$environment\"}) * 100"
         }
       ]
     },
@@ -503,7 +531,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes"
+          "expr": "node_memory_SwapTotal_bytes{environment=\"$environment\"} - node_memory_SwapFree_bytes{environment=\"$environment\"}"
         }
       ]
     },
@@ -560,7 +588,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (status) (rate(http_server_requests_seconds_count{application=\"PIKI\"}[$__rate_interval]))",
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count{application=\"PIKI\", environment=\"$environment\"}[$__rate_interval]))",
           "legendFormat": "{{status}}"
         }
       ]
@@ -607,7 +635,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (uri, status) (rate(http_server_requests_seconds_count{application=\"PIKI\", status=~\"5..\"}[$__rate_interval]))",
+          "expr": "sum by (uri, status) (rate(http_server_requests_seconds_count{application=\"PIKI\", environment=\"$environment\", status=~\"5..\"}[$__rate_interval]))",
           "legendFormat": "{{status}} {{uri}}"
         }
       ]
@@ -654,7 +682,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"PIKI\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"PIKI\", environment=\"$environment\"}[$__rate_interval])))",
           "legendFormat": "p50"
         },
         {
@@ -663,7 +691,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"PIKI\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"PIKI\", environment=\"$environment\"}[$__rate_interval])))",
           "legendFormat": "p95"
         },
         {
@@ -672,7 +700,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"PIKI\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{application=\"PIKI\", environment=\"$environment\"}[$__rate_interval])))",
           "legendFormat": "p99"
         }
       ]
@@ -729,7 +757,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (instance) (jvm_memory_used_bytes{application=\"PIKI\", area=\"heap\"})",
+          "expr": "sum by (instance) (jvm_memory_used_bytes{application=\"PIKI\", environment=\"$environment\", area=\"heap\"})",
           "legendFormat": "used {{instance}}"
         },
         {
@@ -738,7 +766,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (instance) (jvm_memory_max_bytes{application=\"PIKI\", area=\"heap\"})",
+          "expr": "sum by (instance) (jvm_memory_max_bytes{application=\"PIKI\", environment=\"$environment\", area=\"heap\"})",
           "legendFormat": "max {{instance}}"
         }
       ]
@@ -784,7 +812,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (instance) (jvm_memory_used_bytes{application=\"PIKI\", area=\"nonheap\"})",
+          "expr": "sum by (instance) (jvm_memory_used_bytes{application=\"PIKI\", environment=\"$environment\", area=\"nonheap\"})",
           "legendFormat": "nonheap {{instance}}"
         }
       ]
@@ -843,7 +871,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(jvm_gc_pause_seconds_bucket{application=\"PIKI\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(jvm_gc_pause_seconds_bucket{application=\"PIKI\", environment=\"$environment\"}[$__rate_interval])))",
           "legendFormat": "pause p99"
         },
         {
@@ -852,7 +880,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum(rate(jvm_gc_pause_seconds_count{application=\"PIKI\"}[$__rate_interval]))",
+          "expr": "sum(rate(jvm_gc_pause_seconds_count{application=\"PIKI\", environment=\"$environment\"}[$__rate_interval]))",
           "legendFormat": "gc/s"
         }
       ]
@@ -909,7 +937,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+          "expr": "node_memory_MemTotal_bytes{environment=\"$environment\"} - node_memory_MemAvailable_bytes{environment=\"$environment\"}",
           "legendFormat": "used"
         },
         {
@@ -918,7 +946,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "node_memory_MemTotal_bytes",
+          "expr": "node_memory_MemTotal_bytes{environment=\"$environment\"}",
           "legendFormat": "total"
         }
       ]
@@ -964,7 +992,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes",
+          "expr": "node_memory_SwapTotal_bytes{environment=\"$environment\"} - node_memory_SwapFree_bytes{environment=\"$environment\"}",
           "legendFormat": "used"
         },
         {
@@ -973,7 +1001,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "node_memory_SwapTotal_bytes",
+          "expr": "node_memory_SwapTotal_bytes{environment=\"$environment\"}",
           "legendFormat": "total"
         }
       ]
@@ -1019,7 +1047,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"}",
+          "expr": "node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\", environment=\"$environment\"}",
           "legendFormat": "{{mountpoint}}"
         }
       ]
@@ -1076,7 +1104,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (uri) (rate(http_server_requests_seconds_count{application=\"PIKI\", status=\"502\"}[$__rate_interval]))",
+          "expr": "sum by (uri) (rate(http_server_requests_seconds_count{application=\"PIKI\", environment=\"$environment\", status=\"502\"}[$__rate_interval]))",
           "legendFormat": "{{uri}}"
         }
       ]
@@ -1122,7 +1150,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "executor_active_threads{application=\"PIKI\"}",
+          "expr": "executor_active_threads{application=\"PIKI\", environment=\"$environment\"}",
           "legendFormat": "active {{name}}"
         },
         {
@@ -1131,7 +1159,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "executor_queued_tasks{application=\"PIKI\"}",
+          "expr": "executor_queued_tasks{application=\"PIKI\", environment=\"$environment\"}",
           "legendFormat": "queued {{name}}"
         }
       ]
@@ -1177,7 +1205,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "hikaricp_connections_active{application=\"PIKI\"}",
+          "expr": "hikaricp_connections_active{application=\"PIKI\", environment=\"$environment\"}",
           "legendFormat": "active {{pool}}"
         },
         {
@@ -1186,7 +1214,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "hikaricp_connections_idle{application=\"PIKI\"}",
+          "expr": "hikaricp_connections_idle{application=\"PIKI\", environment=\"$environment\"}",
           "legendFormat": "idle {{pool}}"
         },
         {
@@ -1195,7 +1223,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "hikaricp_connections_pending{application=\"PIKI\"}",
+          "expr": "hikaricp_connections_pending{application=\"PIKI\", environment=\"$environment\"}",
           "legendFormat": "pending {{pool}}"
         }
       ]
@@ -1254,7 +1282,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "process_cpu_usage{application=\"PIKI\"}",
+          "expr": "process_cpu_usage{application=\"PIKI\", environment=\"$environment\"}",
           "legendFormat": "process {{instance}}"
         },
         {
@@ -1263,7 +1291,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "system_cpu_usage{application=\"PIKI\"}",
+          "expr": "system_cpu_usage{application=\"PIKI\", environment=\"$environment\"}",
           "legendFormat": "system {{instance}}"
         }
       ]
@@ -1309,7 +1337,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "jvm_threads_live_threads{application=\"PIKI\"}",
+          "expr": "jvm_threads_live_threads{application=\"PIKI\", environment=\"$environment\"}",
           "legendFormat": "{{instance}}"
         }
       ]
@@ -1357,7 +1385,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval]))",
+          "expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\", environment=\"$environment\"}[$__rate_interval]))",
           "legendFormat": "busy"
         }
       ]
@@ -1402,7 +1430,7 @@
             "type": "loki",
             "uid": "${DS_LOKI}"
           },
-          "expr": "{container=~\"team3-(blue|green)\"} |~ \"(?i)(error|exception|warn|fail)\""
+          "expr": "{container=~\"team3-(blue|green)\", environment=\"$environment\"} |~ \"(?i)(error|exception|warn|fail)\""
         }
       ]
     },
@@ -1435,7 +1463,7 @@
             "type": "loki",
             "uid": "${DS_LOKI}"
           },
-          "expr": "{container=~\"team3-(blue|green)\"}"
+          "expr": "{container=~\"team3-(blue|green)\", environment=\"$environment\"}"
         }
       ]
     }

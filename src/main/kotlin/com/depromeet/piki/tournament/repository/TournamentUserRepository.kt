@@ -21,7 +21,12 @@ interface TournamentUserRepository {
 
     fun findByIds(ids: Collection<Long>): List<TournamentUser>
 
+    fun softDeleteByTournamentIdAndUserId(tournamentId: Long, userId: UUID)
+
     fun softDeleteAllByTournamentId(tournamentId: Long)
 
-    fun softDeleteByTournamentIdAndUserId(tournamentId: Long, userId: UUID)
+    fun countCompletedByTournamentId(tournamentId: Long): Int
+
+    // deletedAt 무관 — 삭제한 주최자의 완료 내역도 그룹 결과에 반영해야 한다.
+    fun findCompletedByTournamentId(tournamentId: Long): List<TournamentUser>
 }
