@@ -150,13 +150,13 @@ class TournamentController(
     }
 
     @PostMapping("/{sourceTournamentId}/from-play-link")
-    @ResponseStatus(HttpStatus.CREATED)
     override fun createFromPlayLink(
         @AuthenticationPrincipal userId: UUID,
         @PathVariable sourceTournamentId: Long,
     ): ApiResponseBody<Long> {
-        val newTournamentId = tournamentService.createFromPlayLink(userId, sourceTournamentId)
-        return ApiResponseBody.created(newTournamentId)
+        // idempotent get-or-create: 신규 생성·기존 클론 반환 모두 200. 항상 "생성"이 아니므로 201 을 쓰지 않는다.
+        val tournamentId = tournamentService.createFromPlayLink(userId, sourceTournamentId)
+        return ApiResponseBody.ok(tournamentId)
     }
 
     @PatchMapping("/{tournamentId}/invite")

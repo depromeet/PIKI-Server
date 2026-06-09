@@ -50,7 +50,7 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
     @Autowired private lateinit var jdbcTemplate: JdbcTemplate
 
     @Test
-    fun `같은 유저가 from-play-link 를 동시에 두 번 요청하면 하나만 201 나머지는 409 로 처리된다`() {
+    fun `같은 유저가 from-play-link 를 동시에 두 번 요청해도 클론은 하나만 생성되고 둘 다 200 으로 같은 id 를 받는다`() {
         val ownerId = UUID.randomUUID()
         val clonerId = UUID.randomUUID()
         userJpaRepository.save(User(id = ownerId, nickname = "race-owner", profileImage = "https://cdn.example.com/o.jpg", identityType = IdentityType.GUEST))
@@ -131,8 +131,10 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
             tId
         }
 
-        val status201 = AtomicInteger(0)
-        val status409 = AtomicInteger(0)
+        // idempotent get-or-create: 동시 두 호출 모두 200 이고, source 행 FOR UPDATE 락으로 직렬화되어
+        // 먼저 들어온 쪽이 클론을 만들고 뒤이은 쪽은 그 클론 id 를 그대로 받는다.
+        val status200 = AtomicInteger(0)
+        val returnedIds = java.util.concurrent.ConcurrentLinkedQueue<Long>()
         val executor = Executors.newFixedThreadPool(2)
         val ready = CountDownLatch(2)
         val start = CountDownLatch(1)
@@ -147,9 +149,9 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
                         post("/api/v1/tournaments/$sourceTournamentId/from-play-link")
                             .header(HttpHeaders.AUTHORIZATION, clonerAuth),
                     ).andReturn()
-                    when (res.response.status) {
-                        201 -> status201.incrementAndGet()
-                        409 -> status409.incrementAndGet()
+                    if (res.response.status == 200) {
+                        status200.incrementAndGet()
+                        returnedIds.add(objectMapper.readTree(res.response.contentAsString)["data"].asLong())
                     }
                 } finally {
                     done.countDown()
@@ -162,8 +164,8 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
         done.await(10, TimeUnit.SECONDS)
         executor.shutdown()
 
-        assertEquals(1, status201.get(), "정확히 하나만 201 이어야 한다")
-        assertEquals(1, status409.get(), "정확히 하나만 409 이어야 한다")
+        assertEquals(2, status200.get(), "두 호출 모두 200 이어야 한다")
+        assertEquals(1, returnedIds.toSet().size, "두 호출이 같은 클론 id 를 받아야 한다")
 
         val cloneCount = jdbcTemplate.queryForObject(
             """SELECT COUNT(*) FROM tournaments t
