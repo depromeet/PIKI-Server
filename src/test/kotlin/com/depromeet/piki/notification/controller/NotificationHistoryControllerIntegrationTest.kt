@@ -7,6 +7,7 @@ import com.depromeet.piki.notification.domain.NotificationRouting
 import com.depromeet.piki.notification.domain.NotificationType
 import com.depromeet.piki.notification.repository.NotificationJpaRepository
 import com.depromeet.piki.notification.repository.NotificationRepository
+import com.depromeet.piki.notification.service.DefaultPushImage
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.user.domain.IdentityType
 import org.hamcrest.Matchers.notNullValue
@@ -40,6 +41,8 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
 
     @Autowired private lateinit var notificationJpaRepository: NotificationJpaRepository
 
+    @Autowired private lateinit var defaultPushImage: DefaultPushImage
+
     private fun authHeader(userId: UUID): String = "Bearer ${jwtProvider.generateAccessToken(userId, IdentityType.MEMBER)}"
 
     private fun buildMockMvc(): MockMvc =
@@ -63,6 +66,16 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
         }
         return saved.getId()
     }
+
+    // 타입·actor 프사 snapshot 을 지정해 저장 — 카테고리 필터·imageUrl 검증용.
+    private fun seedTyped(
+        userId: UUID,
+        type: NotificationType,
+        actorImageUrl: String? = null,
+    ): Long =
+        notificationRepository
+            .save(Notification(userId, type, "제목", "본문", 11L, routing = null, actorImageUrl = actorImageUrl))
+            .getId()
 
     @Test
     fun `본인 알림만 최신순으로 unreadCount 와 함께 조회된다`() {
@@ -89,6 +102,113 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.unreadCount").value(2))
             .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
             .andExpect(jsonPath("$.pageResponse.nextCursor").value(nullValue()))
+    }
+
+    @Test
+    fun `category=ACTIVITY 면 토너먼트 알림만, category=SYSTEM 이면 파싱 알림만 조회된다`() {
+        val userId = UUID.randomUUID()
+        val activity = seedTyped(userId, NotificationType.TOURNAMENT_STARTED)
+        val system = seedTyped(userId, NotificationType.ITEM_PARSING_COMPLETED)
+        val mockMvc = buildMockMvc()
+
+        mockMvc
+            .perform(get("/api/v1/notifications").param("category", "ACTIVITY").header(HttpHeaders.AUTHORIZATION, authHeader(userId)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.items.length()").value(1))
+            .andExpect(jsonPath("$.data.items[0].id").value(activity))
+            .andExpect(jsonPath("$.data.items[0].category").value("ACTIVITY"))
+
+        mockMvc
+            .perform(get("/api/v1/notifications").param("category", "SYSTEM").header(HttpHeaders.AUTHORIZATION, authHeader(userId)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.items.length()").value(1))
+            .andExpect(jsonPath("$.data.items[0].id").value(system))
+            .andExpect(jsonPath("$.data.items[0].category").value("SYSTEM"))
+    }
+
+    @Test
+    fun `category 필터도 커서로 페이지를 나누고 다음 페이지를 잇는다`() {
+        val userId = UUID.randomUUID()
+        val a1 = seedTyped(userId, NotificationType.TOURNAMENT_JOINED)
+        val a2 = seedTyped(userId, NotificationType.TOURNAMENT_ITEM_ADDED)
+        val a3 = seedTyped(userId, NotificationType.TOURNAMENT_STARTED)
+        seedTyped(userId, NotificationType.ITEM_PARSING_COMPLETED) // 시스템 — ACTIVITY 페이징에 섞이면 안 됨
+        val mockMvc = buildMockMvc()
+
+        // 1페이지: ACTIVITY size=2 → 최신 2건(a3, a2), 다음 페이지 있음, 커서=a2 (type-in 커서 변형 검증)
+        mockMvc
+            .perform(
+                get("/api/v1/notifications")
+                    .param("category", "ACTIVITY")
+                    .param("size", "2")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.items.length()").value(2))
+            .andExpect(jsonPath("$.data.items[0].id").value(a3))
+            .andExpect(jsonPath("$.data.items[1].id").value(a2))
+            .andExpect(jsonPath("$.pageResponse.hasNext").value(true))
+            .andExpect(jsonPath("$.pageResponse.nextCursor").value(a2.toString()))
+
+        // 2페이지: cursor=a2 + ACTIVITY → 남은 활동 1건(a1)만, 시스템 알림은 안 섞임
+        mockMvc
+            .perform(
+                get("/api/v1/notifications")
+                    .param("category", "ACTIVITY")
+                    .param("size", "2")
+                    .param("cursor", a2.toString())
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.items.length()").value(1))
+            .andExpect(jsonPath("$.data.items[0].id").value(a1))
+            .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
+            .andExpect(jsonPath("$.pageResponse.nextCursor").value(nullValue()))
+    }
+
+    @Test
+    fun `category 로 걸러도 unreadCount 는 전체이고 탭별 카운트를 함께 내려준다`() {
+        val userId = UUID.randomUUID()
+        seedTyped(userId, NotificationType.TOURNAMENT_STARTED) // 활동 1
+        seedTyped(userId, NotificationType.ITEM_PARSING_COMPLETED) // 시스템 1
+        seedTyped(userId, NotificationType.ITEM_PARSING_FAILED) // 시스템 1
+
+        // category=ACTIVITY 로 목록은 1건만 걸러지지만, unreadCount(앱 badge)는 전체 3, 탭별은 활동1·시스템2.
+        buildMockMvc()
+            .perform(get("/api/v1/notifications").param("category", "ACTIVITY").header(HttpHeaders.AUTHORIZATION, authHeader(userId)))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.items.length()").value(1))
+            .andExpect(jsonPath("$.data.unreadCount").value(3))
+            .andExpect(jsonPath("$.data.unreadCountByCategory.ACTIVITY").value(1))
+            .andExpect(jsonPath("$.data.unreadCountByCategory.SYSTEM").value(2))
+    }
+
+    @Test
+    fun `유효하지 않은 category 는 400 으로 거른다`() {
+        buildMockMvc()
+            .perform(
+                get("/api/v1/notifications")
+                    .param("category", "NOPE")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(UUID.randomUUID())),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.detail", notNullValue()))
+    }
+
+    @Test
+    fun `actor 알림은 imageUrl 이 프사 snapshot, 시스템 알림은 defaultPushImg 로 채워진다`() {
+        val userId = UUID.randomUUID()
+        val actorImage = "https://img.test/profiles/actor.png"
+        val activity = seedTyped(userId, NotificationType.TOURNAMENT_JOINED, actorImageUrl = actorImage)
+        val system = seedTyped(userId, NotificationType.ITEM_PARSING_COMPLETED, actorImageUrl = null)
+
+        buildMockMvc()
+            .perform(get("/api/v1/notifications").header(HttpHeaders.AUTHORIZATION, authHeader(userId)))
+            .andExpect(status().isOk)
+            // 최신순(id desc): system → activity
+            .andExpect(jsonPath("$.data.items[0].id").value(system))
+            .andExpect(jsonPath("$.data.items[0].imageUrl").value(defaultPushImage.url)) // actor 없음 → 서버가 채운 기본 아바타
+            .andExpect(jsonPath("$.data.items[0].category").value("SYSTEM"))
+            .andExpect(jsonPath("$.data.items[1].id").value(activity))
+            .andExpect(jsonPath("$.data.items[1].imageUrl").value(actorImage)) // 발송 시점 프사 snapshot 그대로
+            .andExpect(jsonPath("$.data.items[1].category").value("ACTIVITY"))
     }
 
     @Test
@@ -162,8 +282,10 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
                     .content("""{"all":true}""")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
-            // 처리 후 안읽음 수를 응답으로 바로 내려준다(badge 미러링용) — 별도 GET 불필요.
+            // 처리 후 안읽음 수(전체·탭별)를 응답으로 바로 내려준다(badge 미러링용) — 별도 GET 불필요.
             .andExpect(jsonPath("$.data.unreadCount").value(0))
+            .andExpect(jsonPath("$.data.unreadCountByCategory.ACTIVITY").value(0))
+            .andExpect(jsonPath("$.data.unreadCountByCategory.SYSTEM").value(0))
 
         mockMvc
             .perform(get("/api/v1/notifications").header(HttpHeaders.AUTHORIZATION, authHeader(userId)))
@@ -192,7 +314,10 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
             // target 만 본인 소유라 읽힘 → 본인 안읽음은 untouched 1건 남는다(others 는 타인이라 무영향).
+            // seed 는 ITEM_PARSING_COMPLETED(시스템)라 남은 1건은 SYSTEM 탭.
             .andExpect(jsonPath("$.data.unreadCount").value(1))
+            .andExpect(jsonPath("$.data.unreadCountByCategory.SYSTEM").value(1))
+            .andExpect(jsonPath("$.data.unreadCountByCategory.ACTIVITY").value(0))
 
         // 지정 + 본인 소유만 read. 미지정 본인 것·타인 것은 그대로(소유 검증은 쿼리 user_id 가 겸한다).
         assertTrue(notificationJpaRepository.findById(target).get().isRead)

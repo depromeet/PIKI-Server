@@ -20,4 +20,6 @@ class TournamentStartedHandler(
 
     override fun resolveVariables(event: TournamentStarted): Map<String, String> =
         mapOf("actorName" to actorNameResolver.resolve(event.actorId))
+
+    override fun resolveActorImageUrl(event: TournamentStarted): String? = actorNameResolver.resolveProfileImage(event.actorId)
 }

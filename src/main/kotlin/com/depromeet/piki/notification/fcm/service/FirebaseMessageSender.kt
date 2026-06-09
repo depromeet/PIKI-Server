@@ -1,8 +1,10 @@
 package com.depromeet.piki.notification.fcm.service
 
 import com.depromeet.piki.notification.domain.Notification
+import com.depromeet.piki.notification.domain.NotificationCategory
 import com.depromeet.piki.notification.domain.NotificationKind
 import com.depromeet.piki.notification.domain.NotificationRouting
+import com.depromeet.piki.notification.service.DefaultPushImage
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.AndroidConfig
 import com.google.firebase.messaging.AndroidNotification
@@ -25,6 +27,7 @@ import com.google.firebase.messaging.Notification as FcmNotification
 @ConditionalOnBean(FirebaseApp::class)
 class FirebaseMessageSender(
     firebaseApp: FirebaseApp,
+    private val defaultPushImage: DefaultPushImage,
 ) : FcmMessageSender {
     private val log = LoggerFactory.getLogger(javaClass)
     private val messaging = FirebaseMessaging.getInstance(firebaseApp)
@@ -73,7 +76,7 @@ class FirebaseMessageSender(
                     .setTitle(notification.title)
                     .setBody(notification.body)
                     .build(),
-            ).apply { buildDataPayload(notification).forEach { (key, value) -> putData(key, value) } }
+            ).apply { buildDataPayload(notification, defaultPushImage.url).forEach { (key, value) -> putData(key, value) } }
             .applyPlatformConfig()
             .build()
 
@@ -136,19 +139,27 @@ class FirebaseMessageSender(
         // id 는 채널 무관 dedup(SSE·FCM 중복 수신 시 같은 알림으로 합침)과 푸시 탭 → 읽음 처리(POST /read {ids:[id]})의 키다(#246).
         private const val DATA_KEY_ID = "id"
         private const val DATA_KEY_TYPE = "type"
+        private const val DATA_KEY_CATEGORY = "category"
+        private const val DATA_KEY_IMAGE_URL = "imageUrl"
         private const val DATA_KEY_REF_ID = "refId"
         private const val DATA_KEY_KIND = "kind"
         private const val DATA_KEY_TOURNAMENT_ID = "tournamentId"
         private const val DATA_KEY_TOURNAMENT_ITEM_ID = "tournamentItemId"
 
-        // FCM data payload(키→값) 구성 — id·type·refId 는 항상, 라우팅 컨텍스트(kind·tournamentId·tournamentItemId)는
+        // FCM data payload(키→값) 구성 — id·type·category·imageUrl·refId 는 항상, 라우팅 컨텍스트(kind·tournamentId·tournamentItemId)는
         // 있을 때만 싣는다. FCM data 는 값이 null 일 수 없어 null 키는 아예 넣지 않는다(#408). FirebaseMessaging
         // 호출과 무관한 순수 매핑이라 companion 으로 분리해 단위 테스트로 분기를 망라한다(FirebaseApp 없이 검증).
         // notification 은 dispatcher 가 이미 저장한 영속 엔티티라 getId() 가 보장된다(SsePayload.from 과 동일 전제).
-        internal fun buildDataPayload(notification: Notification): Map<String, String> =
+        // imageUrl 은 actor 스냅샷이 있으면 그것, 없으면(시스템) defaultPushImageUrl 로 채워 항상 비지 않게 한다(SsePayload.from 과 동일 규칙).
+        internal fun buildDataPayload(
+            notification: Notification,
+            defaultPushImageUrl: String,
+        ): Map<String, String> =
             buildMap {
                 put(DATA_KEY_ID, notification.getId().toString())
                 put(DATA_KEY_TYPE, notification.type.name)
+                put(DATA_KEY_CATEGORY, NotificationCategory.of(notification.type).name)
+                put(DATA_KEY_IMAGE_URL, notification.actorImageUrl ?: defaultPushImageUrl)
                 put(DATA_KEY_REF_ID, notification.refId.toString())
                 // SSE payload 와 같은 routing() sealed 를 분기해 두 채널이 한 소스를 쓴다. FCM data 는 값이 null 일 수 없어
                 // 라우팅이 없으면 키 자체를 안 넣고, TOURNAMENT 만 추가 식별자를 싣는다(#408).

@@ -38,6 +38,11 @@ abstract class NotificationEventHandler<E : Any>(
     // 기본값 null 을 그대로 쓰고, 그러면 Notification 의 라우팅 컬럼이 비워진다(채널에서 키가 생략된다).
     open fun resolveRouting(event: E): NotificationRouting? = null
 
+    // 행위자(actor) 프로필 사진 URL — 발송 시점에 snapshot 해 Notification.actorImageUrl 에 저장한다(#473).
+    // actor 가 있는 알림(TOURNAMENT_* 등 "OO님이 …")만 override 해 actorId 의 현재 프사 URL 을 돌려준다.
+    // actor 없는 시스템 알림(파싱·공지)은 기본값 null — 직렬화 때 서버가 defaultPushImg(피키 로고)로 채운다.
+    open fun resolveActorImageUrl(event: E): String? = null
+
     // 타입 인자 E 를 Spring 의 제네릭 추출 헬퍼로 풀어낸다. 서브클래스 생성 시 javaClass 는 실제 구현체라,
     // 그 슈퍼타입 NotificationEventHandler<E> 의 첫 타입 인자가 E 다. (private 라 가상 호출이 아니므로 init 안전)
     @Suppress("UNCHECKED_CAST")

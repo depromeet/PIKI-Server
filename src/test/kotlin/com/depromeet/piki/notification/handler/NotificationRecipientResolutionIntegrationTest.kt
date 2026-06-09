@@ -3,6 +3,8 @@ package com.depromeet.piki.notification.handler
 import com.depromeet.piki.item.event.ItemParsingCompleted
 import com.depromeet.piki.item.event.ItemParsingFailed
 import com.depromeet.piki.notification.domain.NotificationRouting
+import com.depromeet.piki.notification.repository.NotificationRepository
+import com.depromeet.piki.notification.service.NotificationDispatcher
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
@@ -44,6 +46,10 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
     @Autowired private lateinit var wishRepository: WishRepository
 
     @Autowired private lateinit var userRepository: UserRepository
+
+    @Autowired private lateinit var notificationDispatcher: NotificationDispatcher
+
+    @Autowired private lateinit var notificationRepository: NotificationRepository
 
     @Test
     fun `토너먼트 아이템 추가 수신자는 참가자에서 추가한 본인을 뺀 집합이다`() {
@@ -113,6 +119,45 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val variables = itemAddedHandler.resolveVariables(TournamentItemAdded(1004L, UUID.randomUUID()))
 
         assertEquals(mapOf("actorName" to ActorNameResolver.UNKNOWN_ACTOR), variables)
+    }
+
+    @Test
+    fun `actor 알림은 발송 시점 행위자 프로필 이미지를 snapshot 한다`() {
+        val actor = UUID.randomUUID()
+        userRepository.save(User(id = actor, nickname = "홍길동", profileImage = "https://x/actor-now.png", identityType = IdentityType.GUEST))
+
+        // 핸들러가 actorId 로 현재 프사 URL 을 뽑아 온다(이 값이 dispatcher 를 통해 Notification.actorImageUrl 로 박힌다).
+        assertEquals("https://x/actor-now.png", joinedHandler.resolveActorImageUrl(TournamentJoined(1009L, actor)))
+        assertEquals("https://x/actor-now.png", itemAddedHandler.resolveActorImageUrl(TournamentItemAdded(1009L, actor)))
+        assertEquals("https://x/actor-now.png", startedHandler.resolveActorImageUrl(TournamentStarted(1009L, actor)))
+    }
+
+    @Test
+    fun `행위자 유저를 못 찾으면 actorImageUrl 은 null 이다 (직렬화 때 defaultPushImg 로 채워짐)`() {
+        assertEquals(null, joinedHandler.resolveActorImageUrl(TournamentJoined(1010L, UUID.randomUUID())))
+    }
+
+    @Test
+    fun `시스템 알림(파싱)은 actor 가 없어 actorImageUrl 이 null 이다 - negative control`() {
+        // 파싱 핸들러는 resolveActorImageUrl 을 override 하지 않는다 → 기본 null → 직렬화 때 피키 로고로 채워진다.
+        assertEquals(null, parsingCompletedHandler.resolveActorImageUrl(ItemParsingCompleted(2099L)))
+        assertEquals(null, parsingFailedHandler.resolveActorImageUrl(ItemParsingFailed(2099L)))
+    }
+
+    @Test
+    fun `dispatch 가 actor 이벤트의 프사를 수신자 알림에 snapshot 으로 저장한다 - end-to-end`() {
+        val tournamentId = 1011L
+        val actor = UUID.randomUUID()
+        val recipient = UUID.randomUUID()
+        listOf(actor, recipient).forEach { tournamentUserRepository.save(TournamentUser(tournamentId, it)) }
+        userRepository.save(User(id = actor, nickname = "행위자", profileImage = "https://x/snap.png", identityType = IdentityType.GUEST))
+
+        // 이벤트 발행 → dispatch → 핸들러 resolveActorImageUrl → Notification.actorImageUrl 까지 실제 체인을 탄다.
+        notificationDispatcher.dispatch(TournamentItemAdded(tournamentId, actor))
+
+        val saved = notificationRepository.findPage(recipient, cursor = null, limit = 10, types = null)
+        assertEquals(1, saved.size)
+        assertEquals("https://x/snap.png", saved.first().actorImageUrl) // 발송 시점 actor 프사가 그대로 박혔다
     }
 
     @Test

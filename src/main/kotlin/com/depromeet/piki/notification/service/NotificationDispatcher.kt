@@ -39,6 +39,8 @@ class NotificationDispatcher(
 
         val refId = handler.resolveRefId(event)
         val routing = handler.resolveRouting(event)
+        // actor 프사는 한 이벤트에 한 명이라 수신자 루프 밖에서 한 번만 해석해 모든 수신자 알림에 같은 값을 박는다(#473).
+        val actorImageUrl = handler.resolveActorImageUrl(event)
         val template = templateProvider.find(handler.notificationType)
         val variables = handler.resolveVariables(event)
         val title = renderer.render(template.title, variables)
@@ -56,6 +58,7 @@ class NotificationDispatcher(
                             body = body,
                             refId = refId,
                             routing = routing,
+                            actorImageUrl = actorImageUrl,
                         ),
                     )
                 // 한 채널의 실패도 다른 채널 전달을 막지 않게 추가로 격리한다.

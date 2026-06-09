@@ -28,6 +28,11 @@ class Notification(
     // 파싱 알림 딥링크 라우팅 컨텍스트(#408) — 아래 kind·tournamentId·tournamentItemId 컬럼으로 평탄화해 저장한다.
     // 라우팅이 없는 알림(토너먼트 알림 등)은 null 을 넘겨 세 컬럼이 모두 비워진다. 생성자 끝의 default 라 기존 호출은 안 깨진다.
     routing: NotificationRouting? = null,
+    // 행위자(actor) 프로필 사진 snapshot(#473) — 발송 시점 actor 의 프사 URL 을 박아 고정한다. 이후 actor 가 프사를
+    // 바꿔도 과거 알림은 그 시점 사진 유지(title 의 닉네임 snapshot 과 같은 결). actor 없는 시스템 알림은 null —
+    // 직렬화 시 서버가 defaultPushImg 로 채운다(컬럼엔 저장 안 함). routing 뒤에 둬 기존 positional 호출(…,refId,routing)을 안 깬다.
+    @Column(name = "actor_image_url", length = MAX_IMAGE_URL_LENGTH)
+    val actorImageUrl: String? = null,
 ) : LongBaseEntity() {
     // 엔티티 불변식 — 최후의 보루. title/body 는 발송 시점에 렌더된 완성본이라, 정상 흐름에선
     // 입력 경계(닉네임 등 변수 길이 제한)가 먼저 걸러 VARCHAR(255) 안에 든다. 그래도 엔티티가
@@ -80,5 +85,8 @@ class Notification(
     companion object {
         // VARCHAR(255) 컬럼과 엔티티 불변식이 같은 상수를 공유한다.
         const val MAX_TEXT_LENGTH = 255
+
+        // actor_image_url 컬럼 길이 — users.profile_image(2048)와 정합. 발송 시점 그 값을 그대로 snapshot 하므로 같은 상한.
+        const val MAX_IMAGE_URL_LENGTH = 2048
     }
 }
