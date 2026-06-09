@@ -46,11 +46,11 @@ class AppleNotificationService(
     }
 
     // sub(Apple subject = socialId) → 우리 userId. 못 찾으면(미가입·이미 탈퇴로 user_detail 파기됨) 멱등하게 무시한다.
+    // sub 는 호출 시점에 이미 non-null 이다 — account-delete·consent-revoked 는 AppleNotificationEvent.parse 가
+    // sub 를 보장하고(누락은 401 로 차단됨), 이 메서드는 그 둘에서만 호출된다. 여기 null 이 닿으면 parse 를 안 거친
+    // 내부 버그이므로 불변식(requireNotNull)으로 막는다(500).
     private fun resolveUserId(sub: String?): UUID? {
-        sub ?: run {
-            log.info("Apple 알림 sub 누락 — 무시")
-            return null
-        }
+        requireNotNull(sub) { "account-delete·consent-revoked 는 parse 가 sub 를 보장하므로 여기 닿으면 안 된다" }
         val userId = userDetailRepository.findByProviderAndSocialId(OAuthProvider.APPLE.name, sub)?.getIdOrNull()
         userId ?: log.info("Apple 알림 대상 유저 없음 — 멱등 무시 (미가입 또는 이미 탈퇴)")
         return userId
