@@ -230,11 +230,15 @@ class TournamentService(
     ): StartResult {
         // 오너가 이미 시작한 뒤에만 멤버가 클론을 만들 수 있다.
         if (rootTournament.isPending()) throw TournamentException.notInProgressTournament()
-        // 이미 클론이 있으면 중복 생성 방지
+        // 이미 본인이 소유한 클론이 있으면 중복 생성 방지.
+        // 참여자 기준이 아니라 소유자(ownerTournamentUserId) 기준 — 타인 클론에 참여만 한 경우를 본인 클론으로 오인하지 않는다.
         val existingClones = tournamentRepository.findBySourceTournamentId(rootTournamentId)
-        val alreadyCloned = existingClones.any { clone ->
-            tournamentUserRepository.findByTournamentIdAndUserId(clone.getId(), userId)?.let { true } ?: false
-        }
+        val ownedTournamentUserIds = tournamentUserRepository
+            .findByIds(existingClones.map { it.ownerTournamentUserId }.toSet())
+            .filter { it.userId == userId }
+            .map { it.getId() }
+            .toSet()
+        val alreadyCloned = existingClones.any { it.ownerTournamentUserId in ownedTournamentUserIds }
         if (alreadyCloned) throw TournamentException.alreadyCloned()
 
         val effectiveItems = getEffectiveTournamentItems(rootTournament)
@@ -731,14 +735,18 @@ class TournamentService(
             tournamentRepository.findTournamentByIdForUpdate(sourceTournamentId)
                 ?: throw TournamentException.notFoundTournament()
 
-        // get-or-create: 이미 본인 클론이 있으면 그 id 로 "이어서 진행하기".
+        // get-or-create: 이미 "본인이 소유한" 클론이 있으면 그 id 로 "이어서 진행하기".
+        // 참여자(TournamentUser) 기준이 아니라 소유자(ownerTournamentUserId) 기준으로 판별한다 —
+        // 타인 클론에 초대코드로 참여만 한 경우를 본인 클론으로 오인해 잘못 라우팅하지 않기 위함.
         // 원본 플레이링크 만료와 무관하게 돌려준다 — 클론은 자체 라이프사이클을 가진다.
-        val existingTournamentIds = tournamentUserRepository
-            .findTournamentIdsByUserId(userId)
+        val clones = tournamentRepository.findBySourceTournamentId(sourceTournamentId)
+        val ownedTournamentUserIds = tournamentUserRepository
+            .findByIds(clones.map { it.ownerTournamentUserId }.toSet())
+            .filter { it.userId == userId }
+            .map { it.getId() }
             .toSet()
-        tournamentRepository
-            .findBySourceTournamentId(sourceTournamentId)
-            .firstOrNull { it.getId() in existingTournamentIds }
+        clones
+            .firstOrNull { it.ownerTournamentUserId in ownedTournamentUserIds }
             ?.let { return it.getId() }
 
         // 신규 클론 생성 경로에서만 플레이링크 유효성을 검증한다.

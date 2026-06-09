@@ -55,6 +55,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 @RecordApplicationEvents
@@ -2206,6 +2207,49 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 post("/api/v1/tournaments/$tournamentId/from-play-link")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
             ).andExpect(status().isConflict)
+    }
+
+    @Test
+    fun `POST from-play-link 는 타인 클론에 참여만 한 유저를 본인 클론으로 오인하지 않고 새로 생성한다`() {
+        val mockMvc = buildMockMvc()
+        val thirdUserId = UUID.randomUUID()
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+        saveUser(thirdUserId, "https://cdn.example.com/third.jpg", "제3유저")
+        val (tournamentId, _, _) = completeTournamentWith2Items(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$tournamentId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+        // otherUser 가 클론을 생성 (소유자)
+        val cloneResult = mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/from-play-link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isOk)
+            .andReturn()
+        val otherCloneId = objectMapper.readTree(cloneResult.response.contentAsString)["data"].asLong()
+
+        // thirdUser 가 otherUser 의 클론(PENDING)에 초대코드로 참여만 한다 (소유자가 아님)
+        val otherClone = tournamentJpaRepository.findByIdAndDeletedAtIsNull(otherCloneId)!!
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$otherCloneId/join")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(thirdUserId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteCode":"${otherClone.inviteCode}"}"""),
+            ).andExpect(status().isOk)
+
+        // thirdUser 의 from-play-link 는 타인 클론을 돌려주지 않고 본인 새 클론을 만든다.
+        val result = mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/from-play-link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(thirdUserId)),
+            ).andExpect(status().isOk)
+            .andReturn()
+        val thirdCloneId = objectMapper.readTree(result.response.contentAsString)["data"].asLong()
+        assertNotEquals(otherCloneId, thirdCloneId)
     }
 
     // ── 그룹 결과 ──────────────────────────────────────────────────
