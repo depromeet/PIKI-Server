@@ -147,10 +147,12 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `read all 은 본인 안읽음을 전부 읽음 처리하고 unreadCount 가 0 이 된다`() {
+    fun `read all 은 본인 안읽음만 전부 읽음 처리하고 타인 알림은 무영향이다`() {
         val userId = UUID.randomUUID()
+        val otherUserId = UUID.randomUUID()
         seed(userId, isRead = false)
         seed(userId, isRead = false)
+        val others = seed(otherUserId, isRead = false) // all=true 가 user_id 범위를 안 넘는지 검증 (WHERE user_id=? 회귀 가드)
         val mockMvc = buildMockMvc()
 
         mockMvc
@@ -169,6 +171,9 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.unreadCount").value(0))
             .andExpect(jsonPath("$.data.items[0].isRead").value(true))
             .andExpect(jsonPath("$.data.items[1].isRead").value(true))
+
+        // 타인(otherUserId) 알림은 all=true 에 안 휩쓸려 그대로 안읽음 (markAllRead 의 user_id 한정 검증).
+        assertFalse(notificationJpaRepository.findById(others).get().isRead)
     }
 
     @Test
