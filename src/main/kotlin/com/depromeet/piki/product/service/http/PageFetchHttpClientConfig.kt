@@ -59,6 +59,9 @@ class PageFetchHttpClientConfig {
                 .setDefaultRequestConfig(
                     RequestConfig
                         .custom()
+                        // connectionRequestTimeout 은 미설정 시 기본 3분이라, 풀 고갈·느린 upstream 에서 워커가 오래 대기한다.
+                        // 빠르게 실패시켜 상위가 적절히 처리·재시도하게 둔다.
+                        .setConnectionRequestTimeout(Timeout.ofMilliseconds(CONNECTION_REQUEST_TIMEOUT_MS))
                         .setResponseTimeout(Timeout.ofMilliseconds(READ_TIMEOUT_MS))
                         .build(),
                 ).build()
@@ -76,6 +79,9 @@ class PageFetchHttpClientConfig {
     companion object {
         private const val CONNECT_TIMEOUT_MS = 5_000L
         private const val READ_TIMEOUT_MS = 15_000L
+
+        // 커넥션 풀에서 커넥션을 획득하기까지의 최대 대기. 미설정 시 HttpClient5 기본이 3분이라 짧게 명시(fail-fast).
+        private const val CONNECTION_REQUEST_TIMEOUT_MS = 2_000L
 
         // 기본 RestClient UA 는 일부 사이트에서 차단되므로 실제 브라우저 UA 로 위장.
         private const val USER_AGENT =
