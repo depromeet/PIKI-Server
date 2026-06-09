@@ -2373,6 +2373,65 @@ class TournamentControllerTest : IntegrationTestSupport() {
             ).andExpect(status().isConflict)
     }
 
+    @Test
+    fun `GET group-result 는 게스트(플레이링크 참여자)도 본인 완료 후 ROOT id 로 조회할 수 있다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(userId, userProfileImage, "주최자")
+        saveUser(otherUserId, "https://cdn.example.com/guest.jpg", "게스트")
+        // 주최자가 ROOT 생성·시작·완료
+        val (rootId, ti1, ti2) = completeTournamentWith2Items(mockMvc)
+        // 주최자가 플레이링크 생성
+        mockMvc.perform(
+            post("/api/v1/tournaments/$rootId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+        // 게스트가 플레이링크로 본인 CLONE 생성 → 시작 → 완료
+        val cloneResult = mockMvc
+            .perform(
+                post("/api/v1/tournaments/$rootId/from-play-link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andReturn()
+        val cloneId = objectMapper.readTree(cloneResult.response.contentAsString)["data"].asLong()
+        mockMvc.perform(
+            post("/api/v1/tournaments/$cloneId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+        )
+        mockMvc.perform(
+            post("/api/v1/tournaments/$cloneId/matches")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """{"currentRound":2,"firstTournamentItemId":$ti1,"secondTournamentItemId":$ti2,"selectedTournamentItemId":$ti1}""",
+                ),
+        )
+
+        // 게스트(ROOT TU 아님, 본인 CLONE 소유자)가 ROOT id 로 그룹 결과 조회 → 200
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$rootId/group-result")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.items").isArray)
+    }
+
+    @Test
+    fun `GET group-result 는 ROOT 참여자도 본인 CLONE 소유자도 아니면 403 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(userId, userProfileImage, "주최자")
+        val outsiderId = UUID.randomUUID()
+        saveUser(outsiderId, "https://cdn.example.com/outsider.jpg", "외부인")
+        val rootId = completeSocialTournamentWith2Players(mockMvc)
+
+        // outsiderId 는 ROOT 의 TournamentUser 도, ROOT 클론의 소유자도 아니다.
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$rootId/group-result")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(outsiderId)),
+            ).andExpect(status().isForbidden)
+    }
+
     private fun completeTournamentWith2Items(mockMvc: MockMvc): TournamentStart {
         val tournamentId = createTournament(mockMvc)
         val item1Id = saveWishItem(name = "아이템1")
