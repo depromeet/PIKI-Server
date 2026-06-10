@@ -65,7 +65,7 @@ data: connected
 
 ```text
 event: notification
-data: {"id":123,"type":"TOURNAMENT_JOINED","title":"홍길동님이 참가했어요","body":"","refId":45,"isRead":false,"createdAt":"2026-06-06T14:32:10"}
+data: {"id":123,"type":"TOURNAMENT_JOINED","category":"ACTIVITY","title":"홍길동님이 참가했어요","body":"","imageUrl":"https://.../profiles/{uid}.png","refId":45,"isRead":false,"createdAt":"2026-06-06T14:32:10"}
 ```
 
 ### (3) 하트비트 (주석 ping)
@@ -86,8 +86,10 @@ data: {"id":123,"type":"TOURNAMENT_JOINED","title":"홍길동님이 참가했어
 |---|---|---|
 | `id` | number (long) | 알림 식별자. 추후 읽음 처리 API 의 키. |
 | `type` | string (enum) | 알림 종류. 딥링크 분기 키. (아래 표) |
+| `category` | string (enum) | 알림센터 탭 구분. `ACTIVITY`(활동) \| `SYSTEM`(시스템). `type` 에서 파생. |
 | `title` | string | 표시용 제목. 발송 시점에 변수 치환이 끝난 완성본. |
 | `body` | string | 표시용 본문. **현재는 전 타입 빈 문자열(`""`)** (후속 템플릿 작업에서 채워질 예정). |
+| `imageUrl` | string | 아바타 URL. **항상 채워짐** — 사람 알림은 발송 시점 actor 프사 snapshot, 시스템 알림은 피키 로고(서버가 `defaultPushImg` 채움). 클라는 null-check 없이 렌더. |
 | `refId` | number (long) | 딥링크 대상 식별자. `type` 에 따라 가리키는 대상이 다름 (아래 표). |
 | `isRead` | boolean | 읽음 여부. SSE 로 즉시 도착하는 알림은 사실상 `false`. |
 | `createdAt` | string (ISO-8601 LocalDateTime) | 생성 시각. 예: `2026-06-06T14:32:10`. 타임존 오프셋 없음(서버 로컬). |
@@ -103,12 +105,17 @@ data: {"id":123,"type":"TOURNAMENT_JOINED","title":"홍길동님이 참가했어
 
 클라이언트는 `type` 으로 화면을 분기하고 `refId` 로 이동 대상을 정한다.
 
-| `type` | 의미 | `title` (현재 문구) | `refId` 가 가리키는 것 | 수신자 |
-|---|---|---|---|---|
-| `TOURNAMENT_JOINED` | 누군가 내 토너먼트에 참가 | `{참가자}님이 참가했어요` | **tournamentId** | 해당 토너먼트 참여자 (행위자 제외) |
-| `TOURNAMENT_ITEM_ADDED` | 누군가 토너먼트에 아이템 추가 | `{참가자}님이 아이템을 추가했어요` | **tournamentId** | 해당 토너먼트 참여자 (행위자 제외) |
-| `ITEM_PARSING_COMPLETED` | 내 상품 정보 추출 성공 | `상품 정보가 저장됐어요` | **itemId** | 본인 |
-| `ITEM_PARSING_FAILED` | 내 상품 정보 추출 실패 | `상품 정보를 가져오지 못했어요` | **itemId** | 본인 |
+| `type` | 카테고리 | 의미 | `title` (현재 문구) | `refId` | 수신자 |
+|---|---|---|---|---|---|
+| `TOURNAMENT_JOINED` | ACTIVITY | 누군가 토너먼트에 참가 | `{참가자}님이 참가했어요` | **tournamentId** | 참여자 (행위자 제외) |
+| `TOURNAMENT_ITEM_ADDED` | ACTIVITY | 누군가 아이템 추가 | `{참가자}님이 아이템을 추가했어요` | **tournamentId** | 참여자 (행위자 제외) |
+| `TOURNAMENT_STARTED` | ACTIVITY | 주최자가 토너먼트 시작 | `{주최자}님이 토너먼트를 시작했어요` | **tournamentId** | 참여자 (주최자 제외) |
+| `TOURNAMENT_PLAYED_FROM_LINK` | ACTIVITY | 플레이링크로 내 토너먼트 플레이 시작 | `{플레이어}님이 회원님 토너먼트를 플레이했어요` | **ROOT 토너먼트 id** | ROOT 주최자 |
+| `TOURNAMENT_COMPLETED` | ACTIVITY | 멤버/게스트가 클론 완료 | `{멤버}님이 회원님 토너먼트를 완료했어요` | **ROOT 토너먼트 id** | ROOT 주최자 |
+| `TOURNAMENT_RESULT_READY` | ACTIVITY | 주최자가 ROOT 완료(결과 나옴) | `참여하신 {주최자}님의 토너먼트 결과가 나왔어요` | **ROOT 토너먼트 id** | 참여자 (주최자 제외) |
+| `ITEM_PARSING_COMPLETED` | SYSTEM | 내 상품 정보 추출 성공 | `상품 정보가 저장됐어요` | **itemId** | 본인(위시 주인/등록자) |
+| `ITEM_PARSING_FAILED` | SYSTEM | 내 상품 정보 추출 실패 | `상품 정보를 가져오지 못했어요` | **itemId** | 본인(위시 주인/등록자) |
+| `ANNOUNCEMENT` | SYSTEM | 전체 공지(관리자, 후속) | (관리자 입력) | **공지 id/0** | 토큰 보유 유저(후속) |
 
 > `title` 문구는 서버 템플릿에서 렌더된 값이라 바뀔 수 있다. 클라이언트는 **문구가 아니라 `type` 으로 분기**할 것.
 
