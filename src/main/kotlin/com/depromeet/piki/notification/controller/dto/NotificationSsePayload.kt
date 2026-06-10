@@ -86,21 +86,43 @@ sealed interface NotificationSsePayload {
             return when (val routing = notification.routing()) {
                 null ->
                     Reference(
-                        id, notification.type, category, notification.title, notification.body,
-                        imageUrl, notification.refId, notification.isRead, notification.createdAt,
+                        id = id,
+                        type = notification.type,
+                        category = category,
+                        title = notification.title,
+                        body = notification.body,
+                        imageUrl = imageUrl,
+                        refId = notification.refId,
+                        isRead = notification.isRead,
+                        createdAt = notification.createdAt,
                     )
 
                 NotificationRouting.Wish ->
                     WishParsing(
-                        id, notification.type, category, notification.title, notification.body,
-                        imageUrl, notification.refId, notification.isRead, notification.createdAt,
+                        id = id,
+                        type = notification.type,
+                        category = category,
+                        title = notification.title,
+                        body = notification.body,
+                        imageUrl = imageUrl,
+                        refId = notification.refId,
+                        isRead = notification.isRead,
+                        createdAt = notification.createdAt,
                     )
 
                 is NotificationRouting.Tournament ->
                     TournamentParsing(
-                        id, notification.type, category, notification.title, notification.body,
-                        imageUrl, notification.refId, notification.isRead, notification.createdAt,
-                        routing.tournamentId, routing.tournamentItemId,
+                        id = id,
+                        type = notification.type,
+                        category = category,
+                        title = notification.title,
+                        body = notification.body,
+                        imageUrl = imageUrl,
+                        refId = notification.refId,
+                        isRead = notification.isRead,
+                        createdAt = notification.createdAt,
+                        tournamentId = routing.tournamentId,
+                        tournamentItemId = routing.tournamentItemId,
                     )
             }
         }

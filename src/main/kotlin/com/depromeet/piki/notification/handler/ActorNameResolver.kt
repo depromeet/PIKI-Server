@@ -13,12 +13,23 @@ import java.util.UUID
 class ActorNameResolver(
     private val userRepository: UserRepository,
 ) {
-    fun resolve(actorId: UUID): String = userRepository.findById(actorId)?.nickname ?: UNKNOWN_ACTOR
-
-    // 발송 시점 actor 프사 URL(#473). 못 찾으면 null → 직렬화 때 서버가 defaultPushImg 로 채운다.
-    fun resolveProfileImage(actorId: UUID): String? = userRepository.findById(actorId)?.profileImage
+    // 닉네임과 프사를 한 번의 findById 로 함께 푼다 — 둘을 따로 조회하면 같은 actor 에 쿼리가 두 번 나간다(#473).
+    // 못 찾으면(데이터 불일치) 닉네임은 fallback, 프사는 null(직렬화 때 서버가 defaultPushImg 로 채운다).
+    fun resolveAttributes(actorId: UUID): ActorAttributes {
+        val user = userRepository.findById(actorId)
+        return ActorAttributes(
+            name = user?.nickname ?: UNKNOWN_ACTOR,
+            profileImage = user?.profileImage,
+        )
+    }
 
     companion object {
         const val UNKNOWN_ACTOR = "알 수 없는 사용자"
     }
 }
+
+// actor 표시 속성 — 템플릿 변수(닉네임)와 프사 snapshot 의 단일 조회 결과.
+data class ActorAttributes(
+    val name: String,
+    val profileImage: String?,
+)

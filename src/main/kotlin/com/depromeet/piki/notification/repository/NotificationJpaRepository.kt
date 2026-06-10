@@ -45,9 +45,6 @@ interface NotificationJpaRepository : JpaRepository<Notification, Long> {
         limit: Limit,
     ): List<Notification>
 
-    // 안읽음 수(badge). (idx_notifications_user_id_is_read 가 그대로 커버)
-    fun countByUserIdAndIsReadFalse(userId: UUID): Long
-
     // type 별 안읽음 수 — 전체 badge + 탭별(활동/시스템) badge 를 한 쿼리(group by)로 집계한다.
     // closed projection(type·count alias)으로 받아 RepositoryImpl 이 카테고리로 접는다. (idx (user_id, is_read) 커버)
     @Query(

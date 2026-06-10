@@ -14,6 +14,7 @@ import java.util.UUID
 @Service
 class NotificationService(
     private val notificationRepository: NotificationRepository,
+    private val defaultPushImage: DefaultPushImage,
 ) {
     // 본인 알림을 최신순으로 한 페이지 + 안읽음 수 동봉. hasNext 판단을 위해 한 건 더 조회하고 초과분은 잘라낸다.
     // category 가 있으면 그 카테고리의 type 집합으로 필터(활동/시스템 탭). unreadCount 는 category 무관 전체(앱 badge).
@@ -45,6 +46,7 @@ class NotificationService(
             unreadCountByCategory = unreadByCategory,
             nextCursor = nextCursor,
             hasNext = hasNext,
+            defaultPushImageUrl = defaultPushImage.url,
         )
     }
 

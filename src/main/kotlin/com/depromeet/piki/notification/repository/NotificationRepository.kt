@@ -21,10 +21,8 @@ interface NotificationRepository {
         types: List<NotificationType>?,
     ): List<Notification>
 
-    // 본인 안읽음 수(badge).
-    fun countUnread(userId: UUID): Long
-
     // 카테고리별 안읽음 수(탭별 badge). 모든 카테고리를 키로 포함하며 해당 없는 카테고리는 0 이다.
+    // 전체 안읽음 수(앱 badge)는 이 맵의 값 합으로 도출한다 — 두 수치가 어긋날 여지를 없앤다.
     fun countUnreadByCategory(userId: UUID): Map<NotificationCategory, Long>
 
     // 지정 id 중 본인 소유 + 안읽음만 read 로 (타인/없는 id 무영향). 영향 건수 반환. 멱등.

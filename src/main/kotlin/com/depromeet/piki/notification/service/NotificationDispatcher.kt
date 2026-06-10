@@ -39,10 +39,12 @@ class NotificationDispatcher(
 
         val refId = handler.resolveRefId(event)
         val routing = handler.resolveRouting(event)
-        // actor 프사는 한 이벤트에 한 명이라 수신자 루프 밖에서 한 번만 해석해 모든 수신자 알림에 같은 값을 박는다(#473).
-        val actorImageUrl = handler.resolveActorImageUrl(event)
+        // actor 는 한 이벤트에 한 명이라 수신자 루프 밖에서 한 번만 해석해(actorId 조회 1회) 모든 수신자 알림에 같은 값을 박는다(#473).
+        // 변수(actorName)와 프사 snapshot 을 한 컨텍스트로 함께 받는다.
+        val actorContext = handler.resolveActorContext(event)
+        val actorImageUrl = actorContext.imageUrl
         val template = templateProvider.find(handler.notificationType)
-        val variables = handler.resolveVariables(event)
+        val variables = actorContext.variables
         val title = renderer.render(template.title, variables)
         val body = renderer.render(template.body, variables)
 

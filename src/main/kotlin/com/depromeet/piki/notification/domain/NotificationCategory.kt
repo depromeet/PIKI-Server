@@ -24,7 +24,10 @@ enum class NotificationCategory {
             }
 
         // 한 카테고리에 속한 type 들 — 목록 조회의 type-in 필터에 쓴다(?category=).
-        fun typesOf(category: NotificationCategory): List<NotificationType> =
-            NotificationType.entries.filter { of(it) == category }
+        // type→category 가 고정이라 클래스 로딩 때 한 번 역색인해 두고(요청마다 entries 전수 순회 회피), 조회는 맵 lookup 으로 끝낸다.
+        private val typesByCategory: Map<NotificationCategory, List<NotificationType>> =
+            NotificationType.entries.groupBy { of(it) }
+
+        fun typesOf(category: NotificationCategory): List<NotificationType> = typesByCategory[category].orEmpty()
     }
 }

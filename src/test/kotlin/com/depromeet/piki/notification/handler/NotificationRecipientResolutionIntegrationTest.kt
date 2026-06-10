@@ -25,7 +25,7 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-// 핸들러의 수신자(resolveRecipients)·변수(resolveVariables) 도출은 DB 역조회에 의존하므로 통합으로 검증한다.
+// 핸들러의 수신자(resolveRecipients)·actor 컨텍스트(resolveActorContext) 도출은 DB 역조회에 의존하므로 통합으로 검증한다.
 // 영속 fixture(참가자·위시·토너먼트 아이템·유저)를 깔고 실제 빈으로 도출 결과를 단언한다. @Transactional 자동 롤백.
 @Transactional
 class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() {
@@ -98,7 +98,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val owner = UUID.randomUUID()
         userRepository.save(User(id = owner, nickname = "주최자", profileImage = "https://x/p.jpg", identityType = IdentityType.GUEST))
 
-        val variables = startedHandler.resolveVariables(TournamentStarted(tournamentId, owner))
+        val variables = startedHandler.resolveActorContext(TournamentStarted(tournamentId, owner)).variables
 
         assertEquals(mapOf("actorName" to "주최자"), variables)
     }
@@ -109,14 +109,14 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val actor = UUID.randomUUID()
         userRepository.save(User(id = actor, nickname = "홍길동", profileImage = "https://x/p.jpg", identityType = IdentityType.GUEST))
 
-        val variables = itemAddedHandler.resolveVariables(TournamentItemAdded(tournamentId, actor))
+        val variables = itemAddedHandler.resolveActorContext(TournamentItemAdded(tournamentId, actor)).variables
 
         assertEquals(mapOf("actorName" to "홍길동"), variables)
     }
 
     @Test
     fun `행위자 유저를 못 찾으면 actorName 은 fallback 으로 채운다`() {
-        val variables = itemAddedHandler.resolveVariables(TournamentItemAdded(1004L, UUID.randomUUID()))
+        val variables = itemAddedHandler.resolveActorContext(TournamentItemAdded(1004L, UUID.randomUUID())).variables
 
         assertEquals(mapOf("actorName" to ActorNameResolver.UNKNOWN_ACTOR), variables)
     }
@@ -127,37 +127,39 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         userRepository.save(User(id = actor, nickname = "홍길동", profileImage = "https://x/actor-now.png", identityType = IdentityType.GUEST))
 
         // 핸들러가 actorId 로 현재 프사 URL 을 뽑아 온다(이 값이 dispatcher 를 통해 Notification.actorImageUrl 로 박힌다).
-        assertEquals("https://x/actor-now.png", joinedHandler.resolveActorImageUrl(TournamentJoined(1009L, actor)))
-        assertEquals("https://x/actor-now.png", itemAddedHandler.resolveActorImageUrl(TournamentItemAdded(1009L, actor)))
-        assertEquals("https://x/actor-now.png", startedHandler.resolveActorImageUrl(TournamentStarted(1009L, actor)))
+        assertEquals("https://x/actor-now.png", joinedHandler.resolveActorContext(TournamentJoined(1009L, actor)).imageUrl)
+        assertEquals("https://x/actor-now.png", itemAddedHandler.resolveActorContext(TournamentItemAdded(1009L, actor)).imageUrl)
+        assertEquals("https://x/actor-now.png", startedHandler.resolveActorContext(TournamentStarted(1009L, actor)).imageUrl)
     }
 
     @Test
     fun `행위자 유저를 못 찾으면 actorImageUrl 은 null 이다 (직렬화 때 defaultPushImg 로 채워짐)`() {
-        assertEquals(null, joinedHandler.resolveActorImageUrl(TournamentJoined(1010L, UUID.randomUUID())))
+        assertEquals(null, joinedHandler.resolveActorContext(TournamentJoined(1010L, UUID.randomUUID())).imageUrl)
     }
 
     @Test
     fun `시스템 알림(파싱)은 actor 가 없어 actorImageUrl 이 null 이다 - negative control`() {
-        // 파싱 핸들러는 resolveActorImageUrl 을 override 하지 않는다 → 기본 null → 직렬화 때 피키 로고로 채워진다.
-        assertEquals(null, parsingCompletedHandler.resolveActorImageUrl(ItemParsingCompleted(2099L)))
-        assertEquals(null, parsingFailedHandler.resolveActorImageUrl(ItemParsingFailed(2099L)))
+        // 파싱 핸들러는 resolveActorContext 를 override 하지 않는다 → 기본 빈 컨텍스트 imageUrl null → 직렬화 때 피키 로고로 채워진다.
+        assertEquals(null, parsingCompletedHandler.resolveActorContext(ItemParsingCompleted(2099L)).imageUrl)
+        assertEquals(null, parsingFailedHandler.resolveActorContext(ItemParsingFailed(2099L)).imageUrl)
     }
 
     @Test
-    fun `dispatch 가 actor 이벤트의 프사를 수신자 알림에 snapshot 으로 저장한다 - end-to-end`() {
+    fun `dispatch 가 actor 이벤트의 프사와 닉네임을 한 컨텍스트에서 수신자 알림에 박는다 - end-to-end`() {
         val tournamentId = 1011L
         val actor = UUID.randomUUID()
         val recipient = UUID.randomUUID()
         listOf(actor, recipient).forEach { tournamentUserRepository.save(TournamentUser(tournamentId, it)) }
         userRepository.save(User(id = actor, nickname = "행위자", profileImage = "https://x/snap.png", identityType = IdentityType.GUEST))
 
-        // 이벤트 발행 → dispatch → 핸들러 resolveActorImageUrl → Notification.actorImageUrl 까지 실제 체인을 탄다.
+        // 이벤트 발행 → dispatch → 핸들러 resolveActorContext(한 번의 actor 조회) → 변수(actorName) 렌더 + 프사 snapshot 까지 실제 체인을 탄다.
         notificationDispatcher.dispatch(TournamentItemAdded(tournamentId, actor))
 
         val saved = notificationRepository.findPage(recipient, cursor = null, limit = 10, types = null)
         assertEquals(1, saved.size)
         assertEquals("https://x/snap.png", saved.first().actorImageUrl) // 발송 시점 actor 프사가 그대로 박혔다
+        // 같은 컨텍스트의 변수(actorName)가 템플릿에 렌더돼 제목에 박힌다 — 변수·프사가 한 조회에서 함께 흐르는지 end-to-end 로 가드한다.
+        assertEquals("행위자님이 아이템을 추가했어요", saved.first().title)
     }
 
     @Test

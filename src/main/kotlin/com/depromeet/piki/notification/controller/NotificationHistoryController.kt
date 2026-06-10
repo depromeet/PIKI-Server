@@ -6,7 +6,6 @@ import com.depromeet.piki.notification.controller.dto.NotificationHistoryRespons
 import com.depromeet.piki.notification.controller.dto.NotificationReadRequest
 import com.depromeet.piki.notification.controller.dto.NotificationReadResponse
 import com.depromeet.piki.notification.domain.NotificationCategory
-import com.depromeet.piki.notification.service.DefaultPushImage
 import com.depromeet.piki.notification.service.NotificationService
 import jakarta.validation.Valid
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -22,7 +21,6 @@ import java.util.UUID
 @RequestMapping("/api/v1/notifications")
 class NotificationHistoryController(
     private val notificationService: NotificationService,
-    private val defaultPushImage: DefaultPushImage,
 ) : NotificationHistoryApi {
     @GetMapping
     override fun getHistory(
@@ -33,7 +31,7 @@ class NotificationHistoryController(
     ): ApiResponseBody<NotificationHistoryResponse> {
         val page = notificationService.getHistory(userId = userId, rawCursor = cursor, rawSize = size, category = category)
         return ApiResponseBody.ok(
-            data = NotificationHistoryResponse.of(page.notifications, page.unreadCount, page.unreadCountByCategory, defaultPushImage.url),
+            data = NotificationHistoryResponse.of(page.notifications, page.unreadCount, page.unreadCountByCategory, page.defaultPushImageUrl),
             pageResponse = PageResponse(nextCursor = page.nextCursor, hasNext = page.hasNext),
         )
     }
