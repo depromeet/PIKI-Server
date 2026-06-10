@@ -1,5 +1,6 @@
 package com.depromeet.piki.notification.fcm.service
 
+import com.depromeet.piki.notification.controller.dto.NotificationSsePayload
 import com.depromeet.piki.notification.domain.Notification
 import com.depromeet.piki.notification.domain.NotificationRouting
 import com.depromeet.piki.notification.domain.NotificationType
@@ -42,13 +43,13 @@ class FirebaseMessageSenderTest {
         assertFalse(FirebaseMessageSender.isStaleToken(null))
     }
 
-    // buildDataPayload 는 FCM data(키→값) 구성 정책 — 라우팅 컨텍스트 유무에 따른 키 셋 분기를 단위로 망라한다(#408).
-    // id 는 항상 실린다(채널 무관 dedup·푸시 탭→읽음의 키, #246) — 미영속 엔티티엔 withId 로 부여한다.
+    // toFcmData 는 NotificationSsePayload(=from(), SSE 와 단일 소스)를 FCM data 로 인코딩 — 라우팅 유무에 따른 키 셋 분기를 단위로 망라한다(#408).
+    // 값은 payload 에서 읽기만 하므로 category·imageUrl 파생이 SSE 와 어긋날 수 없다. id 는 항상 실린다(#246) — 미영속 엔티티엔 withId 로 부여한다.
     @Test
     fun `라우팅 없는 알림은 id·type·category·imageUrl·refId 를 data 에 싣는다`() {
         val notification = Notification(UUID.randomUUID(), NotificationType.TOURNAMENT_JOINED, "제목", "본문", 7L).withId(42L)
 
-        val data = FirebaseMessageSender.buildDataPayload(notification, defaultPushImageUrl)
+        val data = FirebaseMessageSender.toFcmData(NotificationSsePayload.from(notification, defaultPushImageUrl))
 
         // actor 스냅샷 없음 → imageUrl 은 defaultPushImageUrl 로 채워진다. TOURNAMENT_JOINED → category=ACTIVITY.
         assertEquals(
@@ -63,7 +64,7 @@ class FirebaseMessageSenderTest {
             Notification(UUID.randomUUID(), NotificationType.TOURNAMENT_ITEM_ADDED, "제목", "본문", 7L, actorImageUrl = "https://img.test/profiles/a.png")
                 .withId(45L)
 
-        val data = FirebaseMessageSender.buildDataPayload(notification, defaultPushImageUrl)
+        val data = FirebaseMessageSender.toFcmData(NotificationSsePayload.from(notification, defaultPushImageUrl))
 
         assertEquals("https://img.test/profiles/a.png", data["imageUrl"])
         assertEquals("ACTIVITY", data["category"])
@@ -75,7 +76,7 @@ class FirebaseMessageSenderTest {
             Notification(UUID.randomUUID(), NotificationType.ITEM_PARSING_COMPLETED, "제목", "본문", 11L, NotificationRouting.Wish)
                 .withId(43L)
 
-        val data = FirebaseMessageSender.buildDataPayload(notification, defaultPushImageUrl)
+        val data = FirebaseMessageSender.toFcmData(NotificationSsePayload.from(notification, defaultPushImageUrl))
 
         // ITEM_PARSING_* → category=SYSTEM. actor 없어 imageUrl=default.
         assertEquals(
@@ -103,7 +104,7 @@ class FirebaseMessageSenderTest {
                 NotificationRouting.Tournament(tournamentId = 99L, tournamentItemId = 555L),
             ).withId(44L)
 
-        val data = FirebaseMessageSender.buildDataPayload(notification, defaultPushImageUrl)
+        val data = FirebaseMessageSender.toFcmData(NotificationSsePayload.from(notification, defaultPushImageUrl))
 
         assertEquals(
             mapOf(
