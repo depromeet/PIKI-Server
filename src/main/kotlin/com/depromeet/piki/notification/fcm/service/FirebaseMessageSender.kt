@@ -124,7 +124,8 @@ class FirebaseMessageSender(
         private const val ANDROID_CHANNEL_ID = "piki_default"
 
         // 웹 푸시 클릭 시 이동할 링크(https 필수) — 웹 프론트 붙을 때 실제 경로로 조정.
-        private const val WEB_CLICK_LINK = "https://depromeet18team3.cloud"
+        // piki.day 도메인 이관(#488): 웹 프론트 apex(Vercel)가 piki.day 로 이전됨.
+        private const val WEB_CLICK_LINK = "https://piki.day"
 
         // 발송 실패 토큰 중 "정리 대상(죽은 토큰)" 판정 — FirebaseMessaging 응답 구조와 무관한 순수 정책이라
         // companion 으로 분리해 단위 테스트로 분기를 망라한다(FirebaseApp 없이 검증).
