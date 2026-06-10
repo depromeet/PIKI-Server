@@ -16,10 +16,14 @@ enum class NotificationCategory {
                 NotificationType.TOURNAMENT_JOINED,
                 NotificationType.TOURNAMENT_ITEM_ADDED,
                 NotificationType.TOURNAMENT_STARTED,
+                NotificationType.TOURNAMENT_PLAYED_FROM_LINK,
+                NotificationType.TOURNAMENT_COMPLETED,
+                NotificationType.TOURNAMENT_RESULT_READY,
                 -> ACTIVITY
 
                 NotificationType.ITEM_PARSING_COMPLETED,
                 NotificationType.ITEM_PARSING_FAILED,
+                NotificationType.ANNOUNCEMENT,
                 -> SYSTEM
             }
 

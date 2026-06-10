@@ -6,12 +6,17 @@ import com.depromeet.piki.notification.domain.NotificationRouting
 import com.depromeet.piki.notification.repository.NotificationRepository
 import com.depromeet.piki.notification.service.NotificationDispatcher
 import com.depromeet.piki.support.IntegrationTestSupport
+import com.depromeet.piki.tournament.domain.Tournament
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
+import com.depromeet.piki.tournament.event.TournamentCompleted
 import com.depromeet.piki.tournament.event.TournamentItemAdded
 import com.depromeet.piki.tournament.event.TournamentJoined
+import com.depromeet.piki.tournament.event.TournamentPlayedFromLink
+import com.depromeet.piki.tournament.event.TournamentResultReady
 import com.depromeet.piki.tournament.event.TournamentStarted
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
+import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.user.domain.User
@@ -21,6 +26,7 @@ import com.depromeet.piki.wishlist.repository.WishRepository
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -34,6 +40,14 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
     @Autowired private lateinit var joinedHandler: TournamentJoinedHandler
 
     @Autowired private lateinit var startedHandler: TournamentStartedHandler
+
+    @Autowired private lateinit var playedFromLinkHandler: TournamentPlayedFromLinkHandler
+
+    @Autowired private lateinit var completedHandler: TournamentCompletedHandler
+
+    @Autowired private lateinit var resultReadyHandler: TournamentResultReadyHandler
+
+    @Autowired private lateinit var tournamentRepository: TournamentRepository
 
     @Autowired private lateinit var parsingCompletedHandler: ItemParsingCompletedHandler
 
@@ -267,4 +281,98 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
 
         assertEquals(NotificationRouting.Wish, routing)
     }
+
+    // ── 신규 토너먼트 알림(#473): 플레이링크 플레이 · 완료 · 결과 ──────────────────────────
+
+    @Test
+    fun `플레이링크 플레이 알림 수신자는 ROOT 주최자다`() {
+        val owner = UUID.randomUUID()
+        val player = UUID.randomUUID()
+        val rootId = createRootWithOwner(owner)
+
+        val recipients = playedFromLinkHandler.resolveRecipients(TournamentPlayedFromLink(rootId, player))
+
+        assertEquals(setOf(owner), recipients)
+    }
+
+    @Test
+    fun `완료 알림 수신자는 ROOT 주최자이고, 완료자가 곧 주최자면 제외된다`() {
+        val owner = UUID.randomUUID()
+        val member = UUID.randomUUID()
+        val rootId = createRootWithOwner(owner)
+
+        assertEquals(setOf(owner), completedHandler.resolveRecipients(TournamentCompleted(rootId, member)))
+        // actor(완료자)가 주최자 본인이면 자기 알림을 막는다 → 빈 집합.
+        assertTrue(completedHandler.resolveRecipients(TournamentCompleted(rootId, owner)).isEmpty())
+    }
+
+    @Test
+    fun `결과 알림 수신자는 ROOT 참가자와 플레이링크 클론 소유자 합집합에서 주최자를 뺀 집합이다`() {
+        val owner = UUID.randomUUID()
+        val participant = UUID.randomUUID()
+        val guest = UUID.randomUUID()
+        val rootId = createRootWithOwner(owner)
+        tournamentUserRepository.save(TournamentUser(rootId, participant)) // ROOT 참가자(아이템 등록·합류)
+        createClone(rootId, guest) // 플레이링크 클론 소유자(게스트)
+
+        val recipients = resultReadyHandler.resolveRecipients(TournamentResultReady(rootId, owner))
+
+        // 주최자(actor)는 빠지고, ROOT 참가자 + 클론 소유자만 남는다.
+        assertEquals(setOf(participant, guest), recipients)
+    }
+
+    @Test
+    fun `존재하지 않는 ROOT 면 플레이·완료 알림 수신자는 빈 집합이다 (resolver not-found 분기)`() {
+        val absentRootId = 987_654L
+        assertTrue(playedFromLinkHandler.resolveRecipients(TournamentPlayedFromLink(absentRootId, UUID.randomUUID())).isEmpty())
+        assertTrue(completedHandler.resolveRecipients(TournamentCompleted(absentRootId, UUID.randomUUID())).isEmpty())
+        // 결과 알림도 참여자·클론이 하나도 없으면 빈 집합 → dispatch 가 early return 으로 떨군다.
+        assertTrue(resultReadyHandler.resolveRecipients(TournamentResultReady(absentRootId, UUID.randomUUID())).isEmpty())
+    }
+
+    @Test
+    fun `완료 알림 actor 컨텍스트는 완료한 사람의 닉네임과 프사다`() {
+        val actor = UUID.randomUUID()
+        userRepository.save(User(id = actor, nickname = "행위자", profileImage = "https://x/p.png", identityType = IdentityType.GUEST))
+
+        val context = completedHandler.resolveActorContext(TournamentCompleted(1234L, actor))
+
+        assertEquals(mapOf("actorName" to "행위자"), context.variables)
+        assertEquals("https://x/p.png", context.imageUrl)
+    }
+
+    // ROOT 토너먼트 + 주최자(TournamentUser) fixture. ownerTournamentUserId 를 실제 TU id 로 연결한다.
+    private fun createRootWithOwner(ownerUserId: UUID): Long {
+        val root = tournamentRepository.saveTournament(
+            Tournament(ownerTournamentUserId = 0L, name = "t", inviteCode = nextInviteCode(), inviteExpiresAt = LocalDateTime.now().plusDays(1)),
+        )
+        val ownerTu = tournamentUserRepository.save(TournamentUser(root.getId(), ownerUserId))
+        root.assignOwner(ownerTu.getId())
+        tournamentRepository.saveTournament(root)
+        return root.getId()
+    }
+
+    // ROOT 의 CLONE(sourceTournamentId 연결) + 그 소유자(TournamentUser) fixture.
+    private fun createClone(
+        rootId: Long,
+        ownerUserId: UUID,
+    ): Long {
+        val clone = tournamentRepository.saveTournament(
+            Tournament(
+                ownerTournamentUserId = 0L,
+                name = "t",
+                inviteCode = nextInviteCode(),
+                inviteExpiresAt = LocalDateTime.now().plusDays(1),
+                sourceTournamentId = rootId,
+            ),
+        )
+        val tu = tournamentUserRepository.save(TournamentUser(clone.getId(), ownerUserId))
+        clone.assignOwner(tu.getId())
+        tournamentRepository.saveTournament(clone)
+        return clone.getId()
+    }
+
+    private var inviteSeq = 0
+
+    private fun nextInviteCode(): String = "T%05d".format(inviteSeq++)
 }

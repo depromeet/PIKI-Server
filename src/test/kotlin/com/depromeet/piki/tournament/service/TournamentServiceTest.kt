@@ -11,8 +11,11 @@ import com.depromeet.piki.tournament.domain.TournamentHistory
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.domain.TournamentUser
+import com.depromeet.piki.tournament.event.TournamentCompleted
 import com.depromeet.piki.tournament.event.TournamentItemAdded
 import com.depromeet.piki.tournament.event.TournamentJoined
+import com.depromeet.piki.tournament.event.TournamentPlayedFromLink
+import com.depromeet.piki.tournament.event.TournamentResultReady
 import com.depromeet.piki.tournament.event.TournamentStarted
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentItemRoutingView
@@ -842,6 +845,63 @@ class TournamentServiceTest {
         )
 
         assertEquals(TournamentStatus.COMPLETED, repository.tournaments[tournamentId]!!.status)
+    }
+
+    @Test
+    fun `recordMatch 결승 완료 시 ROOT(주최자 본인 진행)면 TournamentResultReady 를 발행한다`() {
+        val tournamentId = createAndStart(listOf(10L, 20L))
+        val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
+        val first = items.find { it.itemId == 10L }!!
+        val second = items.find { it.itemId == 20L }!!
+        publishedEvents.clear() // create·addItems·start 발행분 제거 — 완료 발행만 단언한다.
+
+        service.recordMatch(userId, RecordMatch(tournamentId, 2, first.getId(), second.getId(), first.getId()))
+
+        assertEquals(listOf<Any>(TournamentResultReady(rootTournamentId = tournamentId, actorId = userId)), publishedEvents)
+    }
+
+    @Test
+    fun `recordMatch 결승 완료 시 CLONE(멤버 진행)이면 TournamentCompleted 를 발행한다`() {
+        val rootId = service.create(userId, CreateTournament("t")).tournamentId
+        testWishRepository.addWish(userId, 10L, 20L)
+        service.addItemsFromWish(userId, AddTournamentItemsFromWish(rootId, listOf(10L, 20L)))
+        val inviteCode = repository.tournaments[rootId]!!.inviteCode
+        service.join(otherUserId, rootId, inviteCode) // 멤버 합류(PENDING)
+        service.start(userId, rootId) // 주최자가 시작 → ROOT IN_PROGRESS
+        val cloneId = service.start(otherUserId, rootId).tournamentId // 멤버가 본인 클론 시작
+        val items = tournamentItemRepository.findAllByTournamentId(rootId) // 클론은 ROOT 아이템을 쓴다
+        publishedEvents.clear()
+
+        service.recordMatch(otherUserId, RecordMatch(cloneId, 2, items[0].getId(), items[1].getId(), items[0].getId()))
+
+        assertEquals(listOf<Any>(TournamentCompleted(rootTournamentId = rootId, actorId = otherUserId)), publishedEvents)
+    }
+
+    @Test
+    fun `createFromPlayLink 신규 클론 생성 시 TournamentPlayedFromLink 를 발행한다`() {
+        val rootId = createAndStart(listOf(10L, 20L))
+        val items = tournamentItemRepository.findAllByTournamentId(rootId)
+        service.recordMatch(userId, RecordMatch(rootId, 2, items[0].getId(), items[1].getId(), items[0].getId())) // ROOT 완료
+        service.createPlayLink(userId, rootId) // 주최자가 플레이링크 생성
+        publishedEvents.clear()
+
+        service.createFromPlayLink(otherUserId, rootId) // 링크로 신규 클론 생성·플레이 시작
+
+        assertEquals(listOf<Any>(TournamentPlayedFromLink(rootTournamentId = rootId, actorId = otherUserId)), publishedEvents)
+    }
+
+    @Test
+    fun `createFromPlayLink 가 기존 클론을 돌려주는 경우(get-or-create)엔 발행하지 않는다`() {
+        val rootId = createAndStart(listOf(10L, 20L))
+        val items = tournamentItemRepository.findAllByTournamentId(rootId)
+        service.recordMatch(userId, RecordMatch(rootId, 2, items[0].getId(), items[1].getId(), items[0].getId()))
+        service.createPlayLink(userId, rootId)
+        service.createFromPlayLink(otherUserId, rootId) // 1회차 — 신규 클론(발행 O)
+        publishedEvents.clear()
+
+        service.createFromPlayLink(otherUserId, rootId) // 2회차 — 본인 클론 이어하기(발행 X)
+
+        assertTrue(publishedEvents.isEmpty())
     }
 
     @Test
