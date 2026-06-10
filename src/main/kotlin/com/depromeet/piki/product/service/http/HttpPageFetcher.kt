@@ -51,7 +51,7 @@ class HttpPageFetcher(
                     log.warn("link fetch empty body url={}", current.safeLogString())
                     throw PageFetchException.emptyBody()
                 }
-            val truncated = if (body.length > MAX_HTML_CHARS) body.substring(0, MAX_HTML_CHARS) else body
+            val truncated = if (body.length > MAX_FETCH_CHARS) body.substring(0, MAX_FETCH_CHARS) else body
             // link 는 사용자가 등록한 원본 URL 을 유지하고, html 은 redirect 를 따라간 최종 페이지로 채운다.
             // finalUrl 은 그 최종 페이지의 URL(current) — 상대 URL resolve 의 baseUri 가 원본이 아닌 최종 host 기준이 되게 한다.
             return PageContent(link = link, html = truncated, finalUrl = current)
@@ -178,7 +178,12 @@ class HttpPageFetcher(
         // Location 을 가진 진짜 redirect 상태 코드. 304/300/305 등 다른 3xx 는 따라가지 않는다.
         private val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
 
-        // LLM 토큰 비용 상한. 대형 쇼핑몰(쿠팡 등)은 1MB 가 넘는 경우도 있음.
-        private const val MAX_HTML_CHARS = 200_000
+        // fetch 본문의 보관·파싱 비용을 막는 안전 상한이다. LLM 토큰 상한이 아니다 — 그건 Gemini 입력 직전
+        // GeminiHtmlExtractor 가 정리(sanitize)된 HTML 에 따로 적용한다. 이 상한을 넉넉히 둬야 구조화 추출
+        // (JSON-LD/OpenGraph)이 페이지 전체를 본다: JSON-LD·가격이 본문 뒤쪽에 있는 사이트(아마존 약 1.65MB,
+        // 나이키 약 0.75MB 실측)는 앞부분만 보면 가격을 놓친다. 동시 파싱(워커 풀) 시 메모리(상한 x 동시 수)를
+        // 감안해 무제한이 아니라 3MB 로 바운드한다. 무거운 한국 메이저 몰(쿠팡·G마켓·옥션)은 403 으로 막혀
+        // 애초에 fetch 되지 않으므로 이 상한과 무관하다.
+        private const val MAX_FETCH_CHARS = 3_000_000
     }
 }

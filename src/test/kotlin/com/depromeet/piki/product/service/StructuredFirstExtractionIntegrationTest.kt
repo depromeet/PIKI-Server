@@ -118,6 +118,42 @@ class StructuredFirstExtractionIntegrationTest : IntegrationTestSupport() {
         assertFalse(sentHtml.contains("제거대상주석"), "주석은 제거돼야 한다")
     }
 
+    @Test
+    fun `구조화 데이터가 과거 절단선(200KB) 뒤쪽에 있어도 추출하고 LLM 을 호출하지 않는다`() {
+        stubGeminiClient.reset()
+        stubGeminiClient.build = { error("절단선 밖 JSON-LD 도 구조화로 잡혀 LLM 이 호출되면 안 된다") }
+        // 과거엔 fetch 가 앞 200KB 만 남겨 뒤쪽 JSON-LD 를 놓쳤다(#476). 절단을 fetch 가 아니라 Gemini 입력 직전으로
+        // 옮겼으므로, 240KB 필러 뒤에 있는 JSON-LD 도 구조화가 잡아 LLM 없이 추출해야 한다.
+        val filler = "<div>x</div>".repeat(20_000) // 약 240KB
+        val html =
+            "<html><head></head><body>$filler" +
+                """<script type="application/ld+json">{"@type":"Product","name":"뒤쪽상품","offers":{"price":"77000","priceCurrency":"KRW"}}</script>""" +
+                "</body></html>"
+        stubPageFetcher.build = { PageContent(it, html) }
+
+        val snapshot = extractor.extract(link)
+
+        assertEquals("뒤쪽상품", snapshot.name)
+        assertEquals(77_000, snapshot.currentPrice)
+        assertEquals(0, stubGeminiClient.invocations)
+    }
+
+    @Test
+    fun `fallback 시 LLM 입력 HTML 은 정리 후 200KB 상한으로 잘린다`() {
+        stubGeminiClient.reset()
+        stubGeminiClient.build = { GeminiExtractionResult(isProductPage = true, name = "엘엘엠상품", currentPrice = 1_000) }
+        // 구조화 데이터 없는 대용량 페이지 → fallback. sanitize 후에도 200KB 를 넘으면 앞쪽(HEAD)은 남고 200KB 뒤(TAIL)는 잘려야 한다.
+        val filler = "<p>filler line content here</p>".repeat(20_000) // 약 620KB
+        val html = "<html><head></head><body><p>HEAD_MARKER</p>$filler<p>TAIL_MARKER</p></body></html>"
+        stubPageFetcher.build = { PageContent(it, html) }
+
+        extractor.extract(link)
+
+        val sentHtml = llmInputHtmlOf(stubGeminiClient.lastRequest)
+        assertTrue(sentHtml.contains("HEAD_MARKER"), "앞부분은 LLM 입력에 포함돼야 한다")
+        assertFalse(sentHtml.contains("TAIL_MARKER"), "200KB 뒤(MAX_LLM_CHARS 초과)는 잘려 LLM 입력에서 빠져야 한다")
+    }
+
     // product.extract 카운터의 현재 값. 컨텍스트 공유로 다른 테스트와 누적되므로 호출 전후 증가분(delta)으로 단언한다.
     private fun extractCount(vararg tags: String): Double = meterRegistry.counter("product.extract", *tags).count()
 
