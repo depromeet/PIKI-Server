@@ -30,13 +30,16 @@ abstract class NotificationEventHandler<E : Any>(
     // 알림 row 가 중복 저장되지 않는다(#236 fan-out 안전).
     abstract fun resolveRecipients(event: E): Set<UUID>
 
-    // 템플릿 변수 (예: actorName). 변수 없는 알림은 기본값 emptyMap 을 그대로 쓰고 override 하지 않는다.
-    open fun resolveVariables(event: E): Map<String, String> = emptyMap()
-
     // 딥링크 라우팅 컨텍스트(#408). 파싱 알림처럼 출처(위시/토너먼트)별로 이동 화면이 갈리는 알림은 이를 override 해
     // 도메인 식별자(kind·tournamentId·tournamentItemId)를 싣는다. refId 만으로 충분한 알림(토너먼트 알림 등)은
     // 기본값 null 을 그대로 쓰고, 그러면 Notification 의 라우팅 컬럼이 비워진다(채널에서 키가 생략된다).
     open fun resolveRouting(event: E): NotificationRouting? = null
+
+    // 행위자(actor) 표시 컨텍스트 — 템플릿 변수(actorName)와 발송 시점 프사 snapshot 을 한 번에 해석한다(#473).
+    // 변수와 프사를 따로 hook 으로 두면 같은 actor 에 findById 가 두 번 나가므로, 한 조회로 합쳐 돌려준다.
+    // actor 가 있는 알림(TOURNAMENT_* 등 "OO님이 …")만 override 한다. actor 없는 시스템 알림(파싱·공지)은
+    // 기본값(빈 컨텍스트): 변수 없음 + imageUrl null → 직렬화 때 서버가 defaultPushImg(피키 로고)로 채운다.
+    open fun resolveActorContext(event: E): ActorContext = ActorContext()
 
     // 타입 인자 E 를 Spring 의 제네릭 추출 헬퍼로 풀어낸다. 서브클래스 생성 시 javaClass 는 실제 구현체라,
     // 그 슈퍼타입 NotificationEventHandler<E> 의 첫 타입 인자가 E 다. (private 라 가상 호출이 아니므로 init 안전)
@@ -47,3 +50,11 @@ abstract class NotificationEventHandler<E : Any>(
                 ?: error("${javaClass.simpleName} 의 이벤트 타입 인자(E)를 해석할 수 없습니다")
         ).kotlin as KClass<E>
 }
+
+// actor 알림이 actor 1명에서 함께 끌어내는 표시 컨텍스트 — 템플릿 변수(예: actorName)와 프사 snapshot(imageUrl).
+// 둘을 한 hook(resolveActorContext)으로 묶어 actorId→User 조회를 한 번으로 합친다(#473).
+// 기본값(빈 컨텍스트)은 actor 없는 알림(파싱·공지)이 쓴다 — 변수 없음 + imageUrl null.
+data class ActorContext(
+    val variables: Map<String, String> = emptyMap(),
+    val imageUrl: String? = null,
+)

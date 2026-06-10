@@ -1,6 +1,8 @@
 package com.depromeet.piki.notification.repository
 
 import com.depromeet.piki.notification.domain.Notification
+import com.depromeet.piki.notification.domain.NotificationType
+import org.springframework.data.domain.Limit
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
@@ -12,6 +14,67 @@ interface NotificationJpaRepository : JpaRepository<Notification, Long> {
     @Modifying
     @Query("DELETE FROM Notification n WHERE n.userId = :userId")
     fun hardDeleteAllByUserId(
+        @Param("userId") userId: UUID,
+    ): Int
+
+    // 히스토리 목록 첫 페이지 — 본인 알림을 최신순(id desc)으로 limit 건. (idx_notifications_user_id_is_read 의 user_id leftmost)
+    fun findByUserIdOrderByIdDesc(
+        userId: UUID,
+        limit: Limit,
+    ): List<Notification>
+
+    // 히스토리 목록 다음 페이지 — 커서(직전 페이지 마지막 id) 미만만 최신순 limit 건.
+    fun findByUserIdAndIdLessThanOrderByIdDesc(
+        userId: UUID,
+        id: Long,
+        limit: Limit,
+    ): List<Notification>
+
+    // 카테고리 탭 첫 페이지 — 본인 알림 중 그 카테고리 type 집합만 최신순 limit 건. (idx (user_id, id) 가 정렬을 받치고 type 은 필터)
+    fun findByUserIdAndTypeInOrderByIdDesc(
+        userId: UUID,
+        types: List<NotificationType>,
+        limit: Limit,
+    ): List<Notification>
+
+    // 카테고리 탭 다음 페이지 — 커서 미만 + 그 카테고리 type 집합만 최신순 limit 건.
+    fun findByUserIdAndIdLessThanAndTypeInOrderByIdDesc(
+        userId: UUID,
+        id: Long,
+        types: List<NotificationType>,
+        limit: Limit,
+    ): List<Notification>
+
+    // type 별 안읽음 수 — 전체 badge + 탭별(활동/시스템) badge 를 한 쿼리(group by)로 집계한다.
+    // closed projection(type·count alias)으로 받아 RepositoryImpl 이 카테고리로 접는다. (idx (user_id, is_read) 커버)
+    @Query(
+        "SELECT n.type AS type, COUNT(n) AS count FROM Notification n " +
+            "WHERE n.userId = :userId AND n.isRead = false GROUP BY n.type",
+    )
+    fun countUnreadByType(
+        @Param("userId") userId: UUID,
+    ): List<TypeUnreadCount>
+
+    // group by 결과 한 행 — type 과 그 안읽음 수. Spring Data closed projection(SELECT alias 와 게터명 일치).
+    interface TypeUnreadCount {
+        val type: NotificationType
+        val count: Long
+    }
+
+    // 본인 소유(user_id) + 지정 id + 아직 안읽음만 read 로. user_id 가 WHERE 에 있어 타인/없는 id 는 무영향(소유 검증 겸용).
+    // 영향 건수를 돌려준다. 멱등(이미 읽음·없는 id 는 0건).
+    // 벌크 UPDATE 는 1차 캐시를 우회하므로, 같은 트랜잭션에서 이후 재조회가 stale 값을 읽지 않도록 컨텍스트를 flush·clear 한다.
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Notification n SET n.isRead = true WHERE n.userId = :userId AND n.id IN :ids AND n.isRead = false")
+    fun markReadByUserIdAndIds(
+        @Param("userId") userId: UUID,
+        @Param("ids") ids: Collection<Long>,
+    ): Int
+
+    // 본인 안읽음 전부 read. 영향 건수를 돌려준다. 멱등.
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Notification n SET n.isRead = true WHERE n.userId = :userId AND n.isRead = false")
+    fun markAllReadByUserId(
         @Param("userId") userId: UUID,
     ): Int
 }

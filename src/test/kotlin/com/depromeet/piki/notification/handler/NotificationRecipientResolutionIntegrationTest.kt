@@ -3,13 +3,20 @@ package com.depromeet.piki.notification.handler
 import com.depromeet.piki.item.event.ItemParsingCompleted
 import com.depromeet.piki.item.event.ItemParsingFailed
 import com.depromeet.piki.notification.domain.NotificationRouting
+import com.depromeet.piki.notification.repository.NotificationRepository
+import com.depromeet.piki.notification.service.NotificationDispatcher
 import com.depromeet.piki.support.IntegrationTestSupport
+import com.depromeet.piki.tournament.domain.Tournament
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
+import com.depromeet.piki.tournament.event.TournamentCompleted
 import com.depromeet.piki.tournament.event.TournamentItemAdded
 import com.depromeet.piki.tournament.event.TournamentJoined
+import com.depromeet.piki.tournament.event.TournamentPlayedFromLink
+import com.depromeet.piki.tournament.event.TournamentResultReady
 import com.depromeet.piki.tournament.event.TournamentStarted
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
+import com.depromeet.piki.tournament.repository.TournamentRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.user.domain.User
@@ -19,11 +26,12 @@ import com.depromeet.piki.wishlist.repository.WishRepository
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-// 핸들러의 수신자(resolveRecipients)·변수(resolveVariables) 도출은 DB 역조회에 의존하므로 통합으로 검증한다.
+// 핸들러의 수신자(resolveRecipients)·actor 컨텍스트(resolveActorContext) 도출은 DB 역조회에 의존하므로 통합으로 검증한다.
 // 영속 fixture(참가자·위시·토너먼트 아이템·유저)를 깔고 실제 빈으로 도출 결과를 단언한다. @Transactional 자동 롤백.
 @Transactional
 class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() {
@@ -32,6 +40,14 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
     @Autowired private lateinit var joinedHandler: TournamentJoinedHandler
 
     @Autowired private lateinit var startedHandler: TournamentStartedHandler
+
+    @Autowired private lateinit var playedFromLinkHandler: TournamentPlayedFromLinkHandler
+
+    @Autowired private lateinit var completedHandler: TournamentCompletedHandler
+
+    @Autowired private lateinit var resultReadyHandler: TournamentResultReadyHandler
+
+    @Autowired private lateinit var tournamentRepository: TournamentRepository
 
     @Autowired private lateinit var parsingCompletedHandler: ItemParsingCompletedHandler
 
@@ -44,6 +60,10 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
     @Autowired private lateinit var wishRepository: WishRepository
 
     @Autowired private lateinit var userRepository: UserRepository
+
+    @Autowired private lateinit var notificationDispatcher: NotificationDispatcher
+
+    @Autowired private lateinit var notificationRepository: NotificationRepository
 
     @Test
     fun `토너먼트 아이템 추가 수신자는 참가자에서 추가한 본인을 뺀 집합이다`() {
@@ -92,7 +112,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val owner = UUID.randomUUID()
         userRepository.save(User(id = owner, nickname = "주최자", profileImage = "https://x/p.jpg", identityType = IdentityType.GUEST))
 
-        val variables = startedHandler.resolveVariables(TournamentStarted(tournamentId, owner))
+        val variables = startedHandler.resolveActorContext(TournamentStarted(tournamentId, owner)).variables
 
         assertEquals(mapOf("actorName" to "주최자"), variables)
     }
@@ -103,16 +123,57 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val actor = UUID.randomUUID()
         userRepository.save(User(id = actor, nickname = "홍길동", profileImage = "https://x/p.jpg", identityType = IdentityType.GUEST))
 
-        val variables = itemAddedHandler.resolveVariables(TournamentItemAdded(tournamentId, actor))
+        val variables = itemAddedHandler.resolveActorContext(TournamentItemAdded(tournamentId, actor)).variables
 
         assertEquals(mapOf("actorName" to "홍길동"), variables)
     }
 
     @Test
     fun `행위자 유저를 못 찾으면 actorName 은 fallback 으로 채운다`() {
-        val variables = itemAddedHandler.resolveVariables(TournamentItemAdded(1004L, UUID.randomUUID()))
+        val variables = itemAddedHandler.resolveActorContext(TournamentItemAdded(1004L, UUID.randomUUID())).variables
 
         assertEquals(mapOf("actorName" to ActorNameResolver.UNKNOWN_ACTOR), variables)
+    }
+
+    @Test
+    fun `actor 알림은 발송 시점 행위자 프로필 이미지를 snapshot 한다`() {
+        val actor = UUID.randomUUID()
+        userRepository.save(User(id = actor, nickname = "홍길동", profileImage = "https://x/actor-now.png", identityType = IdentityType.GUEST))
+
+        // 핸들러가 actorId 로 현재 프사 URL 을 뽑아 온다(이 값이 dispatcher 를 통해 Notification.actorImageUrl 로 박힌다).
+        assertEquals("https://x/actor-now.png", joinedHandler.resolveActorContext(TournamentJoined(1009L, actor)).imageUrl)
+        assertEquals("https://x/actor-now.png", itemAddedHandler.resolveActorContext(TournamentItemAdded(1009L, actor)).imageUrl)
+        assertEquals("https://x/actor-now.png", startedHandler.resolveActorContext(TournamentStarted(1009L, actor)).imageUrl)
+    }
+
+    @Test
+    fun `행위자 유저를 못 찾으면 actorImageUrl 은 null 이다 (직렬화 때 defaultPushImg 로 채워짐)`() {
+        assertEquals(null, joinedHandler.resolveActorContext(TournamentJoined(1010L, UUID.randomUUID())).imageUrl)
+    }
+
+    @Test
+    fun `시스템 알림(파싱)은 actor 가 없어 actorImageUrl 이 null 이다 - negative control`() {
+        // 파싱 핸들러는 resolveActorContext 를 override 하지 않는다 → 기본 빈 컨텍스트 imageUrl null → 직렬화 때 피키 로고로 채워진다.
+        assertEquals(null, parsingCompletedHandler.resolveActorContext(ItemParsingCompleted(2099L)).imageUrl)
+        assertEquals(null, parsingFailedHandler.resolveActorContext(ItemParsingFailed(2099L)).imageUrl)
+    }
+
+    @Test
+    fun `dispatch 가 actor 이벤트의 프사와 닉네임을 한 컨텍스트에서 수신자 알림에 박는다 - end-to-end`() {
+        val tournamentId = 1011L
+        val actor = UUID.randomUUID()
+        val recipient = UUID.randomUUID()
+        listOf(actor, recipient).forEach { tournamentUserRepository.save(TournamentUser(tournamentId, it)) }
+        userRepository.save(User(id = actor, nickname = "행위자", profileImage = "https://x/snap.png", identityType = IdentityType.GUEST))
+
+        // 이벤트 발행 → dispatch → 핸들러 resolveActorContext(한 번의 actor 조회) → 변수(actorName) 렌더 + 프사 snapshot 까지 실제 체인을 탄다.
+        notificationDispatcher.dispatch(TournamentItemAdded(tournamentId, actor))
+
+        val saved = notificationRepository.findPage(recipient, cursor = null, limit = 10, types = null)
+        assertEquals(1, saved.size)
+        assertEquals("https://x/snap.png", saved.first().actorImageUrl) // 발송 시점 actor 프사가 그대로 박혔다
+        // 같은 컨텍스트의 변수(actorName)가 템플릿에 렌더돼 제목에 박힌다 — 변수·프사가 한 조회에서 함께 흐르는지 end-to-end 로 가드한다.
+        assertEquals("행위자님이 아이템을 추가했어요", saved.first().title)
     }
 
     @Test
@@ -220,4 +281,98 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
 
         assertEquals(NotificationRouting.Wish, routing)
     }
+
+    // ── 신규 토너먼트 알림(#473): 플레이링크 플레이 · 완료 · 결과 ──────────────────────────
+
+    @Test
+    fun `플레이링크 플레이 알림 수신자는 ROOT 주최자다`() {
+        val owner = UUID.randomUUID()
+        val player = UUID.randomUUID()
+        val rootId = createRootWithOwner(owner)
+
+        val recipients = playedFromLinkHandler.resolveRecipients(TournamentPlayedFromLink(rootId, player))
+
+        assertEquals(setOf(owner), recipients)
+    }
+
+    @Test
+    fun `완료 알림 수신자는 ROOT 주최자이고, 완료자가 곧 주최자면 제외된다`() {
+        val owner = UUID.randomUUID()
+        val member = UUID.randomUUID()
+        val rootId = createRootWithOwner(owner)
+
+        assertEquals(setOf(owner), completedHandler.resolveRecipients(TournamentCompleted(rootId, member)))
+        // actor(완료자)가 주최자 본인이면 자기 알림을 막는다 → 빈 집합.
+        assertTrue(completedHandler.resolveRecipients(TournamentCompleted(rootId, owner)).isEmpty())
+    }
+
+    @Test
+    fun `결과 알림 수신자는 ROOT 참가자와 플레이링크 클론 소유자 합집합에서 주최자를 뺀 집합이다`() {
+        val owner = UUID.randomUUID()
+        val participant = UUID.randomUUID()
+        val guest = UUID.randomUUID()
+        val rootId = createRootWithOwner(owner)
+        tournamentUserRepository.save(TournamentUser(rootId, participant)) // ROOT 참가자(아이템 등록·합류)
+        createClone(rootId, guest) // 플레이링크 클론 소유자(게스트)
+
+        val recipients = resultReadyHandler.resolveRecipients(TournamentResultReady(rootId, owner))
+
+        // 주최자(actor)는 빠지고, ROOT 참가자 + 클론 소유자만 남는다.
+        assertEquals(setOf(participant, guest), recipients)
+    }
+
+    @Test
+    fun `존재하지 않는 ROOT 면 플레이·완료 알림 수신자는 빈 집합이다 (resolver not-found 분기)`() {
+        val absentRootId = 987_654L
+        assertTrue(playedFromLinkHandler.resolveRecipients(TournamentPlayedFromLink(absentRootId, UUID.randomUUID())).isEmpty())
+        assertTrue(completedHandler.resolveRecipients(TournamentCompleted(absentRootId, UUID.randomUUID())).isEmpty())
+        // 결과 알림도 참여자·클론이 하나도 없으면 빈 집합 → dispatch 가 early return 으로 떨군다.
+        assertTrue(resultReadyHandler.resolveRecipients(TournamentResultReady(absentRootId, UUID.randomUUID())).isEmpty())
+    }
+
+    @Test
+    fun `완료 알림 actor 컨텍스트는 완료한 사람의 닉네임과 프사다`() {
+        val actor = UUID.randomUUID()
+        userRepository.save(User(id = actor, nickname = "행위자", profileImage = "https://x/p.png", identityType = IdentityType.GUEST))
+
+        val context = completedHandler.resolveActorContext(TournamentCompleted(1234L, actor))
+
+        assertEquals(mapOf("actorName" to "행위자"), context.variables)
+        assertEquals("https://x/p.png", context.imageUrl)
+    }
+
+    // ROOT 토너먼트 + 주최자(TournamentUser) fixture. ownerTournamentUserId 를 실제 TU id 로 연결한다.
+    private fun createRootWithOwner(ownerUserId: UUID): Long {
+        val root = tournamentRepository.saveTournament(
+            Tournament(ownerTournamentUserId = 0L, name = "t", inviteCode = nextInviteCode(), inviteExpiresAt = LocalDateTime.now().plusDays(1)),
+        )
+        val ownerTu = tournamentUserRepository.save(TournamentUser(root.getId(), ownerUserId))
+        root.assignOwner(ownerTu.getId())
+        tournamentRepository.saveTournament(root)
+        return root.getId()
+    }
+
+    // ROOT 의 CLONE(sourceTournamentId 연결) + 그 소유자(TournamentUser) fixture.
+    private fun createClone(
+        rootId: Long,
+        ownerUserId: UUID,
+    ): Long {
+        val clone = tournamentRepository.saveTournament(
+            Tournament(
+                ownerTournamentUserId = 0L,
+                name = "t",
+                inviteCode = nextInviteCode(),
+                inviteExpiresAt = LocalDateTime.now().plusDays(1),
+                sourceTournamentId = rootId,
+            ),
+        )
+        val tu = tournamentUserRepository.save(TournamentUser(clone.getId(), ownerUserId))
+        clone.assignOwner(tu.getId())
+        tournamentRepository.saveTournament(clone)
+        return clone.getId()
+    }
+
+    private var inviteSeq = 0
+
+    private fun nextInviteCode(): String = "T%05d".format(inviteSeq++)
 }

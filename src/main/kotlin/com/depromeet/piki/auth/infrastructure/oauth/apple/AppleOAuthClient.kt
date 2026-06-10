@@ -27,7 +27,8 @@ import java.util.Date
 
 class AppleOAuthClient(
     private val props: AppleProperties,
-) : OAuthClient {
+) : OAuthClient,
+    AppleNotificationVerifier {
     override val provider = OAuthProvider.APPLE
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -90,6 +91,59 @@ class AppleOAuthClient(
     // v2: iOS SDK 가 발급한 identityToken(JWT)을 직접 검증. aud = bundleId (Bundle ID).
     override fun fetchUserInfoByAccessToken(accessToken: String): OAuthUserInfo =
         verifyIdTokenAndExtract(accessToken, expectedAud = props.bundleId)
+
+    // Apple 서버-서버 알림 검증. id_token 과 같은 JWKS·issuer·kid 회전 인프라(parseWithKidRotationRetry)를
+    // 재사용해 JWKS 캐시를 한 인스턴스에서 공유한다. 알림 JWT 는 aud 가 우리 client_id(Services ID) 또는
+    // bundleId 이고, payload 의 events 클레임을 들고 온다. 검증·파싱 실패는 모두 AppleNotificationException(401)로
+    // 변환한다 — 이 엔드포인트는 permitAll 이라 서명이 유일한 진위 방어선이고, 위조/비정상 호출은 401 로 거부한다.
+    override fun verify(payloadJwt: String): AppleNotificationEvent = toNotificationEvent(parseNotificationClaims(payloadJwt))
+
+    // 알림 JWT 파싱. id_token 경로(parseWithKidRotationRetry)와 같은 JWKS·kid 회전 로직을 따르되 예외 매핑이 다르다 —
+    // JWKS fetch 실패(외부 의존성)는 providerError(502)로, 서명·claims 파싱 실패(위조)는 invalidSignature(401)로 분기한다.
+    // parseWithKidRotationRetry 를 그대로 쓰면 둘 다 OAuthException.providerError 로 뭉쳐 구분이 불가능해 따로 둔다.
+    private fun parseNotificationClaims(payloadJwt: String): Claims {
+        val jwks = fetchJwksForNotification()
+        return try {
+            parseIdToken(payloadJwt, jwks)
+        } catch (e: Exception) {
+            // 캐시 JWKS 에 없는 kid = Apple 키 회전 가능성 → 캐시 무효화 후 1회 재시도. 그 외(서명 위조·exp·issuer)는 401.
+            if (!isKidRotation(e)) throw AppleNotificationException.invalidSignature(e)
+            jwksCachedAt = 0L
+            val refreshed = fetchJwksForNotification()
+            try {
+                parseIdToken(payloadJwt, refreshed)
+            } catch (retry: Exception) {
+                throw AppleNotificationException.invalidSignature(retry)
+            }
+        }
+    }
+
+    // JWKS 조회는 외부 호출이므로 실패 시 warn 으로 남긴다(CLAUDE.md: 외부 호출 실패 = warn). providerError 는
+    // GlobalExceptionHandler 에서 info 로만 요약되므로, 외부 의존성 장애를 운영에서 놓치지 않게 호출 지점에 warn + 스택을 남긴다.
+    private fun fetchJwksForNotification(): String =
+        try {
+            getJwks()
+        } catch (e: Exception) {
+            log.warn("Apple JWKS 조회 실패로 알림 검증 불가 (재시도 가능)", e)
+            throw AppleNotificationException.providerError(e)
+        }
+
+    // 서명·issuer 검증이 끝난 claims 에서 aud 를 확인하고 events 를 파싱한다. 외부 호출(JWKS) 없는 순수 검증이라
+    // 단위 테스트가 직접 호출한다 — aud 위조·events 누락 같은 보안 경로를 stub 없이 망라한다.
+    // aud 는 우리 client_id(Services ID) 또는 bundleId 여야 한다. 불일치·형식 오류는 AppleNotificationException(401).
+    internal fun toNotificationEvent(claims: Claims): AppleNotificationEvent {
+        val aud = claims.audience ?: emptySet()
+        if (aud.none { it == props.clientId || it == props.bundleId }) {
+            log.warn("Apple 알림 aud 불일치: actual={}", aud)
+            throw AppleNotificationException.invalidSignature()
+        }
+        val eventsJson = claims["events"] as? String ?: throw AppleNotificationException.invalidSignature()
+        return try {
+            AppleNotificationEvent.parse(eventsJson)
+        } catch (e: Exception) {
+            throw AppleNotificationException.invalidSignature(e)
+        }
+    }
 
     private fun verifyIdTokenAndExtract(
         idToken: String,

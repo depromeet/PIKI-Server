@@ -6,6 +6,13 @@ enum class NotificationType {
     TOURNAMENT_JOINED,
     TOURNAMENT_ITEM_ADDED,
     TOURNAMENT_STARTED,
+    // 플레이링크로 내 토너먼트를 누군가 플레이/완료한 사실 — ROOT 주최자에게 간다(actor=플레이/완료한 사람).
+    TOURNAMENT_PLAYED_FROM_LINK,
+    TOURNAMENT_COMPLETED,
+    // 내가 참여한 토너먼트를 주최자가 완료해 결과가 나온 사실 — 참여자에게 간다(actor=주최자).
+    TOURNAMENT_RESULT_READY,
     ITEM_PARSING_COMPLETED,
     ITEM_PARSING_FAILED,
+    // 전체 공지(#391/#250). 트리거(admin 백오피스)·발행은 후속 — 지금은 분류/필터용 enum 만 선반영한다.
+    ANNOUNCEMENT,
 }
