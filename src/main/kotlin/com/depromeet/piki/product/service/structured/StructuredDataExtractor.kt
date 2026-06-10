@@ -28,7 +28,8 @@ class StructuredDataExtractor(
     ): ProductSnapshot? = fromJsonLd(document, link) ?: fromOpenGraph(document, link)
 
     // 단독 호출·테스트 편의: HTML 을 직접 파싱해 위임한다. 운영 경로는 오케스트레이터가 Document 를 만들어 공유한다.
-    fun extract(page: PageContent): ProductSnapshot? = extract(Jsoup.parse(page.html, page.link.value.toString()), page.link)
+    // baseUri 는 html 의 출처인 최종 URL(finalUrl) 기준, 정체성으로 넘기는 link 는 원본 유지.
+    fun extract(page: PageContent): ProductSnapshot? = extract(Jsoup.parse(page.html, page.finalUrl.value.toString()), page.link)
 
     // --- JSON-LD (schema.org/Product) ---
 

@@ -1050,6 +1050,44 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `GET tournaments-id 는 ROOT 토너먼트 응답에 sourceTournamentId 가 없다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.sourceTournamentId").doesNotExist())
+    }
+
+    @Test
+    fun `GET tournaments-id 는 CLONE 토너먼트 응답에 sourceTournamentId 로 ROOT id 를 내려준다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(otherUserId, "https://cdn.example.com/guest.jpg", "게스트")
+        val (rootId) = completeTournamentWith2Items(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$rootId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+        val cloneResult = mockMvc.perform(
+            post("/api/v1/tournaments/$rootId/from-play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+        ).andReturn()
+        val cloneId = objectMapper.readTree(cloneResult.response.contentAsString)["data"].asLong()
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$cloneId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.sourceTournamentId").value(rootId))
+    }
+
+    @Test
     fun `DELETE tournaments-id-items-itemId 는 PENDING 토너먼트에서 아이템을 삭제하고 200 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)

@@ -42,6 +42,24 @@ class PageFetchException private constructor(
                 HttpStatus.BAD_GATEWAY,
             )
 
+        // redirect 가 hop 상한을 넘어 무한·체인 의심. 대상 페이지의 고정된 비정상 상태라 재시도해도 결정론적으로
+        // 재실패하므로 RETRYABLE(재시도 권유)이 아니라 SERVER_ERROR(재시도 불가). status 는 외부 의존성 실패라 502.
+        fun tooManyRedirects(): PageFetchException =
+            PageFetchException(
+                "링크 페이지의 redirect 가 너무 많습니다.",
+                ErrorCategory.SERVER_ERROR,
+                HttpStatus.BAD_GATEWAY,
+            )
+
+        // 대상 서버가 3xx 를 주면서 Location 이 없거나 깨진 값을 준 비정상 redirect 응답. 재시도해도 영구 실패라 SERVER_ERROR.
+        fun malformedRedirect(cause: Throwable? = null): PageFetchException =
+            PageFetchException(
+                "링크 페이지의 redirect 응답이 올바르지 않습니다.",
+                ErrorCategory.SERVER_ERROR,
+                HttpStatus.BAD_GATEWAY,
+                cause,
+            )
+
         // host 가 사설/메타데이터/loopback 영역으로 resolve 될 때 SSRF 차단 신호.
         fun blockedHost(): PageFetchException =
             PageFetchException(
