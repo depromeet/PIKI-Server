@@ -12,8 +12,12 @@ class NotificationCategoryTest {
         "TOURNAMENT_JOINED, ACTIVITY",
         "TOURNAMENT_ITEM_ADDED, ACTIVITY",
         "TOURNAMENT_STARTED, ACTIVITY",
+        "TOURNAMENT_PLAYED_FROM_LINK, ACTIVITY",
+        "TOURNAMENT_COMPLETED, ACTIVITY",
+        "TOURNAMENT_RESULT_READY, ACTIVITY",
         "ITEM_PARSING_COMPLETED, SYSTEM",
         "ITEM_PARSING_FAILED, SYSTEM",
+        "ANNOUNCEMENT, SYSTEM",
     )
     fun `type 별 카테고리 매핑`(
         type: NotificationType,
@@ -31,11 +35,22 @@ class NotificationCategoryTest {
     @Test
     fun `typesOf 는 그 카테고리에 속한 type 만 돌려준다`() {
         assertEquals(
-            listOf(NotificationType.TOURNAMENT_JOINED, NotificationType.TOURNAMENT_ITEM_ADDED, NotificationType.TOURNAMENT_STARTED),
+            listOf(
+                NotificationType.TOURNAMENT_JOINED,
+                NotificationType.TOURNAMENT_ITEM_ADDED,
+                NotificationType.TOURNAMENT_STARTED,
+                NotificationType.TOURNAMENT_PLAYED_FROM_LINK,
+                NotificationType.TOURNAMENT_COMPLETED,
+                NotificationType.TOURNAMENT_RESULT_READY,
+            ),
             NotificationCategory.typesOf(NotificationCategory.ACTIVITY),
         )
         assertEquals(
-            listOf(NotificationType.ITEM_PARSING_COMPLETED, NotificationType.ITEM_PARSING_FAILED),
+            listOf(
+                NotificationType.ITEM_PARSING_COMPLETED,
+                NotificationType.ITEM_PARSING_FAILED,
+                NotificationType.ANNOUNCEMENT,
+            ),
             NotificationCategory.typesOf(NotificationCategory.SYSTEM),
         )
     }
