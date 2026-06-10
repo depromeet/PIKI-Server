@@ -11,8 +11,8 @@ import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 
 // fetch 된 HTML 의 구조화 데이터(JSON-LD schema.org/Product · OpenGraph)를 코드로 파싱해
-// LLM 호출 없이 ProductSnapshot 을 만든다. 필수 필드(name+currentPrice)가 검증을 통과하면 성공,
-// 미달·부재·검증위반이면 null 을 돌려 오케스트레이터가 Gemini fallback 으로 넘어가게 한다.
+// LLM 호출 없이 ProductSnapshot 을 만든다. 필수 필드(name+currentPrice)가 검증을 통과하면 Extracted,
+// 미달·부재·검증위반이면 사유를 담은 Miss 를 돌려 오케스트레이터가 Gemini fallback 으로 넘어가게 한다.
 //
 // jsoup 은 마크업에서 <script ld+json>·<meta og:*> 블록을 정확히 꺼내는 책임만 지고, JSON-LD 값 자체는
 // Jackson 3 트리(JsonNode)로 다룬다. 깨진 ld+json 한 덩어리가 전체를 죽이지 않도록 각 script 를 runCatching 으로 격리한다.
@@ -22,42 +22,71 @@ class StructuredDataExtractor(
 ) {
     // 오케스트레이터가 파싱한 Document 를 공유받아 읽기만 한다(Document 를 변형하지 않으므로 이후 Gemini fallback 과 안전하게 공유).
     // 우선순위: JSON-LD(구조적 가격을 정확히 들고 있음) > OpenGraph(가격 표준 태그가 없어 보조).
+    // 둘 다 실패하면 더 데이터에 근접했던 사유(worse)를 reason 으로 보고한다.
     fun extract(
         document: Document,
         link: ProductLink,
-    ): ProductSnapshot? = fromJsonLd(document, link) ?: fromOpenGraph(document, link)
+    ): StructuredExtraction =
+        when (val fromJsonLd = fromJsonLd(document, link)) {
+            is StructuredExtraction.Extracted -> fromJsonLd
+            is StructuredExtraction.Miss ->
+                when (val fromOpenGraph = fromOpenGraph(document, link)) {
+                    is StructuredExtraction.Extracted -> fromOpenGraph
+                    is StructuredExtraction.Miss -> worse(fromJsonLd, fromOpenGraph)
+                }
+        }
 
     // 단독 호출·테스트 편의: HTML 을 직접 파싱해 위임한다. 운영 경로는 오케스트레이터가 Document 를 만들어 공유한다.
     // baseUri 는 html 의 출처인 최종 URL(finalUrl) 기준, 정체성으로 넘기는 link 는 원본 유지.
-    fun extract(page: PageContent): ProductSnapshot? = extract(Jsoup.parse(page.html, page.finalUrl.value.toString()), page.link)
+    fun extract(page: PageContent): StructuredExtraction = extract(Jsoup.parse(page.html, page.finalUrl.value.toString()), page.link)
+
+    // 두 실패 사유 중 데이터에 더 근접한(=정보량이 큰) 쪽. enum 선언 순서가 아니라 명시 rank 로 비교한다(선언 순서 변경에 독립).
+    private fun worse(
+        a: StructuredExtraction.Miss,
+        b: StructuredExtraction.Miss,
+    ): StructuredExtraction.Miss = if (a.rank >= b.rank) a else b
 
     // --- JSON-LD (schema.org/Product) ---
 
     private fun fromJsonLd(
         document: Document,
         link: ProductLink,
-    ): ProductSnapshot? =
-        // type 속성에 charset 파라미터·따옴표·공백 변형이 붙어도 application/ld+json 으로 인식한다(jsoup 이 파싱한 attr 기준).
-        document
-            .select("script[type]")
-            .filter { it.attr("type").trim().startsWith("application/ld+json", ignoreCase = true) }
-            .flatMap { script ->
-                val root = runCatching { objectMapper.readTree(script.data()) }.getOrNull()
-                root?.let { collectProductNodes(it) } ?: emptyList()
+    ): StructuredExtraction {
+        val products =
+            document
+                // type 속성에 charset 파라미터·따옴표·공백 변형이 붙어도 application/ld+json 으로 인식한다(jsoup 이 파싱한 attr 기준).
+                .select("script[type]")
+                .filter { it.attr("type").trim().startsWith("application/ld+json", ignoreCase = true) }
+                .flatMap { script ->
+                    val root = runCatching { objectMapper.readTree(script.data()) }.getOrNull()
+                    root?.let { collectProductNodes(it) } ?: emptyList()
+                }
+        // Product 노드가 하나도 없으면 구조화 데이터 부재.
+        if (products.isEmpty()) return StructuredExtraction.Miss.NO_DATA
+
+        // 시드는 최저 rank(NO_DATA)에서 시작해 노드 결과로 올린다. 노드가 있으므로 toSnapshotFromProduct 는
+        // 항상 MISSING_FIELD 이상(또는 Extracted)을 주어, 첫 반복에서 곧바로 실제 사유로 덮인다.
+        var worst: StructuredExtraction.Miss = StructuredExtraction.Miss.NO_DATA
+        // 앞 Product 가 검증에 실패해도(요약용 불완전 노드 등) 뒤의 완전한 Product 까지 모두 시도한다.
+        for (product in products) {
+            when (val result = toSnapshotFromProduct(product, link)) {
+                is StructuredExtraction.Extracted -> return result
+                is StructuredExtraction.Miss -> worst = worse(worst, result)
             }
-            // 앞 Product 가 검증에 실패해도(요약용 불완전 노드 등) 뒤의 완전한 Product 까지 모두 시도한다.
-            .firstNotNullOfOrNull { product -> toSnapshotFromProduct(product, link) }
+        }
+        return worst
+    }
 
     private fun toSnapshotFromProduct(
         product: JsonNode,
         link: ProductLink,
-    ): ProductSnapshot? {
+    ): StructuredExtraction {
         val offer = firstOffer(product)
-        return toSnapshotOrNull(
+        return toResult(
             link = link,
             name = textOf(product.get("name")),
             imageUrl = imageUrlOf(product),
-            price = parsePrice(textOf(priceNode(offer))),
+            priceText = textOf(priceNode(offer)),
             currency = textOf(offer?.get("priceCurrency")),
         )
     }
@@ -138,15 +167,17 @@ class StructuredDataExtractor(
     private fun fromOpenGraph(
         document: Document,
         link: ProductLink,
-    ): ProductSnapshot? =
-        toSnapshotOrNull(
-            link = link,
-            name = stripSiteSuffix(metaContent(document, "og:title"), metaContent(document, "og:site_name")),
-            imageUrl = metaContent(document, "og:image"),
-            // OG 표준엔 가격이 없어 product:price:amount(OG product 확장)를 best-effort 로 시도한다.
-            price = parsePrice(metaContent(document, "product:price:amount")),
-            currency = metaContent(document, "product:price:currency"),
-        )
+    ): StructuredExtraction {
+        val name = stripSiteSuffix(metaContent(document, "og:title"), metaContent(document, "og:site_name"))
+        // OG 표준엔 가격이 없어 product:price:amount(OG product 확장)를 best-effort 로 시도한다.
+        val priceText = metaContent(document, "product:price:amount")
+        val imageUrl = metaContent(document, "og:image")
+        val currency = metaContent(document, "product:price:currency")
+        // OG 관련 태그(title·price·image·currency)가 하나도 없으면 구조화 데이터 부재. 하나라도 있으면 toResult 가 missing/invalid 를 가린다.
+        // currency 도 포함해, 통화 태그만 단독으로 있는 페이지가 no_data 로 오분류되지 않게 한다(부분 제공 → missing_field).
+        if (listOfNotNull(name, priceText, imageUrl, currency).isEmpty()) return StructuredExtraction.Miss.NO_DATA
+        return toResult(link = link, name = name, imageUrl = imageUrl, priceText = priceText, currency = currency)
+    }
 
     private fun metaContent(
         document: Document,
@@ -170,23 +201,26 @@ class StructuredDataExtractor(
 
     // --- 공통 ---
 
-    // 필수 필드(name+price)가 모두 있고 정규화·범위검증을 통과해야 성공. 하나라도 미달이면 null(→fallback).
-    private fun toSnapshotOrNull(
+    // 필수 필드(name+price)가 모두 있고 정규화·범위검증을 통과하면 Extracted.
+    //   name·priceText 부재 → MISSING_FIELD (가격은 raw 텍스트 유무로 판단해, 값이 있으나 못 뽑은 경우와 구분한다)
+    //   price 파싱 불가(음수·범위초과·비숫자) → INVALID_VALUE
+    //   fromExtracted 범위 위반(name 길이초과 등) → INVALID_VALUE
+    //   정규화 후 name 이 blank→null (OG site suffix 제거로 빈 문자열이 된 경우 등) → MISSING_FIELD
+    private fun toResult(
         link: ProductLink,
         name: String?,
         imageUrl: String?,
-        price: Int?,
+        priceText: String?,
         currency: String?,
-    ): ProductSnapshot? {
-        name ?: return null
-        price ?: return null
-        // 범위 위반(가격 음수·길이 초과)은 fromExtracted 가 예외를 던지므로 흡수해 null(→fallback)로 다룬다.
+    ): StructuredExtraction {
+        name ?: return StructuredExtraction.Miss.MISSING_FIELD
+        priceText ?: return StructuredExtraction.Miss.MISSING_FIELD
+        val price = parsePrice(priceText) ?: return StructuredExtraction.Miss.INVALID_VALUE
         val snapshot =
             runCatching { ProductSnapshot.fromExtracted(link, name, imageUrl, price, currency) }
-                .getOrNull() ?: return null
-        // 정규화 후 name 이 blank→null 이 됐으면 필수 필드 상실로 보고 fallback (price 는 fromExtracted 가 보존).
-        snapshot.name ?: return null
-        return snapshot
+                .getOrNull() ?: return StructuredExtraction.Miss.INVALID_VALUE
+        snapshot.name ?: return StructuredExtraction.Miss.MISSING_FIELD
+        return StructuredExtraction.Extracted(snapshot)
     }
 
     private fun textOf(node: JsonNode?): String? {
