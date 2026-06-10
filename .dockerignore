@@ -1,0 +1,12 @@
+.git
+.gradle
+build/
+!build/libs/*.jar
+.idea
+out
+.kotlin
+terraform
+docs
+*.md
+.env*
+.env-local

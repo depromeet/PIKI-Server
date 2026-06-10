@@ -1,0 +1,100 @@
+package com.depromeet.piki.user.domain
+
+import com.depromeet.piki.common.exception.BaseException
+import com.depromeet.piki.common.exception.ErrorCategory
+import com.depromeet.piki.common.exception.HttpMappable
+import org.springframework.http.HttpStatus
+import java.util.UUID
+
+class UserException private constructor(
+    message: String,
+    override val category: ErrorCategory,
+    override val httpStatus: HttpStatus,
+) : BaseException(message),
+    HttpMappable {
+    companion object {
+        fun notFound(userId: UUID): UserException =
+            UserException(
+                "유저를 찾을 수 없습니다. userId=$userId",
+                ErrorCategory.NOT_FOUND,
+                HttpStatus.NOT_FOUND,
+            )
+
+        fun alreadyMember(userId: UUID): UserException =
+            UserException(
+                "이미 MEMBER 입니다. userId=$userId",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
+
+        fun deletedUser(userId: UUID): UserException =
+            UserException(
+                "탈퇴한 유저입니다. userId=$userId",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
+
+        fun duplicateNickname(): UserException =
+            UserException(
+                "이미 사용 중인 닉네임입니다.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
+
+        fun nicknameGenerationFailed(): UserException =
+            UserException(
+                "닉네임 생성에 실패했습니다. 다시 시도해주세요.",
+                ErrorCategory.SERVER_ERROR,
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            )
+
+        fun invalidNickname(reason: String): UserException =
+            UserException(
+                reason,
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
+
+        // 게스트 탈퇴 거부 — 멀쩡한 클라이언트(게스트 토큰)가 정상 요청으로 닿을 수 있는 계약 응답이라 커스텀 예외(403).
+        // 게스트는 보존할 PII 도, 스토어 요건상 "계정"도 없고, 공유 토너먼트 참조 때문에 하드삭제도 불가하다.
+        fun guestCannotWithdraw(): UserException =
+            UserException(
+                "게스트는 탈퇴할 수 없습니다.",
+                ErrorCategory.FORBIDDEN,
+                HttpStatus.FORBIDDEN,
+            )
+
+        // 프로필 이미지 수정은 MEMBER 전용 — 게스트가 이미지 파트를 담아 PATCH /me 를 호출하면 닿는 계약 응답(403).
+        // 게스트 토큰으로 정상 요청을 보낼 수 있으므로 require/check(500)가 아니라 커스텀 예외다(guestCannotWithdraw 와 같은 결).
+        fun guestCannotUpdateProfileImage(): UserException =
+            UserException(
+                "프로필 이미지는 회원만 수정할 수 있습니다.",
+                ErrorCategory.FORBIDDEN,
+                HttpStatus.FORBIDDEN,
+            )
+
+        fun emptyProfileImage(): UserException =
+            UserException(
+                "빈 이미지 파일은 업로드할 수 없습니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
+
+        // 지원 형식 목록은 클라이언트 안내 목적이라 노출돼도 안전하다(내부 정보 아님).
+        fun unsupportedProfileImageType(): UserException =
+            UserException(
+                "지원하지 않는 이미지 형식입니다. (지원: ${ProfileImageFile.SUPPORTED_MIME_TYPES.joinToString()})",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
+
+        // 선언한 Content-Type 과 실제 파일 바이트(매직바이트)가 어긋나거나 이미지로 해석되지 않을 때.
+        // Content-Type 헤더는 클라이언트가 위조할 수 있으므로 실제 시그니처로 교차검증한다.
+        fun malformedProfileImage(): UserException =
+            UserException(
+                "이미지 파일이 손상되었거나 형식과 내용이 일치하지 않습니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
+    }
+}

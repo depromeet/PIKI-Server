@@ -1,15 +1,20 @@
 spring:
   application:
-    name: team3
+    name: PIKI
   config:
-    import: optional:file:.env[.properties]
-
+    # .env 다음에 .env.local 을 읽어 로컬 개인 override 를 덮어쓴다(뒤가 우선). 둘 다 optional·gitignore.
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:.env.local[.properties]
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 25MB
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/team3?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8}
-    username: ${DB_USERNAME:team3}
-    password: ${DB_PASSWORD:team3}
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:piki}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
+    username: ${DB_USERNAME:piki}
+    password: ${DB_PASSWORD:piki}
     driver-class-name: com.mysql.cj.jdbc.Driver
-
   jpa:
     hibernate:
       ddl-auto: validate
@@ -18,17 +23,141 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
         format_sql: false
-
   flyway:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
+    # 마이그레이션이 전부 additive(순서 무관)이므로 머지 순서와 timestamp 순서가 어긋나도 안전하게 적용한다.
+    # 덕분에 머지 직전 timestamp 재발급이 불필요. 순서 의존이 필요한 변경은 단계 배포로 따로 다룬다.
+    out-of-order: true
+    # history 에는 적용 기록이 있으나 로컬엔 파일이 없는(missing) 마이그레이션의 검증 실패를 무시한다.
+    # 최종 스키마 정합성은 ddl-auto:validate 가 보증한다.
+    ignore-migration-patterns: "*:missing"
+    # 데이터 마이그레이션이 env 별 값을 쓰도록 placeholder 주입. dicebear 기본 프로필 backfill 이
+    # ${s3publicbaseurl} 로 dev/prod 버킷 URL 을 조립한다. 미설정(로컬/테스트)이면 빈 값 → 해당 SQL 은 가드로 no-op.
+    # 키는 lowercase 로 둔다 — camelCase 는 Spring relaxed-binding 정규화로 Flyway 에 전달이 어긋난다.
+    placeholders:
+      s3publicbaseurl: ${s3.public-base-url}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+jwt:
+  # secret 은 환경변수로만 주입한다 (default 없음). 운영에서 env 누락 시 부팅 실패가 의도.
+  secret: ${JWT_SECRET}
+  # Spring 의 Duration 파싱은 1h / 14d / 30m / PT1H30M 등 다양한 형식 지원.
+  access-token-expiry: ${JWT_ACCESS_EXPIRY:15m}
+  refresh-token-expiry: ${JWT_REFRESH_EXPIRY:14d}
+
+auth:
+  cookie:
+    # 토큰 쿠키의 Secure 속성. 운영(HTTPS)은 true, 로컬(HTTP)은 .env 의 COOKIE_SECURE=false 로 끈다.
+    # 누락 시 기본 true (fail-safe-secure).
+    secure: ${COOKIE_SECURE:true}
+
+oauth:
+  kakao:
+    client-id: ${KAKAO_CLIENT_ID:}
+    client-secret: ${KAKAO_CLIENT_SECRET:}
+    redirect-uri: ${KAKAO_REDIRECT_URI:}
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
+    client-secret: ${GOOGLE_CLIENT_SECRET:}
+    redirect-uri: ${GOOGLE_REDIRECT_URI:}
+  apple:
+    team-id: ${APPLE_TEAM_ID:}
+    key-id: ${APPLE_KEY_ID:}
+    client-id: ${APPLE_CLIENT_ID:}
+    bundle-id: ${APPLE_BUNDLE_ID:}
+    private-key: ${APPLE_PRIVATE_KEY:}
+    redirect-uri: ${APPLE_REDIRECT_URI:}
 
 gemini:
-  api-key: ${GEMINI_API_KEY}
-  model: gemini-3-flash-preview
+  api-key: ${GEMINI_API_KEY:}
+  # 기본 모델은 GeminiProperties.DEFAULT_MODEL 한 곳에서만 정의한다 (drift 방지). 여기엔 리터럴을 두지 않는다.
+  # 운영에서 모델을 바꾸려면 GEMINI_MODEL 환경변수로 override (relaxed binding: GEMINI_MODEL -> gemini.model).
+  retry:
+    # max-attempts 는 총 시도 횟수(초기 호출 + 재시도). 기본 1 = 재시도 없음.
+    # URL 파싱 재시도를 outbox recover(ItemParsingScheduler) 한 곳으로 모았다(#461) — Gemini 내부 재시도를 켜면
+    # 단건 파싱이 재시도 1회당 약 +35s 늘어 60s 를 넘기고 "단건 ≤60s, 절대 3분 초과 금지" 보장이 깨진다. 올리기 전 그 영향을 반드시 확인.
+    # 한 요청이 유발하는 billed API 호출 횟수 상한이기도 해 비용·quota 와도 직결된다.
+    max-attempts: ${GEMINI_RETRY_MAX_ATTEMPTS:1}
+    initial-delay-ms: ${GEMINI_RETRY_INITIAL_DELAY_MS:1000}
+
+admin:
+  # 개발 서버 전용 관리자 백오피스. prod 프로파일에서는 @Profile("!prod") 로 빈/라우트 자체가 뜨지 않는다.
+  # dev/local 에서 아래가 비어 있으면 AdminProperties.init 에서 부팅 실패시킨다 ("빈 계정으로 로그인 불가" 방지).
+  username: ${ADMIN_USERNAME:}
+  password: ${ADMIN_PASSWORD:}
+
+s3:
+  # 크롭한 상품 이미지 저장 버킷. 자격증명은 EC2 instance role / 로컬 환경변수(DefaultCredentialsProvider).
+  bucket: ${S3_BUCKET:}
+  region: ${S3_REGION:ap-northeast-2}
+  public-base-url: ${S3_PUBLIC_BASE_URL:}
 
 springdoc:
   api-docs:
     path: /v3/api-docs
   default-produces-media-type: application/json
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 노출: health(상태), prometheus(메트릭 scrape), loggers(런타임 로그 레벨 변경).
+        # info·metrics·env 등 나머지 actuator 엔드포인트는 노출하지 않는다 (info 는 contributor 가
+        # 없어 빈 응답이라 노출 표면만 늘릴 뿐이고, Alloy 도 prometheus·health 만 긁는다).
+        # loggers 는 비-API 인증 로그(평소 DEBUG)를 조사 시 런타임에 켜기 위함. POST 로 동작을 바꾸는
+        # WRITE 엔드포인트라, 외부(nginx 443)가 /actuator/ 를 403 으로 차단해 localhost(박스)에서만 도달한다.
+        # 외부 차단 + EC2 내부 Grafana Alloy 만 localhost 로 /actuator/prometheus 를 scrape 하는 2층 구조.
+        include: health, prometheus, loggers
+  metrics:
+    tags:
+      # Grafana Cloud 에서 서비스 단위로 메트릭을 구분하는 공통 라벨.
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      # 모든 응답·로그에 traceId 가 빠짐없이 찍히고 모든 요청이 trace 로 export 되도록 1.0 으로 둔다
+      # (기본 0.1 이면 일부 요청만 추적). 트래픽이 커져 GC Traces 볼륨·비용이 부담되면 그때 하향한다.
+      probability: 1.0
+    export:
+      otlp:
+        # span 을 OTLP 로 내보낼지 토글 (micrometer-tracing 기본 true). 로컬엔 수집기(Alloy)가 없어 끈다 —
+        # 운영 docker run 에만 TRACING_OTLP_ENABLED=true 를 준다 (LOG_STRUCTURED=ecs 와 같은 env override 패턴).
+        # off 여도 trace 생성·전파(traceId·MDC·로그 correlation)는 그대로다 — export 단계만 끈다.
+        enabled: ${TRACING_OTLP_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          # export on 일 때 span 을 보낼 OTLP(HTTP/protobuf, 기본 transport=http) endpoint.
+          # 앱 컨테이너(bridge)에서 호스트의 Alloy(otelcol.receiver.otlp, --network host)로 보내려면
+          # 컨테이너→호스트 게이트웨이를 거쳐야 한다 (컨테이너 안 localhost 는 자기 자신이라 호스트 Alloy 에 안 닿는다).
+          # deploy.yml 이 앱 docker run 에 --add-host=host.docker.internal:host-gateway 를 주고 이 endpoint 로 보낸다.
+          endpoint: ${OTLP_TRACES_ENDPOINT:http://host.docker.internal:4318/v1/traces}
+
+logging:
+  structured:
+    format:
+      # 운영은 Grafana(Loki)로 로그를 보낸다. ECS JSON 으로 출력하면 Alloy 가 trace.id·log.level·message 등
+      # 필드를 파싱해 trace 를 Loki structured metadata 로 승격하고 본문은 message 만 남길 수 있다(#364).
+      # 값이 있으면(ecs) 구조화 JSON 출력이 켜지고 아래 pattern.console(평문)은 무시된다.
+      # 로컬은 LOG_STRUCTURED 미설정(빈값)이라 구조화 off → pattern.console 평문 패턴이 적용된다.
+      # (운영 docker run 에만 -e LOG_STRUCTURED=ecs 를 준다. env override 패턴은 ADMIN_ENABLED 와 동일.)
+      console: ${LOG_STRUCTURED:}
+  pattern:
+    # 아래 평문 패턴은 구조화 off(로컬)일 때만 적용된다 — LOG_STRUCTURED=ecs 면 위 구조화 출력이 우선한다.
+    # 운영 로그는 Grafana(Loki)에서 본다. Grafana 가 줄 앞에 수집시각(KST)+레벨을 자동으로 붙이므로,
+    # Spring Boot 기본 콘솔 패턴의 시각·레벨과 겹쳐 한 줄에 시각·레벨이 두 번씩 나온다. 게다가 운영 컨테이너
+    # JVM 은 UTC 라 Spring 시각이 Grafana 의 KST 표시와 9시간 어긋나 더 헷갈린다.
+    #
+    # 그래서 콘솔 패턴을 직접 정의한다:
+    #  - 시각을 Asia/Seoul 로 고정해 Grafana 표시(KST)와 맞춘다 (JVM 타임존은 안 건드린다 — now() 등 도메인 시각에
+    #    영향 주지 않도록 로그 출력에서만 KST 로 포맷. DB 는 serverTimezone=UTC 유지).
+    #  - PID·--- ·application name([PIKI])을 뺀다. 단일 컨테이너라 PID 는 항상 1 이고, 서비스 구분은 Loki 의
+    #    container 라벨(team3-blue/green)이 이미 한다 — 줄마다 반복할 가치가 없다.
+    #  - traceId/spanId 는 한 요청의 전체 로그를 묶는 추적 키라 유지한다 (sampling 1.0 이라 항상 채워진다).
+    # 색상(%clr)은 쓰지 않는다 — non-TTY(컨테이너 stdout)에선 어차피 plain 이고, 로컬 콘솔 색상보다 패턴 단순함을 택한다.
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS, Asia/Seoul} %-5level [%thread] [%X{traceId:-},%X{spanId:-}] %logger{36} : %msg%n%wEx"

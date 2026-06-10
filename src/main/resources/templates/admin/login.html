@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIKI 백오피스 로그인</title>
+    <link rel="stylesheet" th:href="@{/admin-assets/backoffice.css}">
+    <!-- 사이트 전역 파비콘. /favicon.ico 는 JWT 체인(@Order 2)에서 permitAll 돼 인증 없이 서빙된다. -->
+    <link rel="icon" href="/favicon.ico">
+</head>
+<body>
+<div class="login-container">
+    <h1>PIKI 백오피스</h1>
+    <p class="login-desc">개발 서버 운영 도구</p>
+    <p class="login-error" th:if="${param.error}">아이디 또는 비밀번호가 올바르지 않습니다.</p>
+    <p class="login-info" th:if="${param.logout}">로그아웃되었습니다.</p>
+    <form th:action="@{/admin/login}" method="post">
+        <input type="text" name="username" placeholder="아이디" required autofocus>
+        <input type="password" id="password" name="password" placeholder="비밀번호" required>
+        <label class="login-show-pw">
+            <input type="checkbox"
+                   onchange="document.getElementById('password').type = this.checked ? 'text' : 'password'">
+            비밀번호 보기
+        </label>
+        <button type="submit">로그인</button>
+    </form>
+</div>
+</body>
+</html>

@@ -48,6 +48,13 @@ resource "aws_db_instance" "mysql" {
   deletion_protection        = false # dev 단계에서는 false, prod 에서는 true 로 전환
   skip_final_snapshot        = true  # dev 단계에서만 true
 
+  # 실제 비밀번호는 콘솔/운영에서 바뀔 수 있어 state·var.db_password 와 어긋날 수 있다.
+  # terraform 이 apply 마다 비번을 var.db_password 로 강제 변경해 앱 DB 연결이 끊기는 사고를 막기 위해
+  # password 변경은 무시한다. 비번을 의도적으로 바꿀 때는 콘솔/CLI 로 직접 수행한다.
+  lifecycle {
+    ignore_changes = [password]
+  }
+
   tags = {
     Name = "${local.name_prefix}-mysql"
   }

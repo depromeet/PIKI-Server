@@ -1,0 +1,26 @@
+# CI 전용 Dockerfile — Gradle 빌드는 GitHub Actions에서 네이티브로 실행 후 JAR만 넘겨받음
+# ────────────────────────────────────────────
+# Stage 1: extractor — Layered JAR 분리
+# ────────────────────────────────────────────
+FROM eclipse-temurin:25-jdk AS extractor
+WORKDIR /workspace
+COPY build/libs/*.jar app.jar
+RUN java -Djarmode=layertools -jar app.jar extract
+
+# ────────────────────────────────────────────
+# Stage 2: runtime — 최소 실행 이미지
+# ────────────────────────────────────────────
+FROM eclipse-temurin:25-jre AS runtime
+WORKDIR /app
+
+RUN groupadd --system appgroup && useradd --system --gid appgroup appuser
+
+COPY --from=extractor /workspace/dependencies/ ./
+COPY --from=extractor /workspace/spring-boot-loader/ ./
+COPY --from=extractor /workspace/snapshot-dependencies/ ./
+COPY --from=extractor /workspace/application/ ./
+
+USER appuser
+
+EXPOSE 8080
+ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]

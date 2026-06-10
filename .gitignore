@@ -3,6 +3,7 @@
 
 # Claude Code
 .claude/settings.local.json
+.claude/worktrees/
 
 # IDE - 개인 설정 제외
 .idea/*
@@ -21,9 +22,12 @@ build/
 # IntelliJ 컴파일 출력
 out/
 
-# Environment
-.env
-.env.test
+# Environment — .env* 전부 무시하되 템플릿(.env.example)은 커밋 유지
+.env*
+!.env.example
 
 # Kotlin
 .kotlin/
+
+# superpowers AI 워크플로 산출물 (로컬 전용) — 로컬 세팅 차이로 새어나가지 않도록 레포에서 무시
+docs/superpowers/

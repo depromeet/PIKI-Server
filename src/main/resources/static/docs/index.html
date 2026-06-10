@@ -3,7 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>team3 API Docs</title>
+    <title>PIKI API Docs</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <!--
       v9.x: React Router v6 업그레이드로 hash 라우팅 회귀 버그 발생 (URL 해시는 변경되나 콘텐츠 미갱신)
       v8.5.2 고정: hash router 정상 동작이 확인된 마지막 v8 버전
@@ -19,12 +20,178 @@
       integrity="sha384-oYu9Au1JU1Sd5Za5LYSepn+Sofm8uvVdUCxLWbJYesNAS72Y7G/gQ0pjiB6wyf1Z"
       crossorigin="anonymous"
     />
+    <!-- 깔끔한 한글/영문 본문 폰트. 코드/모노스페이스는 시스템 mono 로 둔다. -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+    />
+    <style>
+      :root {
+        --piki-font:
+          "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI",
+          "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+        --piki-mono: "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
+        --piki-bar-h: 52px;
+        --piki-border: #e5e7eb;
+        --piki-accent: #4f46e5;
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+
+      /* 슬림 브랜드 헤더 — 기본 Elements 는 상단 타이틀이 없어 밋밋하다. */
+      .piki-topbar {
+        position: fixed;
+        inset: 0 0 auto 0;
+        height: var(--piki-bar-h);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 20px;
+        background: #ffffff;
+        border-bottom: 1px solid var(--piki-border);
+        font-family: var(--piki-font);
+        z-index: 10;
+      }
+      .piki-topbar .brand {
+        font-weight: 800;
+        font-size: 17px;
+        letter-spacing: -0.02em;
+        color: #111827;
+      }
+      .piki-topbar .brand .dot {
+        color: var(--piki-accent);
+      }
+      .piki-topbar .sub {
+        font-size: 13px;
+        color: #6b7280;
+        font-weight: 500;
+      }
+      .piki-topbar .spacer {
+        flex: 1;
+      }
+      .piki-topbar a {
+        font-size: 13px;
+        color: #6b7280;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .piki-topbar a:hover {
+        color: var(--piki-accent);
+      }
+
+      /* Elements 를 헤더 아래로 밀어 넣는다. */
+      .piki-docs {
+        position: fixed;
+        inset: var(--piki-bar-h) 0 0 0;
+      }
+
+      /* 본문 폰트를 Pretendard 로 통일 (사이드바·콘텐츠 모두 cascade). */
+      elements-api {
+        font-family: var(--piki-font);
+        --font-prose: var(--piki-font);
+        --font-ui: var(--piki-font);
+        --font-code: var(--piki-mono);
+      }
+
+      /* 마크다운 description 안의 표를 또렷하게 — 경계선·헤더 배경·셀 여백. */
+      elements-api .sl-prose table,
+      elements-api .sl-markdown-viewer table {
+        border-collapse: collapse;
+        margin: 12px 0;
+        font-size: 13.5px;
+      }
+      elements-api .sl-prose th,
+      elements-api .sl-prose td,
+      elements-api .sl-markdown-viewer th,
+      elements-api .sl-markdown-viewer td {
+        border: 1px solid var(--piki-border);
+        padding: 7px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+      elements-api .sl-prose th,
+      elements-api .sl-markdown-viewer th {
+        background: #f9fafb;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      /* 인라인 코드(`token`)를 살짝 칩처럼 — 본문에서 식별자가 눈에 들어오게. */
+      elements-api .sl-prose code,
+      elements-api .sl-markdown-viewer code {
+        font-family: var(--piki-mono);
+        font-size: 0.86em;
+        background: #f3f4f6;
+        border: 1px solid #eceef1;
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+
+      /*
+        operation 설명(=`HttpOperation__Description`) 영역만 검은 callout 으로 강조한다.
+        이 클래스는 parameter/response/스키마/Overview 설명과 구분되는 "그 엔드포인트의 설명란" 전용이라,
+        여기만 다크 테마로 뒤집어도 다른 description 은 영향받지 않는다. 다크 배경에 맞춰 표·코드·강조색을 반전.
+      */
+      elements-api .HttpOperation__Description {
+        background: #0d0d0f;
+        color: #e6e7eb;
+        padding: 18px 20px;
+        border-radius: 10px;
+        border: 1px solid #20242e;
+      }
+      /* Stoplight 가 문단·리스트 색을 자체 지정하므로 밝은 색으로 덮어 저대비를 막는다. */
+      elements-api .HttpOperation__Description p,
+      elements-api .HttpOperation__Description li,
+      elements-api .HttpOperation__Description span {
+        color: #e3e5ea;
+      }
+      elements-api .HttpOperation__Description strong {
+        color: #ffffff;
+      }
+      elements-api .HttpOperation__Description a {
+        color: #a5b4fc;
+      }
+      /* 다크 배경용 인라인 코드 칩 */
+      elements-api .HttpOperation__Description code {
+        background: #1b1f2a;
+        border-color: #2a3040;
+        color: #e6e7eb;
+      }
+      /* 다크 배경용 표 — Stoplight zebra 줄무늬(짝수 행 회색)를 걷어낸다 (!important 로 우선). */
+      elements-api .HttpOperation__Description table,
+      elements-api .HttpOperation__Description tbody,
+      elements-api .HttpOperation__Description tbody tr,
+      elements-api .HttpOperation__Description tbody td {
+        background-color: transparent !important;
+      }
+      elements-api .HttpOperation__Description th {
+        background-color: #15181f;
+        color: #f3f4f6;
+        border-color: #2a3040;
+      }
+      elements-api .HttpOperation__Description td {
+        color: #d6d8de;
+        border-color: #2a3040;
+      }
+    </style>
   </head>
-  <body style="margin: 0;">
+  <body>
+    <header class="piki-topbar">
+      <span class="brand">PIKI<span class="dot">.</span></span>
+      <span class="sub">API Reference</span>
+      <span class="spacer"></span>
+      <a href="/v3/api-docs" target="_blank" rel="noopener">OpenAPI JSON</a>
+    </header>
     <elements-api
+      class="piki-docs"
       apiDescriptionUrl="/v3/api-docs"
       router="hash"
       layout="sidebar"
+      hideExport="true"
     />
   </body>
 </html>

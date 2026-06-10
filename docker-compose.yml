@@ -1,25 +1,41 @@
 services:
   mysql:
     image: mysql:8.4
-    container_name: team3-mysql
+    container_name: piki-mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
-      MYSQL_DATABASE: ${DB_NAME:-team3}
-      MYSQL_USER: ${DB_USERNAME:-team3}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-team3}
+      MYSQL_DATABASE: ${DB_NAME:-piki}
+      MYSQL_USER: ${DB_USERNAME:-piki}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-piki}
     ports:
-      - "3306:3306"
+      # loopback 바인딩 — 공유망·원격 Docker host 에서 무인증 외부 접근을 막는다. 로컬 앱은 localhost 로 접속.
+      - "127.0.0.1:3306:3306"
     volumes:
-      - team3-mysql-data:/var/lib/mysql
+      - piki-mysql-data:/var/lib/mysql
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_ROOT_PASSWORD:-root}"]
+      # mysqladmin ping 은 인증 없이도 reachable 여부를 돌려준다.
+      # 인자에 비밀번호를 박으면 컨테이너 내부 ps / docker inspect 출력에 그대로 노출된다.
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: piki-redis
+    restart: unless-stopped
+    ports:
+      # loopback 바인딩 — Redis 무인증 외부 접근(데이터 변조·삭제) 차단. 로컬 앱은 localhost 로 접속.
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
 
 volumes:
-  team3-mysql-data:
+  piki-mysql-data:

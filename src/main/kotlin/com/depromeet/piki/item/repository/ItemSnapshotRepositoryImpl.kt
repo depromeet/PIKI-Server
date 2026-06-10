@@ -1,0 +1,38 @@
+package com.depromeet.piki.item.repository
+
+import com.depromeet.piki.item.domain.ItemSnapshot
+import com.depromeet.piki.item.domain.ItemStatus
+import org.springframework.data.domain.PageRequest
+import org.springframework.stereotype.Repository
+import java.time.LocalDateTime
+
+@Repository
+class ItemSnapshotRepositoryImpl(
+    private val itemSnapshotJpaRepository: ItemSnapshotJpaRepository,
+) : ItemSnapshotRepository {
+    override fun save(snapshot: ItemSnapshot): ItemSnapshot = itemSnapshotJpaRepository.save(snapshot)
+
+    override fun saveAll(snapshots: List<ItemSnapshot>): List<ItemSnapshot> =
+        itemSnapshotJpaRepository.saveAll(snapshots)
+
+    override fun findLatestByItemId(itemId: Long): ItemSnapshot? =
+        itemSnapshotJpaRepository.findFirstByItemIdAndDeletedAtIsNullOrderByIdDesc(itemId)
+
+    override fun findById(id: Long): ItemSnapshot? = itemSnapshotJpaRepository.findByIdAndDeletedAtIsNull(id)
+
+    override fun findByIds(ids: List<Long>): List<ItemSnapshot> =
+        itemSnapshotJpaRepository.findByIdInAndDeletedAtIsNull(ids)
+
+    override fun findDuePending(batchSize: Int): List<ItemSnapshot> =
+        itemSnapshotJpaRepository.findByStatusForUpdate(ItemStatus.PENDING, PageRequest.of(0, batchSize))
+
+    override fun findStaleProcessing(
+        threshold: LocalDateTime,
+        batchSize: Int,
+    ): List<ItemSnapshot> =
+        itemSnapshotJpaRepository.findStaleByStatusForUpdate(
+            ItemStatus.PROCESSING,
+            threshold,
+            PageRequest.of(0, batchSize),
+        )
+}
