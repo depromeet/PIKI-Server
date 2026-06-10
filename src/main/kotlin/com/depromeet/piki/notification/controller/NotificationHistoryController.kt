@@ -1,0 +1,47 @@
+package com.depromeet.piki.notification.controller
+
+import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.common.response.PageResponse
+import com.depromeet.piki.notification.controller.dto.NotificationHistoryResponse
+import com.depromeet.piki.notification.controller.dto.NotificationReadRequest
+import com.depromeet.piki.notification.controller.dto.NotificationReadResponse
+import com.depromeet.piki.notification.domain.NotificationCategory
+import com.depromeet.piki.notification.service.NotificationService
+import jakarta.validation.Valid
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.RestController
+import java.util.UUID
+
+@RestController
+@RequestMapping("/api/v1/notifications")
+class NotificationHistoryController(
+    private val notificationService: NotificationService,
+) : NotificationHistoryApi {
+    @GetMapping
+    override fun getHistory(
+        @AuthenticationPrincipal userId: UUID,
+        @RequestParam(required = false) cursor: String?,
+        @RequestParam(required = false) size: Int?,
+        @RequestParam(required = false) category: NotificationCategory?,
+    ): ApiResponseBody<NotificationHistoryResponse> {
+        val page = notificationService.getHistory(userId = userId, rawCursor = cursor, rawSize = size, category = category)
+        return ApiResponseBody.ok(
+            data = NotificationHistoryResponse.of(page.notifications, page.unreadCount, page.unreadCountByCategory, page.defaultPushImageUrl),
+            pageResponse = PageResponse(nextCursor = page.nextCursor, hasNext = page.hasNext),
+        )
+    }
+
+    @PostMapping("/read")
+    override fun read(
+        @AuthenticationPrincipal userId: UUID,
+        @Valid @RequestBody request: NotificationReadRequest,
+    ): ApiResponseBody<NotificationReadResponse> {
+        val unreadByCategory = notificationService.read(userId = userId, command = request.toCommand())
+        return ApiResponseBody.ok(data = NotificationReadResponse.of(unreadByCategory))
+    }
+}

@@ -2,6 +2,7 @@ package com.depromeet.piki.notification.sse
 
 import com.depromeet.piki.notification.controller.dto.NotificationSsePayload
 import com.depromeet.piki.notification.domain.Notification
+import com.depromeet.piki.notification.service.DefaultPushImage
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
@@ -16,6 +17,7 @@ import java.util.UUID
 @Component
 class LocalSseDelivery(
     private val registry: SseEmitterRegistry,
+    private val defaultPushImage: DefaultPushImage,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -28,7 +30,7 @@ class LocalSseDelivery(
             SseEmitter
                 .event()
                 .name(EVENT_NOTIFICATION)
-                .data(NotificationSsePayload.from(notification))
+                .data(NotificationSsePayload.from(notification, defaultPushImage.url))
         registry.emittersOf(userId).forEach { sendOrEvict(userId, it, event) }
     }
 

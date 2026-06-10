@@ -81,4 +81,9 @@ class IntegrationStubs {
 
     @Bean
     fun appleOAuthClient(): StubOAuthClient = StubOAuthClient(OAuthProvider.APPLE)
+
+    // Apple 서버-서버 알림 서명 검증(외부 JWKS 호출) 격리. 운영 AppleOAuthClient 가 AppleNotificationVerifier 를
+    // 구현하지만 oauth.client.enabled=false 로 꺼지므로, 이 stub 이 유일한 AppleNotificationVerifier 라 @Primary 불필요.
+    @Bean
+    fun appleNotificationVerifier(): StubAppleNotificationVerifier = StubAppleNotificationVerifier()
 }

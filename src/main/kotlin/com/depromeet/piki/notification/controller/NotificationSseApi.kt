@@ -16,24 +16,26 @@ import java.util.UUID
 interface NotificationSseApi {
     @Operation(
         summary = "알림 실시간 구독 (SSE)",
-        description = """
-            인증 유저의 알림을 실시간으로 받는 SSE(Server-Sent Events) 스트림을 연다.
-            응답은 ApiResponseBody JSON 래퍼가 아니라 text/event-stream 스트림이며, 다음 이벤트가 흘러온다.
-            - connect: 구독 직후 1회. data="connected". 연결 성립 신호.
-            - notification: 알림 1건. type 으로 화면을, 파싱 알림은 kind 로 출처(위시/토너먼트)를 분기한다. 출처별 payload 셰입과 라우팅 필드(kind·tournamentId·tournamentItemId)는 notification-sse-spec.md 참조.
-            - (주석 ping): 약 30초 간격 하트비트. 연결 유지용이며 data 이벤트가 아니다.
-            토너먼트 알림은 해당 토너먼트 참여자에게만 fan-out 되므로, 자기 스트림 1개만 구독하면 토너먼트·개인 알림이 모두 도착한다.
-            연결은 30분 후 타임아웃되며, 클라이언트는 끊기면 재연결한다.
-        """,
+        description =
+            "인증 유저의 알림을 실시간으로 받는 **SSE(Server-Sent Events)** 스트림을 연다.\n\n" +
+                "응답은 `ApiResponseBody` JSON 래퍼가 아니라 `text/event-stream` 스트림이며, 다음 이벤트가 흘러온다.\n\n" +
+                "| 이벤트 | 시점 | 내용 |\n" +
+                "|---|---|---|\n" +
+                "| `connect` | 구독 직후 1회 | `data=\"connected\"`. 연결 성립 신호 |\n" +
+                "| `notification` | 알림 1건마다 | `type` 으로 화면을, 파싱 알림은 `kind` 로 출처(위시/토너먼트)를 분기. " +
+                "출처별 payload 셰입과 라우팅 필드(`kind`·`tournamentId`·`tournamentItemId`)는 `notification-sse-spec.md` 참조 |\n" +
+                "| `(주석 ping)` | 약 30초 간격 | 하트비트. 연결 유지용이며 data 이벤트가 아니다 |\n\n" +
+                "- 토너먼트 알림은 해당 토너먼트 참여자에게만 fan-out 되므로, **자기 스트림 1개만 구독**하면 토너먼트·개인 알림이 모두 도착한다.\n" +
+                "- 연결은 **30분 후 타임아웃**되며, 클라이언트는 끊기면 재연결한다.",
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
                 description =
-                    "SSE 스트림 시작 (text/event-stream). notification 이벤트 data payload 는 알림 종류별로 셰입이 다르고" +
-                        "(파싱 알림은 출처별 kind·tournamentId·tournamentItemId), 스트림·다형 구조라 OpenAPI 로 표현이 어려워" +
-                        " notification-sse-spec.md 로 문서화한다.",
+                    "SSE 스트림 시작 (`text/event-stream`). `notification` 이벤트 data payload 는 알림 종류별로 셰입이 다르고" +
+                        "(파싱 알림은 출처별 `kind`·`tournamentId`·`tournamentItemId`), 스트림·다형 구조라 OpenAPI 로 표현이 어려워" +
+                        " `notification-sse-spec.md` 로 문서화한다.",
             ),
             ApiResponse(
                 responseCode = "401",

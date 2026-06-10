@@ -12,8 +12,13 @@ import java.time.LocalDateTime
 // PENDING 은 반드시 한 번은 claim 돼 실행이 시작된다. item_snapshots 테이블 자체가 outbox(상태머신을 가진 작업 큐)라
 // 별도 테이블이 없다.
 //
-// 한계 — 보장은 'claim-at-least-once' 이지 '실행 at-least-once' 가 아니다: claim(PROCESSING 커밋) 직후 워커 제출
-// 전에 인스턴스가 죽으면 그 작업은 실행 0회로 PROCESSING 에 갇히고, recover 가 FAILED 로 종결한다(재큐잉 없음 — 사용자가 재등록).
+// 보장은 execution at-least-once(#461): claim 직후 크래시(실행 0회)·실행 중 크래시·일시 외부 오류로 단건 실행이
+// 끝나지 않은 작업을 recover 가 재실행으로 되살린다. 핵심 불변식 두 가지:
+//   1. 단건 시도는 60s 안에 끝난다 — fetch(≤약 20s) + Gemini(≤약 35s, 내부 재시도 off) 외부 timeout 합이 ≤ 약 55s.
+//      그래서 updated_at 이 60s(STALE_TIMEOUT_SECONDS) 보다 오래된 PROCESSING 은 "워커가 더는 돌고 있지 않다" 로 단정할 수 있고,
+//      정상적으로 도는 시도를 stale 로 오판해 죽이지 않는다.
+//   2. 재실행 상한 2회(MAX_ATTEMPTS). 최악 총 시간 = 2 x (60s 윈도 + recover 주기 15s) = 약 150s 로, 절대 3분을 넘지 않는다.
+// 재시도해도 결과가 뻔한 확정 실패(상품 아님 등)는 워커가 즉시 FAILED 하고, recover 는 "실행이 안 끝난" 행만 맡는다.
 //
 // 단일 인스턴스 기준의 @Scheduled 다. 멀티 인스턴스로 가면 claim 의 FOR UPDATE 가 중복 파싱(두 워커가 같은 행)은
 // 막지만, SKIP LOCKED 가 없어 두 디스패처가 같은 선두 batch 를 두고 락 대기로 직렬화된다 — 그때는 SKIP LOCKED
@@ -35,24 +40,27 @@ class ItemParsingScheduler(
         claimed.forEach { dispatchToWorker(it) }
     }
 
+    // 디스패처·recover 가 공유하는 워커 제출. 풀 포화(queue 초과)로 거부되면 PROCESSING 그대로 둔다 —
+    // recover 가 stale 로 잡아 재실행한다(execution at-least-once). "claim 됐는데 실행 0회" 도 되살릴 대상이라 종결하지 않는다.
+    // (#411 까지는 거부 시 즉시 FAILED 였으나, 실패·재시도 판정을 recover 한 곳으로 모으면서 여기선 종결하지 않는다.)
     private fun dispatchToWorker(claimed: ClaimedItem) {
-        // 워커 풀 포화(queue 초과)로 거부되면 PROCESSING 방치 대신 즉시 FAILED 로 떨군다 (기존 등록 경로와 같은 정책).
         runCatching { itemParsingWorker.parse(claimed.itemId, claimed.link) }
-            .onFailure { e ->
-                log.warn("item {} 워커 디스패치 거부 → FAILED: {}", claimed.itemId, e.message)
-                runCatching { itemParsingService.markFailed(claimed.itemId) }
-                    .onFailure { ex -> log.error("item {} FAILED 전이 실패, PROCESSING 방치 위험", claimed.itemId, ex) }
-            }
+            .onFailure { e -> log.warn("item {} 워커 디스패치 거부 → PROCESSING 유지, recover 가 재실행: {}", claimed.itemId, e.message) }
     }
 
-    // recover — 워커가 죽어(인스턴스 크래시 등) PROCESSING 에 갇힌 stale 작업을 주기적으로 FAILED 로 정리한다.
-    // 재시도(재큐잉)는 하지 않는다: 사용자와 맞닿은 작업이라 뒤늦은 자동 재실행은 의미가 없고, 사용자가 직접 재등록한다.
-    // stale 판정은 updated_at(PROCESSING claim 시각) 기준이라, 정상 처리 중(외부 LLM 60s)인 작업은 걸리지 않는다.
+    // recover — 단건 실행이 끝나지 않아 stale 해진 PROCESSING 을 재실행하거나(execution at-least-once) 상한 도달·되살림 불가 시 종결한다.
+    // stale 판정은 updated_at(claim·재실행 시각) 기준이라, 정상적으로 도는 단건(≤ 약 55s)은 60s 윈도에 걸리지 않는다.
     @Scheduled(fixedDelay = RECOVER_INTERVAL_MS)
     fun recover() {
-        val threshold = LocalDateTime.now().minusMinutes(STALE_TIMEOUT_MINUTES)
-        val recovered = itemParsingService.recoverStaleProcessing(threshold, BATCH_SIZE)
-        if (recovered > 0) log.warn("stale PROCESSING {}건 → FAILED 정리", recovered)
+        val threshold = LocalDateTime.now().minusSeconds(STALE_TIMEOUT_SECONDS)
+        val outcome = itemParsingService.retryOrFailStaleProcessing(threshold, BATCH_SIZE, MAX_ATTEMPTS)
+        if (outcome.toRetry.isNotEmpty()) {
+            log.warn("stale PROCESSING {}건 재실행 디스패치", outcome.toRetry.size)
+            outcome.toRetry.forEach { dispatchToWorker(it) }
+        }
+        if (outcome.failedCount > 0) {
+            log.warn("stale PROCESSING {}건 → FAILED (재시도 상한 도달 또는 되살릴 수 없음)", outcome.failedCount)
+        }
     }
 
     companion object {
@@ -60,9 +68,14 @@ class ItemParsingScheduler(
 
         // 사용자 대면 작업이라 짧게 둔다 — 등록 직후 파싱이 시작되기까지의 지연이 이 주기로 결정된다.
         private const val DISPATCH_INTERVAL_MS = 1_000L
-        private const val RECOVER_INTERVAL_MS = 60_000L
 
-        // 정상 파싱이 끝났어야 할 시간(외부 LLM read-timeout 60s)을 넉넉히 넘긴 기준. 이보다 오래 PROCESSING 이면 방치로 본다.
-        private const val STALE_TIMEOUT_MINUTES = 5L
+        // recover 주기. stale 윈도(60s) + 이 주기가 stale 감지 지연이므로, 최악 총 시간(2 x (60s + 15s) = 약 150s)을 3분 밑으로 둔다.
+        private const val RECOVER_INTERVAL_MS = 15_000L
+
+        // 단건 시도가 60s 안에 끝나는 구조라(외부 timeout 합 ≤ 약 55s), 60s 넘게 PROCESSING 이면 워커가 더는 돌고 있지 않다고 본다.
+        private const val STALE_TIMEOUT_SECONDS = 60L
+
+        // 실행 시도 상한(초회 1 + 재시도 1). 단건 ≤ 60s 와 함께 "절대 3분 초과 금지" 를 보장한다.
+        private const val MAX_ATTEMPTS = 2
     }
 }

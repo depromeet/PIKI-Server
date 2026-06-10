@@ -21,9 +21,10 @@ data class GeminiProperties(
      * billed API 호출 횟수 상한이므로, API 비용·quota 를 고려해 운영에서 직접 조정한다.
      */
     data class Retry(
-        // max-attempts 는 총 시도 횟수(초기 호출 + 재시도). 기본 2 = 초기 호출 1회 + 재시도 1회.
-        // 한 요청이 유발하는 billed API 호출 횟수 상한이므로 비용·quota 에 맞춰 운영에서 조정한다.
-        val maxAttempts: Int = 2,
+        // max-attempts 는 총 시도 횟수(초기 호출 + 재시도). 기본 1 = 재시도 없음.
+        // URL 파싱 재시도를 outbox recover 로 일원화해(#461) Gemini 내부 재시도를 끈 것이 기본값이다 — 켜면 단건 파싱이
+        // 60s 를 넘겨 "단건 ≤60s, 절대 3분 초과 금지" 보장이 깨지므로 비용·quota 와 함께 그 영향을 확인하고 조정한다.
+        val maxAttempts: Int = 1,
         val initialDelayMs: Long = 1_000,
     ) {
         init {

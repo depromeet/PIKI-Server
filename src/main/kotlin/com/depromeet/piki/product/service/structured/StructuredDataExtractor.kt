@@ -37,7 +37,8 @@ class StructuredDataExtractor(
         }
 
     // 단독 호출·테스트 편의: HTML 을 직접 파싱해 위임한다. 운영 경로는 오케스트레이터가 Document 를 만들어 공유한다.
-    fun extract(page: PageContent): StructuredExtraction = extract(Jsoup.parse(page.html, page.link.value.toString()), page.link)
+    // baseUri 는 html 의 출처인 최종 URL(finalUrl) 기준, 정체성으로 넘기는 link 는 원본 유지.
+    fun extract(page: PageContent): StructuredExtraction = extract(Jsoup.parse(page.html, page.finalUrl.value.toString()), page.link)
 
     // 두 실패 사유 중 데이터에 더 근접한(=정보량이 큰) 쪽. enum 선언 순서가 아니라 명시 rank 로 비교한다(선언 순서 변경에 독립).
     private fun worse(

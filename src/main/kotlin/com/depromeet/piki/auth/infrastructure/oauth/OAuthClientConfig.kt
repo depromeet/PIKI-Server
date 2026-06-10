@@ -22,6 +22,9 @@ class OAuthClientConfig {
     @Bean
     fun kakaoOAuthClient(kakaoProperties: KakaoProperties): OAuthClient = KakaoOAuthClient(kakaoProperties)
 
+    // 반환 타입을 AppleOAuthClient 로 노출한다 — OAuthClient(소셜 로그인) 와 AppleNotificationVerifier
+    // (서버-서버 알림 검증)를 한 인스턴스가 모두 구현하므로, 두 주입 지점에 같은 빈이 쓰여 JWKS 캐시를 공유한다.
+    // 여전히 OAuthClient 구현이라 List<OAuthClient> 주입(소셜 로그인 registry)과도 호환된다.
     @Bean
-    fun appleOAuthClient(appleProperties: AppleProperties): OAuthClient = AppleOAuthClient(appleProperties)
+    fun appleOAuthClient(appleProperties: AppleProperties): AppleOAuthClient = AppleOAuthClient(appleProperties)
 }

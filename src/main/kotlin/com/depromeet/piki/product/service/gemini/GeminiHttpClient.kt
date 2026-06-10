@@ -87,7 +87,8 @@ class GeminiHttpClient(
         private const val BASE_URL = "https://generativelanguage.googleapis.com"
         private const val CONNECT_TIMEOUT_MS = 5_000
 
-        // LLM 응답이 길어질 수 있어 넉넉히 두되, 1 분 안에 재시도(최대 2회)까지 끝낼 수 있도록 30 초로 제한.
+        // LLM 응답이 길어질 수 있어 넉넉히 두되, 단건 파싱을 60s 안에 끝내기 위해(#461) 30 초로 제한한다.
+        // Gemini 내부 재시도는 기본 off(maxAttempts=1)라 이 30s 가 곧 한 번 호출의 상한이다 — fetch(≤약 20s)와 합쳐 단건 ≤ 약 55s.
         private const val READ_TIMEOUT_MS = 30_000
 
         // API 키는 access log 에 남지 않도록 쿼리 대신 헤더로 전달.

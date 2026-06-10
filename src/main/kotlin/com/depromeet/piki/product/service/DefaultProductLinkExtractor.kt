@@ -31,7 +31,8 @@ class DefaultProductLinkExtractor(
         val fetchMs = (System.nanoTime() - fetchStart) / 1_000_000
 
         // HTML 을 한 번만 파싱해 구조화 파서와 Gemini fallback 이 같은 Document 를 공유한다(파싱·ld+json 식별 중복 제거).
-        val document = Jsoup.parse(page.html, link.value.toString())
+        // baseUri 는 html 의 출처인 최종 URL(page.finalUrl) 기준 — redirect 를 따라갔으면 원본 link 와 host 가 다를 수 있다.
+        val document = Jsoup.parse(page.html, page.finalUrl.value.toString())
 
         val result = structuredDataExtractor.extract(document, link)
 

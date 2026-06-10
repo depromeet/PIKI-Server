@@ -244,6 +244,8 @@ class TournamentApiExamples(
                                         name = "내 토너먼트",
                                         status = TournamentStatus.PENDING,
                                         isOwner = true,
+                                        isRoot = true,
+                                        sourceTournamentId = null,
                                         pending =
                                             TournamentDetailResponse.PendingData(
                                                 inviteCode = "ABC123",
@@ -289,7 +291,7 @@ class TournamentApiExamples(
                         )
                         add(
                             status = HttpStatus.OK,
-                            name = "IN_PROGRESS - 진행 중 복원",
+                            name = "IN_PROGRESS - 멤버 대기 중 (주최자 시작 완료, 본인 미시작)",
                             payload =
                                 ApiResponseBody.ok(
                                     TournamentDetailResponse(
@@ -297,6 +299,67 @@ class TournamentApiExamples(
                                         name = "내 토너먼트",
                                         status = TournamentStatus.IN_PROGRESS,
                                         isOwner = false,
+                                        isRoot = true,
+                                        sourceTournamentId = null,
+                                        pending =
+                                            TournamentDetailResponse.PendingData(
+                                                inviteCode = null,
+                                                inviteExpiresAt = null,
+                                                items =
+                                                    listOf(
+                                                        TournamentDetailResponse.ItemDetailResponse(
+                                                            tournamentItemId = 1,
+                                                            itemId = 10,
+                                                            name = "나이키 에어맥스",
+                                                            price = 129_000,
+                                                            currency = "KRW",
+                                                            imageUrl = "https://cdn.example.com/items/1.jpg",
+                                                            status = ItemStatus.READY,
+                                                        ),
+                                                        TournamentDetailResponse.ItemDetailResponse(
+                                                            tournamentItemId = 2,
+                                                            itemId = 20,
+                                                            name = "아디다스 울트라부스트",
+                                                            price = 189_000,
+                                                            currency = "KRW",
+                                                            imageUrl = "https://cdn.example.com/items/2.jpg",
+                                                            status = ItemStatus.READY,
+                                                        ),
+                                                    ),
+                                                participants =
+                                                    listOf(
+                                                        TournamentDetailResponse.ParticipantResponse(
+                                                            userId = UUID.fromString("11111111-2222-3333-4444-555555555555"),
+                                                            nickname = "주최자",
+                                                            profileImage = "https://cdn.example.com/profiles/user1.jpg",
+                                                            isWithdrawn = false,
+                                                        ),
+                                                        TournamentDetailResponse.ParticipantResponse(
+                                                            userId = UUID.fromString("22222222-3333-4444-5555-666666666666"),
+                                                            nickname = "참여자",
+                                                            profileImage = "https://cdn.example.com/profiles/user2.jpg",
+                                                            isWithdrawn = false,
+                                                        ),
+                                                    ),
+                                                ownerStarted = true,
+                                            ),
+                                        inProgress = null,
+                                        completed = null,
+                                    ),
+                                ),
+                        )
+                        add(
+                            status = HttpStatus.OK,
+                            name = "IN_PROGRESS - 진행 중 복원 (CLONE)",
+                            payload =
+                                ApiResponseBody.ok(
+                                    TournamentDetailResponse(
+                                        tournamentId = 2,
+                                        name = "내 토너먼트",
+                                        status = TournamentStatus.IN_PROGRESS,
+                                        isOwner = false,
+                                        isRoot = false,
+                                        sourceTournamentId = 1,
                                         pending = null,
                                         inProgress =
                                             TournamentDetailResponse.InProgressData(
@@ -344,6 +407,8 @@ class TournamentApiExamples(
                                         name = "내 토너먼트",
                                         status = TournamentStatus.COMPLETED,
                                         isOwner = true,
+                                        isRoot = true,
+                                        sourceTournamentId = null,
                                         pending = null,
                                         inProgress = null,
                                         completed =
@@ -502,10 +567,14 @@ class TournamentApiExamples(
                 handlerMethod.binds(TournamentController::createFromPlayLink) ->
                     operation.examples(openApiObjectMapper.delegate) {
                         add(
-                            status = HttpStatus.CREATED,
-                            name = "복제 토너먼트 생성 성공",
-                            payload = ApiResponseBody.created(42L),
+                            status = HttpStatus.OK,
+                            name = "복제 토너먼트 생성 또는 기존 본인 클론 반환",
+                            payload = ApiResponseBody.ok(42L),
                         )
+                        unauthorized()
+                        add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
+                        add(TournamentException.playLinkNotCreated(), name = "플레이 링크가 생성되지 않은 토너먼트")
+                        add(TournamentException.playLinkExpired(), name = "플레이 링크 만료")
                     }
 
                 handlerMethod.binds(TournamentController::getGroupResult) ->

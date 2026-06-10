@@ -190,4 +190,33 @@ class ItemSnapshotTest {
         assertEquals(HttpStatus.CONFLICT, ex.httpStatus)
         assertEquals(ItemStatus.PENDING, snapshot.status)
     }
+
+    // --- 재실행 claim (reclaim) — execution at-least-once (#461) ---
+
+    @Test
+    fun `markProcessing 은 attemptCount 를 1 로 올려 첫 실행 시도를 기록한다`() {
+        val snapshot = ItemSnapshot.pending(itemId = 1L)
+        assertEquals(0, snapshot.attemptCount)
+        snapshot.markProcessing()
+        assertEquals(1, snapshot.attemptCount)
+    }
+
+    @Test
+    fun `reclaim 은 PROCESSING 을 유지하며 attemptCount 를 올린다`() {
+        // 워커 크래시 등으로 PROCESSING 에 갇힌 행을 recover 가 재실행할 때의 전이.
+        val snapshot = ItemSnapshot.pending(itemId = 1L).apply { markProcessing() } // PROCESSING, attempt 1
+        snapshot.reclaim()
+        assertEquals(ItemStatus.PROCESSING, snapshot.status)
+        assertEquals(2, snapshot.attemptCount)
+    }
+
+    @Test
+    fun `PROCESSING 이 아닌 스냅샷을 reclaim 하면 IllegalStateException`() {
+        // PENDING(claim 전)·READY(완료)·FAILED(실패)는 재실행 claim 대상이 아니다 — recover 가 잘못된 행을 집은 코드 버그 방어.
+        assertFailsWith<IllegalStateException> { ItemSnapshot.pending(1L).reclaim() }
+        assertFailsWith<IllegalStateException> {
+            ItemSnapshot(itemId = 1L).apply { markReady(ProductSnapshot(name = "x")) }.reclaim()
+        }
+        assertFailsWith<IllegalStateException> { ItemSnapshot(itemId = 1L).apply { markFailed() }.reclaim() }
+    }
 }
