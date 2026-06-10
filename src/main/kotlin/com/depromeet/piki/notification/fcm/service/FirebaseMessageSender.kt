@@ -1,9 +1,7 @@
 package com.depromeet.piki.notification.fcm.service
 
+import com.depromeet.piki.notification.controller.dto.NotificationSsePayload
 import com.depromeet.piki.notification.domain.Notification
-import com.depromeet.piki.notification.domain.NotificationCategory
-import com.depromeet.piki.notification.domain.NotificationKind
-import com.depromeet.piki.notification.domain.NotificationRouting
 import com.depromeet.piki.notification.service.DefaultPushImage
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.AndroidConfig
@@ -61,24 +59,27 @@ class FirebaseMessageSender(
         return stale
     }
 
-    // 표시용 title/body + 클라 라우팅용 data(type·refId·라우팅 컨텍스트)를 실은 멀티캐스트 메시지.
-    // 백그라운드 수신 시 클라가 data 로 딥링크를 복원한다. data 키 구성은 buildDataPayload 가 결정한다.
+    // 표시용 title/body + 클라 라우팅용 data 를 실은 멀티캐스트 메시지. 백그라운드 수신 시 클라가 data 로 딥링크를 복원한다.
+    // 셰입의 단일 소스는 NotificationSsePayload.from() — SSE·히스토리와 같은 곳에서 title/body·category·imageUrl·라우팅 값을 만들어
+    // 채널이 달라도 내용이 어긋나지 않는다. FCM 은 그 payload 를 표시 블록(title/body)과 data(문자열 맵)로 인코딩만 한다(toFcmData).
     private fun buildMessage(
         tokens: List<String>,
         notification: Notification,
-    ): MulticastMessage =
-        MulticastMessage
+    ): MulticastMessage {
+        val payload = NotificationSsePayload.from(notification, defaultPushImage.url)
+        return MulticastMessage
             .builder()
             .addAllTokens(tokens)
             .setNotification(
                 FcmNotification
                     .builder()
-                    .setTitle(notification.title)
-                    .setBody(notification.body)
+                    .setTitle(payload.title)
+                    .setBody(payload.body)
                     .build(),
-            ).apply { buildDataPayload(notification, defaultPushImage.url).forEach { (key, value) -> putData(key, value) } }
+            ).apply { toFcmData(payload).forEach { (key, value) -> putData(key, value) } }
             .applyPlatformConfig()
             .build()
+    }
 
     // 플랫폼별 푸시 옵션을 한 메시지에 모두 싣는다 — FCM 이 각 토큰의 플랫폼에 맞는 config 만 적용하므로
     // (iOS 토큰엔 APNS, Android 토큰엔 Android, 웹 토큰엔 WebPush) 한 발송이 세 플랫폼을 다 커버한다.
@@ -133,9 +134,7 @@ class FirebaseMessageSender(
         internal fun isStaleToken(code: MessagingErrorCode?): Boolean = code == MessagingErrorCode.UNREGISTERED
 
         // 백그라운드 수신 시 클라가 딥링크를 복원하려고 읽는 data 키 — FE 와 공유하는 contract.
-        // 값은 NotificationSsePayload 의 필드명(id·type·refId·kind·tournamentId·tournamentItemId)과 일치시켜,
-        // 클라가 SSE/FCM 어느 채널로 받든 같은 키로 같은 알림을 다루게 한다. (SSE 는 data class 프로퍼티명을 Jackson 이
-        //  직렬화하므로 그 쪽은 같은 문자열을 상수로 빼지 못한다 — 이 상수의 값으로 일치를 맞춘다.)
+        // 키 이름은 NotificationSsePayload 의 필드명과 일치시켜, 클라가 SSE/FCM 어느 채널로 받든 같은 키로 같은 알림을 다루게 한다.
         // id 는 채널 무관 dedup(SSE·FCM 중복 수신 시 같은 알림으로 합침)과 푸시 탭 → 읽음 처리(POST /read {ids:[id]})의 키다(#246).
         private const val DATA_KEY_ID = "id"
         private const val DATA_KEY_TYPE = "type"
@@ -146,30 +145,25 @@ class FirebaseMessageSender(
         private const val DATA_KEY_TOURNAMENT_ID = "tournamentId"
         private const val DATA_KEY_TOURNAMENT_ITEM_ID = "tournamentItemId"
 
-        // FCM data payload(키→값) 구성 — id·type·category·imageUrl·refId 는 항상, 라우팅 컨텍스트(kind·tournamentId·tournamentItemId)는
-        // 있을 때만 싣는다. FCM data 는 값이 null 일 수 없어 null 키는 아예 넣지 않는다(#408). FirebaseMessaging
-        // 호출과 무관한 순수 매핑이라 companion 으로 분리해 단위 테스트로 분기를 망라한다(FirebaseApp 없이 검증).
-        // notification 은 dispatcher 가 이미 저장한 영속 엔티티라 getId() 가 보장된다(SsePayload.from 과 동일 전제).
-        // imageUrl 은 actor 스냅샷이 있으면 그것, 없으면(시스템) defaultPushImageUrl 로 채워 항상 비지 않게 한다(SsePayload.from 과 동일 규칙).
-        internal fun buildDataPayload(
-            notification: Notification,
-            defaultPushImageUrl: String,
-        ): Map<String, String> =
+        // NotificationSsePayload 를 FCM data(키→값 문자열 맵)로 인코딩한다. 값은 payload(=from())가 이미 만든 것을 읽기만 하고
+        // (category·imageUrl·refId·라우팅 재계산 없음 — SSE 와 단일 소스), 여기선 문자열 평탄화만 한다. FCM data 는 값이 null 일 수 없어
+        // 라우팅 없는 알림(Reference)은 kind 계열 키를 아예 넣지 않는다(#408). title/body 는 표시 블록(setNotification)이 담당해 data 에
+        // 중복하지 않고, isRead(항상 false)·createdAt(수신시점)도 딥링크 복원에 불필요해 싣지 않는다(lean contract).
+        // FirebaseMessaging 호출과 무관한 순수 매핑이라 companion 으로 분리해 단위 테스트로 분기를 망라한다(FirebaseApp 없이 검증).
+        internal fun toFcmData(payload: NotificationSsePayload): Map<String, String> =
             buildMap {
-                put(DATA_KEY_ID, notification.getId().toString())
-                put(DATA_KEY_TYPE, notification.type.name)
-                put(DATA_KEY_CATEGORY, NotificationCategory.of(notification.type).name)
-                put(DATA_KEY_IMAGE_URL, notification.actorImageUrl ?: defaultPushImageUrl)
-                put(DATA_KEY_REF_ID, notification.refId.toString())
-                // SSE payload 와 같은 routing() sealed 를 분기해 두 채널이 한 소스를 쓴다. FCM data 는 값이 null 일 수 없어
-                // 라우팅이 없으면 키 자체를 안 넣고, TOURNAMENT 만 추가 식별자를 싣는다(#408).
-                when (val routing = notification.routing()) {
-                    null -> Unit
-                    NotificationRouting.Wish -> put(DATA_KEY_KIND, NotificationKind.WISH.name)
-                    is NotificationRouting.Tournament -> {
-                        put(DATA_KEY_KIND, NotificationKind.TOURNAMENT.name)
-                        put(DATA_KEY_TOURNAMENT_ID, routing.tournamentId.toString())
-                        put(DATA_KEY_TOURNAMENT_ITEM_ID, routing.tournamentItemId.toString())
+                put(DATA_KEY_ID, payload.id.toString())
+                put(DATA_KEY_TYPE, payload.type.name)
+                put(DATA_KEY_CATEGORY, payload.category.name)
+                put(DATA_KEY_IMAGE_URL, payload.imageUrl)
+                put(DATA_KEY_REF_ID, payload.refId.toString())
+                when (payload) {
+                    is NotificationSsePayload.Reference -> Unit
+                    is NotificationSsePayload.WishParsing -> put(DATA_KEY_KIND, payload.kind.name)
+                    is NotificationSsePayload.TournamentParsing -> {
+                        put(DATA_KEY_KIND, payload.kind.name)
+                        put(DATA_KEY_TOURNAMENT_ID, payload.tournamentId.toString())
+                        put(DATA_KEY_TOURNAMENT_ITEM_ID, payload.tournamentItemId.toString())
                     }
                 }
             }
