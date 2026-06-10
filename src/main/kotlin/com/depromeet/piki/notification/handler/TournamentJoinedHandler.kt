@@ -20,6 +20,8 @@ class TournamentJoinedHandler(
     override fun resolveRecipients(event: TournamentJoined): Set<UUID> =
         tournamentUserRepository.findByTournamentId(event.tournamentId).map { it.userId }.toSet() - event.actorId
 
-    override fun resolveVariables(event: TournamentJoined): Map<String, String> =
-        mapOf("actorName" to actorNameResolver.resolve(event.actorId))
+    override fun resolveActorContext(event: TournamentJoined): ActorContext {
+        val actor = actorNameResolver.resolveAttributes(event.actorId)
+        return ActorContext(variables = mapOf("actorName" to actor.name), imageUrl = actor.profileImage)
+    }
 }

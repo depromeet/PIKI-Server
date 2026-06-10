@@ -1,6 +1,7 @@
 package com.depromeet.piki.notification.repository
 
 import com.depromeet.piki.notification.domain.Notification
+import com.depromeet.piki.notification.domain.NotificationType
 import org.springframework.data.domain.Limit
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
@@ -29,8 +30,36 @@ interface NotificationJpaRepository : JpaRepository<Notification, Long> {
         limit: Limit,
     ): List<Notification>
 
-    // 안읽음 수(badge). (idx_notifications_user_id_is_read 가 그대로 커버)
-    fun countByUserIdAndIsReadFalse(userId: UUID): Long
+    // 카테고리 탭 첫 페이지 — 본인 알림 중 그 카테고리 type 집합만 최신순 limit 건. (idx (user_id, id) 가 정렬을 받치고 type 은 필터)
+    fun findByUserIdAndTypeInOrderByIdDesc(
+        userId: UUID,
+        types: List<NotificationType>,
+        limit: Limit,
+    ): List<Notification>
+
+    // 카테고리 탭 다음 페이지 — 커서 미만 + 그 카테고리 type 집합만 최신순 limit 건.
+    fun findByUserIdAndIdLessThanAndTypeInOrderByIdDesc(
+        userId: UUID,
+        id: Long,
+        types: List<NotificationType>,
+        limit: Limit,
+    ): List<Notification>
+
+    // type 별 안읽음 수 — 전체 badge + 탭별(활동/시스템) badge 를 한 쿼리(group by)로 집계한다.
+    // closed projection(type·count alias)으로 받아 RepositoryImpl 이 카테고리로 접는다. (idx (user_id, is_read) 커버)
+    @Query(
+        "SELECT n.type AS type, COUNT(n) AS count FROM Notification n " +
+            "WHERE n.userId = :userId AND n.isRead = false GROUP BY n.type",
+    )
+    fun countUnreadByType(
+        @Param("userId") userId: UUID,
+    ): List<TypeUnreadCount>
+
+    // group by 결과 한 행 — type 과 그 안읽음 수. Spring Data closed projection(SELECT alias 와 게터명 일치).
+    interface TypeUnreadCount {
+        val type: NotificationType
+        val count: Long
+    }
 
     // 본인 소유(user_id) + 지정 id + 아직 안읽음만 read 로. user_id 가 WHERE 에 있어 타인/없는 id 는 무영향(소유 검증 겸용).
     // 영향 건수를 돌려준다. 멱등(이미 읽음·없는 id 는 0건).
