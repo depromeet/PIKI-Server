@@ -18,21 +18,11 @@ class CorsConfig {
             CorsConfiguration().apply {
                 allowedOrigins =
                     listOf(
-                        "https://depromeet18team3.cloud",
-                        "https://www.depromeet18team3.cloud",
+                        // Vercel 프로젝트 기본 URL — depromeet18team3.cloud 도메인과 별개라 retire 대상이 아니다.
                         "https://depromeet.vercel.app",
-                        // dev 프론트 — dev.api.depromeet18team3.cloud(dev 서버)를 호출하는 dev 프론트 origin.
-                        // (Apple 콜백이 www.dev 를 쓰는 등 호스트가 갈릴 수 있어 둘 다 허용)
-                        "https://dev.depromeet18team3.cloud",
-                        "https://www.dev.depromeet18team3.cloud",
-                        // 우리 서버 자체 origin — Stoplight UI (/docs/index.html) 의 try-it 이
-                        // 브라우저 fetch(mode=cors) 로 호출 시 same-origin 이어도 Origin 헤더가 박혀
-                        // CORS 검사를 거치므로 화이트리스트에 포함되어야 한다. (prod·dev API 둘 다)
-                        "https://api.depromeet18team3.cloud",
-                        "https://dev.api.depromeet18team3.cloud",
-                        // piki.day 도메인 이관(#488) — 옛 도메인과 듀얼런으로 병렬 허용한다. 프론트(Vercel:
-                        // piki.day·www·dev) + 우리 서버 self-origin(api·dev.api, Stoplight try-it). 옛 도메인
-                        // retire 시 위 depromeet18team3.cloud 블록을 제거한다.
+                        // piki.day — 프론트(Vercel: piki.day·www·dev) + 우리 서버 self-origin(api·dev.api 는
+                        // Stoplight UI(/docs/index.html) try-it 이 same-origin 이어도 Origin 헤더가 박혀 필요).
+                        // (#488 retire 로 옛 depromeet18team3.cloud 도메인 origin 은 제거됨.)
                         "https://piki.day",
                         "https://www.piki.day",
                         "https://dev.piki.day",
