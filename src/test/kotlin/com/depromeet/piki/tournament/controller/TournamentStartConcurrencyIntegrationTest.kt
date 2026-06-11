@@ -119,7 +119,7 @@ class TournamentStartConcurrencyIntegrationTest : IntegrationTestSupport() {
         assertEquals(1, status409.get(), "나머지 하나는 락 대기 후 PENDING 아님으로 409 여야 한다")
 
         // 정리 — @Transactional 자동 롤백이 없으므로 만든 행을 전부 직접 지운다. item/snapshot 까지 지워야
-        // 다른 테스트(예: AdminItemControllerIntegrationTest)의 전체 item 카운트가 오염되지 않는다.
+        // 다른 테스트의 전체 item 카운트가 오염되지 않는다.
         jdbcTemplate.update("DELETE FROM tournament_items WHERE tournament_id = ?", tournamentId)
         jdbcTemplate.update("DELETE FROM tournament_users WHERE tournament_id = ?", tournamentId)
         jdbcTemplate.update("DELETE FROM tournaments WHERE id = ?", tournamentId)

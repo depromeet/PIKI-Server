@@ -85,12 +85,6 @@ gemini:
     max-attempts: ${GEMINI_RETRY_MAX_ATTEMPTS:1}
     initial-delay-ms: ${GEMINI_RETRY_INITIAL_DELAY_MS:1000}
 
-admin:
-  # 개발 서버 전용 관리자 백오피스. prod 프로파일에서는 @Profile("!prod") 로 빈/라우트 자체가 뜨지 않는다.
-  # dev/local 에서 아래가 비어 있으면 AdminProperties.init 에서 부팅 실패시킨다 ("빈 계정으로 로그인 불가" 방지).
-  username: ${ADMIN_USERNAME:}
-  password: ${ADMIN_PASSWORD:}
-
 s3:
   # 크롭한 상품 이미지 저장 버킷. 자격증명은 EC2 instance role / 로컬 환경변수(DefaultCredentialsProvider).
   bucket: ${S3_BUCKET:}
@@ -145,7 +139,7 @@ logging:
       # 필드를 파싱해 trace 를 Loki structured metadata 로 승격하고 본문은 message 만 남길 수 있다(#364).
       # 값이 있으면(ecs) 구조화 JSON 출력이 켜지고 아래 pattern.console(평문)은 무시된다.
       # 로컬은 LOG_STRUCTURED 미설정(빈값)이라 구조화 off → pattern.console 평문 패턴이 적용된다.
-      # (운영 docker run 에만 -e LOG_STRUCTURED=ecs 를 준다. env override 패턴은 ADMIN_ENABLED 와 동일.)
+      # (운영 docker run 에만 -e LOG_STRUCTURED=ecs 를 준다. env override 패턴은 TRACING_OTLP_ENABLED 와 동일.)
       console: ${LOG_STRUCTURED:}
   pattern:
     # 아래 평문 패턴은 구조화 off(로컬)일 때만 적용된다 — LOG_STRUCTURED=ecs 면 위 구조화 출력이 우선한다.
