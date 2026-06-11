@@ -7,7 +7,7 @@ import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.common.response.PageResponse
 import com.depromeet.piki.common.storage.ImageStorageException
-import com.depromeet.piki.image.domain.ProductImage
+import com.depromeet.piki.image.domain.ProductImageException
 import com.depromeet.piki.item.domain.ItemException
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.product.domain.ProductLinkException
@@ -99,8 +99,8 @@ class WishlistApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                // @ModelAttribute Bean Validation 위반은 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
-                                detail = "currentPrice: ${WishlistUpdateRequest.PRICE_MIN_MESSAGE}",
+                                // @ModelAttribute Bean Validation 위반은 GlobalExceptionHandler.detailOf 가 위반 필드의 메시지를 그대로 detail 로 내린다.
+                                detail = WishlistUpdateRequest.PRICE_MIN_MESSAGE,
                             ),
                     )
                     add(ItemException.nameRequiredForReady(), name = "상품명 없이 복구 시도")
@@ -143,15 +143,7 @@ class WishlistApiExamples(
                         payload = ApiResponseBody.created(imageProcessingEntries),
                     )
                     add(WishException.invalidImageCount(), name = "이미지 개수 위반 (1~5개 아님)")
-                    add(
-                        status = HttpStatus.BAD_REQUEST,
-                        name = "지원하지 않는 이미지 형식",
-                        payload =
-                            ApiResponseBody.fail<Unit>(
-                                category = ErrorCategory.INVALID_INPUT,
-                                detail = ProductImage.unsupportedMimeTypeMessage("image/gif"),
-                            ),
-                    )
+                    add(ProductImageException.unsupportedType(), name = "지원하지 않는 이미지 형식")
                     unauthorized()
                     forbidden("권한 없음 (MEMBER 필요)")
                 }

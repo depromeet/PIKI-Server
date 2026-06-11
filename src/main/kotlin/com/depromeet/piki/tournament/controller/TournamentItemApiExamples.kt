@@ -44,8 +44,8 @@ class TournamentItemApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    // @RequestBody Bean Validation 위반은 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
-                                    detail = "itemIds: ${AddTournamentItemsRequest.ITEM_IDS_SIZE_MESSAGE}",
+                                    // Bean Validation 위반은 GlobalExceptionHandler.detailOf 가 위반 필드의 메시지를 그대로 detail 로 내린다.
+                                    detail = AddTournamentItemsRequest.ITEM_IDS_SIZE_MESSAGE,
                                 ),
                         )
                         add(TournamentException.tooManyTournamentItems(), name = "아이템 최대 32개 초과")

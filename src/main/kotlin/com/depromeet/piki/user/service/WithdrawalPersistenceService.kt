@@ -34,7 +34,7 @@ class WithdrawalPersistenceService(
     // 따라서 2회 실행돼도 같은 종단 상태가 되고 UNIQUE 충돌·예외가 나지 않는다. 완전 직렬화(락)는 불필요.
     @Transactional
     fun withdraw(userId: UUID) {
-        val user = userRepository.findById(userId) ?: throw UserException.notFound(userId)
+        val user = userRepository.findById(userId) ?: throw UserException.notFound()
         user.deletedAt?.let {
             log.info("이미 탈퇴 처리된 유저 — cascade 생략(멱등) userId={}", userId)
             return

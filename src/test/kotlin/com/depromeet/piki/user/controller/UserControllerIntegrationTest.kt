@@ -243,7 +243,7 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
                     .param("nickname", "새닉네임")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.GUEST)}"),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.detail").value("프로필 이미지는 회원만 수정할 수 있습니다."))
+            .andExpect(jsonPath("$.detail").value("프로필 이미지는 회원만 바꿀 수 있어요."))
     }
 
     @Test
@@ -294,7 +294,7 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
                     .file(gif)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.GUEST)}"),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.detail").value("프로필 이미지는 회원만 수정할 수 있습니다."))
+            .andExpect(jsonPath("$.detail").value("프로필 이미지는 회원만 바꿀 수 있어요."))
     }
 
     @Test
@@ -333,7 +333,7 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}"),
             ).andExpect(status().isBadRequest)
             // @ModelAttribute(multipart) 검증 실패 응답 detail 이 OpenAPI example(UserApiExamples updateMe 400)과 같은 형식인지 고정.
-            .andExpect(jsonPath("$.detail").value("nickname: ${UserUpdateRequest.NICKNAME_SIZE_MESSAGE}"))
+            .andExpect(jsonPath("$.detail").value(UserUpdateRequest.NICKNAME_SIZE_MESSAGE))
     }
 
     @Test
@@ -394,7 +394,7 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
                     .file(gif)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.MEMBER)}"),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value(startsWith("지원하지 않는 이미지 형식입니다.")))
+            .andExpect(jsonPath("$.detail").value(startsWith("지원하지 않는 이미지 형식이에요.")))
     }
 
     @Test
@@ -539,6 +539,6 @@ class UserControllerIntegrationTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId)}"),
             ).andExpect(status().isBadRequest)
             // 쿼리 파라미터 POJO(암묵 @ModelAttribute) 검증 실패도 같은 "필드명: 메시지" 형식인지 실측·고정.
-            .andExpect(jsonPath("$.detail").value("nickname: ${NicknameCheckRequest.NICKNAME_SIZE_MESSAGE}"))
+            .andExpect(jsonPath("$.detail").value(NicknameCheckRequest.NICKNAME_SIZE_MESSAGE))
     }
 }

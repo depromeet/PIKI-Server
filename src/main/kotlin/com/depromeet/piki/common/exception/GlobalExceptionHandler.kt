@@ -79,14 +79,15 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
             else -> ErrorCategory.SERVER_ERROR
         }
 
-    // 검증 실패만 첫 위반 필드를 노출해 사용자 수정을 돕는다. 그 외 표준 예외는 내부 메시지(파서 세부 등)를
-    // 노출하지 않도록 null 로 두어, fail 이 category 의 고정 문구로 응답하게 한다(detail 노이즈·정보 누출 방지).
+    // 검증 실패만 첫 위반 필드의 메시지를 노출해 사용자 수정을 돕는다. 필드명(영문 식별자) 접두사는 내부 용어라
+    // 붙이지 않고 메시지만 내려보낸다. 그 외 표준 예외는 내부 메시지(파서 세부 등)를 노출하지 않도록 null 로 두어,
+    // fail 이 category 의 고정 문구로 응답하게 한다(detail 노이즈·정보 누출 방지).
     private fun detailOf(ex: Exception): String? =
         when (ex) {
             is MethodArgumentNotValidException ->
                 ex.bindingResult.fieldErrors.firstOrNull()
-                    ?.let { "${it.field}: ${it.defaultMessage ?: "유효하지 않은 값입니다."}" }
-                    ?: "요청 본문 검증 실패"
+                    ?.let { it.defaultMessage ?: "다시 한번 확인해 주세요." }
+                    ?: "다시 한번 확인해 주세요."
             else -> null
         }
 }

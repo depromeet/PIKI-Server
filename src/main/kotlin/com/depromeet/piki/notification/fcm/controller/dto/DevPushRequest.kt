@@ -10,7 +10,7 @@ import java.util.UUID
 
 @Schema(description = "[DEV] FCM 즉시 발송 요청 — 본문의 토큰으로 바로 푸시(등록 불필요). FE 가 Xcode 에서 받은 토큰을 붙여 발송 경로를 확인한다.")
 data class DevPushRequest(
-    @field:NotBlank
+    @field:NotBlank(message = TOKEN_BLANK_MESSAGE)
     @field:Size(max = UserDevice.MAX_TOKEN_LENGTH)
     @field:Schema(
         description = "발송할 FCM 토큰 (Xcode 등에서 실시간으로 받은 값)",
@@ -39,6 +39,7 @@ data class DevPushRequest(
     companion object {
         const val DEFAULT_TITLE = "PIKI 테스트 알림"
         const val DEFAULT_BODY = "FCM 발송이 정상 동작하는지 확인하는 테스트 메시지입니다."
+        const val TOKEN_BLANK_MESSAGE = "FCM 토큰이 비어 있어요."
 
         private const val TEST_REF_ID = 0L
     }
