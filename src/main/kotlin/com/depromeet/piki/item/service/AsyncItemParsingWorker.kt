@@ -5,6 +5,7 @@ import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductLinkExtractor
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.product.service.ProductSnapshotException
+import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Component
 class AsyncItemParsingWorker(
     private val productLinkExtractor: ProductLinkExtractor,
     private val itemParsingService: ItemParsingService,
+    private val meterRegistry: MeterRegistry,
 ) : ItemParsingWorker {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -42,11 +44,15 @@ class AsyncItemParsingWorker(
         val elapsedMs = (System.nanoTime() - started) / 1_000_000
         // 전이가 실패(추출값 도메인 검증 위반·DB 오류·sweeper 와의 레이스로 이미 전이됨)해도 예외를 흡수한다.
         runCatching { itemParsingService.markReady(itemId, snapshot) }
-            .onSuccess { log.info("item {} 파싱 완료: latency={}ms url={}", itemId, elapsedMs, link.safeLogString()) }
+            .onSuccess {
+                log.info("item {} 파싱 완료: latency={}ms url={}", itemId, elapsedMs, link.safeLogString())
+                ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_READY, ItemParsingMetrics.REASON_NONE)
+            }
             .onFailure { e ->
                 // 추출은 됐으나 값을 신뢰할 수 없어 READY 로 채울 수 없는 경우 → PROCESSING 방치 대신 FAILED 로.
                 log.warn("item {} READY 전이 실패 → FAILED: url={}", itemId, link.safeLogString(), e)
                 markFailedQuietly(itemId)
+                ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, ItemParsingMetrics.REASON_READY_REJECTED)
             }
     }
 
@@ -62,6 +68,7 @@ class AsyncItemParsingWorker(
             is ProductSnapshotException -> {
                 log.info("item {} 파싱 실패(확정·재시도 무의미): {} url={}", itemId, e.message, link.safeLogString())
                 markFailedQuietly(itemId)
+                ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, ItemParsingMetrics.REASON_NOT_PRODUCT)
             }
             // 일시 외부 오류(네트워크·timeout·Gemini 5xx 등) — 다시 하면 될 수도 있으므로 FAILED 로 종결하지 않고
             // PROCESSING 그대로 둔다. recover 가 stale 로 잡아 상한까지 재실행한다(execution at-least-once, #461).
