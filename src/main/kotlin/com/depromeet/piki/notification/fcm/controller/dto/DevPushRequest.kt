@@ -39,7 +39,7 @@ data class DevPushRequest(
     companion object {
         const val DEFAULT_TITLE = "PIKI 테스트 알림"
         const val DEFAULT_BODY = "FCM 발송이 정상 동작하는지 확인하는 테스트 메시지입니다."
-        const val TOKEN_BLANK_MESSAGE = "FCM 토큰이 비어 있어요."
+        const val TOKEN_BLANK_MESSAGE = "FCM 토큰은 비어 있을 수 없습니다."
 
         private const val TEST_REF_ID = 0L
     }
