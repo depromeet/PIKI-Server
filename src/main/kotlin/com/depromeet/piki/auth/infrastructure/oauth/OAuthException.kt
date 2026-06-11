@@ -18,17 +18,18 @@ class OAuthException private constructor(
         fun providerError(cause: Throwable): OAuthException =
             OAuthException("로그인에 실패했어요. 잠시 후 다시 시도해 주세요.", ErrorCategory.RETRYABLE, HttpStatus.BAD_GATEWAY, cause)
 
-        // code(+redirectUri) 도 accessToken 도 없어 어느 흐름도 성립 안 함 → 400. 내부 파라미터 이름은 노출하지 않는다.
+        // code(+redirectUri) 도 accessToken 도 없어 어느 흐름도 성립 안 함 → 400. validFlow 의 service 중복방어로,
+        // 엔드유저가 아니라 앱이 흐름을 잘못 구성한 구현 버그라 detail 은 사용자 친화 문구가 아니라 개발자 디버깅용 구체 메시지로 둔다.
         fun invalidRequest(): OAuthException =
             OAuthException(
-                "로그인에 실패했어요. 다시 시도해 주세요.",
+                "소셜 로그인 요청이 올바르지 않습니다 (code+redirectUri 또는 accessToken 이 필요합니다).",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
 
-        // 지원하지 않는 provider (미구현 apple · 오타 등) → 400.
+        // 지원하지 않는 provider (미구현 apple · 오타 등) → 400. 앱이 provider 경로를 정하므로 엔드유저 비대면, 개발자용 메시지.
         fun unsupportedProvider(): OAuthException =
-            OAuthException("지원하지 않는 로그인 방식이에요.", ErrorCategory.INVALID_INPUT, HttpStatus.BAD_REQUEST)
+            OAuthException("지원하지 않는 소셜 로그인 제공자입니다.", ErrorCategory.INVALID_INPUT, HttpStatus.BAD_REQUEST)
 
         // state 없음 · 만료 · 이미 소비됨 → 401. CSRF 방지용 state 불일치로 요청을 거부.
         fun invalidState(): OAuthException =
