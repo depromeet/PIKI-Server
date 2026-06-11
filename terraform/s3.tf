@@ -97,3 +97,50 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "dev_images" {
     }
   }
 }
+
+# -----------------------------------------------------------------------------
+# 스테이징(staging) 전용 이미지 버킷 — staging-<기존 버킷명>. dev_images 4개 리소스 미러.
+# 앱은 staging env 의 S3_BUCKET / S3_PUBLIC_BASE_URL 로 이 버킷을 가리킨다.
+# -----------------------------------------------------------------------------
+resource "aws_s3_bucket" "staging_images" {
+  bucket = "staging-${var.image_bucket_name}"
+
+  tags = {
+    Name = "staging-${var.image_bucket_name}"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "staging_images" {
+  bucket = aws_s3_bucket.staging_images.id
+
+  block_public_acls       = true
+  ignore_public_acls      = true
+  block_public_policy     = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_policy" "staging_images_public_read" {
+  bucket     = aws_s3_bucket.staging_images.id
+  depends_on = [aws_s3_bucket_public_access_block.staging_images]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "PublicReadGetObject"
+      Effect    = "Allow"
+      Principal = "*"
+      Action    = "s3:GetObject"
+      Resource  = "${aws_s3_bucket.staging_images.arn}/*"
+    }]
+  })
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "staging_images" {
+  bucket = aws_s3_bucket.staging_images.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}

@@ -3,7 +3,7 @@ name: Deploy
 on:
   workflow_run:
     workflows: [CI]
-    branches: [dev, main]
+    branches: [dev, staging, main]
     types: [completed]
   workflow_dispatch:
 
@@ -31,6 +31,10 @@ jobs:
             echo "environment=prod" >> "$GITHUB_OUTPUT"
             echo "domain=api.piki.day" >> "$GITHUB_OUTPUT"
             echo "nginx_conf=api.piki.day.conf" >> "$GITHUB_OUTPUT"
+          elif [ "$BRANCH" = "staging" ]; then
+            echo "environment=staging" >> "$GITHUB_OUTPUT"
+            echo "domain=staging.api.piki.day" >> "$GITHUB_OUTPUT"
+            echo "nginx_conf=staging.api.piki.day.conf" >> "$GITHUB_OUTPUT"
           else
             echo "environment=dev" >> "$GITHUB_OUTPUT"
             echo "domain=dev.api.piki.day" >> "$GITHUB_OUTPUT"
@@ -305,9 +309,9 @@ jobs:
           # FCM 푸시(#242) — Firebase 서비스계정 키(JSON base64). dev/prod 가 같은 piki 프로젝트를 공유해 공통 secret.
           # 미설정이면 FirebaseConfig 가 안 떠 발송이 no-op (부팅은 정상, 토큰 수집 API 는 계속 동작).
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          # Spring 프로파일 — prod 에서만 'prod' 활성. @Profile("!prod") 의 dev 전용 빈(admin·DevAuth 등)이
-          # prod 에서 안 뜨게 하는 핵심. dev 는 'dev'(=!prod)라 그 빈들이 정상 로드된다.
-          SPRING_PROFILES_ACTIVE: ${{ needs.resolve.outputs.environment == 'prod' && 'prod' || 'dev' }}
+          # Spring 프로파일 — prod·staging 에서 'prod' 활성. @Profile("!prod") 의 dev 전용 빈(admin·DevAuth 등)이
+          # prod·staging 에서 안 뜨게 하는 핵심. staging 은 진짜 pre-prod 라 prod 와 동일 동작(#498). dev 만 'dev'(=!prod).
+          SPRING_PROFILES_ACTIVE: ${{ (needs.resolve.outputs.environment == 'prod' || needs.resolve.outputs.environment == 'staging') && 'prod' || 'dev' }}
           # admin 백오피스 — dev 전용. prod 는 false(프로파일 게이팅과 이중 방어).
           ADMIN_ENABLED: ${{ needs.resolve.outputs.environment == 'dev' && 'true' || 'false' }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
