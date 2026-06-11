@@ -29,6 +29,7 @@ data "aws_iam_policy_document" "image_bucket_rw" {
     resources = [
       "${aws_s3_bucket.images.arn}/*",
       "${aws_s3_bucket.dev_images.arn}/*",
+      "${aws_s3_bucket.staging_images.arn}/*",
     ]
   }
 }
