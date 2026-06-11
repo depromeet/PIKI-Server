@@ -60,4 +60,15 @@ class HttpPageFetcherCharsetTest {
 
         assertTrue(page.html.contains("장바구니"), "헤더 charset 이 없으면 HTML meta charset(euc-kr)으로 디코딩돼야 한다")
     }
+
+    @Test
+    fun `Content-Type charset 이 HTML meta charset 보다 우선한다`() {
+        // Content-Type 은 UTF-8, meta 는 euc-kr 로 충돌. HTML5 spec 처럼 HTTP 헤더 charset 이 meta 보다 우선이라 UTF-8 로 디코딩돼야 한다.
+        val html = """<html><head><meta charset="euc-kr"></head><body>운동화</body></html>"""
+        val fetcher = fetcherReturning(html.toByteArray(Charsets.UTF_8), MediaType.parseMediaType("text/html;charset=UTF-8"))
+
+        val page = fetcher.fetch(ProductLink.parse("https://shop.example.com/p"))
+
+        assertTrue(page.html.contains("운동화"), "Content-Type charset(UTF-8)이 HTML meta charset(euc-kr)보다 우선해야 한다")
+    }
 }
