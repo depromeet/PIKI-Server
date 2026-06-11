@@ -38,6 +38,9 @@ class JwtAuthenticationFilter(
                 // userId 를 단다 — traceId 가 요청 1건을 묶고, userId 가 그 유저의 여러 요청을 가로질러 묶는다.
                 // async 전파는 ContextPropagatingTaskDecorator(AsyncConfig)가 MDC 를 워커로 넘겨 보장한다.
                 MDC.put(LoggingKeys.USER_ID, payload.userId.toString())
+                // request attribute 에도 둔다 — AccessLogFilter(이 필터보다 바깥)는 자기 finally 시점에 아래 MDC.remove
+                // 가 이미 돈 뒤라 MDC 로는 userId 를 못 본다. attribute 는 요청 끝까지 살아있어 access log 가 그걸 읽는다.
+                request.setAttribute(LoggingKeys.USER_ID, payload.userId.toString())
             }
         try {
             filterChain.doFilter(request, response)

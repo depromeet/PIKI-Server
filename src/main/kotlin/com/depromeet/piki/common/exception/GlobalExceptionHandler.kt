@@ -23,9 +23,22 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
 
     @ExceptionHandler(BaseException::class)
     fun handleBaseException(e: BaseException): ResponseEntity<ApiResponseBody<Nothing>> {
-        log.info("[{}] {}", e.javaClass.simpleName, e.message)
         val status = if (e is HttpMappable) e.httpStatus else HttpStatus.INTERNAL_SERVER_ERROR
         val category = if (e is HttpMappable) e.category else ErrorCategory.SERVER_ERROR
+        // status 로 레벨을 가른다 (handleExceptionInternal 과 같은 기준). 전부 info 로 찍으면 서버 버그(5xx)가
+        // 스택 없이 묻히고, 외부 의존성 실패(502)가 정상 흐름처럼 보인다.
+        when {
+            // HttpMappable 아닌 5xx = 서버 버그·불변식 위반 → error + 스택. 정상 요청으로 닿을 수 없는 코드 결함.
+            status.is5xxServerError && e !is HttpMappable ->
+                log.error("[{}] {} -> {}", e.javaClass.simpleName, e.message, status.value(), e)
+            // HttpMappable 5xx = 외부 의존성 실패(502 등, OAuth provider·Gemini·Apple). 우리 밖의 장애라 warn,
+            // cause 추적 위해 예외 동봉. 클라이언트는 재시도로 대응 가능한 계약 응답이다.
+            status.is5xxServerError ->
+                log.warn("[{}] {} -> {}", e.javaClass.simpleName, e.message, status.value(), e)
+            // 4xx = 클라이언트 계약 위반 → info. 서버 입장에선 정상 거부다.
+            else ->
+                log.info("[{}] {} -> {}", e.javaClass.simpleName, e.message, status.value())
+        }
         return ResponseEntity
             .status(status)
             .body(ApiResponseBody.fail(category, e.message))
