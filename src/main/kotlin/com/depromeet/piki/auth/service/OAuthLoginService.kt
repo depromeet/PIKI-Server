@@ -8,6 +8,7 @@ import com.depromeet.piki.auth.infrastructure.oauth.OAuthUserInfo
 import com.depromeet.piki.auth.infrastructure.redis.OAuthStateStore
 import com.depromeet.piki.auth.service.dto.OAuthLoginCommand
 import com.depromeet.piki.auth.service.dto.SignupResult
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
 
@@ -20,20 +21,30 @@ class OAuthLoginService(
     private val authService: AuthService,
     private val oAuthStateStore: OAuthStateStore,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     fun login(
         provider: OAuthProvider,
         command: OAuthLoginCommand,
         currentUserId: UUID?,
     ): SignupResult {
+        // currentUserId 는 게스트가 소셜 연결을 시도하는 경우의 게스트 id(없으면 null=신규/재방문 로그인).
+        // 토큰·code 등 크리덴셜은 싣지 않는다 — provider 와 게스트연결 여부만 남긴다.
+        log.info("소셜 로그인 시도 provider={} currentUserId={}", provider, currentUserId)
         // state 가 있으면 Redis 에서 소비 검증. 없거나 만료된 state 는 401 — CSRF 방지.
         // state 를 보내지 않으면 검증 생략 (v2 SDK 흐름 · 과도기 호환).
         command.state?.ifBlank { null }?.let { state ->
-            if (!oAuthStateStore.consumeIfValid(state)) throw OAuthException.invalidState()
+            if (!oAuthStateStore.consumeIfValid(state)) {
+                // 클라이언트 계약 위반(만료·위조 state)이라 info — 서버 입장에선 정상 거부다.
+                log.info("소셜 로그인 거부 사유=state 검증 실패(CSRF 방지) provider={}", provider)
+                throw OAuthException.invalidState()
+            }
         }
         val client = oAuthClientRegistry.resolve(provider)
         val userInfo = fetchUserInfo(client, command) // 외부 호출, tx 밖
         val user = socialAccountService.resolveUser(userInfo, currentUserId) // 영속화, 짧은 tx
         val tokenPair = authService.createTokensForUser(user)
+        log.info("소셜 로그인 성공 provider={} userId={} identityType={}", provider, user.id, user.identityType)
         return SignupResult(tokenPair = tokenPair, user = user)
     }
 
@@ -58,6 +69,8 @@ class OAuthLoginService(
         } catch (e: OAuthException) {
             throw e
         } catch (e: Exception) {
+            // 외부 의존성(provider) 장애 → 502 매핑. warn + 스택으로 원인(네트워크·4xx/5xx·역직렬화)을 남긴다.
+            log.warn("OAuth provider 호출 실패 — 502 매핑", e)
             throw OAuthException.providerError(e)
         }
 }

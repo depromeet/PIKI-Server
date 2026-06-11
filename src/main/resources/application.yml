@@ -159,5 +159,8 @@ logging:
     #  - PID·--- ·application name([PIKI])을 뺀다. 단일 컨테이너라 PID 는 항상 1 이고, 서비스 구분은 Loki 의
     #    container 라벨(team3-blue/green)이 이미 한다 — 줄마다 반복할 가치가 없다.
     #  - traceId/spanId 는 한 요청의 전체 로그를 묶는 추적 키라 유지한다 (sampling 1.0 이라 항상 채워진다).
+    #  - userId(MDC, JwtAuthenticationFilter 가 인증 요청에 주입)는 한 유저의 여러 요청을 가로질러 묶는 키다 —
+    #    grep userId=<uuid> 로 로그인→플레이→… 여정 전체를 잇는다. 미인증 요청은 '-' 로 비워진다.
+    #    (prod ECS JSON 은 MDC 를 필드로 자동 출력하므로 이 평문 패턴에만 명시한다.)
     # 색상(%clr)은 쓰지 않는다 — non-TTY(컨테이너 stdout)에선 어차피 plain 이고, 로컬 콘솔 색상보다 패턴 단순함을 택한다.
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS, Asia/Seoul} %-5level [%thread] [%X{traceId:-},%X{spanId:-}] %logger{36} : %msg%n%wEx"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS, Asia/Seoul} %-5level [%thread] [%X{traceId:-},%X{spanId:-}] [user=%X{userId:-}] %logger{36} : %msg%n%wEx"

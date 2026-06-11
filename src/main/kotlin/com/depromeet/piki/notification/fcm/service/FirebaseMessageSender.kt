@@ -1,7 +1,9 @@
 package com.depromeet.piki.notification.fcm.service
 
+import com.depromeet.piki.common.logging.SensitiveData
 import com.depromeet.piki.notification.controller.dto.NotificationSsePayload
 import com.depromeet.piki.notification.domain.Notification
+import com.depromeet.piki.notification.domain.NotificationCategory
 import com.depromeet.piki.notification.service.DefaultPushImage
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.AndroidConfig
@@ -37,25 +39,48 @@ class FirebaseMessageSender(
         notification: Notification,
     ): List<String> {
         val stale = mutableListOf<String>()
+        // 발송 결과 집계 — 성공 수와 실패 사유(FCM messagingErrorCode)별 분포를 모아 마지막에 한 줄로 요약한다.
+        // 토큰 원문은 크리덴셜이라 지문(maskToken)으로만 남긴다.
+        var success = 0
+        val failureCodes = mutableMapOf<String, Int>()
         tokens.chunked(MULTICAST_LIMIT).forEach { chunk ->
             val response =
                 runCatching { messaging.sendEachForMulticast(buildMessage(chunk, notification)) }
                     .getOrElse { e ->
-                        // 토큰은 민감 정보라 로그에 남기지 않는다 — 크기만.
-                        log.warn("FCM 멀티캐스트 발송 실패 chunkSize={}", chunk.size, e)
+                        // 토큰은 민감 정보라 로그에 남기지 않는다 — 크기만. 청크 통째 실패는 아래 요약에서 (실패=토큰−성공)으로 드러난다.
+                        log.warn("FCM 멀티캐스트 청크 발송 실패 chunkSize={}", chunk.size, e)
                         return@forEach
                     }
             response.responses.forEachIndexed { i, result ->
-                if (result.isSuccessful) return@forEachIndexed
+                if (result.isSuccessful) {
+                    success++
+                    return@forEachIndexed
+                }
                 val code = result.exception?.messagingErrorCode
+                failureCodes.merge(code?.name ?: "UNKNOWN", 1, Int::plus)
                 if (isStaleToken(code)) {
                     stale += chunk[i]
+                    log.info("FCM 죽은 토큰 감지 → 정리 대상 token={} code={}", SensitiveData.maskToken(chunk[i]), code)
                 } else {
-                    // 토큰 무관 실패(요청 오류·일시 오류 등)는 토큰을 지우지 않고 코드만 남긴다(토큰은 민감).
-                    log.warn("FCM 발송 실패(토큰 보존) code={}", code)
+                    // 토큰 무관 실패(요청 오류·일시 오류 등)는 토큰을 지우지 않고 코드만 남긴다(어떤 이슈로 실패했는지 = FCM 반환 코드).
+                    log.warn("FCM 발송 실패(토큰 보존) token={} code={}", SensitiveData.maskToken(chunk[i]), code)
                 }
             }
         }
+        // 어떤 페이로드(type·refId)를 몇 토큰에 보내 몇 건 성공/실패했고, 실패 사유(FCM code)별 분포 + 죽은 토큰 정리 수.
+        // 렌더된 title/body 는 닉네임 등 PII 를 담을 수 있어 싣지 않는다 — 라우팅 식별자(type·refId·category)만.
+        log.info(
+            "FCM 발송 결과 notificationId={} type={} category={} refId={} 토큰={} 성공={} 실패={} 실패사유={} 죽은토큰정리={}",
+            notification.getId(),
+            notification.type,
+            NotificationCategory.of(notification.type),
+            notification.refId,
+            tokens.size,
+            success,
+            tokens.size - success,
+            failureCodes,
+            stale.size,
+        )
         return stale
     }
 

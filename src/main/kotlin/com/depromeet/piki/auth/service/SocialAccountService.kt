@@ -30,18 +30,26 @@ class SocialAccountService(
         // 2. 신규 소셜 + 현재 게스트면 → 게스트 계정에 연결 + 승격 (위시·토너먼트 데이터 이어줌)
         currentUserId?.let { guestId ->
             try {
-                socialAccountWriter.linkGuestAndPromote(guestId, userInfo)?.let { return it }
+                socialAccountWriter.linkGuestAndPromote(guestId, userInfo)?.let {
+                    // 계정 생애 이벤트(게스트→회원 승격) — 승격은 같은 userId 를 유지하므로 데이터 연속성이 보장된다.
+                    log.info("게스트 계정 소셜 연결·승격 userId={} provider={}", it.id, userInfo.provider)
+                    return it
+                }
             } catch (e: DataIntegrityViolationException) {
                 // 동시 충돌: 다른 요청이 이 소셜을 먼저 선점 → 그 계정으로 합류 (게스트 포기)
+                log.info("게스트 승격 중 소셜 선점 충돌 → 기존 계정 합류 guestId={} provider={}", guestId, userInfo.provider)
                 return loginExisting(userInfo) ?: throw e
             }
         }
 
         // 3. 순수 신규 가입 → MEMBER 생성 + 소셜 연결
         return try {
-            socialAccountWriter.createSocialUserAndLink(userInfo)
+            socialAccountWriter.createSocialUserAndLink(userInfo).also {
+                log.info("신규 소셜 회원 가입 userId={} provider={}", it.id, userInfo.provider)
+            }
         } catch (e: DataIntegrityViolationException) {
             // 동시 충돌: 다른 요청이 먼저 같은 소셜로 가입 → 그 user 로 합류 (내가 만든 user 는 REQUIRED tx 롤백으로 폐기)
+            log.info("신규 가입 중 소셜 선점 충돌 → 기존 계정 합류 provider={}", userInfo.provider)
             loginExisting(userInfo) ?: throw e
         }
     }
