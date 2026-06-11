@@ -4,7 +4,6 @@ import com.depromeet.piki.auth.filter.JwtAuthenticationFilter
 import com.depromeet.piki.user.domain.IdentityType
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.core.annotation.Order
 import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
@@ -18,11 +17,7 @@ class SecurityConfig(
     private val authenticationEntryPoint: ApiResponseAuthenticationEntryPoint,
     private val accessDeniedHandler: ApiResponseAccessDeniedHandler,
 ) {
-    // @Order(2): admin 백오피스 체인(AdminSecurityConfig, @Order(1))이 /admin/** 를 먼저 잡고,
-    // 나머지 모든 요청은 이 기존 JWT(stateless) 체인이 처리한다. prod 환경에서는 admin 체인이
-    // 아예 없어 이 체인만 단독으로 동작한다.
     @Bean
-    @Order(2)
     fun securityFilterChain(
         http: HttpSecurity,
         jwtAuthenticationFilter: JwtAuthenticationFilter,
@@ -84,8 +79,7 @@ class SecurityConfig(
                     .requestMatchers("/docs/**", "/v3/api-docs/**")
                     .permitAll()
                     // 파비콘 — 브라우저가 모든 페이지에서 자동 요청하는 사이트 전역 정적 자산.
-                    // admin 체인(/admin/**)이 안 잡고 이 체인으로 떨어지므로 여기서 permit 해야
-                    // docs·admin 어디서든 401 없이 뜬다. 민감정보 없는 공개 파일.
+                    // docs 등 어디서든 401 없이 뜨도록 permit 한다. 민감정보 없는 공개 파일.
                     .requestMatchers(HttpMethod.GET, "/favicon.ico")
                     .permitAll()
                     .requestMatchers("/api/v1/wishlists/**")

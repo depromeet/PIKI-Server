@@ -66,9 +66,3 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
-
-# admin 백오피스 자격증명 — 통합 테스트 부팅 통과용 더미.
-# @Profile("!prod") 로 게이팅되어 있고 테스트는 prod 프로파일을 쓰지 않으므로 항상 활성.
-admin:
-  username: admin
-  password: admin-test-pw

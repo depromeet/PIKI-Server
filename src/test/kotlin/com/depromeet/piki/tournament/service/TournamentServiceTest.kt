@@ -123,8 +123,6 @@ class TournamentServiceTest {
                 }
             }
         }
-
-        override fun findRecent(limit: Int): List<Item> = emptyList()
     }
 
     // 위시 등록의 축약 — itemId 마다 활성 snapshot(READY·기본가)을 만들고 그것을 가리키는 wish 를 만든다.
