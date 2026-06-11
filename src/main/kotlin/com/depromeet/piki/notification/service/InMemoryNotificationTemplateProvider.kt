@@ -25,7 +25,7 @@ class InMemoryNotificationTemplateProvider : NotificationTemplateProvider {
                 NotificationTemplate(title = "상품 정보가 저장됐어요", body = ""),
             NotificationType.ITEM_PARSING_FAILED to
                 NotificationTemplate(title = "상품 정보를 가져오지 못했어요", body = ""),
-            // 공지 본문은 추후 admin 백오피스가 변수(title·body)로 채운다(#391/#250). 트리거 전까진 발송되지 않는 placeholder.
+            // 공지 본문은 추후 운영 도구가 변수(title·body)로 채운다(#391/#250). 트리거 전까진 발송되지 않는 placeholder.
             NotificationType.ANNOUNCEMENT to
                 NotificationTemplate(title = "\${title}", body = "\${body}"),
         )

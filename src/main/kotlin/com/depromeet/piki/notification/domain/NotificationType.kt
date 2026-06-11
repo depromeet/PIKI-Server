@@ -13,6 +13,6 @@ enum class NotificationType {
     TOURNAMENT_RESULT_READY,
     ITEM_PARSING_COMPLETED,
     ITEM_PARSING_FAILED,
-    // 전체 공지(#391/#250). 트리거(admin 백오피스)·발행은 후속 — 지금은 분류/필터용 enum 만 선반영한다.
+    // 전체 공지(#391/#250). 트리거·발행은 후속 — 지금은 분류/필터용 enum 만 선반영한다.
     ANNOUNCEMENT,
 }
