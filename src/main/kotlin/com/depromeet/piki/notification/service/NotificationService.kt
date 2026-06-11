@@ -6,6 +6,7 @@ import com.depromeet.piki.notification.domain.NotificationHistorySize
 import com.depromeet.piki.notification.repository.NotificationRepository
 import com.depromeet.piki.notification.service.dto.NotificationHistoryPage
 import com.depromeet.piki.notification.service.dto.NotificationReadCommand
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -16,6 +17,8 @@ class NotificationService(
     private val notificationRepository: NotificationRepository,
     private val defaultPushImage: DefaultPushImage,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     // 본인 알림을 최신순으로 한 페이지 + 안읽음 수 동봉. hasNext 판단을 위해 한 건 더 조회하고 초과분은 잘라낸다.
     // category 가 있으면 그 카테고리의 type 집합으로 필터(활동/시스템 탭). unreadCount 는 category 무관 전체(앱 badge).
     @Transactional(readOnly = true)
@@ -58,10 +61,19 @@ class NotificationService(
         userId: UUID,
         command: NotificationReadCommand,
     ): Map<NotificationCategory, Long> {
-        when (command) {
-            NotificationReadCommand.All -> notificationRepository.markAllRead(userId)
-            is NotificationReadCommand.Ids -> notificationRepository.markRead(userId, command.ids)
-        }
-        return notificationRepository.countUnreadByCategory(userId)
+        val method =
+            when (command) {
+                NotificationReadCommand.All -> {
+                    notificationRepository.markAllRead(userId)
+                    "all"
+                }
+                is NotificationReadCommand.Ids -> {
+                    notificationRepository.markRead(userId, command.ids)
+                    "ids(${command.ids.size})"
+                }
+            }
+        val unread = notificationRepository.countUnreadByCategory(userId)
+        log.info("알림 읽음 처리 userId={} 방식={} 처리후안읽음={}", userId, method, unread.values.sum())
+        return unread
     }
 }
