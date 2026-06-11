@@ -5,6 +5,7 @@ import com.depromeet.piki.item.event.ItemParsingFailed
 import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.product.service.ProductSnapshot
+import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
@@ -21,6 +22,7 @@ class ItemParsingService(
     private val itemRepository: ItemRepository,
     private val itemSnapshotRepository: ItemSnapshotRepository,
     private val eventPublisher: ApplicationEventPublisher,
+    private val meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -104,6 +106,7 @@ class ItemParsingService(
                 linkByItemId[snapshot.itemId] ?: run {
                     snapshot.markFailed()
                     eventPublisher.publishEvent(ItemParsingFailed(snapshot.itemId))
+                    ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, ItemParsingMetrics.REASON_NO_SOURCE)
                     failedCount++
                     return@forEach
                 }
@@ -111,6 +114,7 @@ class ItemParsingService(
             if (snapshot.attemptCount >= maxAttempts) {
                 snapshot.markFailed()
                 eventPublisher.publishEvent(ItemParsingFailed(snapshot.itemId))
+                ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, ItemParsingMetrics.REASON_RETRY_EXHAUSTED)
                 failedCount++
                 return@forEach
             }
