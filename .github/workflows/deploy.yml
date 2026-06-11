@@ -29,12 +29,12 @@ jobs:
           REF="${{ github.event.workflow_run.head_sha || github.sha }}"
           if [ "$BRANCH" = "main" ]; then
             echo "environment=prod" >> "$GITHUB_OUTPUT"
-            echo "domain=api.depromeet18team3.cloud" >> "$GITHUB_OUTPUT"
-            echo "nginx_conf=api.depromeet18team3.cloud.conf" >> "$GITHUB_OUTPUT"
+            echo "domain=api.piki.day" >> "$GITHUB_OUTPUT"
+            echo "nginx_conf=api.piki.day.conf" >> "$GITHUB_OUTPUT"
           else
             echo "environment=dev" >> "$GITHUB_OUTPUT"
-            echo "domain=dev.api.depromeet18team3.cloud" >> "$GITHUB_OUTPUT"
-            echo "nginx_conf=dev.api.depromeet18team3.cloud.conf" >> "$GITHUB_OUTPUT"
+            echo "domain=dev.api.piki.day" >> "$GITHUB_OUTPUT"
+            echo "nginx_conf=dev.api.piki.day.conf" >> "$GITHUB_OUTPUT"
           fi
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
