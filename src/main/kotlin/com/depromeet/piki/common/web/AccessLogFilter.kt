@@ -32,11 +32,13 @@ class AccessLogFilter : OncePerRequestFilter() {
         response: HttpServletResponse,
         filterChain: FilterChain,
     ) {
-        val start = System.currentTimeMillis()
+        // latency 는 monotonic clock(nanoTime)으로 잰다 — currentTimeMillis 는 NTP 시간 보정 때 음수·과대값으로
+        // 깨질 수 있어 관측 지표로 부적합하다. wall-clock 표시 시각은 로그 패턴의 %d 가 따로 담당한다.
+        val startNanos = System.nanoTime()
         try {
             filterChain.doFilter(request, response)
         } finally {
-            val latencyMs = System.currentTimeMillis() - start
+            val latencyMs = (System.nanoTime() - startNanos) / 1_000_000
             (request.getAttribute(LoggingKeys.USER_ID) as? String)?.let { MDC.put(LoggingKeys.USER_ID, it) }
             try {
                 log.info("{} {} -> {} ({}ms)", request.method, request.requestURI, response.status, latencyMs)

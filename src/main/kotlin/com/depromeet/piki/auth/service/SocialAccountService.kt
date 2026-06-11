@@ -36,8 +36,9 @@ class SocialAccountService(
                     return it
                 }
             } catch (e: DataIntegrityViolationException) {
-                // 동시 충돌: 다른 요청이 이 소셜을 먼저 선점 → 그 계정으로 합류 (게스트 포기)
-                log.info("게스트 승격 중 소셜 선점 충돌 → 기존 계정 합류 guestId={} provider={}", guestId, userInfo.provider)
+                // 동시 충돌: 다른 요청이 이 소셜을 먼저 선점 → 그 계정으로 합류 (게스트 포기).
+                // 방어적으로 복구한 비정상 경합이라 warn — 빈발하면 동시 로그인 경합 신호다.
+                log.warn("게스트 승격 중 소셜 선점 충돌 → 기존 계정 합류 guestId={} provider={}", guestId, userInfo.provider)
                 return loginExisting(userInfo) ?: throw e
             }
         }
@@ -48,8 +49,9 @@ class SocialAccountService(
                 log.info("신규 소셜 회원 가입 userId={} provider={}", it.id, userInfo.provider)
             }
         } catch (e: DataIntegrityViolationException) {
-            // 동시 충돌: 다른 요청이 먼저 같은 소셜로 가입 → 그 user 로 합류 (내가 만든 user 는 REQUIRED tx 롤백으로 폐기)
-            log.info("신규 가입 중 소셜 선점 충돌 → 기존 계정 합류 provider={}", userInfo.provider)
+            // 동시 충돌: 다른 요청이 먼저 같은 소셜로 가입 → 그 user 로 합류 (내가 만든 user 는 REQUIRED tx 롤백으로 폐기).
+            // 방어적으로 복구한 비정상 경합이라 warn.
+            log.warn("신규 가입 중 소셜 선점 충돌 → 기존 계정 합류 provider={}", userInfo.provider)
             loginExisting(userInfo) ?: throw e
         }
     }

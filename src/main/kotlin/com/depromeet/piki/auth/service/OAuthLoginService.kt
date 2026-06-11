@@ -69,8 +69,9 @@ class OAuthLoginService(
         } catch (e: OAuthException) {
             throw e
         } catch (e: Exception) {
-            // 외부 의존성(provider) 장애 → 502 매핑. warn + 스택으로 원인(네트워크·4xx/5xx·역직렬화)을 남긴다.
-            log.warn("OAuth provider 호출 실패 — 502 매핑", e)
+            // provider 장애는 GlobalExceptionHandler 가 OAuthException(cause=e)을 category 기준 레벨로 남긴다
+            // (RETRYABLE=warn / SERVER_ERROR=error, 스택에 cause 포함). 여기서 raw e 를 또 찍으면 중복이고
+            // 원문 노출 표면만 늘어, 로깅은 핸들러에 일임하고 여기선 래핑만 한다.
             throw OAuthException.providerError(e)
         }
 }
