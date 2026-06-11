@@ -1,7 +1,9 @@
 package com.depromeet.piki.notification.fcm.service
 
+import com.depromeet.piki.common.logging.SensitiveData
 import com.depromeet.piki.notification.fcm.domain.UserDevice
 import com.depromeet.piki.notification.fcm.repository.UserDeviceRepository
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -13,6 +15,8 @@ import java.util.UUID
 class UserDeviceService(
     private val userDeviceRepository: UserDeviceRepository,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     // 토큰 등록/갱신(POST). upsert 다 — 앱 진입·토큰 회전 어느 경로로 와도 기기당 1 row 로 수렴한다.
     // 배달 정확성을 위해 같은 토큰을 들고 있던 다른 사용자 row 는 먼저 해제하고, 내 (user,device) row 가
     // 있으면 토큰만 교체, 없으면 신규 생성한다.
@@ -28,9 +32,12 @@ class UserDeviceService(
         val token = fcmToken.trim()
         val mine = userDeviceRepository.findByUserIdAndDeviceId(userId, device)
         releaseStaleTokenHolder(token, keep = mine)
-        mine ?: return userDeviceRepository.save(
-            UserDevice(userId = userId, deviceId = device, fcmToken = token),
-        )
+        // 토큰 원문은 크리덴셜이라 지문으로만. deviceId 는 기기 식별자라 그대로(같은 기기의 등록/해제 상관추적 키).
+        mine ?: run {
+            log.info("FCM 토큰 등록(신규) userId={} deviceId={} token={}", userId, device, SensitiveData.maskToken(token))
+            return userDeviceRepository.save(UserDevice(userId = userId, deviceId = device, fcmToken = token))
+        }
+        log.info("FCM 토큰 등록(갱신) userId={} deviceId={} token={}", userId, device, SensitiveData.maskToken(token))
         mine.refreshToken(token)
         return userDeviceRepository.save(mine)
     }
@@ -42,7 +49,9 @@ class UserDeviceService(
         deviceId: String,
     ) {
         // 등록과 같은 정규화 — 키 일치를 위해 trim.
-        userDeviceRepository.deleteByUserIdAndDeviceId(userId, deviceId.trim())
+        val device = deviceId.trim()
+        userDeviceRepository.deleteByUserIdAndDeviceId(userId, device)
+        log.info("FCM 토큰 해제 userId={} deviceId={}", userId, device)
     }
 
     // 발송(#245) — 한 사용자의 모든 기기 토큰을 모아 멀티캐스트 대상으로 넘긴다.
