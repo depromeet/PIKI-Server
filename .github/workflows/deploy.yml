@@ -194,6 +194,17 @@ jobs:
             [ -f /etc/nginx/team3-upstream.conf ] || echo "server localhost:8080;" | sudo tee /etc/nginx/team3-upstream.conf
             # 새 인스턴스(cloud-init nginx)는 stock default 사이트가 켜져 있어 catch-all 로 충돌 → 제거.
             sudo rm -f /etc/nginx/sites-enabled/default
+            # 환경당 conf 는 $DOMAIN 하나만 enabled 여야 한다. 도메인 rename(#488 depromeet retire 등) 후
+            # 옛 도메인의 잔존 conf 가 sites-enabled 에 남으면 limit_req_zone 중복으로 nginx -t 가 깨진다.
+            # $DOMAIN·default 외의 sites-enabled 항목과 그 sites-available 원본을 정리한다(멱등 — 정상 배포엔 no-op).
+            for old in /etc/nginx/sites-enabled/*; do
+              [ -e "$old" ] || continue   # sites-enabled 가 비어 glob 미확장 시 리터럴 '*' 보호
+              bn=$(basename "$old")
+              [ "$bn" = "$DOMAIN" ] && continue
+              [ "$bn" = "default" ] && continue
+              echo "[nginx] $DOMAIN 외 옛 conf 제거: $bn"
+              sudo rm -f "$old" "/etc/nginx/sites-available/$bn"
+            done
             # 현재 설정 백업 후 교체. nginx -t 검증 실패 시 이전 설정으로 롤백하고 배포를 중단한다.
             sudo cp "$DST" "${DST}.bak" 2>/dev/null || true
             sudo cp "$SRC" "$DST"
