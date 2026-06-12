@@ -25,6 +25,7 @@ Grafana Cloud 가 호스팅하는 Grafana 이므로 셀프호스팅 provisioning
 5. **의존성** — 502율(Gemini 등 외부 실패) · executor active/queued · HikariCP active/idle/pending.
 6. **리소스** — 앱 process/system CPU · JVM 스레드 · 호스트 CPU.
 7. **로그** — 에러/경고 필터 로그 + 전체 로그(`team3-blue`/`team3-green`).
+8. **파싱·추출** — 파싱 결과(`item.parsing` result별)·실패 사유(reason별: not_product·ready_rejected·retry_exhausted·no_source)·추출 방법(`product.extract` via별: 직접 파싱 vs LLM). 상품 추출 실패가 트래픽에서 얼마나·왜 나는지 본다(#506).
 
 앱 메트릭은 `application="PIKI"` 라벨로 필터한다(Alloy 의 prometheus.scrape 가 붙임).
 blue-green 이라 한 시점에 한 슬롯만 활성이며 `instance` 라벨로 blue/green 을 구분한다.
