@@ -37,6 +37,6 @@ data class NotificationReadRequest(
         // 인증·본인 한정·멱등 + HTTP 본문 크기 상한으로 이미 안전하다(임의 캡으로 정상 요청을 400 으로 막지 않는다).
         // 응답 detail 은 사용자 대면이라 친화 문구로 둔다(어느 필드가 잘못됐는지는 앱이 자기 요청으로 안다).
         // Bean Validation 위반 메시지의 single source — ApiExamples 가 같은 상수를 참조한다.
-        const val VALID_SELECTION_MESSAGE = "요청을 처리하지 못했어요. 다시 시도해 주세요."
+        const val VALID_SELECTION_MESSAGE = "요청을 처리하지 못했어요."
     }
 }
