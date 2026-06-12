@@ -32,7 +32,7 @@ class FcmTokenApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                detail = FcmTokenRegisterRequest.TOKEN_BLANK_MESSAGE,
+                                detail = FcmTokenRegisterRequest.BLANK_MESSAGE,
                             ),
                     )
                     unauthorized()
