@@ -13,6 +13,7 @@ import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.product.service.ProductSnapshotException
 import com.depromeet.piki.product.service.gemini.GeminiApiException
+import com.depromeet.piki.product.service.http.PageFetchException
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubImageStorage
 import com.depromeet.piki.support.StubProductImageExtractor
@@ -452,6 +453,32 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             await().atMost(Duration.ofSeconds(5)).until { calls.get() >= 1 }
             // 확정 실패가 아니므로 FAILED 로 떨어지지 않고 PROCESSING 으로 남아야 한다 (recover 재시도 대상).
             assertEquals(ItemStatus.PROCESSING, latestSnapshot(itemId)?.status)
+        } finally {
+            cleanup(userId)
+        }
+    }
+
+    @Test
+    fun `URL 파싱이 영구 외부 오류(차단된 호스트·접근 불가)면 즉시 FAILED 로 종결한다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            // 재시도해도 결정론적으로 재실패하는 영구 오류(호스트 차단·4xx 접근 불가 등)는 recover 를 기다리지 않고
+            // (약 150초 헛돔 방지) 워커가 즉시 FAILED 로 종결한다. recover 는 stale(60초) 후에야 돌므로 5초 내 FAILED 면 즉시 종결이다.
+            stubProductLinkExtractor.build = { throw PageFetchException.blockedHost() }
+            val permanentBefore = parseCount("failed", "permanent_error")
+            val itemId = registerAndGetItemId(mockMvc, userId, "https://shop.example.com/products/blocked")
+
+            await().atMost(Duration.ofSeconds(5)).until {
+                latestSnapshot(itemId)?.status == ItemStatus.FAILED
+            }
+            // 결과 메트릭(#506): 재시도 무의미한 영구 외부 오류 확정 실패는 result=failed,reason=permanent_error 로 +1.
+            await().atMost(Duration.ofSeconds(2)).until { parseCount("failed", "permanent_error") - permanentBefore >= 1.0 }
+
+            val snapshot = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
+            assertEquals(ItemStatus.FAILED, snapshot.status)
+            assertNull(snapshot.name)
         } finally {
             cleanup(userId)
         }

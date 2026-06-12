@@ -20,6 +20,10 @@ object ItemParsingMetrics {
     // 워커 확정 실패 — 상품 페이지 아님·추출값 신뢰 불가(ProductSnapshotException). 클라이언트 입력 계약 위반.
     const val REASON_NOT_PRODUCT = "not_product"
 
+    // 워커 확정 실패 — 재시도 무의미한 외부 오류(호스트 차단·4xx 접근 불가·redirect 비정상·Gemini 영구 오류).
+    // ErrorCategory 가 RETRYABLE 이 아니라 즉시 종결한 경우다. not_product(상품 아님)와 구분해 별도로 센다.
+    const val REASON_PERMANENT_ERROR = "permanent_error"
+
     // 추출은 됐으나 READY 전이가 값 검증에 막힘(이름 없음 등).
     const val REASON_READY_REJECTED = "ready_rejected"
 

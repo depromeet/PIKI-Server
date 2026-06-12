@@ -1,6 +1,8 @@
 package com.depromeet.piki.item.service
 
 import com.depromeet.piki.common.config.AsyncConfig
+import com.depromeet.piki.common.exception.ErrorCategory
+import com.depromeet.piki.common.exception.HttpMappable
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductLinkExtractor
 import com.depromeet.piki.product.service.ProductSnapshot
@@ -56,26 +58,38 @@ class AsyncItemParsingWorker(
             }
     }
 
-    // 파싱 실패는 두 갈래다 — 확정 실패는 즉시 종결, 일시 실패는 recover 에 맡긴다.
+    // 파싱 실패는 두 갈래다 — 재시도해도 결정론적으로 재실패하는 영구 오류는 즉시 종결, 일시 오류는 recover 에 맡긴다.
+    // 판정은 ErrorCategory 가 쥔다: RETRYABLE(일시)만 PROCESSING 으로 두고, 그 외(INVALID_INPUT·SERVER_ERROR 등
+    // 재시도 무의미)는 즉시 FAILED. HttpMappable 이 아닌 예상 못한 예외는 일시·영구를 단정할 수 없어 보수적으로 일시로 둔다.
     private fun onExtractFailed(
         itemId: Long,
         link: ProductLink,
         e: Throwable,
     ) {
-        when (e) {
-            // 확정 실패 — 상품 아님·추출값 신뢰 불가. 같은 URL 을 다시 파싱해도 결과가 같으므로 즉시 FAILED 로 종결한다
-            // (사용자에게 빨리 알림). 클라이언트 입력 계약 위반이라 서버 입장에선 정상 동작(info).
-            is ProductSnapshotException -> {
-                log.info("item {} 파싱 실패(확정·재시도 무의미): {} url={}", itemId, e.message, link.safeLogString())
-                markFailedQuietly(itemId)
-                ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, ItemParsingMetrics.REASON_NOT_PRODUCT)
-            }
+        if (isRetryable(e)) {
             // 일시 외부 오류(네트워크·timeout·Gemini 5xx 등) — 다시 하면 될 수도 있으므로 FAILED 로 종결하지 않고
             // PROCESSING 그대로 둔다. recover 가 stale 로 잡아 상한까지 재실행한다(execution at-least-once, #461).
-            else ->
-                log.warn("item {} 파싱 실패(일시 외부 오류) → PROCESSING 유지, recover 가 재실행: url={}", itemId, link.safeLogString(), e)
+            log.warn("item {} 파싱 실패(일시 외부 오류) → PROCESSING 유지, recover 가 재실행: url={}", itemId, link.safeLogString(), e)
+            return
         }
+        // 확정 실패 — 상품 아님·추출값 신뢰 불가·호스트 차단·4xx 접근 불가 등. 같은 URL 을 다시 파싱해도 결과가
+        // 같으므로 즉시 FAILED 로 종결한다(사용자에게 빨리 알림). 클라이언트 입력 계약 위반이라 서버 입장에선 정상 동작(info).
+        log.info("item {} 파싱 실패(확정·재시도 무의미): {} url={}", itemId, e.message, link.safeLogString())
+        markFailedQuietly(itemId)
+        ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, reasonOf(e))
     }
+
+    // 재시도해도 의미 있는 일시 오류인가. ErrorCategory.RETRYABLE 만 재시도 대상이다. HttpMappable 이 아닌
+    // 예상 못한 예외(코드 버그성)는 일시·영구를 단정할 수 없으니 보수적으로 재시도 대상(PROCESSING 유지)으로 둔다.
+    private fun isRetryable(e: Throwable): Boolean = e is HttpMappable && e.category == ErrorCategory.RETRYABLE
+
+    // 확정 실패의 메트릭 reason. 상품 아님·추출값 신뢰 불가(ProductSnapshotException)는 not_product 로 따로 센다
+    // (대시보드에서 "상품 아님"을 구분). 그 외 재시도 무의미 오류(호스트 차단·4xx·redirect 비정상·Gemini 영구)는 permanent_error.
+    private fun reasonOf(e: Throwable): String =
+        when (e) {
+            is ProductSnapshotException -> ItemParsingMetrics.REASON_NOT_PRODUCT
+            else -> ItemParsingMetrics.REASON_PERMANENT_ERROR
+        }
 
     // FAILED 전이도 sweeper 와의 레이스로 실패할 수 있어(이미 전이됨) 잡아 흡수한다.
     private fun markFailedQuietly(itemId: Long) {
