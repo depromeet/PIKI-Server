@@ -33,10 +33,8 @@ data class OAuthLoginRequest(
         OAuthLoginCommand(code = code, redirectUri = redirectUri, accessToken = accessToken, state = state)
 
     companion object {
-        // validFlow 위반(code+redirectUri 와 accessToken 을 둘 다·둘 다 없이 보냄)은 엔드유저 행동이 아니라
-        // 앱이 흐름을 잘못 구성한 클라이언트 구현 버그다. 정상 앱은 항상 한 흐름만 보내므로 사용자는 닿지 않는다.
-        // 따라서 detail 은 사용자 친화 문구가 아니라 앱 개발자가 디버깅할 구체 메시지로 둔다.
-        // Bean Validation 위반 메시지의 single source — OpenApiExamples 가 같은 상수를 참조한다.
-        const val VALID_FLOW_MESSAGE = "code+redirectUri 또는 accessToken 중 한 흐름만 보내야 합니다."
+        // 응답 detail 은 사용자 대면이라 친화 문구로 둔다. 어느 흐름이 잘못됐는지(앱 구현 버그)는 응답이 아니라
+        // 로그로 구분한다. Bean Validation 위반 메시지의 single source — OpenApiExamples 가 같은 상수를 참조한다.
+        const val VALID_FLOW_MESSAGE = "로그인에 실패했어요. 다시 시도해 주세요."
     }
 }

@@ -24,11 +24,10 @@ data class FcmTokenRegisterRequest(
     )
     val deviceId: String,
 ) {
-    // FCM 토큰·기기 식별자는 앱이 SDK 에서 받아 보내는 값이라 엔드유저 비대면(앱 구현 영역)이다.
-    // 위반은 앱 버그이므로 사용자 친화 문구가 아니라 어떤 필드가 비었는지 짚는 개발자용 메시지로 둔다.
+    // 응답 detail 은 사용자 대면이라 친화 문구로 둔다(어느 필드가 비었는지는 앱이 자기 요청으로 안다).
     // OpenApiExamples 가 같은 상수를 참조해 문서 detail 과 실제 응답 detail 을 일치시킨다.
     companion object {
-        const val TOKEN_BLANK_MESSAGE = "FCM 토큰은 비어 있을 수 없습니다."
-        const val DEVICE_ID_BLANK_MESSAGE = "기기 식별자는 비어 있을 수 없습니다."
+        const val TOKEN_BLANK_MESSAGE = "알림 설정에 실패했어요. 잠시 후 다시 시도해 주세요."
+        const val DEVICE_ID_BLANK_MESSAGE = "알림 설정에 실패했어요. 잠시 후 다시 시도해 주세요."
     }
 }

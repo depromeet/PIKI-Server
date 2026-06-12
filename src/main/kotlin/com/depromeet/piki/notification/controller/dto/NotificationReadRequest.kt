@@ -35,9 +35,8 @@ data class NotificationReadRequest(
         // Bean Validation 메시지를 const 로 빼 ApiExamples 가 같은 상수를 참조하게 한다(detail single-source).
         // ids 개수 상한은 두지 않는다 — 대량 읽음은 all=true 가 담당하고, ids 는 본인 알림 선택(보통 단건)이라
         // 인증·본인 한정·멱등 + HTTP 본문 크기 상한으로 이미 안전하다(임의 캡으로 정상 요청을 400 으로 막지 않는다).
-        // validSelection 위반(all 과 ids 를 둘 다·둘 다 없이 보냄)은 엔드유저 행동이 아니라 앱 구현 버그다.
-        // 사용자는 "전체 읽음" 버튼이나 알림 단건을 누를 뿐 all/ids 를 직접 구성하지 않으므로 정상 흐름엔 닿지 않는다.
-        // detail 은 앱 개발자 디버깅용 구체 메시지로 둔다(사용자 친화 문구로 바꾸지 않음).
-        const val VALID_SELECTION_MESSAGE = "all=true 또는 ids 중 정확히 하나만 보내야 합니다."
+        // 응답 detail 은 사용자 대면이라 친화 문구로 둔다(어느 필드가 잘못됐는지는 앱이 자기 요청으로 안다).
+        // Bean Validation 위반 메시지의 single source — ApiExamples 가 같은 상수를 참조한다.
+        const val VALID_SELECTION_MESSAGE = "요청을 처리하지 못했어요. 다시 시도해 주세요."
     }
 }

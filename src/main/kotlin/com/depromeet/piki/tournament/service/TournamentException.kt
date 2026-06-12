@@ -150,11 +150,10 @@ class TournamentException private constructor(
                 HttpStatus.CONFLICT,
             )
 
-        // 앱이 미지원 상태로 조회 요청 → 미구현 기능 신호(501). 엔드유저가 status 를 직접 정하지 않으므로 비대면,
-        // detail 은 사용자 친화 문구가 아니라 개발자용 구체 메시지로 둔다.
+        // 미구현 기능 신호(501). 응답 detail 은 사용자 대면이라 친화 문구로 두고, 어느 상태가 미구현인지는 로그·trace 로 본다.
         fun statusNotSupported(): TournamentException =
             TournamentException(
-                "해당 상태의 토너먼트 조회는 아직 지원되지 않습니다.",
+                "아직 지원되지 않는 기능이에요.",
                 ErrorCategory.SERVER_ERROR,
                 HttpStatus.NOT_IMPLEMENTED,
             )
