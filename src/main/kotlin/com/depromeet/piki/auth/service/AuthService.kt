@@ -8,6 +8,7 @@ import com.depromeet.piki.auth.service.dto.TokenPair
 import com.depromeet.piki.user.domain.User
 import com.depromeet.piki.user.domain.UserException
 import com.depromeet.piki.user.service.UserService
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
 
@@ -17,6 +18,8 @@ class AuthService(
     private val jwtProvider: JwtProvider,
     private val refreshTokenStore: RefreshTokenStore,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     fun createGuest(): SignupResult {
         val user = userService.createGuest()
         val tokenPair = issueTokenPair(user)
@@ -38,11 +41,24 @@ class AuthService(
         return SignupResult(tokenPair = tokenPair, user = user)
     }
 
+    // 응답 detail 은 사용자 친화로 통일("로그인 정보가 만료됐어요")돼 어느 단계 실패인지 안 드러나므로,
+    // 디버깅·보안 추적용 사유는 던지는 지점에서 로그로 남긴다 (토큰 원문은 노출하지 않는다).
     fun refresh(refreshToken: String): TokenPair {
-        val userId = jwtProvider.parseRefreshToken(refreshToken) ?: throw AuthException.invalidToken()
+        val userId =
+            jwtProvider.parseRefreshToken(refreshToken)
+                ?: run {
+                    log.info("refresh 실패: 리프레시 토큰 파싱 불가 (만료·위변조)")
+                    throw AuthException.invalidToken()
+                }
         val user = userService.findById(userId)
-        user.deletedAt?.let { throw AuthException.invalidToken() }
-        if (!refreshTokenStore.consumeIfMatches(userId, refreshToken)) throw AuthException.invalidToken()
+        user.deletedAt?.let {
+            log.info("refresh 실패: 탈퇴 유저 userId={}", userId)
+            throw AuthException.invalidToken()
+        }
+        if (!refreshTokenStore.consumeIfMatches(userId, refreshToken)) {
+            log.warn("refresh 실패: 리프레시 토큰 매칭 불일치 (재사용·위조 가능) userId={}", userId)
+            throw AuthException.invalidToken()
+        }
         return issueTokenPair(user)
     }
 
@@ -51,7 +67,10 @@ class AuthService(
     }
 
     fun createTokensForUser(user: User): TokenPair {
-        user.deletedAt?.let { throw AuthException.invalidToken() }
+        user.deletedAt?.let {
+            log.info("토큰 발급 거부: 탈퇴 유저 userId={}", user.id)
+            throw AuthException.invalidToken()
+        }
         return issueTokenPair(user)
     }
 

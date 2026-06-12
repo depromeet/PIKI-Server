@@ -8,6 +8,7 @@ import com.depromeet.piki.auth.infrastructure.oauth.OAuthUserInfo
 import com.depromeet.piki.auth.infrastructure.redis.OAuthStateStore
 import com.depromeet.piki.auth.service.dto.OAuthLoginCommand
 import com.depromeet.piki.auth.service.dto.SignupResult
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
 
@@ -20,6 +21,8 @@ class OAuthLoginService(
     private val authService: AuthService,
     private val oAuthStateStore: OAuthStateStore,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     fun login(
         provider: OAuthProvider,
         command: OAuthLoginCommand,
@@ -28,7 +31,11 @@ class OAuthLoginService(
         // state 가 있으면 Redis 에서 소비 검증. 없거나 만료된 state 는 401 — CSRF 방지.
         // state 를 보내지 않으면 검증 생략 (v2 SDK 흐름 · 과도기 호환).
         command.state?.ifBlank { null }?.let { state ->
-            if (!oAuthStateStore.consumeIfValid(state)) throw OAuthException.invalidState()
+            if (!oAuthStateStore.consumeIfValid(state)) {
+                // CSRF 방어 지점 — 만료·위조·재사용 가능성이 있어 보안 추적용으로 warn. state 원문은 남기지 않는다.
+                log.warn("OAuth state 검증 실패 (만료·위조·재사용) provider={}", provider)
+                throw OAuthException.invalidState()
+            }
         }
         val client = oAuthClientRegistry.resolve(provider)
         val userInfo = fetchUserInfo(client, command) // 외부 호출, tx 밖
@@ -46,8 +53,18 @@ class OAuthLoginService(
         command.accessToken?.ifBlank { null }?.let { accessToken ->
             return runProvider { client.fetchUserInfoByAccessToken(accessToken) }
         }
-        val code = command.code?.ifBlank { null } ?: throw OAuthException.invalidRequest()
-        val redirectUri = command.redirectUri?.ifBlank { null } ?: throw OAuthException.invalidRequest()
+        val code =
+            command.code?.ifBlank { null }
+                ?: run {
+                    log.info("OAuth 요청 흐름 누락: code 없음")
+                    throw OAuthException.invalidRequest()
+                }
+        val redirectUri =
+            command.redirectUri?.ifBlank { null }
+                ?: run {
+                    log.info("OAuth 요청 흐름 누락: redirectUri 없음")
+                    throw OAuthException.invalidRequest()
+                }
         return runProvider { client.fetchUserInfoByCode(code, redirectUri) }
     }
 
