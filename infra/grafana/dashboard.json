@@ -1522,7 +1522,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (result) (increase(item_parsing_total{application=\"PIKI\", environment=\"$environment\"}[$__range]))",
+          "expr": "sum by (result) (item_parsing_total{application=\"PIKI\", environment=\"$environment\"})",
           "legendFormat": "{{result}}",
           "instant": true
         }
@@ -1571,7 +1571,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (reason) (increase(item_parsing_total{application=\"PIKI\", environment=\"$environment\", result=\"failed\"}[$__range]))",
+          "expr": "sum by (reason) (item_parsing_total{application=\"PIKI\", environment=\"$environment\", result=\"failed\"})",
           "legendFormat": "{{reason}}",
           "instant": true
         }
@@ -1621,7 +1621,7 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (via) (increase(product_extract_total{application=\"PIKI\", environment=\"$environment\"}[$__range]))",
+          "expr": "sum by (via) (product_extract_total{application=\"PIKI\", environment=\"$environment\"})",
           "legendFormat": "{{via}}",
           "instant": true
         }
