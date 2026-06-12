@@ -22,15 +22,14 @@ class CorsConfigTest {
     }
 
     @Test
-    fun `dev 프로파일에서는 LAN 사설망 패턴을 허용한다`() {
+    fun `dev 프로파일에서는 192_168 LAN 패턴만 허용한다`() {
         val patterns = patternsFor("dev")
-        assertTrue(patterns?.any { it.startsWith("http://192.168.") } == true, "192.168 LAN 패턴이 있어야 한다")
-        assertTrue(patterns?.any { it.startsWith("http://10.") } == true, "10.x LAN 패턴이 있어야 한다")
+        assertEquals(listOf("http://192.168.*.*:[*]"), patterns) // 192.168 만 — 10·172 등 넓은 대역은 넣지 않는다
     }
 
     @Test
-    fun `프로파일 미지정(로컬)에서도 LAN 사설망 패턴을 허용한다`() {
+    fun `프로파일 미지정(로컬)에서도 192_168 LAN 패턴을 허용한다`() {
         // 로컬 실행은 active profile 이 비어있을 수 있다 — prod 가 아니므로 LAN 이 열려야 한다.
-        assertTrue(patternsFor()?.any { it.startsWith("http://192.168.") } == true)
+        assertEquals(listOf("http://192.168.*.*:[*]"), patternsFor())
     }
 }

@@ -44,21 +44,16 @@ class CorsConfig(
                         "http://127.0.0.1:3000",
                     )
                 // 실기기 dev 테스트(#509): 폰 브라우저가 LAN IP(http://192.168.x.y:port)로 프론트에 접속하면
-                // Origin 이 그 사설망 IP 로 박혀 CORS 에 걸린다. dev·local 에서만 사설망 대역을 allowedOriginPatterns 로
-                // 허용해 폰이 백엔드를 직접 호출하게 한다(프론트의 요청 수동 재작성 우회 제거).
+                // Origin 이 그 사설망 IP 로 박혀 CORS 에 걸린다. dev·local 에서만 192.168 대역(가정·사무실 공유기 LAN 의
+                // 표준 범위, 실기기 테스트가 실제로 쓰는 대역)을 allowedOriginPatterns 로 허용해 폰이 백엔드를 직접
+                // 호출하게 한다(프론트의 요청 수동 재작성 우회 제거). 192.168 로만 좁혀 credentials 오리진 표면을 최소화한다
+                // (10/172 는 요청 밖, localhost·127.0.0.1:3000 은 이미 위 allowedOrigins 에 있어 로컬은 그걸로 충분).
                 // 분기 기준은 'prod' 프로파일이다 — staging 도 deploy 가 'prod' 프로파일로 띄우므로(#498: pre-prod=prod
                 // 동일 동작) prod 와 함께 LAN 이 닫힌다. 즉 LAN 은 dev(프로파일 dev)·local 에서만 열린다.
                 // allowedOrigins(정확) + allowedOriginPatterns(와일드카드)는 한 설정에 공존하며, allowCredentials=true 와도
                 // patterns 는 호환된다(allowedOrigins=["*"] 만 금지).
                 if (!environment.acceptsProfiles(Profiles.of("prod"))) {
-                    allowedOriginPatterns =
-                        listOf(
-                            "http://192.168.*.*:[*]", // 가정·사무실 LAN (가장 흔함)
-                            "http://10.*.*.*:[*]",
-                            "http://172.*.*.*:[*]",
-                            "http://localhost:[*]",
-                            "http://127.0.0.1:[*]",
-                        )
+                    allowedOriginPatterns = listOf("http://192.168.*.*:[*]")
                 }
                 allowedMethods = listOf("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                 allowedHeaders = listOf("*")
