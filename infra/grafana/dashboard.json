@@ -1480,7 +1480,7 @@
     },
     {
       "id": 201,
-      "type": "timeseries",
+      "type": "stat",
       "title": "파싱 결과 (result별)",
       "gridPos": {
         "h": 8,
@@ -1494,23 +1494,25 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "ops",
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "showPoints": "never"
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "palette-classic"
           }
         },
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         }
       },
       "targets": [
@@ -1520,14 +1522,15 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (result) (rate(item_parsing_total{application=\"PIKI\", environment=\"$environment\"}[$__rate_interval]))",
-          "legendFormat": "{{result}}"
+          "expr": "sum by (result) (increase(item_parsing_total{application=\"PIKI\", environment=\"$environment\"}[$__range]))",
+          "legendFormat": "{{result}}",
+          "instant": true
         }
       ]
     },
     {
       "id": 202,
-      "type": "timeseries",
+      "type": "bargauge",
       "title": "파싱 실패 사유 (reason별)",
       "gridPos": {
         "h": 8,
@@ -1541,23 +1544,24 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "ops",
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "showPoints": "never"
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "palette-classic"
           }
         },
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         }
       },
       "targets": [
@@ -1567,14 +1571,15 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (reason) (rate(item_parsing_total{application=\"PIKI\", environment=\"$environment\", result=\"failed\"}[$__rate_interval]))",
-          "legendFormat": "{{reason}}"
+          "expr": "sum by (reason) (increase(item_parsing_total{application=\"PIKI\", environment=\"$environment\", result=\"failed\"}[$__range]))",
+          "legendFormat": "{{reason}}",
+          "instant": true
         }
       ]
     },
     {
       "id": 203,
-      "type": "timeseries",
+      "type": "stat",
       "title": "추출 방법 (직접 파싱 vs LLM)",
       "gridPos": {
         "h": 8,
@@ -1588,23 +1593,25 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "ops",
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "showPoints": "never"
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "palette-classic"
           }
         },
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         }
       },
       "targets": [
@@ -1614,8 +1621,9 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (via) (rate(product_extract_total{application=\"PIKI\", environment=\"$environment\"}[$__rate_interval]))",
-          "legendFormat": "{{via}}"
+          "expr": "sum by (via) (increase(product_extract_total{application=\"PIKI\", environment=\"$environment\"}[$__range]))",
+          "legendFormat": "{{via}}",
+          "instant": true
         }
       ]
     }
