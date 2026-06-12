@@ -319,8 +319,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `POST tournaments-id-items 에서 존재하지 않는 아이템 ID 이면 404 를 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        // 위시에는 등록되어 있지만 item 테이블에는 없는 ID — wish 확인 통과 후 item 존재 확인에서 404
-        wishJpaRepository.save(Wish(userId = userId, itemId = 999999L))
+        // 위시에는 등록되어 있지만 item 테이블에는 없는 ID — wish 확인 통과 후 item 존재 확인에서 404.
+        // itemId 단일 출처는 snapshot 이므로, item 행 없이 itemId=999999 를 가리키는 snapshot 만 시딩해 wish 가 가리키게 한다(FK 없음).
+        val danglingSnapshotId = itemSnapshotJpaRepository.save(ItemSnapshot.processing(999999L)).getId()
+        wishJpaRepository.save(Wish(userId = userId, snapshotId = danglingSnapshotId))
 
         mockMvc
             .perform(
@@ -340,7 +342,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val processingSnapshotId =
             itemSnapshotJpaRepository.save(ItemSnapshot.processing(processingItemId)).getId()
         // 위시에도 등록 — wish 확인 통과 후 READY 상태 확인에서 409
-        wishJpaRepository.save(Wish(userId = userId, itemId = processingItemId, snapshotId = processingSnapshotId))
+        wishJpaRepository.save(Wish(userId = userId, snapshotId = processingSnapshotId))
 
         mockMvc
             .perform(
@@ -1137,8 +1139,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val tournamentId = createTournament(mockMvc)
         val otherItem = saveWishItem(otherUserId)
         tournamentUserJpaRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
-        // 위시 추가는 소유자 전용이므로 DB에 직접 삽입해 다른 유저가 추가한 상황을 구성
-        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = otherItem, userId = otherUserId))
+        // 위시 추가는 소유자 전용이므로 DB에 직접 삽입해 다른 유저가 추가한 상황을 구성. 출전 시점 고정 snapshot 을 함께 시딩한다(NOT NULL).
+        val otherSnapshot = saveSnapshot(otherItem, status = ItemStatus.READY)
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, userId = otherUserId, snapshotId = otherSnapshot.getId()))
         val itemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc
@@ -1169,10 +1172,12 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId1 = createTournament(mockMvc, "토너먼트1")
         val tournamentId2 = createTournament(mockMvc, "토너먼트2")
+        // 토너먼트 소속만 검증하는 시나리오라 표시값은 무관하다. 출전 시점 고정 snapshot 만 시딩해 연결한다(NOT NULL).
+        val snapshotOfTournament2 = saveSnapshot(999L, status = ItemStatus.READY)
         val itemOfTournament2 =
             tournamentItemJpaRepository
                 .save(
-                    TournamentItem(tournamentId = tournamentId2, itemId = 999L, userId = userId),
+                    TournamentItem(tournamentId = tournamentId2, userId = userId, snapshotId = snapshotOfTournament2.getId()),
                 ).getId()
 
         mockMvc
@@ -1189,7 +1194,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val failedItem = itemJpaRepository.save(Item())
         val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED)
         tournamentItemJpaRepository.save(
-            TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId, snapshotId = snapshot.getId()),
+            TournamentItem(tournamentId = tournamentId, userId = userId, snapshotId = snapshot.getId()),
         )
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
@@ -1233,7 +1238,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val processingItem = itemJpaRepository.save(Item())
         val snapshot = saveSnapshot(processingItem.getId(), status = ItemStatus.PROCESSING)
         tournamentItemJpaRepository.save(
-            TournamentItem(tournamentId = tournamentId, itemId = processingItem.getId(), userId = userId, snapshotId = snapshot.getId()),
+            TournamentItem(tournamentId = tournamentId, userId = userId, snapshotId = snapshot.getId()),
         )
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
@@ -1249,9 +1254,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `PATCH tournaments-id-items-itemId 에서 IN_PROGRESS 토너먼트이면 409 를 반환한다`() {
         val mockMvc = buildMockMvc()
         val (tournamentId, item1Id) = startTournamentWith2Items(mockMvc)
-        // 토너먼트가 IN_PROGRESS 라 snapshot 검증 전 notPending(409)에서 막힌다 — item 정체성만 있으면 된다.
+        // 토너먼트가 IN_PROGRESS 라 snapshot 검증 전 notPending(409)에서 막힌다 — 고정 snapshot 만 시딩해 연결하면 된다(NOT NULL).
         val failedItem = itemJpaRepository.save(Item())
-        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId))
+        val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED)
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, userId = userId, snapshotId = snapshot.getId()))
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).last().getId()
 
         mockMvc
@@ -1269,9 +1275,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         tournamentUserJpaRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
-        // 등록자(otherUserId)가 아닌 userId 의 PATCH 라 snapshot 검증 전 forbidden(403)에서 막힌다 — item 정체성만 있으면 된다.
+        // 등록자(otherUserId)가 아닌 userId 의 PATCH 라 snapshot 검증 전 forbidden(403)에서 막힌다 — 고정 snapshot 만 시딩해 연결하면 된다(NOT NULL).
         val failedItem = itemJpaRepository.save(Item())
-        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = otherUserId))
+        val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED)
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, userId = otherUserId, snapshotId = snapshot.getId()))
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc
@@ -1290,7 +1297,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val failedItem = itemJpaRepository.save(Item())
         val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED, name = "기존 이름")
         tournamentItemJpaRepository.save(
-            TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId, snapshotId = snapshot.getId()),
+            TournamentItem(tournamentId = tournamentId, userId = userId, snapshotId = snapshot.getId()),
         )
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
@@ -1315,7 +1322,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val failedItem = itemJpaRepository.save(Item())
         val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED)
         tournamentItemJpaRepository.save(
-            TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId, snapshotId = snapshot.getId()),
+            TournamentItem(tournamentId = tournamentId, userId = userId, snapshotId = snapshot.getId()),
         )
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
@@ -1352,7 +1359,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
             assertEquals(tournamentItemId, tournamentItem.getId())
             // 상태는 활성 snapshot 이 보유한다(4a) — 링크 등록 직후라 PENDING(outbox 적재)으로 시작한다.
             // @Transactional 테스트라 등록이 커밋되지 않아 디스패처(별도 트랜잭션)가 이 PENDING 을 집지 못한다 → PENDING 고정.
-            val snapshot = itemSnapshotJpaRepository.findFirstByItemIdAndDeletedAtIsNullOrderByIdDesc(tournamentItem.itemId)
+            // item 정체성은 snapshot 단일 출처이므로 tournament_item 의 고정 snapshot 으로 itemId 에 도달해 최신 snapshot 을 조회한다.
+            val fixedSnapshot = itemSnapshotJpaRepository.findById(tournamentItem.snapshotId).get()
+            val snapshot = itemSnapshotJpaRepository.findFirstByItemIdAndDeletedAtIsNullOrderByIdDesc(fixedSnapshot.itemId)
             assertEquals(ItemStatus.PENDING, snapshot?.status)
         } finally {
             stubItemParsingWorker.enabled = true
@@ -1732,7 +1741,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
         return tournamentItemJpaRepository.save(
             TournamentItem(
                 tournamentId = tournamentId,
-                itemId = item.getId(),
                 userId = owner,
                 snapshotId = snapshot.getId(),
             ),

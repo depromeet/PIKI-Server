@@ -534,9 +534,10 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
 
     // @Transactional 자동 롤백이 없으므로 이 테스트가 만든 user·wish·item·snapshot 을 직접 정리한다.
     private fun cleanup(userId: UUID) {
+        // wishes 는 item_id 를 더 들지 않는다(4b 정규화) — snapshot_id 로 item_snapshots 를 조인해 itemId 에 도달한다.
         val itemIds =
             jdbcTemplate.queryForList(
-                "SELECT item_id FROM wishes WHERE user_id = ?",
+                "SELECT s.item_id FROM wishes w JOIN item_snapshots s ON s.id = w.snapshot_id WHERE w.user_id = ?",
                 Long::class.java,
                 uuidToBytes(userId),
             )

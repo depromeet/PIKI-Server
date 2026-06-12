@@ -45,7 +45,6 @@ class TournamentItemPersistenceService(
             listOf(
                 TournamentItem(
                     tournamentId = tournamentId,
-                    itemId = item.getId(),
                     userId = userId,
                     snapshotId = snapshot.getId(),
                 ),
@@ -70,7 +69,6 @@ class TournamentItemPersistenceService(
             items.zip(snapshots) { item, snapshot ->
                 TournamentItem(
                     tournamentId = tournamentId,
-                    itemId = item.getId(),
                     userId = userId,
                     snapshotId = snapshot.getId(),
                 )
@@ -109,9 +107,7 @@ class TournamentItemPersistenceService(
         if (tournamentItem.userId != userId) throw TournamentException.forbiddenTournament()
         // 토너먼트는 출전 시점 고정 snapshot 을 본다. 최신(findLatestByItemId)이 아니라 tournamentItem.snapshotId 를
         // 갱신해야, 5단계 갱신으로 같은 item 에 snapshot 이 여러 개 생겨도 토너먼트가 고정한 버전만 보정돼 격리가 유지된다.
-        val snapshotId =
-            tournamentItem.snapshotId
-                ?: error("snapshot 없음 — tournamentItemId=$tournamentItemId, itemId=${tournamentItem.itemId}")
+        val snapshotId = tournamentItem.snapshotId
         val snapshot =
             itemSnapshotRepository.findById(snapshotId)
                 ?: error("snapshot 없음 — tournamentItemId=$tournamentItemId, snapshotId=$snapshotId")

@@ -14,19 +14,17 @@ import java.util.UUID
 class TournamentItem(
     @Column(name = "tournament_id", nullable = false)
     val tournamentId: Long,
-    @Column(name = "item_id", nullable = false)
-    val itemId: Long,
     @Column(name = "user_id", nullable = false, columnDefinition = "BINARY(16)")
     val userId: UUID,
     // 출전 시점 고정 snapshot 참조. raw Long(FK 없음). 위시 갱신과 무관하게 고정돼 토너먼트 공정성을 지킨다.
-    // nullable — 3단계 전환기에 추가됐고, 신규 출전부터 채워진다.
-    @Column(name = "snapshot_id")
-    val snapshotId: Long? = null,
+    // item 정체성은 snapshot.itemId 단일 출처 — tournament_item 은 itemId 를 따로 들지 않고 snapshot 으로 도달한다.
+    @Column(name = "snapshot_id", nullable = false)
+    val snapshotId: Long,
 ) : LongBaseEntity() {
     // 엔티티 불변식 — 0·음수는 존재할 수 없는 참조다. 정상 흐름에선 닿지 않고, 닿으면 코드 버그.
     init {
         require(tournamentId > 0) { "tournamentId 는 양수여야 한다: $tournamentId" }
-        require(itemId > 0) { "itemId 는 양수여야 한다: $itemId" }
+        require(snapshotId > 0) { "snapshotId 는 양수여야 한다: $snapshotId" }
     }
 
     fun softDelete() {

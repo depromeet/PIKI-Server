@@ -24,14 +24,18 @@ interface TournamentItemJpaRepository : JpaRepository<TournamentItem, Long> {
     fun findIdsByTournamentId(@Param("tournamentId") tournamentId: Long): List<Long>
 
     // 이 아이템을 토너먼트에 추가한 사람들(adder). 같은 아이템이 여러 토너먼트에 공유될 수 있어 DISTINCT. (파싱 알림 수신자 역조회)
-    @Query("SELECT DISTINCT t.userId FROM TournamentItem t WHERE t.itemId = :itemId AND t.deletedAt IS NULL")
+    // item_id 는 snapshot 단일 출처라 tournament_item→snapshot theta join 으로 itemId 에 도달한다(FK·연관관계 없음).
+    @Query(
+        "SELECT DISTINCT t.userId FROM TournamentItem t, ItemSnapshot s " +
+            "WHERE t.snapshotId = s.id AND s.itemId = :itemId AND t.deletedAt IS NULL",
+    )
     fun findUserIdsByItemId(@Param("itemId") itemId: Long): List<UUID>
 
     // 이 아이템의 토너먼트 출전 좌표(tournamentId·tournament_item id). 파싱 알림 딥링크 라우팅 역조회(#408).
     // 공유 대비 List 지만 파싱 시점엔 단일 컨텍스트라 0~1 행이다. id 오름차순으로 결정성만 둔다.
     @Query(
-        "SELECT t.tournamentId AS tournamentId, t.id AS tournamentItemId FROM TournamentItem t " +
-            "WHERE t.itemId = :itemId AND t.deletedAt IS NULL ORDER BY t.id ASC",
+        "SELECT t.tournamentId AS tournamentId, t.id AS tournamentItemId FROM TournamentItem t, ItemSnapshot s " +
+            "WHERE t.snapshotId = s.id AND s.itemId = :itemId AND t.deletedAt IS NULL ORDER BY t.id ASC",
     )
     fun findRoutingByItemId(@Param("itemId") itemId: Long): List<TournamentItemRoutingView>
 
