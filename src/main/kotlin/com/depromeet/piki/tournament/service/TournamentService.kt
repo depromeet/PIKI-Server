@@ -480,7 +480,7 @@ class TournamentService(
     ): List<TournamentSummary> {
         val tournamentIds = tournamentUserRepository.findTournamentIdsByUserId(userId)
         if (tournamentIds.isEmpty()) return emptyList()
-        val tournaments = tournamentRepository.findByIdsAndStatuses(tournamentIds, null)
+        val tournaments = tournamentRepository.findByIdsAndStatuses(tournamentIds, statuses)
         if (tournaments.isEmpty()) return emptyList()
 
         val tournamentUsers = tournamentUserRepository.findByTournamentIds(tournaments.map { it.getId() })
@@ -513,7 +513,6 @@ class TournamentService(
                     effectiveStatus = tournament.status,
                 )
             }
-            .filter { statuses.isNullOrEmpty() || it.status in statuses }
     }
 
     @Transactional
