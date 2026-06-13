@@ -825,16 +825,18 @@ class TournamentService(
         } else {
             requesterOwnedClone?.isCompleted() ?: false
         }
-        if (!requesterHasCompleted || !computeHasGroupResult(tournament)) {
+        // completedRootTUs·completedClones 는 아래 plays 빌드에도 쓰이므로 미리 구해 게이트와 공유한다.
+        // computeHasGroupResult 를 별도 호출하면 findBySourceTournamentId 와 countCompletedByTournamentId 를
+        // 중복 조회하게 되므로 인라인으로 처리한다.
+        val completedRootTUs = tournamentUserRepository.findCompletedByTournamentId(tournamentId)
+        val completedClones = allClones.filter { it.isCompleted() }
+        if (!requesterHasCompleted || completedRootTUs.size + completedClones.size < 2) {
             throw TournamentException.groupResultNotAvailable()
         }
 
         // "play" = 한 참여자의 독립적인 토너먼트 진행 단위.
         // 루트 토너먼트의 각 완료 TU + 각 완료된 클론 토너먼트의 오너 TU.
         data class Play(val tournamentId: Long, val tuId: Long, val userUUID: UUID)
-
-        val completedRootTUs = tournamentUserRepository.findCompletedByTournamentId(tournamentId)
-        val completedClones = allClones.filter { it.isCompleted() }
         // cloneOwnerTUById 는 위 권한 게이트에서 allClones 전체로 구해 재사용한다 (completedClones ⊆ allClones).
 
         val plays = buildList {
