@@ -290,7 +290,7 @@ class TournamentService(
         val currentUser = tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
         val isOwner = currentUser.getId() == tournament.ownerTournamentUserId
-        val isRoot = tournament.sourceTournamentId?.let { false } ?: true
+        val isRoot = tournament.isRoot()
 
         return when (tournament.status) {
             TournamentStatus.PENDING -> {
@@ -438,7 +438,8 @@ class TournamentService(
                 }
             },
             isOwner = false,
-            isRoot = true,
+            isRoot = root.isRoot(),
+            sourceTournamentId = null,
             ownerStarted = true,
         )
     }
@@ -578,11 +579,9 @@ class TournamentService(
         // 완료 알림 발행(#473). CLONE 완료(멤버/게스트) → ROOT 주최자에게 "완료했어요",
         // ROOT 완료(주최자 본인 진행) → 참여자에게 "결과 나왔어요". rootId 는 클론이면 원본, ROOT 면 자기 자신.
         val rootTournamentId = tournament.sourceTournamentId ?: tournament.getId()
-        if (tournament.sourceTournamentId != null) {
-            eventPublisher.publishEvent(TournamentCompleted(rootTournamentId = rootTournamentId, actorId = userId))
-        } else {
-            eventPublisher.publishEvent(TournamentResultReady(rootTournamentId = rootTournamentId, actorId = userId))
-        }
+        tournament.sourceTournamentId
+            ?.let { eventPublisher.publishEvent(TournamentCompleted(rootTournamentId = rootTournamentId, actorId = userId)) }
+            ?: eventPublisher.publishEvent(TournamentResultReady(rootTournamentId = rootTournamentId, actorId = userId))
 
         val isOwner = tournamentUser.getId() == tournament.ownerTournamentUserId
         return buildCompleted(tournament, histories + newHistory, computeHasGroupResult(tournament), isOwner)
@@ -602,7 +601,7 @@ class TournamentService(
         hasGroupResult: Boolean,
         isOwner: Boolean,
     ): TournamentDetail.Completed {
-        val isRoot = tournament.sourceTournamentId?.let { false } ?: true
+        val isRoot = tournament.isRoot()
         val rankedPairs = computeRanking(histories)
         val tournamentItemById = tournamentItemRepository
             .findByIds(rankedPairs.map { it.first })
