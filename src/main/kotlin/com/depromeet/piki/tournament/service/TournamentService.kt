@@ -504,7 +504,7 @@ class TournamentService(
                 val isTournamentOwner = myTU?.getId() == tournament.ownerTournamentUserId
                 // ROOT(소셜) 토너먼트는 PENDING 이후에는 멤버 목록에서 제외한다.
                 // 멤버는 본인 CLONE 으로 플레이하며 그 CLONE 이 목록에 표시된다.
-                tournament.sourceTournamentId?.let { true } ?: (isTournamentOwner || tournament.isPending())
+                !tournament.isRoot() || isTournamentOwner || tournament.isPending()
             }
             .map { tournament ->
                 TournamentSummary.of(
@@ -528,10 +528,8 @@ class TournamentService(
             tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)
                 ?: throw TournamentException.forbiddenTournament()
         // ROOT 토너먼트는 오너만 플레이한다. 멤버는 본인 CLONE 에서 진행해야 한다.
-        tournament.sourceTournamentId ?: run {
-            if (tournamentUser.getId() != tournament.ownerTournamentUserId) {
-                throw TournamentException.forbiddenTournament()
-            }
+        if (tournament.isRoot() && tournamentUser.getId() != tournament.ownerTournamentUserId) {
+            throw TournamentException.forbiddenTournament()
         }
         if (command.selectedTournamentItemId != command.firstTournamentItemId &&
             command.selectedTournamentItemId != command.secondTournamentItemId
@@ -578,9 +576,11 @@ class TournamentService(
         // 완료 알림 발행(#473). CLONE 완료(멤버/게스트) → ROOT 주최자에게 "완료했어요",
         // ROOT 완료(주최자 본인 진행) → 참여자에게 "결과 나왔어요". rootId 는 클론이면 원본, ROOT 면 자기 자신.
         val rootTournamentId = tournament.sourceTournamentId ?: tournament.getId()
-        tournament.sourceTournamentId
-            ?.let { eventPublisher.publishEvent(TournamentCompleted(rootTournamentId = rootTournamentId, actorId = userId)) }
-            ?: eventPublisher.publishEvent(TournamentResultReady(rootTournamentId = rootTournamentId, actorId = userId))
+        if (tournament.isRoot()) {
+            eventPublisher.publishEvent(TournamentResultReady(rootTournamentId = rootTournamentId, actorId = userId))
+        } else {
+            eventPublisher.publishEvent(TournamentCompleted(rootTournamentId = rootTournamentId, actorId = userId))
+        }
 
         val isOwner = tournamentUser.getId() == tournament.ownerTournamentUserId
         return buildCompleted(tournament, histories + newHistory, computeHasGroupResult(tournament), isOwner)
