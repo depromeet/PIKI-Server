@@ -111,7 +111,7 @@ class TournamentService(
             tournamentRepository.findTournamentById(command.tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
-        tournament.sourceTournamentId?.let { throw TournamentException.clonedTournamentCannotAddItems() }
+        if (!tournament.isRoot()) throw TournamentException.clonedTournamentCannotAddItems()
         tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
         val existingItemIds =
@@ -723,7 +723,7 @@ class TournamentService(
             tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
                 ?: throw TournamentException.forbiddenTournament()
         if (tournamentUser.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
-        tournament.sourceTournamentId?.let { throw TournamentException.clonedTournamentCannotSharePlayLink() }
+        if (!tournament.isRoot()) throw TournamentException.clonedTournamentCannotSharePlayLink()
         tournament.playLinkExpiresAt?.let { throw TournamentException.playLinkAlreadyCreated() }
         val expiresAt = LocalDateTime
             .now()
@@ -805,7 +805,7 @@ class TournamentService(
         val tournament =
             tournamentRepository.findTournamentById(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
-        tournament.sourceTournamentId?.let { throw TournamentException.clonedTournamentCannotViewGroupResult() }
+        if (!tournament.isRoot()) throw TournamentException.clonedTournamentCannotViewGroupResult()
         val allClones = tournamentRepository.findBySourceTournamentId(tournamentId)
         val requesterRootTU = tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
         val cloneOwnerTUById = tournamentUserRepository
