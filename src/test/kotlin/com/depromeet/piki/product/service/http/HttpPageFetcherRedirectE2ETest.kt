@@ -41,7 +41,9 @@ class HttpPageFetcherRedirectE2ETest {
 
         val page = fetcher.fetch(link)
 
-        assertTrue((page.finalUrl.value.host ?: "").endsWith("musinsa.com"), "최종 호스트가 musinsa.com 이어야 한다")
+        // endsWith("musinsa.com") 만으로는 evilmusinsa.com 같은 호스트도 통과해 회귀 검출이 약하므로 정확 매칭한다.
+        val host = page.finalUrl.value.host ?: ""
+        assertTrue(host == "musinsa.com" || host.endsWith(".musinsa.com"), "최종 호스트가 musinsa.com 계열이어야 한다")
         assertTrue(page.html.contains("og:title"), "최종 무신사 상품 페이지(OG 메타태그)를 받았어야 한다")
     }
 }
