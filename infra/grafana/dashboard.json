@@ -1675,7 +1675,7 @@
             "type": "loki",
             "uid": "${DS_LOKI}"
           },
-          "expr": "{container=~\"team3-(blue|green)\", environment=\"$environment\"} |~ \"item.parse.result|extract via=|파싱 실패\""
+          "expr": "{container=~\"team3-(blue|green)\", environment=\"$environment\"} |~ \"item.parse.result|item.parse.error|extract via=|파싱 실패\""
         }
       ]
     }
