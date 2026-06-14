@@ -73,8 +73,9 @@ class AsyncItemParsingWorker(
                     ItemParsingMetrics.RESULT_FAILED,
                     ItemParsingMetrics.REASON_READY_REJECTED,
                     link.safeLogString(),
-                    e,
                 )
+                // 예외 상세(스택)는 별도 줄로 — 구조화(item.parse.result) 줄에 스택을 붙이면 logfmt 파싱이 깨진다.
+                log.warn("item.parse.error item={} reason={} READY 전이 거부", itemId, ItemParsingMetrics.REASON_READY_REJECTED, e)
                 markFailedQuietly(itemId)
                 ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, ItemParsingMetrics.REASON_READY_REJECTED)
             }
@@ -98,13 +99,14 @@ class AsyncItemParsingWorker(
         // 같으므로 즉시 FAILED 로 종결한다(사용자에게 빨리 알림). 클라이언트 입력 계약 위반이라 서버 입장에선 정상 동작(info).
         val reason = reasonOf(e)
         log.info(
-            "item.parse.result item={} result={} reason={} url={} cause={}",
+            "item.parse.result item={} result={} reason={} url={}",
             itemId,
             ItemParsingMetrics.RESULT_FAILED,
             reason,
             link.safeLogString(),
-            e.message,
         )
+        // 실패 사유 원문(공백 포함 가능)은 별도 줄로 — 구조화 줄의 logfmt 필드 파싱을 깨지 않게 분리한다.
+        log.info("item.parse.error item={} reason={} cause={}", itemId, reason, e.message)
         markFailedQuietly(itemId)
         ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, reason)
     }
