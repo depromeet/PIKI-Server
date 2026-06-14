@@ -8,6 +8,8 @@ import com.depromeet.piki.product.service.ProductLinkExtractor
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.product.service.ProductSnapshotException
 import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.observation.Observation
+import io.micrometer.observation.ObservationRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
@@ -23,6 +25,7 @@ class AsyncItemParsingWorker(
     private val productLinkExtractor: ProductLinkExtractor,
     private val itemParsingService: ItemParsingService,
     private val meterRegistry: MeterRegistry,
+    private val observationRegistry: ObservationRegistry,
 ) : ItemParsingWorker {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -31,10 +34,15 @@ class AsyncItemParsingWorker(
         itemId: Long,
         link: ProductLink,
     ) {
-        val started = System.nanoTime()
-        runCatching { productLinkExtractor.extract(link) }
-            .onSuccess { snapshot -> onExtracted(itemId, link, snapshot, started) }
-            .onFailure { e -> onExtractFailed(itemId, link, e) }
+        // 파싱 한 건을 "item.parse" span 하나로 묶는다 — fetch·structured·Gemini 호출이 그 자식 span 으로 붙어,
+        // 트레이스에서 단건 파이프라인(직접 파싱 → LLM fallback)을 끝까지 펼쳐 볼 수 있다. 디스패처가 @Scheduled 라
+        // 들어오는 trace 가 없어, 여기서 만들지 않으면 fetch·Gemini span 이 따로 떠 묶이지 않는다.
+        Observation.createNotStarted(PARSE_OBSERVATION, observationRegistry).observe {
+            val started = System.nanoTime()
+            runCatching { productLinkExtractor.extract(link) }
+                .onSuccess { snapshot -> onExtracted(itemId, link, snapshot, started) }
+                .onFailure { e -> onExtractFailed(itemId, link, e) }
+        }
     }
 
     private fun onExtracted(
@@ -47,12 +55,26 @@ class AsyncItemParsingWorker(
         // 전이가 실패(추출값 도메인 검증 위반·DB 오류·sweeper 와의 레이스로 이미 전이됨)해도 예외를 흡수한다.
         runCatching { itemParsingService.markReady(itemId, snapshot) }
             .onSuccess {
-                log.info("item {} 파싱 완료: latency={}ms url={}", itemId, elapsedMs, link.safeLogString())
+                log.info(
+                    "item.parse.result item={} result={} reason={} latency={}ms url={}",
+                    itemId,
+                    ItemParsingMetrics.RESULT_READY,
+                    ItemParsingMetrics.REASON_NONE,
+                    elapsedMs,
+                    link.safeLogString(),
+                )
                 ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_READY, ItemParsingMetrics.REASON_NONE)
             }
             .onFailure { e ->
                 // 추출은 됐으나 값을 신뢰할 수 없어 READY 로 채울 수 없는 경우 → PROCESSING 방치 대신 FAILED 로.
-                log.warn("item {} READY 전이 실패 → FAILED: url={}", itemId, link.safeLogString(), e)
+                log.warn(
+                    "item.parse.result item={} result={} reason={} url={}",
+                    itemId,
+                    ItemParsingMetrics.RESULT_FAILED,
+                    ItemParsingMetrics.REASON_READY_REJECTED,
+                    link.safeLogString(),
+                    e,
+                )
                 markFailedQuietly(itemId)
                 ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, ItemParsingMetrics.REASON_READY_REJECTED)
             }
@@ -74,9 +96,17 @@ class AsyncItemParsingWorker(
         }
         // 확정 실패 — 상품 아님·추출값 신뢰 불가·호스트 차단·4xx 접근 불가 등. 같은 URL 을 다시 파싱해도 결과가
         // 같으므로 즉시 FAILED 로 종결한다(사용자에게 빨리 알림). 클라이언트 입력 계약 위반이라 서버 입장에선 정상 동작(info).
-        log.info("item {} 파싱 실패(확정·재시도 무의미): {} url={}", itemId, e.message, link.safeLogString())
+        val reason = reasonOf(e)
+        log.info(
+            "item.parse.result item={} result={} reason={} url={} cause={}",
+            itemId,
+            ItemParsingMetrics.RESULT_FAILED,
+            reason,
+            link.safeLogString(),
+            e.message,
+        )
         markFailedQuietly(itemId)
-        ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, reasonOf(e))
+        ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, reason)
     }
 
     // 재시도해도 의미 있는 일시 오류인가. ErrorCategory.RETRYABLE 만 재시도 대상이다. HttpMappable 이 아닌
@@ -100,5 +130,10 @@ class AsyncItemParsingWorker(
                     else -> log.error("item {} FAILED 전이 실패, PROCESSING 방치 위험", itemId, e)
                 }
             }
+    }
+
+    companion object {
+        // 파싱 단건 트레이스 span 이름. 대시보드 트레이스 "아이템" 탭이 TraceQL `name = "item.parse"` 로 이걸 거른다.
+        private const val PARSE_OBSERVATION = "item.parse"
     }
 }
