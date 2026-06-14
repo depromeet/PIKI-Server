@@ -74,7 +74,7 @@
         "name": "traceFilter",
         "type": "custom",
         "label": "trace 필터",
-        "query": "전체 : resource.service.name = \"PIKI\",느린(>500ms) : resource.service.name = \"PIKI\" && trace:duration > 500ms,에러 : resource.service.name = \"PIKI\" && status = error",
+        "query": "전체 : resource.service.name = \"PIKI\",느린(>500ms) : resource.service.name = \"PIKI\" && trace:duration > 500ms,에러 : resource.service.name = \"PIKI\" && status = error,아이템 : resource.service.name = \"PIKI\" && name = \"item.parse\"",
         "current": {
           "text": "전체",
           "value": "resource.service.name = \"PIKI\"",
@@ -94,6 +94,11 @@
           {
             "text": "에러",
             "value": "resource.service.name = \"PIKI\" && status = error",
+            "selected": false
+          },
+          {
+            "text": "아이템",
+            "value": "resource.service.name = \"PIKI\" && name = \"item.parse\"",
             "selected": false
           }
         ],
@@ -1470,7 +1475,7 @@
     {
       "id": 200,
       "type": "row",
-      "title": "파싱·추출 (결과 · 사유 · 방법)",
+      "title": "파싱·추출 관측 (실패율 red-switch · 결과 · 방법 · 로그)",
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -1481,7 +1486,8 @@
     {
       "id": 201,
       "type": "stat",
-      "title": "파싱 결과 (result별)",
+      "title": "파싱 실패율 (%)",
+      "description": "최근 구간 파싱 실패 비율. 레드 스위치 — 급등하면 특정 플랫폼 추출이 깨진 신호. environment 드롭다운을 따라간다(dev 는 저빈도라 노이즈, 주로 prod 기준으로 본다).",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -1494,25 +1500,38 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
-          "decimals": 0,
-          "color": {
-            "mode": "palette-classic"
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
           }
         },
         "overrides": []
       },
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value_and_name",
-        "justifyMode": "auto",
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+          ]
         }
       },
       "targets": [
@@ -1522,16 +1541,15 @@
             "type": "prometheus",
             "uid": "${DS_PROM}"
           },
-          "expr": "sum by (result) (item_parsing_total{application=\"PIKI\", environment=\"$environment\"})",
-          "legendFormat": "{{result}}",
-          "instant": true
+          "expr": "sum(rate(item_parsing_total{application=\"PIKI\", environment=\"$environment\", result=\"failed\"}[$__rate_interval])) / clamp_min(sum(rate(item_parsing_total{application=\"PIKI\", environment=\"$environment\"}[$__rate_interval])), 0.001) * 100"
         }
       ]
     },
     {
       "id": 202,
-      "type": "bargauge",
-      "title": "파싱 실패 사유 (reason별)",
+      "type": "timeseries",
+      "title": "파싱 결과 (result별, 로그·배포무영향)",
+      "description": "item.parse.result 로그를 세어 결과 분포를 본다. 로그 이벤트라 앱 재배포(인메모리 카운터 리셋)에 영향받지 않는다.",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -1539,48 +1557,49 @@
         "y": 48
       },
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
+        "type": "loki",
+        "uid": "${DS_LOKI}"
       },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "decimals": 0,
-          "color": {
-            "mode": "palette-classic"
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
           }
         },
         "overrides": []
       },
       "options": {
-        "orientation": "horizontal",
-        "displayMode": "gradient",
-        "showUnfilled": true,
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
         {
           "refId": "A",
           "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
+            "type": "loki",
+            "uid": "${DS_LOKI}"
           },
-          "expr": "sum by (reason) (item_parsing_total{application=\"PIKI\", environment=\"$environment\", result=\"failed\"})",
-          "legendFormat": "{{reason}}",
-          "instant": true
+          "expr": "sum by (result) (count_over_time({container=~\"team3-(blue|green)\", environment=\"$environment\"} |= \"item.parse.result\" | logfmt | __error__=\"\" [$__interval]))",
+          "legendFormat": "{{result}}"
         }
       ]
     },
     {
       "id": 203,
-      "type": "stat",
-      "title": "추출 방법 (직접 파싱 vs LLM)",
+      "type": "timeseries",
+      "title": "추출 방법 (via별, 로그)",
+      "description": "extract via= 로그를 세어 직접 파싱(structured) 대 LLM 비율을 본다. via=llm 이 비싼 호출이라, structured 비중이 곧 비용 절감 지표.",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -1588,42 +1607,75 @@
         "y": 48
       },
       "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROM}"
+        "type": "loki",
+        "uid": "${DS_LOKI}"
       },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "decimals": 0,
-          "color": {
-            "mode": "palette-classic"
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
           }
         },
         "overrides": []
       },
       "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value_and_name",
-        "justifyMode": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
         {
           "refId": "A",
           "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROM}"
+            "type": "loki",
+            "uid": "${DS_LOKI}"
           },
-          "expr": "sum by (via) (product_extract_total{application=\"PIKI\", environment=\"$environment\"})",
-          "legendFormat": "{{via}}",
-          "instant": true
+          "expr": "sum by (via) (count_over_time({container=~\"team3-(blue|green)\", environment=\"$environment\"} |= \"extract via=\" | logfmt | __error__=\"\" [$__interval]))",
+          "legendFormat": "{{via}}"
+        }
+      ]
+    },
+    {
+      "id": 204,
+      "type": "logs",
+      "title": "파싱 이벤트 로그 (결과 · 추출 방법 · 실패 사유)",
+      "description": "item.parse.result(결과·사유) · extract via=(추출 방법) · 파싱 실패 로그를 한데 본다. 어느 URL 이 왜 실패했는지 맥락까지 보이는 durable 기록.",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "{container=~\"team3-(blue|green)\", environment=\"$environment\"} |~ \"item.parse.result|item.parse.error|extract via=|파싱 실패\""
         }
       ]
     }

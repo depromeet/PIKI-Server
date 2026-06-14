@@ -25,7 +25,9 @@ Grafana Cloud 가 호스팅하는 Grafana 이므로 셀프호스팅 provisioning
 5. **의존성** — 502율(Gemini 등 외부 실패) · executor active/queued · HikariCP active/idle/pending.
 6. **리소스** — 앱 process/system CPU · JVM 스레드 · 호스트 CPU.
 7. **로그** — 에러/경고 필터 로그 + 전체 로그(`team3-blue`/`team3-green`).
-8. **파싱·추출** — 파싱 결과(`item.parsing` result별)·실패 사유(reason별: not_product·ready_rejected·retry_exhausted·no_source)·추출 방법(`product.extract` via별: 직접 파싱 vs LLM). 상품 추출 실패가 트래픽에서 얼마나·왜 나는지 본다(#506).
+8. **파싱·추출 관측** — **파싱 실패율**(`item.parsing` 메트릭 rate 기반 레드 스위치, 임계 색상, 환경 따라감) + **파싱 결과(result별)·추출 방법(via별)**(`item.parse.result`·`extract via=` 로그를 `count_over_time | logfmt` 로 셈) + **파싱 이벤트 로그**(어느 URL 이 왜 실패했는지 맥락). 단건 파이프라인 드릴다운은 상단 트레이스의 **`아이템` 탭**(`name = "item.parse"`)으로 본다(#506).
+
+   - **누적 카운트 메트릭이 아니라 로그/트레이스 기반인 이유**: 인메모리 카운터는 앱 재배포마다 0으로 리셋된다. dev 는 하루 수십 번 배포해 누계가 무의미하고, `increase` 창집계도 잦은 재시작+blue/green instance churn 에 시리즈를 떨군다. 로그 이벤트는 Loki 에 durable 하게 쌓여 배포에 영향받지 않으므로 결과·방법 집계의 정확한 소스다. 메트릭은 "정확한 누계"가 아니라 "실패율 급등 감지(레드 스위치)" 한 가지에만 쓴다 — 그 역할엔 짧은 창 rate 라 리셋이 무관하다.
 
 앱 메트릭은 `application="PIKI"` 라벨로 필터한다(Alloy 의 prometheus.scrape 가 붙임).
 blue-green 이라 한 시점에 한 슬롯만 활성이며 `instance` 라벨로 blue/green 을 구분한다.
