@@ -8,13 +8,13 @@ import org.springframework.web.multipart.MultipartFile
 @Schema(description = "토너먼트 아이템 수정 요청 — 들어온 필드만 갱신한다")
 data class UpdateTournamentItemRequest(
     @field:Schema(description = "수정할 상품명", example = "나이키 에어맥스", nullable = true)
-    @field:Size(min = 1, max = 512)
+    @field:Size(min = 1, max = 512, message = "상품명을 1~512자로 입력해 주세요.")
     val name: String? = null,
     @field:Schema(description = "수정할 현재 판매가", example = "129000", nullable = true)
-    @field:Min(0)
+    @field:Min(value = 0, message = "가격은 0원 이상으로 입력해 주세요.")
     val price: Int? = null,
     @field:Schema(description = "수정할 통화 코드 (ISO 4217)", example = "KRW", nullable = true)
-    @field:Size(max = 8)
+    @field:Size(max = 8, message = "통화 코드는 8자까지 입력할 수 있어요.")
     val currency: String? = null,
     @field:Schema(description = "수정할 상품 이미지", nullable = true)
     val image: MultipartFile? = null,

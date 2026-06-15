@@ -20,6 +20,6 @@ data class UserUpdateRequest(
     // Bean Validation 위반 메시지의 single source. OpenAPI example(UserApiExamples)이 같은 상수를 참조해
     // "필드 검증 문구가 @field 와 example 두 곳에서 따로 노는" 어긋남을 컴파일 타임에 막는다.
     companion object {
-        const val NICKNAME_SIZE_MESSAGE = "닉네임은 1자 이상 10자 이하여야 한다."
+        const val NICKNAME_SIZE_MESSAGE = "닉네임은 1~10자 사이로 입력해 주세요."
     }
 }

@@ -19,7 +19,7 @@ class ItemException private constructor(
         // 갱신은 서버 재추출 경로로만 들어오고, 클라이언트 보정은 추출 실패(FAILED) 항목에 한정된다.
         fun alreadyReady(): ItemException =
             ItemException(
-                "이미 등록 완료된 상품은 수정할 수 없습니다.",
+                "이미 등록된 상품은 수정할 수 없어요.",
                 ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )
@@ -27,7 +27,7 @@ class ItemException private constructor(
         // 파싱 중(PROCESSING)인 item 은 백그라운드 워커가 결과를 채우는 중이라 클라이언트가 끼어들 수 없다.
         fun stillProcessing(): ItemException =
             ItemException(
-                "아직 처리 중인 상품은 수정할 수 없습니다.",
+                "상품 정보를 가져오는 중이에요. 잠시만 기다려 주세요.",
                 ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )
@@ -36,7 +36,7 @@ class ItemException private constructor(
         // 엔티티 불변식(requireReadyInvariant)이 최후의 보루라면, 이건 그 전에 클라이언트에게 400 으로 돌려주는 경계다.
         fun nameRequiredForReady(): ItemException =
             ItemException(
-                "상품명을 입력해야 합니다.",
+                "상품 이름을 입력해 주세요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )

@@ -111,8 +111,8 @@ class TournamentApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    // @RequestBody Bean Validation 위반은 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
-                                    detail = "nickname: ${JoinTournamentAsGuestRequest.NICKNAME_BLANK_MESSAGE}",
+                                    // Bean Validation 위반은 GlobalExceptionHandler.detailOf 가 위반 필드의 메시지를 그대로 detail 로 내린다.
+                                    detail = JoinTournamentAsGuestRequest.NICKNAME_BLANK_MESSAGE,
                                 ),
                         )
                         unauthorized()
@@ -489,7 +489,7 @@ class TournamentApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    detail = "inviteDurationMinutes: ${UpdateInviteDurationRequest.INVITE_DURATION_MAX_MESSAGE}",
+                                    detail = UpdateInviteDurationRequest.INVITE_DURATION_MAX_MESSAGE,
                                 ),
                         )
                         unauthorized()

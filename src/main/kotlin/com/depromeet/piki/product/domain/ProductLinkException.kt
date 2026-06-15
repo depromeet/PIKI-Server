@@ -15,7 +15,7 @@ class ProductLinkException private constructor(
     companion object {
         fun blank(): ProductLinkException =
             ProductLinkException(
-                "URL이 비어 있습니다.",
+                "링크를 입력해 주세요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
@@ -25,7 +25,7 @@ class ProductLinkException private constructor(
         // 디버깅용 컨텍스트는 cause 로 연결해 stack trace 로만 남긴다.
         fun invalidFormat(cause: Throwable): ProductLinkException =
             ProductLinkException(
-                "유효한 URL 형식이 아닙니다.",
+                "올바른 링크 형식이 아니에요. 다시 확인해 주세요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
                 cause,
@@ -33,7 +33,7 @@ class ProductLinkException private constructor(
 
         fun unsupportedScheme(): ProductLinkException =
             ProductLinkException(
-                "https URL만 허용합니다.",
+                "https 링크만 등록할 수 있어요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )

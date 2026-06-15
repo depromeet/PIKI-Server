@@ -329,7 +329,7 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
                     ),
                 ),
             ).andExpect(status().isBadGateway)
-            .andExpect(jsonPath("$.detail").value("소셜 로그인 제공자 호출에 실패했습니다."))
+            .andExpect(jsonPath("$.detail").value("로그인에 실패했어요. 잠시 후 다시 시도해 주세요."))
             .andExpect(jsonPath("$.data").value(nullValue()))
     }
 
@@ -345,7 +345,7 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
                     ),
                 ),
             ).andExpect(status().isUnauthorized)
-            .andExpect(jsonPath("$.detail").value("소셜 로그인 토큰이 유효하지 않습니다. 다시 로그인해 주세요."))
+            .andExpect(jsonPath("$.detail").value("로그인 정보가 만료됐어요. 다시 로그인해 주세요."))
             .andExpect(jsonPath("$.data").value(nullValue()))
     }
 
@@ -364,7 +364,7 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
                     ),
                 ),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value("소셜 로그인 인가 정보가 만료되었거나 유효하지 않습니다. 다시 시도해 주세요."))
+            .andExpect(jsonPath("$.detail").value("로그인 정보가 만료됐어요. 다시 시도해 주세요."))
             .andExpect(jsonPath("$.data").value(nullValue()))
     }
 
@@ -383,7 +383,7 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
                     ),
                 ),
             ).andExpect(status().isBadGateway)
-            .andExpect(jsonPath("$.detail").value("소셜 로그인 설정 오류가 발생했습니다."))
+            .andExpect(jsonPath("$.detail").value("로그인에 실패했어요. 잠시 후 다시 시도해 주세요."))
             .andExpect(jsonPath("$.data").value(nullValue()))
     }
 

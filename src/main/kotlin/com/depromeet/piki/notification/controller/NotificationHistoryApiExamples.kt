@@ -92,8 +92,8 @@ class NotificationHistoryApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                // @AssertTrue(validSelection) 위반은 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
-                                detail = "validSelection: ${NotificationReadRequest.VALID_SELECTION_MESSAGE}",
+                                // @AssertTrue 위반은 GlobalExceptionHandler.detailOf 가 위반 필드의 메시지를 그대로 detail 로 내린다.
+                                detail = NotificationReadRequest.VALID_SELECTION_MESSAGE,
                             ),
                     )
                     unauthorized()

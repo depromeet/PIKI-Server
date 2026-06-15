@@ -11,7 +11,7 @@ data class UpdateInviteDurationRequest(
     val inviteDurationMinutes: Long,
 ) {
     companion object {
-        const val INVITE_DURATION_MIN_MESSAGE = "초대 유효 시간은 1분 이상이어야 합니다."
-        const val INVITE_DURATION_MAX_MESSAGE = "초대 유효 시간은 1440분(24시간) 이하이어야 합니다."
+        const val INVITE_DURATION_MIN_MESSAGE = "초대 유효 시간은 1분 이상으로 입력해 주세요."
+        const val INVITE_DURATION_MAX_MESSAGE = "초대 유효 시간은 24시간 이내로 입력해 주세요."
     }
 }

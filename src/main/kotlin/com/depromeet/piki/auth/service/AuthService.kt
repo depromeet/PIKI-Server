@@ -40,7 +40,7 @@ class AuthService(
     // OAuth 통합 (epic #122) 전까지의 임시 endpoint 와 같은 결로 묶여 운영 노출 차단 예정 (#177 후속).
     fun issueTokenForExistingUser(userId: UUID): SignupResult {
         val user = userService.findById(userId)
-        user.deletedAt?.let { throw UserException.deletedUser(userId) }
+        user.deletedAt?.let { throw UserException.deletedUser() }
         val tokenPair = issueTokenPair(user)
         return SignupResult(tokenPair = tokenPair, user = user)
     }
@@ -73,7 +73,10 @@ class AuthService(
     }
 
     fun createTokensForUser(user: User): TokenPair {
-        user.deletedAt?.let { throw AuthException.invalidToken() }
+        user.deletedAt?.let {
+            log.info("토큰 발급 거부: 탈퇴 유저 userId={}", user.id)
+            throw AuthException.invalidToken()
+        }
         return issueTokenPair(user)
     }
 

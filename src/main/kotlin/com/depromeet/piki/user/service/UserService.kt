@@ -156,7 +156,7 @@ class UserService(
     }
 
     @Transactional(readOnly = true)
-    fun findById(userId: UUID): User = userRepository.findById(userId) ?: throw UserException.notFound(userId)
+    fun findById(userId: UUID): User = userRepository.findById(userId) ?: throw UserException.notFound()
 
     // 마이페이지(GET /me) 조회 — User(정체성)와 UserDetail 의 email 을 한 트랜잭션에서 모은다.
     // email 은 미수집(게스트)·미동의·backfill 전이면 UserDetail 이 없거나 null 이라 그대로 null 로 내려간다.
@@ -188,7 +188,7 @@ class UserService(
         profileImageUrl: String?,
     ): User {
         val user = findById(userId)
-        user.deletedAt?.let { throw UserException.deletedUser(userId) }
+        user.deletedAt?.let { throw UserException.deletedUser() }
         // 무엇이 바뀌었는지만 남긴다 — 닉네임 원문은 PII 라 값이 아니라 "어떤 필드가 변경됐나"만 로깅한다.
         val changedFields =
             buildList {
@@ -223,7 +223,7 @@ class UserService(
         profileImageUrl: String,
     ): User {
         val user = findById(userId)
-        user.deletedAt?.let { throw UserException.deletedUser(userId) }
+        user.deletedAt?.let { throw UserException.deletedUser() }
         user.updateProfileImage(profileImageUrl)
         return userRepository.save(user)
     }
@@ -231,7 +231,7 @@ class UserService(
     @Transactional
     fun promoteToMember(userId: UUID): User {
         val user = findById(userId)
-        user.deletedAt?.let { throw UserException.deletedUser(userId) }
+        user.deletedAt?.let { throw UserException.deletedUser() }
         user.promoteToMember()
         return userRepository.save(user)
     }
