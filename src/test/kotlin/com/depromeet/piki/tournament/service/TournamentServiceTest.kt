@@ -139,8 +139,9 @@ class TournamentServiceTest {
             vararg itemIds: Long,
         ) {
             itemIds.forEach { itemId ->
-                // 같은 (user, item) 중복은 무시한다(기존 Set 시맨틱 보존).
-                if (wishes.any { it.userId == userId && it.itemId == itemId }) return@forEach
+                // 같은 (user, item) 중복은 무시한다(기존 Set 시맨틱 보존). item 정체성은 wish.snapshotId 가 가리키는
+                // snapshot.itemId 단일 출처라, 보조맵 없이 snapshot 으로 도달해 실제 wish→snapshot 조인과 동형으로 필터한다.
+                if (wishes.any { it.userId == userId && itemIdOf(it.snapshotId) == itemId }) return@forEach
                 val snapshot =
                     snapshotRepository.save(
                         ItemSnapshot(
@@ -151,11 +152,15 @@ class TournamentServiceTest {
                             extractedAt = LocalDateTime.now(),
                         ),
                     )
-                val wish = Wish(userId = userId, itemId = itemId, snapshotId = snapshot.getId())
+                val wish = Wish(userId = userId, snapshotId = snapshot.getId())
                 setEntityId(wish, idSeq++)
                 wishes.add(wish)
             }
         }
+
+        // wish.snapshotId → snapshot.itemId 해석. 실제 구현이 wish→ItemSnapshot theta join 으로 itemId 에 닿는 것과 동형이다.
+        private fun itemIdOf(snapshotId: Long): Long =
+            snapshotRepository.findById(snapshotId)?.itemId ?: error("snapshot 이 없는 wish — addWish 가 항상 snapshot 을 함께 만든다")
 
         override fun save(wish: Wish): Wish = wish
 
@@ -167,7 +172,7 @@ class TournamentServiceTest {
         override fun countByItemIdsAndUserId(
             itemIds: List<Long>,
             userId: UUID,
-        ): Long = wishes.count { it.userId == userId && it.itemId in itemIds }.toLong()
+        ): Long = wishes.count { it.userId == userId && itemIdOf(it.snapshotId) in itemIds }.toLong()
 
         override fun findPage(
             userId: UUID,
@@ -182,11 +187,11 @@ class TournamentServiceTest {
         override fun findByItemIdsAndUserId(
             itemIds: List<Long>,
             userId: UUID,
-        ): List<Wish> = wishes.filter { it.userId == userId && it.itemId in itemIds }
+        ): List<Wish> = wishes.filter { it.userId == userId && itemIdOf(it.snapshotId) in itemIds }
 
         // 이 아이템을 위시에 담은 유저들 (알림 수신자 역조회). dev #371 이 추가한 계약을 wishes 기반으로 옮긴 것.
         override fun findUserIdsByItemId(itemId: Long): List<UUID> =
-            wishes.filter { it.itemId == itemId }.map { it.userId }.distinct()
+            wishes.filter { itemIdOf(it.snapshotId) == itemId }.map { it.userId }.distinct()
 
         override fun hardDeleteAllByUserId(userId: UUID): Int {
             val before = wishes.size
@@ -294,9 +299,16 @@ class TournamentServiceTest {
             users.values.map { it.nickname }.filter { it in candidates }
     }
 
-    private class TestTournamentItemRepository : TournamentItemRepository {
+    private class TestTournamentItemRepository(
+        private val snapshotRepository: TestItemSnapshotRepository,
+    ) : TournamentItemRepository {
         val items = mutableListOf<TournamentItem>()
         private var idSeq = 1L
+
+        // tournament_item.snapshotId → snapshot.itemId 해석. 실제 구현이 tournament_item→ItemSnapshot theta join 으로
+        // itemId 에 닿는 것과 동형이다(item 정체성은 snapshot.itemId 단일 출처라 tournament_item 은 itemId 를 따로 안 든다).
+        private fun itemIdOf(snapshotId: Long): Long =
+            snapshotRepository.findById(snapshotId)?.itemId ?: error("snapshot 이 없는 tournament_item — 출전 시 항상 snapshot 을 가리킨다")
 
         override fun saveAll(items: List<TournamentItem>): List<TournamentItem> =
             items.map { item ->
@@ -314,13 +326,13 @@ class TournamentServiceTest {
 
         override fun findUserIdsByItemId(itemId: Long): List<UUID> =
             items
-                .filter { it.itemId == itemId && (it.deletedAt?.let { false } ?: true) }
+                .filter { itemIdOf(it.snapshotId) == itemId && (it.deletedAt?.let { false } ?: true) }
                 .map { it.userId }
                 .distinct()
 
         override fun findRoutingByItemId(itemId: Long): List<TournamentItemRoutingView> =
             items
-                .filter { it.itemId == itemId && (it.deletedAt?.let { false } ?: true) }
+                .filter { itemIdOf(it.snapshotId) == itemId && (it.deletedAt?.let { false } ?: true) }
                 .sortedBy { it.getId() }
                 .map { item ->
                     object : TournamentItemRoutingView {
@@ -437,12 +449,12 @@ class TournamentServiceTest {
         }
     }
 
-    private val tournamentItemRepository = TestTournamentItemRepository()
+    private val testItemSnapshotRepository = TestItemSnapshotRepository()
+    private val tournamentItemRepository = TestTournamentItemRepository(testItemSnapshotRepository)
     private val tournamentUserRepository = TestTournamentUserRepository()
     private val repository = TestTournamentRepository()
     private val testUserRepository = TestUserRepository()
     private val testItemRepository = TestItemRepository()
-    private val testItemSnapshotRepository = TestItemSnapshotRepository()
     private val testWishRepository = TestWishRepository(testItemSnapshotRepository)
     // 발행된 도메인 이벤트를 그대로 모으는 capturing publisher — 발행 단언에 쓴다.
     private val publishedEvents = mutableListOf<Any>()
@@ -470,6 +482,12 @@ class TournamentServiceTest {
         service.start(userId, tournamentId)
         return tournamentId
     }
+
+    // TournamentItem 의 정체성(itemId)은 그것이 가리키는 고정 snapshot 의 itemId 다 — 시나리오를 itemId 로 구성하는
+    // 테스트가 출전 아이템을 itemId 로 찾을 때 이 헬퍼로 도달한다. (TournamentItem 엔티티는 itemId 를 따로 들지 않는다.)
+    private fun itemIdOf(item: TournamentItem): Long =
+        testItemSnapshotRepository.findById(item.snapshotId)?.itemId
+            ?: error("snapshot 이 없는 tournament_item — 출전 시 항상 snapshot 을 가리킨다")
 
     @Test
     fun `create 는 PENDING 상태로 토너먼트를 생성하고 ID 를 반환한다`() {
@@ -719,8 +737,8 @@ class TournamentServiceTest {
     fun `recordMatch 에서 2개 아이템 결승 라운드면 1위와 2위 순위 결과를 반환한다`() {
         val tournamentId = createAndStart(listOf(10L, 20L))
         val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
-        val winner = items.find { it.itemId == 10L }!!
-        val loser = items.find { it.itemId == 20L }!!
+        val winner = items.find { itemIdOf(it) ==10L }!!
+        val loser = items.find { itemIdOf(it) ==20L }!!
 
         val result = service.recordMatch(
             userId,
@@ -806,8 +824,8 @@ class TournamentServiceTest {
     fun `recordMatch 는 IN_PROGRESS 토너먼트에 히스토리를 저장한다`() {
         val tournamentId = createAndStart((1L..4L).toList())
         val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
-        val firstItem = items.find { it.itemId == 1L }!!
-        val secondItem = items.find { it.itemId == 2L }!!
+        val firstItem = items.find { itemIdOf(it) ==1L }!!
+        val secondItem = items.find { itemIdOf(it) ==2L }!!
 
         service.recordMatch(
             userId,
@@ -828,8 +846,8 @@ class TournamentServiceTest {
     fun `recordMatch 에서 currentRound 가 2 면 토너먼트가 COMPLETED 로 완료된다`() {
         val tournamentId = createAndStart(listOf(10L, 20L))
         val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
-        val firstItem = items.find { it.itemId == 10L }!!
-        val secondItem = items.find { it.itemId == 20L }!!
+        val firstItem = items.find { itemIdOf(it) ==10L }!!
+        val secondItem = items.find { itemIdOf(it) ==20L }!!
 
         service.recordMatch(
             userId,
@@ -849,8 +867,8 @@ class TournamentServiceTest {
     fun `recordMatch 결승 완료 시 ROOT(주최자 본인 진행)면 TournamentResultReady 를 발행한다`() {
         val tournamentId = createAndStart(listOf(10L, 20L))
         val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
-        val first = items.find { it.itemId == 10L }!!
-        val second = items.find { it.itemId == 20L }!!
+        val first = items.find { itemIdOf(it) ==10L }!!
+        val second = items.find { itemIdOf(it) ==20L }!!
         publishedEvents.clear() // create·addItems·start 발행분 제거 — 완료 발행만 단언한다.
 
         service.recordMatch(userId, RecordMatch(tournamentId, 2, first.getId(), second.getId(), first.getId()))
@@ -926,8 +944,8 @@ class TournamentServiceTest {
     fun `recordMatch 에서 참가자가 아니면 예외가 발생한다`() {
         val tournamentId = createAndStart((1L..4L).toList())
         val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
-        val firstItem = items.find { it.itemId == 1L }!!
-        val secondItem = items.find { it.itemId == 2L }!!
+        val firstItem = items.find { itemIdOf(it) ==1L }!!
+        val secondItem = items.find { itemIdOf(it) ==2L }!!
 
         assertFailsWith<TournamentException> {
             service.recordMatch(
@@ -963,8 +981,8 @@ class TournamentServiceTest {
     fun `recordMatch 에서 승자가 대결 아이템이 아니면 예외가 발생한다`() {
         val tournamentId = createAndStart((1L..4L).toList())
         val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
-        val firstItem = items.find { it.itemId == 1L }!!
-        val secondItem = items.find { it.itemId == 2L }!!
+        val firstItem = items.find { itemIdOf(it) ==1L }!!
+        val secondItem = items.find { itemIdOf(it) ==2L }!!
 
         assertFailsWith<TournamentException> {
             service.recordMatch(
@@ -1006,8 +1024,8 @@ class TournamentServiceTest {
     fun `recordMatch 에서 이미 완료된 토너먼트면 예외가 발생한다`() {
         val tournamentId = createAndStart(listOf(10L, 20L))
         val items = tournamentItemRepository.findAllByTournamentId(tournamentId)
-        val firstItem = items.find { it.itemId == 10L }!!
-        val secondItem = items.find { it.itemId == 20L }!!
+        val firstItem = items.find { itemIdOf(it) ==10L }!!
+        val secondItem = items.find { itemIdOf(it) ==20L }!!
 
         val finalMatch =
             RecordMatch(
@@ -1331,8 +1349,10 @@ class TournamentServiceTest {
     fun `deleteItem 에서 토너먼트 소유자도 다른 사람이 추가한 아이템을 삭제할 수 있다`() {
         val tournamentId = service.create(userId, CreateTournament("토너먼트")).tournamentId
         tournamentUserRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
-        // 위시 추가는 소유자 전용이므로 DB에 직접 삽입해 다른 유저가 추가한 상황을 구성
-        tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId = tournamentId, itemId = 1L, userId = otherUserId)))
+        // 위시 추가는 소유자 전용이므로 DB에 직접 삽입해 다른 유저가 추가한 상황을 구성.
+        // TournamentItem 은 itemId 를 따로 안 들고 고정 snapshot 을 가리키므로, 먼저 snapshot 을 만들어 그 id 로 출전시킨다.
+        val snapshot = testItemSnapshotRepository.save(ItemSnapshot(itemId = 1L, status = ItemStatus.READY))
+        tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId = tournamentId, snapshotId = snapshot.getId(), userId = otherUserId)))
         val item = tournamentItemRepository.findAllByTournamentId(tournamentId).first()
 
         service.deleteItem(userId, tournamentId, item.getId())

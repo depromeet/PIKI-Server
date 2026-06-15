@@ -35,7 +35,7 @@ class WishPersistenceService(
         val saved = itemRepository.save(item)
         // 저장한 snapshot 의 id 를 wish 의 활성 포인터(snapshotId)로 박는다. 5단계 갱신에서 새 버전으로 스왑된다.
         val snapshot = itemSnapshotRepository.save(ItemSnapshot.pending(saved.getId()))
-        val wish = wishRepository.save(Wish(userId = userId, itemId = saved.getId(), snapshotId = snapshot.getId()))
+        val wish = wishRepository.save(Wish(userId = userId, snapshotId = snapshot.getId()))
         return WishWithItem(wish = wish, item = saved, snapshot = snapshot)
     }
 
@@ -52,7 +52,7 @@ class WishPersistenceService(
             itemSnapshotRepository.saveAll(items.map { ItemSnapshot.processing(it.getId()) }).associateBy { it.itemId }
         return items.map { item ->
             val snapshot = snapshotsByItemId[item.getId()] ?: error("item ${item.getId()} 의 snapshot 이 없다")
-            val wish = wishRepository.save(Wish(userId = userId, itemId = item.getId(), snapshotId = snapshot.getId()))
+            val wish = wishRepository.save(Wish(userId = userId, snapshotId = snapshot.getId()))
             WishWithItem(wish = wish, item = item, snapshot = snapshot)
         }
     }
