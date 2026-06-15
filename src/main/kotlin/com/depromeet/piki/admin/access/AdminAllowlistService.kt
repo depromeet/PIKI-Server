@@ -53,10 +53,10 @@ class AdminAllowlistService(
     }
 
     // 토큰 소비(1회) — 유효하면 신원 반환 후 삭제, 아니면 null.
+    // getAndDelete(GETDEL) 로 조회·삭제를 원자화한다 — get 후 delete 분리 시 동시 요청이 같은 토큰을 두 번
+    // 소비해(TOCTOU) 원타임 보장이 깨진다(같은 grant 링크를 두 곳에서 동시 열면 두 IP 모두 허용될 수 있음).
     fun consumeGrantToken(token: String): SlackIdentity? {
-        val key = grantKey(token)
-        val raw = redis.opsForValue().get(key) ?: return null
-        redis.delete(key)
+        val raw = redis.opsForValue().getAndDelete(grantKey(token)) ?: return null
         val parts = raw.split("|", limit = 2)
         return SlackIdentity(userId = parts[0], name = parts.getOrElse(1) { parts[0] })
     }

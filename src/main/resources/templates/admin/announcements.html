@@ -70,7 +70,7 @@
             </td>
             <td class="meta">
               <span th:if="${a.scheduled}" th:text="${#temporals.format(a.scheduledAt, 'yyyy-MM-dd HH:mm')} + ' 예약'">예약</span>
-              <span th:if="${a.sent or a.sending}" th:text="${a.sentAt != null} ? ${#temporals.format(a.sentAt, 'yyyy-MM-dd HH:mm')} : '발송중'">—</span>
+              <span th:if="${a.sent or a.sending}" th:text="${a.sentAt != null ? #temporals.format(a.sentAt, 'yyyy-MM-dd HH:mm') : '발송중'}">—</span>
               <span th:if="${a.draft}">발송 시 대상 확정</span>
               <div th:if="${a.sent or a.sending}" style="margin-top:3px">
                 대상 <b th:text="${a.totalCount}">0</b> · 성공 <b style="color:#15a05a" th:text="${a.successCount}">0</b><th:block th:if="${a.failureCount > 0}"> · 실패 <b style="color:#b42318" th:text="${a.failureCount}">0</b></th:block><th:block th:if="${a.sending}"> · <span style="color:var(--accent)" th:text="${a.progressPercent} + '%'">0%</span></th:block>

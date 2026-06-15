@@ -22,13 +22,14 @@ class AnnouncementProgressWriter(
     )
 
     // SENDING 클레임 — DRAFT/SCHEDULED 일 때만 SENDING 으로 전환하고 대상자를 못 박는다(진행률 분모).
-    // 이미 처리 중·완료거나 없는 공지면 null(중복 발송 차단). 단일 인스턴스 가정 — 다중 인스턴스 동시 클레임 방어는 후속(SELECT FOR UPDATE 등).
+    // 이미 처리 중·완료거나 없는 공지면 null(중복 발송 차단). 비관적 락(findByIdForUpdate)으로 조회→검사→저장을
+    // 직렬화해, 더블클릭·스케줄러/수동 경합에서 같은 공지가 두 번 SENDING 으로 전환되는 중복 발송을 막는다.
     @Transactional
     fun claim(
         announcementId: Long,
         actor: String,
     ): Claim? {
-        val announcement = announcementRepository.findById(announcementId).orElse(null) ?: return null
+        val announcement = announcementRepository.findByIdForUpdate(announcementId) ?: return null
         if (!(announcement.isDraft || announcement.isScheduled)) return null
         val recipients = userDeviceService.findAllTokenHolderIds()
         announcement.markSending(recipientCount = recipients.size, sentBy = actor)

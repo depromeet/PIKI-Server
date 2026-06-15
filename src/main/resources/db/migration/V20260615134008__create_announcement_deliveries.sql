@@ -11,6 +11,8 @@ CREATE TABLE announcement_deliveries (
     fcm_code        VARCHAR(50)  NULL,
     created_at      DATETIME(6)  NOT NULL,
     updated_at      DATETIME(6)  NOT NULL,
+    -- BaseEntity 가 매핑하는 soft-delete 컬럼. 없으면 insert/select 시 컬럼 불일치로 실패한다(다른 테이블과 동일 관례).
+    deleted_at      DATETIME(6)  NULL,
     PRIMARY KEY (id),
     KEY idx_announcement_deliveries_announcement (announcement_id),
     KEY idx_announcement_deliveries_user (user_id)

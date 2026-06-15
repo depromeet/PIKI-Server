@@ -39,11 +39,20 @@ class AnnouncementBroadcaster(
         // FCM sender 부재는 로컬(키 없음)에선 정상 — 알림은 만들되(SSE/히스토리) 푸시는 SKIPPED 로 기록한다.
         val sender = fcmSenderProvider.getIfAvailable()
         recipients.forEach { userId ->
-            val notification = persistence.save(Notification(userId, NotificationType.ANNOUNCEMENT, title, body, refId))
-            // SSE 는 best-effort(접속 중인 유저만 즉시 수신) — 실패해도 fan-out 을 멈추지 않는다. 히스토리엔 이미 저장됨.
-            runCatching { sseChannel.send(userId, notification) }
-                .onFailure { log.warn("공지 SSE 전달 실패 userId={}", userId, it) }
-            onRecipient(resolvePush(userId, notification, sender))
+            // 수신자 1건 처리 실패(알림 저장·FCM 등)가 전체 fan-out 을 멈추지 않도록 수신자 단위로 흡수한다.
+            // 멈추면 일부만 발송된 채 상위가 완료 처리돼 집계 정합성이 깨진다 — 실패는 FAILED 로 기록하고 다음으로.
+            val delivery =
+                runCatching {
+                    val notification = persistence.save(Notification(userId, NotificationType.ANNOUNCEMENT, title, body, refId))
+                    // SSE 는 best-effort(접속 중인 유저만 즉시 수신) — 실패해도 fan-out 을 멈추지 않는다. 히스토리엔 이미 저장됨.
+                    runCatching { sseChannel.send(userId, notification) }
+                        .onFailure { log.warn("공지 SSE 전달 실패 userId={}", userId, it) }
+                    resolvePush(userId, notification, sender)
+                }.getOrElse {
+                    log.error("공지 수신자 처리 실패 userId={}", userId, it)
+                    RecipientDelivery(userId, DeliveryStatus.FAILED, INTERNAL_ERROR_CODE)
+                }
+            onRecipient(delivery)
         }
     }
 
@@ -62,5 +71,10 @@ class AnnouncementBroadcaster(
             result.successCount > 0 -> RecipientDelivery(userId, DeliveryStatus.SUCCESS, null)
             else -> RecipientDelivery(userId, DeliveryStatus.FAILED, result.dominantFailureCode)
         }
+    }
+
+    companion object {
+        // FCM 코드가 아니라 우리 쪽 수신자 처리 예외를 나타내는 fcm_code 값(FCM 에러코드와 구분).
+        private const val INTERNAL_ERROR_CODE = "INTERNAL_ERROR"
     }
 }
