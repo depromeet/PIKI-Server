@@ -108,7 +108,7 @@ class TournamentService(
         command: AddTournamentItemsFromWish,
     ): List<Long> {
         val tournament =
-            tournamentRepository.findTournamentById(command.tournamentId)
+            tournamentRepository.findTournamentByIdForUpdate(command.tournamentId)
                 ?: throw TournamentException.notFoundTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
         if (!tournament.isRoot()) throw TournamentException.clonedTournamentCannotAddItems()
