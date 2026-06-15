@@ -11,15 +11,13 @@ import java.util.UUID
 @Component
 class TournamentStartedHandler(
     private val tournamentUserRepository: TournamentUserRepository,
-    private val actorNameResolver: ActorNameResolver,
+    private val tournamentVariables: TournamentNotificationVariables,
 ) : NotificationEventHandler<TournamentStarted>(NotificationType.TOURNAMENT_STARTED) {
     override fun resolveRefId(event: TournamentStarted): Long = event.tournamentId
 
     override fun resolveRecipients(event: TournamentStarted): Set<UUID> =
         tournamentUserRepository.findByTournamentId(event.tournamentId).map { it.userId }.toSet() - event.actorId
 
-    override fun resolveActorContext(event: TournamentStarted): ActorContext {
-        val actor = actorNameResolver.resolveAttributes(event.actorId)
-        return ActorContext(variables = mapOf("actorName" to actor.name), imageUrl = actor.profileImage)
-    }
+    override fun resolveActorContext(event: TournamentStarted): ActorContext =
+        tournamentVariables.context(event.tournamentId, event.actorId)
 }

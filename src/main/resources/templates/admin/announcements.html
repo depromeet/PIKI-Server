@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <title>공지 발송 · PiKi 백오피스</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <style>
+    :root{--accent:#0EA5E9;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;}
+    *{box-sizing:border-box;} body{margin:0;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:#f7f8fa;color:var(--ink);}
+    .bar{display:flex;align-items:center;gap:12px;padding:14px 24px;background:#fff;border-bottom:1px solid var(--border);}
+    .brand{font-weight:800;font-size:17px;letter-spacing:-.03em;}.brand .dot{color:var(--accent);}
+    .bar a{font-size:13px;color:var(--muted);text-decoration:none;font-weight:600;}
+    .wrap{max-width:880px;margin:0 auto;padding:26px 24px;}
+    h1{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0 0 6px;} .lede{color:var(--muted);font-size:13.5px;margin:0 0 20px;}
+    .ok{background:#dcfce7;color:#15803d;border-radius:8px;padding:9px 14px;font-size:13px;margin-bottom:16px;}
+    .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px;}
+    label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:0 0 6px;}
+    input,textarea{width:100%;border:1px solid #e3e6ea;border-radius:10px;padding:11px 13px;font-size:14px;font-family:inherit;background:#fbfcfd;}
+    textarea{resize:vertical;min-height:70px;}
+    .row{margin-bottom:14px;}
+    .btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px 18px;font-size:13.5px;font-weight:700;font-family:inherit;cursor:pointer;}
+    .btn.sm{padding:7px 14px;font-size:12.5px;}
+    .btn.ghost{background:#fff;color:#b42318;border:1px solid #fecaca;}
+    h2{font-size:15px;font-weight:800;margin:24px 0 10px;}
+    table{width:100%;border-collapse:collapse;font-size:13px;} th{background:#fafbfc;color:var(--muted);font-weight:700;text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;}
+    td{padding:11px 14px;border-bottom:1px solid #f1f3f5;vertical-align:middle;} tr:last-child td{border-bottom:none;}
+    .ttl{font-weight:700;} .bd{color:var(--muted);font-size:12px;margin-top:2px;}
+    .st{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;}
+    .st.SENT{background:#e4f6ec;color:#15a05a;} .st.DRAFT{background:#fef3c7;color:#92400e;}
+    .st.SCHEDULED{background:#e0f2fe;color:#0369a1;} .st.SENDING{background:#e0f2fe;color:#0284c7;}
+    .btn.alt{background:#fff;color:var(--accent);border:1px solid #bae6fd;}
+    .empty{color:var(--muted);font-size:13px;padding:20px;text-align:center;}
+    .meta{font-size:11.5px;color:var(--muted);}
+  </style>
+</head>
+<body>
+  <div class="bar"><span class="brand"><img src="/favicon.ico" alt="PiKi" style="width:19px;height:19px;border-radius:5px;vertical-align:-4px;margin-right:6px">PiKi<span class="dot">.</span> 백오피스</span><a th:href="@{/admin}">← 홈</a></div>
+  <div class="wrap">
+    <h1>공지</h1>
+    <p class="lede">공지를 <b>등록</b>한 뒤, 아래 목록에서 골라 <b>발송</b>합니다. 발송 시 문구를 새로 입력하지 않아 오타가 생기지 않습니다.</p>
+    <div class="ok" th:if="${param.registered}">공지가 등록됐습니다. 아래 목록에서 발송하거나 예약하세요.</div>
+    <div class="ok" th:if="${param.scheduled}">공지가 예약됐습니다. 예약 시각에 자동 발송됩니다.</div>
+    <div class="ok" th:if="${param.canceled}">예약을 취소했습니다.</div>
+    <div class="ok" th:if="${param.deleted}">초안을 삭제했습니다.</div>
+
+    <h2>공지 등록</h2>
+    <form class="card" th:action="@{/admin/announcements}" method="post">
+      <div class="row"><label for="title">제목</label><input id="title" name="title" type="text" required placeholder="피키 v1.0.1이 출시됐어요"></div>
+      <div class="row"><label for="body">본문</label><textarea id="body" name="body" placeholder="새로운 토너먼트 기능을 확인해보세요"></textarea></div>
+      <button class="btn" type="submit">등록</button>
+    </form>
+
+    <h2>등록된 공지 <span style="font-weight:500;font-size:12.5px;color:var(--muted)">— 현재 발송 대상 <b th:text="${recipientCount}">0</b>명 (토큰 보유자)</span></h2>
+    <div class="card" style="padding:0">
+      <table>
+        <thead><tr><th>내용</th><th>상태</th><th>예약/발송</th><th></th></tr></thead>
+        <tbody>
+          <tr th:each="a : ${announcements}">
+            <td><div class="ttl" th:text="${a.title}">제목</div><div class="bd" th:if="${!#strings.isEmpty(a.body)}" th:text="${a.body}">본문</div></td>
+            <td>
+              <span class="st" th:classappend="${a.status}" th:switch="${a.status}">
+                <span th:case="'DRAFT'">등록됨</span>
+                <span th:case="'SCHEDULED'">예약됨</span>
+                <span th:case="'SENDING'">발송중</span>
+                <span th:case="'SENT'">발송됨</span>
+                <span th:case="*" th:text="${a.status}">상태</span>
+              </span>
+            </td>
+            <td class="meta">
+              <span th:if="${a.scheduled}" th:text="${#temporals.format(a.scheduledAt, 'yyyy-MM-dd HH:mm')} + ' 예약'">예약</span>
+              <span th:if="${a.sent or a.sending}" th:text="${a.sentAt != null} ? ${#temporals.format(a.sentAt, 'yyyy-MM-dd HH:mm')} : '발송중'">—</span>
+              <span th:if="${a.draft}">발송 시 대상 확정</span>
+              <div th:if="${a.sent or a.sending}" style="margin-top:3px">
+                대상 <b th:text="${a.totalCount}">0</b> · 성공 <b style="color:#15a05a" th:text="${a.successCount}">0</b><th:block th:if="${a.failureCount > 0}"> · 실패 <b style="color:#b42318" th:text="${a.failureCount}">0</b></th:block><th:block th:if="${a.sending}"> · <span style="color:var(--accent)" th:text="${a.progressPercent} + '%'">0%</span></th:block>
+              </div>
+            </td>
+            <td>
+              <div style="display:flex;gap:6px;align-items:center">
+                <a th:if="${a.draft}" class="btn sm" style="display:inline-block;text-decoration:none" th:href="@{/admin/announcements/{id}/send(id=${a.id})}">발송/예약</a>
+                <form th:if="${a.draft}" th:action="@{/admin/announcements/{id}/delete(id=${a.id})}" method="post" style="margin:0"
+                      onsubmit="return confirm('이 초안을 삭제할까요?');">
+                  <button class="btn sm ghost" type="submit">삭제</button>
+                </form>
+                <form th:if="${a.scheduled}" th:action="@{/admin/announcements/{id}/cancel(id=${a.id})}" method="post" style="margin:0"
+                      onsubmit="return confirm('예약을 취소할까요?');">
+                  <button class="btn sm ghost" type="submit">예약 취소</button>
+                </form>
+                <a th:if="${a.sending or a.sent}" class="btn sm alt" style="display:inline-block;text-decoration:none" th:href="@{/admin/announcements/{id}/result(id=${a.id})}">결과 보기</a>
+              </div>
+            </td>
+          </tr>
+          <tr th:if="${announcements.isEmpty()}"><td colspan="4" class="empty">등록된 공지가 없습니다. 위에서 등록하세요.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

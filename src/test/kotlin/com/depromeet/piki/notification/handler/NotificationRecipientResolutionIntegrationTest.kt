@@ -114,7 +114,8 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
 
         val variables = startedHandler.resolveActorContext(TournamentStarted(tournamentId, owner)).variables
 
-        assertEquals(mapOf("actorName" to "주최자"), variables)
+        // 변수 계약: actorName + tournamentId + tournamentName(토너먼트 미생성이라 fallback). 카탈로그·미리보기와 일치해야 한다.
+        assertEquals(mapOf("actorName" to "주최자", "tournamentId" to "1008", "tournamentName" to "토너먼트"), variables)
     }
 
     @Test
@@ -125,14 +126,14 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
 
         val variables = itemAddedHandler.resolveActorContext(TournamentItemAdded(tournamentId, actor)).variables
 
-        assertEquals(mapOf("actorName" to "홍길동"), variables)
+        assertEquals(mapOf("actorName" to "홍길동", "tournamentId" to "1003", "tournamentName" to "토너먼트"), variables)
     }
 
     @Test
     fun `행위자 유저를 못 찾으면 actorName 은 fallback 으로 채운다`() {
         val variables = itemAddedHandler.resolveActorContext(TournamentItemAdded(1004L, UUID.randomUUID())).variables
 
-        assertEquals(mapOf("actorName" to ActorNameResolver.UNKNOWN_ACTOR), variables)
+        assertEquals(mapOf("actorName" to ActorNameResolver.UNKNOWN_ACTOR, "tournamentId" to "1004", "tournamentName" to "토너먼트"), variables)
     }
 
     @Test
@@ -337,7 +338,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
 
         val context = completedHandler.resolveActorContext(TournamentCompleted(1234L, actor))
 
-        assertEquals(mapOf("actorName" to "행위자"), context.variables)
+        assertEquals(mapOf("actorName" to "행위자", "tournamentId" to "1234", "tournamentName" to "토너먼트"), context.variables)
         assertEquals("https://x/p.png", context.imageUrl)
     }
 

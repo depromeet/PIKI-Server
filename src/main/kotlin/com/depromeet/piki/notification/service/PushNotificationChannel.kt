@@ -42,7 +42,7 @@ class PushNotificationChannel(
             }
         val tokens = userDeviceService.findTokens(userId)
         if (tokens.isEmpty()) return
-        val staleTokens = sender.send(tokens, notification)
-        userDeviceService.removeStaleTokens(staleTokens)
+        val result = sender.send(tokens, notification)
+        userDeviceService.removeStaleTokens(result.staleTokens)
     }
 }

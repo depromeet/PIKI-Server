@@ -312,13 +312,19 @@ jobs:
           # Spring 프로파일 — prod·staging 에서 'prod' 활성. @Profile("!prod") 의 dev 전용 빈(DevAuth 등)이
           # prod·staging 에서 안 뜨게 하는 핵심. staging 은 진짜 pre-prod 라 prod 와 동일 동작(#498). dev 만 'dev'(=!prod).
           SPRING_PROFILES_ACTIVE: ${{ (needs.resolve.outputs.environment == 'prod' || needs.resolve.outputs.environment == 'staging') && 'prod' || 'dev' }}
+          # 운영 백오피스(#249) — 슬랙-IP 게이트(#526)가 보호하므로 전 환경 on. 비민감 플래그라 secret 아님(inline).
+          ADMIN_ENABLED: 'true'
+          # dev/staging 도메인 전체를 allowlist IP 로만 연다(공개 차단). prod 는 false(실유저 공개, /admin 만 슬랙 세션 게이트).
+          ENV_ACCESS_GATE: ${{ (needs.resolve.outputs.environment == 'dev' || needs.resolve.outputs.environment == 'staging') && 'true' || 'false' }}
+          # 슬랙 슬래시커맨드 HMAC 검증 키(민감) — 게이트를 여는 유일 진입(/admin-access)의 보호막. 비면 /admin 항상 404.
+          SLACK_ADMIN_SIGNING_SECRET: ${{ secrets.SLACK_ADMIN_SIGNING_SECRET }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           IMAGE_TAG: ${{ needs.resolve.outputs.ref }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: GEMINI_API_KEY,DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,JWT_SECRET,REDIS_HOST,REDIS_PORT,KAKAO_CLIENT_ID,KAKAO_CLIENT_SECRET,KAKAO_REDIRECT_URI,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,APPLE_TEAM_ID,APPLE_KEY_ID,APPLE_CLIENT_ID,APPLE_BUNDLE_ID,APPLE_PRIVATE_KEY,APPLE_REDIRECT_URI,S3_BUCKET,S3_PUBLIC_BASE_URL,FIREBASE_SERVICE_ACCOUNT,SPRING_PROFILES_ACTIVE,DOCKERHUB_USERNAME,IMAGE_TAG
+          envs: GEMINI_API_KEY,DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,JWT_SECRET,REDIS_HOST,REDIS_PORT,KAKAO_CLIENT_ID,KAKAO_CLIENT_SECRET,KAKAO_REDIRECT_URI,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,APPLE_TEAM_ID,APPLE_KEY_ID,APPLE_CLIENT_ID,APPLE_BUNDLE_ID,APPLE_PRIVATE_KEY,APPLE_REDIRECT_URI,S3_BUCKET,S3_PUBLIC_BASE_URL,FIREBASE_SERVICE_ACCOUNT,SPRING_PROFILES_ACTIVE,ADMIN_ENABLED,ENV_ACCESS_GATE,SLACK_ADMIN_SIGNING_SECRET,DOCKERHUB_USERNAME,IMAGE_TAG
           script: |
             IMAGE="$DOCKERHUB_USERNAME/team3-server:$IMAGE_TAG"
 
@@ -417,6 +423,9 @@ jobs:
               -e S3_BUCKET="$S3_BUCKET" \
               -e S3_PUBLIC_BASE_URL="$S3_PUBLIC_BASE_URL" \
               -e FIREBASE_SERVICE_ACCOUNT="$FIREBASE_SERVICE_ACCOUNT" \
+              -e ADMIN_ENABLED="$ADMIN_ENABLED" \
+              -e ENV_ACCESS_GATE="$ENV_ACCESS_GATE" \
+              -e SLACK_ADMIN_SIGNING_SECRET="$SLACK_ADMIN_SIGNING_SECRET" \
               "$IMAGE"
 
       - name: Health check and switch

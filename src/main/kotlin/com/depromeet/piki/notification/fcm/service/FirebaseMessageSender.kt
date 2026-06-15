@@ -37,7 +37,7 @@ class FirebaseMessageSender(
     override fun send(
         tokens: List<String>,
         notification: Notification,
-    ): List<String> {
+    ): FcmSendResult {
         val stale = mutableListOf<String>()
         // 발송 결과 집계 — 성공 수와 실패 사유(FCM messagingErrorCode)별 분포를 모아 마지막에 한 줄로 요약한다.
         // 토큰 원문은 크리덴셜이라 지문(maskToken)으로만 남긴다.
@@ -81,7 +81,7 @@ class FirebaseMessageSender(
             failureCodes,
             stale.size,
         )
-        return stale
+        return FcmSendResult(staleTokens = stale, successCount = success, failureByCode = failureCodes)
     }
 
     // 표시용 title/body + 클라 라우팅용 data 를 실은 멀티캐스트 메시지. 백그라운드 수신 시 클라가 data 로 딥링크를 복원한다.
