@@ -107,11 +107,21 @@ class Announcement(
     }
 
     // fan-out 진행 중 배치마다 집계를 누적한다(진행률 갱신).
+    // 정상 흐름(서비스가 SENDING 인 공지에 올바른 델타만 넘김)에선 닿지 않는 불변식 — flush 중복 호출·음수 델타 등
+    // 코드 버그가 집계를 오염시키는 걸 막는다(progressPercent 의 coerceIn 이 UI 만 가리고 저장값은 오염되던 구멍).
     fun addProgress(
         successDelta: Int,
         failureDelta: Int,
         skippedDelta: Int,
     ) {
+        check(isSending) { "진행률 누적은 SENDING 상태에서만 가능하다. status=$status" }
+        check(successDelta >= 0 && failureDelta >= 0 && skippedDelta >= 0) {
+            "진행률 델타는 음수일 수 없다. success=$successDelta failure=$failureDelta skipped=$skippedDelta"
+        }
+        val nextProcessed = processedCount + successDelta + failureDelta + skippedDelta
+        check(totalCount == 0 || nextProcessed <= totalCount) {
+            "진행 누적이 대상 수를 초과한다. processed=$nextProcessed total=$totalCount"
+        }
         this.successCount += successDelta
         this.failureCount += failureDelta
         this.skippedCount += skippedDelta

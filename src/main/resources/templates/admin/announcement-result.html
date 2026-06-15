@@ -76,12 +76,22 @@
         setNum('success', r.success); setNum('failure', r.failure); setNum('skipped', r.skipped);
         document.getElementById('fill').style.width = r.progressPercent + '%';
         document.getElementById('state').textContent = r.done ? '발송 완료' : '발송 중...';
-        var rows = (r.failureByCode || []).map(function (c) {
-          return '<tr><td class="code">' + c.first + '</td><td class="cnt">' + c.second + '</td></tr>';
-        });
-        if (r.noTokenCount > 0) rows.push('<tr><td class="code">NO_TOKEN (토큰 없음)</td><td class="cnt">' + r.noTokenCount + '</td></tr>');
-        if (rows.length === 0) rows.push('<tr><td class="empty" colspan="2">실패 없음</td></tr>');
-        document.getElementById('codes').innerHTML = rows.join('');
+        // 데이터(코드·카운트)는 textContent 로만 넣는다 — 문자열 결합 + innerHTML 은 저장 데이터 오염 시 관리자 XSS 경로가 된다.
+        function row(code, cnt, cls) {
+          var tr = document.createElement('tr');
+          var tdCode = document.createElement('td'); tdCode.className = cls || 'code'; tdCode.textContent = String(code);
+          var tdCnt = document.createElement('td'); tdCnt.className = 'cnt'; tdCnt.textContent = String(cnt);
+          tr.appendChild(tdCode); tr.appendChild(tdCnt); return tr;
+        }
+        var codesEl = document.getElementById('codes');
+        codesEl.replaceChildren();
+        (r.failureByCode || []).forEach(function (c) { codesEl.appendChild(row(c.first, c.second)); });
+        if (r.noTokenCount > 0) codesEl.appendChild(row('NO_TOKEN (토큰 없음)', r.noTokenCount));
+        if (!codesEl.hasChildNodes()) {
+          var tr = document.createElement('tr');
+          var td = document.createElement('td'); td.className = 'empty'; td.colSpan = 2; td.textContent = '실패 없음';
+          tr.appendChild(td); codesEl.appendChild(tr);
+        }
       }
       function poll() {
         fetch(url, { headers: { 'Accept': 'application/json' } })

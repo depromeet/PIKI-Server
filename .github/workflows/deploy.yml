@@ -326,6 +326,13 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: GEMINI_API_KEY,DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,JWT_SECRET,REDIS_HOST,REDIS_PORT,KAKAO_CLIENT_ID,KAKAO_CLIENT_SECRET,KAKAO_REDIRECT_URI,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,APPLE_TEAM_ID,APPLE_KEY_ID,APPLE_CLIENT_ID,APPLE_BUNDLE_ID,APPLE_PRIVATE_KEY,APPLE_REDIRECT_URI,S3_BUCKET,S3_PUBLIC_BASE_URL,FIREBASE_SERVICE_ACCOUNT,SPRING_PROFILES_ACTIVE,ADMIN_ENABLED,ENV_ACCESS_GATE,SLACK_ADMIN_SIGNING_SECRET,DOCKERHUB_USERNAME,IMAGE_TAG
           script: |
+            # ADMIN_ENABLED=true 인데 서명 시크릿이 비면 /admin-access 서명 검증이 전부 실패해 allowlist 를 열 수 없고
+            # /admin 이 영구 차단된다. 배포가 성공해버리기 전에 fail-fast 로 막는다(#249).
+            if [ "$ADMIN_ENABLED" = "true" ] && [ -z "$SLACK_ADMIN_SIGNING_SECRET" ]; then
+              echo "::error::SLACK_ADMIN_SIGNING_SECRET is empty while ADMIN_ENABLED=true"
+              exit 1
+            fi
+
             IMAGE="$DOCKERHUB_USERNAME/team3-server:$IMAGE_TAG"
 
             # 옛 배포 이미지가 쌓여 EC2 디스크가 차면 containerd 가 새 이미지를 못 받아 배포가 실패한다(#336).

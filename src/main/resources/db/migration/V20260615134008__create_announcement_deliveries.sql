@@ -14,7 +14,8 @@ CREATE TABLE announcement_deliveries (
     -- BaseEntity 가 매핑하는 soft-delete 컬럼. 없으면 insert/select 시 컬럼 불일치로 실패한다(다른 테이블과 동일 관례).
     deleted_at      DATETIME(6)  NULL,
     PRIMARY KEY (id),
-    KEY idx_announcement_deliveries_announcement (announcement_id),
+    -- 수신자 1명당 1행(파일 상단 계약)을 DB 가 강제한다. 재시도·중복 실행 시 같은 유저 행이 쌓여 집계(성공·코드별 실패 수)가 부풀려지는 걸 막는다.
+    UNIQUE KEY uk_announcement_deliveries_announcement_user (announcement_id, user_id),
     KEY idx_announcement_deliveries_user (user_id)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4;

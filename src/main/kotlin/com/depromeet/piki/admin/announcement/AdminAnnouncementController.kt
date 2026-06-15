@@ -1,5 +1,6 @@
 package com.depromeet.piki.admin.announcement
 
+import com.depromeet.piki.admin.access.AdminSession
 import com.depromeet.piki.admin.config.ConditionalOnAdminEnabled
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.stereotype.Controller
@@ -58,7 +59,7 @@ class AdminAnnouncementController(
         request: HttpServletRequest,
     ): String {
         val at = scheduledAt?.trim()?.ifBlank { null }?.let { LocalDateTime.parse(it) }
-        adminAnnouncementService.schedule(id, at, actor = "운영자", clientIp = clientIp(request))
+        adminAnnouncementService.schedule(id, at, actor = actor(request), clientIp = clientIp(request))
         // 예약이면 목록에서 예약 상태를 보고, 즉시면 바로 결과(진행률) 화면으로 보낸다.
         return at?.let { "redirect:/admin/announcements?scheduled" } ?: "redirect:/admin/announcements/$id/result"
     }
@@ -69,7 +70,7 @@ class AdminAnnouncementController(
         @PathVariable id: Long,
         request: HttpServletRequest,
     ): String {
-        adminAnnouncementService.cancelSchedule(id, actor = "운영자", clientIp = clientIp(request))
+        adminAnnouncementService.cancelSchedule(id, actor = actor(request), clientIp = clientIp(request))
         return "redirect:/admin/announcements?canceled"
     }
 
@@ -98,6 +99,10 @@ class AdminAnnouncementController(
         adminAnnouncementService.delete(id)
         return "redirect:/admin/announcements?deleted"
     }
+
+    // 감사 actor — 슬랙 게이트(#526)가 세션에 바인딩한 신원. 게이트를 우회하는 로컬(admin.enabled)엔 세션이 없어 "운영자" 로 폴백.
+    private fun actor(request: HttpServletRequest): String =
+        request.getSession(false)?.let { AdminSession.slackName(it) } ?: "운영자"
 
     private fun clientIp(request: HttpServletRequest): String =
         request.getHeader("X-Forwarded-For")?.split(",")?.firstOrNull()?.trim()?.ifBlank { null } ?: request.remoteAddr
