@@ -37,6 +37,12 @@ class TournamentItemPersistenceService(
         link: ProductLink,
     ): PersistedTournamentItem {
         validateAndCheckCapacity(userId, tournamentId, 1)
+        val existingItems = tournamentItemRepository.findAllByTournamentId(tournamentId)
+        if (existingItems.isNotEmpty()) {
+            val existingSnapshots = itemSnapshotRepository.findByIds(existingItems.map { it.snapshotId })
+            val existingLinks = itemRepository.findByIds(existingSnapshots.map { it.itemId }).mapNotNull { it.link }
+            if (link in existingLinks) throw TournamentException.duplicateTournamentItem()
+        }
         val item = itemRepository.save(Item(link))
         // 저장한 snapshot 의 id 를 tournament_item 에 고정한다. 출전 시점 버전이 박혀 위시 갱신과 격리된다.
         // URL 경로는 PENDING 으로 적재(outbox)하고 디스패처가 집어 파싱한다 — 워커를 여기서 트리거하지 않는다.

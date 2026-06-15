@@ -49,17 +49,48 @@ class HttpPageFetcherRedirectTest {
     }
 
     @Test
-    fun `cross-domain redirect 는 차단한다`() {
+    fun `cross-domain redirect 도 따라가 최종 페이지 본문을 받는다`() {
+        // 무신사 OneLink·bit.ly 등 단축·딥링크는 다른 도메인의 최종 상품 페이지로 보낸다. 도메인이 바뀌어도 따라간다.
+        // (사설망 SSRF 는 매 hop 의 guardAgainstInternalHost IP 가드가 막으므로 도메인 단위 차단은 불필요.)
         val fetcher =
             fetcherWith { server ->
                 server
-                    .expect(requestTo("https://www.zigzag.kr/p"))
-                    .andRespond(withStatus(HttpStatus.FOUND).location(URI("https://evil.com/p")))
+                    .expect(requestTo("https://musinsa.onelink.me/x"))
+                    .andRespond(withStatus(HttpStatus.MOVED_PERMANENTLY).location(URI("https://musinsa.com/p")))
+                server
+                    .expect(requestTo("https://musinsa.com/p"))
+                    .andRespond(withSuccess("<html>product</html>", MediaType.TEXT_HTML))
             }
 
-        assertFailsWith<PageFetchException> {
-            fetcher.fetch(ProductLink.parse("https://www.zigzag.kr/p"))
+        val page = fetcher.fetch(ProductLink.parse("https://musinsa.onelink.me/x"))
+
+        assertEquals("<html>product</html>", page.html)
+        assertEquals("https://musinsa.com/p", page.finalUrl.value.toString())
+    }
+
+    @Test
+    fun `cross-domain redirect 타깃이 사설 IP 로 resolve 되면 SSRF 로 차단한다`() {
+        // cross-domain 을 허용해도 사설망 접근은 매 hop IP 가드가 막는다 — 도메인이 아니라 IP 로 SSRF 를 닫는다.
+        val resolver: (String) -> Array<InetAddress> = { host ->
+            if (host == "internal.attacker.test") {
+                arrayOf(InetAddress.getByName("169.254.169.254")) // 클라우드 메타데이터
+            } else {
+                arrayOf(InetAddress.getByName("93.184.216.34")) // 공인
+            }
         }
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        server
+            .expect(requestTo("https://www.zigzag.kr/p"))
+            .andRespond(withStatus(HttpStatus.FOUND).location(URI("https://internal.attacker.test/p")))
+        val fetcher = HttpPageFetcher(builder.build(), RequestScopedDnsResolver(resolver))
+
+        val ex =
+            assertFailsWith<PageFetchException> {
+                fetcher.fetch(ProductLink.parse("https://www.zigzag.kr/p"))
+            }
+        // 사설/메타데이터 주소로 가는 hop 은 blockedHost(INVALID_INPUT)로 차단된다.
+        assertEquals(ErrorCategory.INVALID_INPUT, ex.category)
     }
 
     @Test

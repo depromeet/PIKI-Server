@@ -17,7 +17,7 @@ import java.net.URI
 import java.nio.charset.Charset
 
 // fetch 용 RestClient 와 host→IP 해석(dnsResolver)을 생성자로 주입받는다. 둘 다 밖에서 교체할 수 있어야
-// 네트워크 없이 redirect 루프(3xx 따라가기·cross-domain 차단·hop 상한)를 단위 테스트로 검증할 수 있다.
+// 네트워크 없이 redirect 루프(3xx 따라가기·cross-domain 따라가기·다운그레이드 차단·hop 상한)를 단위 테스트로 검증할 수 있다.
 //
 // dnsResolver 는 PageFetchHttpClientConfig 의 RestClient 와 같은 인스턴스를 공유한다 — 가드가 검증한 IP 로 실제
 // 연결도 이뤄지게(IP pin) 해 DNS rebinding/TOCTOU 를 닫는다. 한 fetch 가 끝나면 clear() 로 캐시를 비운다.
@@ -84,7 +84,9 @@ class HttpPageFetcher(
             throw PageFetchException.upstreamError(e)
         }
 
-    // 3xx 응답의 Location 을 절대 URI 로 만들고, 같은 회사 도메인 + https 면 다음 hop 으로, 아니면 SSRF 로 차단한다.
+    // 3xx 응답의 Location 을 절대 URI 로 만들고, https 면 다음 hop 으로 따라간다.
+    // cross-domain redirect 도 따라간다(무신사 OneLink·bit.ly 등 단축·딥링크가 다른 도메인의 최종 상품 페이지로 보낸다).
+    // 사설망 SSRF 는 매 hop 의 guardAgainstInternalHost(IP 검증)가 막으므로, 도메인 단위 차단 없이도 내부망 접근은 닫혀 있다.
     private fun nextRedirect(
         current: ProductLink,
         response: ResponseEntity<ByteArray>,
@@ -92,12 +94,8 @@ class HttpPageFetcher(
         val location = redirectLocation(current, response)
         // 상대 Location(/path)도 원본 URI 에 resolve 해 절대 URI 로 만든다.
         val target = current.value.resolve(location)
-        if (!RedirectPolicy.isSameRegistrableDomain(current.value.host, target.host)) {
-            log.warn("[SSRF] blocked: cross-domain redirect url={}", current.safeLogString())
-            throw PageFetchException.blockedHost()
-        }
-        // https 강제(http 다운그레이드 차단)와 형식 검증을 ProductLink.parse 가 한다. 같은 도메인이라도 https 가
-        // 아니거나(다운그레이드) 형식이 깨진 redirect 는 따라가지 않는다.
+        // https 강제(http 다운그레이드 차단)와 형식 검증을 ProductLink.parse 가 한다. https 가 아니거나(다운그레이드)
+        // 형식이 깨진 redirect 는 따라가지 않는다.
         return try {
             ProductLink.parse(target.toString())
         } catch (e: ProductLinkException) {
