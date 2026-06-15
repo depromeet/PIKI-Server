@@ -28,12 +28,15 @@ class OAuthLoginService(
         command: OAuthLoginCommand,
         currentUserId: UUID?,
     ): SignupResult {
+        // currentUserId 는 게스트가 소셜 연결을 시도하는 경우의 게스트 id(없으면 null=신규/재방문 로그인).
+        // 토큰·code 등 크리덴셜은 싣지 않는다 — provider 와 게스트연결 여부만 남긴다.
+        log.info("소셜 로그인 시도 provider={} currentUserId={}", provider, currentUserId)
         // state 가 있으면 Redis 에서 소비 검증. 없거나 만료된 state 는 401 — CSRF 방지.
         // state 를 보내지 않으면 검증 생략 (v2 SDK 흐름 · 과도기 호환).
         command.state?.ifBlank { null }?.let { state ->
             if (!oAuthStateStore.consumeIfValid(state)) {
-                // CSRF 방어 지점 — 만료·위조·재사용 가능성이 있어 보안 추적용으로 warn. state 원문은 남기지 않는다.
-                log.warn("OAuth state 검증 실패 (만료·위조·재사용) provider={}", provider)
+                // 클라이언트 계약 위반(만료·위조 state)이라 info — 서버 입장에선 정상 거부다.
+                log.info("소셜 로그인 거부 사유=state 검증 실패(CSRF 방지) provider={}", provider)
                 throw OAuthException.invalidState()
             }
         }
@@ -41,6 +44,7 @@ class OAuthLoginService(
         val userInfo = fetchUserInfo(client, command) // 외부 호출, tx 밖
         val user = socialAccountService.resolveUser(userInfo, currentUserId) // 영속화, 짧은 tx
         val tokenPair = authService.createTokensForUser(user)
+        log.info("소셜 로그인 성공 provider={} userId={} identityType={}", provider, user.id, user.identityType)
         return SignupResult(tokenPair = tokenPair, user = user)
     }
 
@@ -75,6 +79,9 @@ class OAuthLoginService(
         } catch (e: OAuthException) {
             throw e
         } catch (e: Exception) {
+            // provider 장애는 GlobalExceptionHandler 가 OAuthException(cause=e)을 category 기준 레벨로 남긴다
+            // (RETRYABLE=warn / SERVER_ERROR=error, 스택에 cause 포함). 여기서 raw e 를 또 찍으면 중복이고
+            // 원문 노출 표면만 늘어, 로깅은 핸들러에 일임하고 여기선 래핑만 한다.
             throw OAuthException.providerError(e)
         }
 }

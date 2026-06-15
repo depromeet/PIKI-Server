@@ -23,9 +23,24 @@ class GlobalExceptionHandler : ResponseEntityExceptionHandler() {
 
     @ExceptionHandler(BaseException::class)
     fun handleBaseException(e: BaseException): ResponseEntity<ApiResponseBody<Nothing>> {
-        log.info("[{}] {}", e.javaClass.simpleName, e.message)
         val status = if (e is HttpMappable) e.httpStatus else HttpStatus.INTERNAL_SERVER_ERROR
         val category = if (e is HttpMappable) e.category else ErrorCategory.SERVER_ERROR
+        // 5xx 레벨은 HttpMappable 유무가 아니라 category 로 가른다 — 같은 502 라도 SERVER_ERROR(우리 설정·코드 버그:
+        // OAuth misconfigured·Gemini clientError)와 RETRYABLE(외부 일시 장애: provider 호출·Gemini callFailed)은
+        // 심각도가 다르다. HttpMappable 5xx 를 전부 warn 으로 묶으면 INTERNAL_SERVER_ERROR+SERVER_ERROR 인
+        // nicknameGenerationFailed 같은 진짜 서버 버그가 알림에서 누락된다.
+        when {
+            // SERVER_ERROR(500/502) = 재시도해도 무의미한 우리 서버 문제 → error + 스택(알림 신호).
+            // HttpMappable 아닌 BaseException 도 category 가 SERVER_ERROR 라 여기로 와 스택과 함께 남는다.
+            status.is5xxServerError && category == ErrorCategory.SERVER_ERROR ->
+                log.error("[{}] {} -> {}", e.javaClass.simpleName, e.message, status.value(), e)
+            // RETRYABLE 5xx(502) = 외부 의존성 일시 실패 → warn, cause 추적 위해 예외 동봉. 클라는 재시도로 대응 가능.
+            status.is5xxServerError ->
+                log.warn("[{}] {} -> {}", e.javaClass.simpleName, e.message, status.value(), e)
+            // 4xx = 클라이언트 계약 위반 → info. 서버 입장에선 정상 거부다.
+            else ->
+                log.info("[{}] {} -> {}", e.javaClass.simpleName, e.message, status.value())
+        }
         return ResponseEntity
             .status(status)
             .body(ApiResponseBody.fail(category, e.message))

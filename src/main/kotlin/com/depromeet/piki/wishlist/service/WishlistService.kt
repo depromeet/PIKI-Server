@@ -86,22 +86,18 @@ class WishlistService(
         val hasNext = fetched.size > size
         val pageWishes = fetched.take(size)
 
-        val itemsById = itemRepository.findByIds(pageWishes.map { it.itemId }).associateBy { it.getId() }
         // 표시값은 wish 의 활성 snapshot 에서 읽는다. snapshot 은 등록 시 함께 생기고 wish.snapshotId 로 고정된다.
         val snapshotsById =
-            itemSnapshotRepository.findByIds(pageWishes.mapNotNull { it.snapshotId }).associateBy { it.getId() }
+            itemSnapshotRepository.findByIds(pageWishes.map { it.snapshotId }).associateBy { it.getId() }
+        // item 정체성은 snapshot.itemId 단일 출처다. snapshot 에서 itemId 를 모아 item 을 한 번에 끌어온다.
+        val itemsById = itemRepository.findByIds(snapshotsById.values.map { it.itemId }).associateBy { it.getId() }
         val entries =
             pageWishes.map { wish ->
-                // item·snapshot 은 wish 와 함께 영속화되며 별도 삭제 경로가 없다. 없으면 영속화 경로가 깨진 코드 버그다.
-                val item = itemsById[wish.itemId] ?: error("wish ${wish.getId()} 의 item ${wish.itemId} 가 없다")
+                // snapshot·item 은 wish 와 함께 영속화되며 별도 삭제 경로가 없다. 없으면 영속화 경로가 깨진 코드 버그다.
                 val snapshot =
-                    wish.snapshotId?.let { snapshotsById[it] }
+                    snapshotsById[wish.snapshotId]
                         ?: error("wish ${wish.getId()} 의 snapshot ${wish.snapshotId} 가 없다")
-                // snapshot_id 는 FK 없는 raw Long 이라 잘못 연결되면 item 은 A, 표시값은 B 인 섞인 응답이 나갈 수 있다.
-                // 서비스가 보장하는 정합성을 불변식으로 한 번 더 막는다(어긋나면 영속화 경로가 깨진 코드 버그).
-                require(snapshot.itemId == wish.itemId) {
-                    "wish ${wish.getId()} 의 snapshot(${snapshot.getId()}) 가 다른 item(${snapshot.itemId} != ${wish.itemId})을 가리킨다"
-                }
+                val item = itemsById[snapshot.itemId] ?: error("wish ${wish.getId()} 의 item ${snapshot.itemId} 가 없다")
                 WishWithItem(wish = wish, item = item, snapshot = snapshot)
             }
 
@@ -123,15 +119,13 @@ class WishlistService(
     ): WishWithItem {
         val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
         wish.verifyOwnedBy(userId)
-        // wish 가 가리키는 item·snapshot 은 반드시 존재한다. 없으면 영속화 경로가 깨진 코드 버그다.
-        val item = itemRepository.findById(wish.itemId) ?: error("wish ${wish.getId()} 의 item ${wish.itemId} 가 없다")
+        // wish 가 가리키는 snapshot·item 은 반드시 존재한다. 없으면 영속화 경로가 깨진 코드 버그다.
+        // item 정체성은 snapshot.itemId 단일 출처다 — snapshot 을 먼저 끌어오고 그 itemId 로 item 을 조회한다.
         val snapshot =
-            wish.snapshotId?.let { itemSnapshotRepository.findById(it) }
+            itemSnapshotRepository.findById(wish.snapshotId)
                 ?: error("wish ${wish.getId()} 의 snapshot ${wish.snapshotId} 가 없다")
-        // snapshot_id 는 FK 없는 raw Long 이라 잘못 연결되면 item 은 A, 표시값은 B 인 섞인 응답이 나갈 수 있다.
-        require(snapshot.itemId == wish.itemId) {
-            "wish ${wish.getId()} 의 snapshot(${snapshot.getId()}) 가 다른 item(${snapshot.itemId} != ${wish.itemId})을 가리킨다"
-        }
+        val item =
+            itemRepository.findById(snapshot.itemId) ?: error("wish ${wish.getId()} 의 item ${snapshot.itemId} 가 없다")
         return WishWithItem(wish = wish, item = item, snapshot = snapshot)
     }
 
@@ -151,23 +145,25 @@ class WishlistService(
         val productImage = image?.let { ProductImage.of(it.bytes, it.contentType) }
         val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
         wish.verifyOwnedBy(userId)
-        // wish 가 가리키는 item 은 반드시 존재한다. 없으면 영속화 경로가 깨진 코드 버그다.
-        val item = itemRepository.findById(wish.itemId) ?: error("wish ${wish.getId()} 의 item ${wish.itemId} 가 없다")
         // 활성 snapshot 으로 사전 상태 검증 — FAILED 가 아니면 S3 에 올리기 전에 막는다(orphan 업로드 방지).
         // recover 가 READY/PROCESSING 에 사유별 409 를 던진다(트랜잭션 밖 조회라 던지기 전용, 실제 보정은 recoverItem).
+        // item 정체성은 snapshot.itemId 단일 출처다. snapshot·item 은 영속화 경로상 반드시 존재한다(없으면 코드 버그).
         val activeSnapshot =
-            wish.snapshotId?.let { itemSnapshotRepository.findById(it) }
+            itemSnapshotRepository.findById(wish.snapshotId)
                 ?: error("wish ${wish.getId()} 의 snapshot ${wish.snapshotId} 가 없다")
+        val item =
+            itemRepository.findById(activeSnapshot.itemId)
+                ?: error("wish ${wish.getId()} 의 item ${activeSnapshot.itemId} 가 없다")
         if (!activeSnapshot.isFailed()) activeSnapshot.recover()
         // 이미지가 있으면 S3 업로드(트랜잭션 밖). 실패 시 ImageStorageException(502).
         val imageUrl =
             productImage?.let {
                 imageStorage.upload(it.bytes, "items/${UUID.randomUUID()}.${it.extension}", it.mimeType)
             }
-        wishPersistenceService.recoverItem(wish.itemId, name, currentPrice, imageUrl, currency)
+        wishPersistenceService.recoverItem(activeSnapshot.itemId, name, currentPrice, imageUrl, currency)
         // recoverItem 이 같은 트랜잭션에서 활성 snapshot 을 보정했다. 응답 표시값은 그 snapshot 을 재조회해 읽는다.
         val snapshot =
-            wish.snapshotId?.let { itemSnapshotRepository.findById(it) }
+            itemSnapshotRepository.findById(wish.snapshotId)
                 ?: error("wish ${wish.getId()} 의 snapshot ${wish.snapshotId} 가 없다")
         return WishWithItem(wish = wish, item = item, snapshot = snapshot)
     }

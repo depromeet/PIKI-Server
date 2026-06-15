@@ -150,14 +150,6 @@ class TournamentException private constructor(
                 HttpStatus.CONFLICT,
             )
 
-        // 미구현 기능 신호(501). 응답 detail 은 사용자 대면이라 친화 문구로 두고, 어느 상태가 미구현인지는 로그·trace 로 본다.
-        fun statusNotSupported(): TournamentException =
-            TournamentException(
-                "아직 지원되지 않는 기능이에요.",
-                ErrorCategory.SERVER_ERROR,
-                HttpStatus.NOT_IMPLEMENTED,
-            )
-
         fun invalidInviteCode(): TournamentException =
             TournamentException(
                 "초대 코드가 올바르지 않아요.",

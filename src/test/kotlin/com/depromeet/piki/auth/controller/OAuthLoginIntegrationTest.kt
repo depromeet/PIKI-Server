@@ -3,6 +3,8 @@ package com.depromeet.piki.auth.controller
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthException
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthProvider
 import com.depromeet.piki.auth.infrastructure.oauth.OAuthUserInfo
+import com.depromeet.piki.item.domain.ItemSnapshot
+import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubOAuthClient
 import com.depromeet.piki.user.service.WithdrawalService
@@ -52,6 +54,9 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
 
     @Autowired
     private lateinit var wishRepository: WishRepository
+
+    @Autowired
+    private lateinit var itemSnapshotRepository: ItemSnapshotRepository
 
     @Autowired
     private lateinit var userDetailRepository: UserDetailRepository
@@ -206,7 +211,9 @@ class OAuthLoginIntegrationTest : IntegrationTestSupport() {
         val guest = createGuest()
         val guestId = UUID.fromString(guest.userId)
         // 게스트 상태에서 위시 1건 생성 (user_id = 게스트 id). 승격은 id 를 유지하므로 이 행이 그대로 따라와야 한다.
-        wishRepository.save(Wish(userId = guestId, itemId = 1L))
+        // wish 는 활성 snapshot 을 가리키므로(snapshotId NOT NULL) 대응 snapshot 을 먼저 시딩하고 그 id 를 넘긴다.
+        val snapshotId = itemSnapshotRepository.save(ItemSnapshot.processing(itemId = 1L)).getId()
+        wishRepository.save(Wish(userId = guestId, snapshotId = snapshotId))
         kakaoOAuthClient.fetchByAccessTokenStub = { OAuthUserInfo(OAuthProvider.KAKAO, "kakao_inherit", null) }
 
         val resultId =

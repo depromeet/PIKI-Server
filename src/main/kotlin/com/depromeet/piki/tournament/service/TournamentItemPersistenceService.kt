@@ -37,6 +37,12 @@ class TournamentItemPersistenceService(
         link: ProductLink,
     ): PersistedTournamentItem {
         validateAndCheckCapacity(userId, tournamentId, 1)
+        val existingItems = tournamentItemRepository.findAllByTournamentId(tournamentId)
+        if (existingItems.isNotEmpty()) {
+            val existingSnapshots = itemSnapshotRepository.findByIds(existingItems.map { it.snapshotId })
+            val existingLinks = itemRepository.findByIds(existingSnapshots.map { it.itemId }).mapNotNull { it.link }
+            if (link in existingLinks) throw TournamentException.duplicateTournamentItem()
+        }
         val item = itemRepository.save(Item(link))
         // 저장한 snapshot 의 id 를 tournament_item 에 고정한다. 출전 시점 버전이 박혀 위시 갱신과 격리된다.
         // URL 경로는 PENDING 으로 적재(outbox)하고 디스패처가 집어 파싱한다 — 워커를 여기서 트리거하지 않는다.
@@ -45,7 +51,6 @@ class TournamentItemPersistenceService(
             listOf(
                 TournamentItem(
                     tournamentId = tournamentId,
-                    itemId = item.getId(),
                     userId = userId,
                     snapshotId = snapshot.getId(),
                 ),
@@ -70,7 +75,6 @@ class TournamentItemPersistenceService(
             items.zip(snapshots) { item, snapshot ->
                 TournamentItem(
                     tournamentId = tournamentId,
-                    itemId = item.getId(),
                     userId = userId,
                     snapshotId = snapshot.getId(),
                 )
@@ -109,9 +113,7 @@ class TournamentItemPersistenceService(
         if (tournamentItem.userId != userId) throw TournamentException.forbiddenTournament()
         // 토너먼트는 출전 시점 고정 snapshot 을 본다. 최신(findLatestByItemId)이 아니라 tournamentItem.snapshotId 를
         // 갱신해야, 5단계 갱신으로 같은 item 에 snapshot 이 여러 개 생겨도 토너먼트가 고정한 버전만 보정돼 격리가 유지된다.
-        val snapshotId =
-            tournamentItem.snapshotId
-                ?: error("snapshot 없음 — tournamentItemId=$tournamentItemId, itemId=${tournamentItem.itemId}")
+        val snapshotId = tournamentItem.snapshotId
         val snapshot =
             itemSnapshotRepository.findById(snapshotId)
                 ?: error("snapshot 없음 — tournamentItemId=$tournamentItemId, snapshotId=$snapshotId")

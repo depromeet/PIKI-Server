@@ -3,9 +3,11 @@ package com.depromeet.piki.auth.filter
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.auth.infrastructure.redis.WithdrawnTokenStore
 import com.depromeet.piki.auth.web.TokenCookieWriter
+import com.depromeet.piki.common.logging.LoggingKeys
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.slf4j.MDC
 import org.springframework.http.HttpHeaders
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
@@ -32,8 +34,21 @@ class JwtAuthenticationFilter(
                 val authority = SimpleGrantedAuthority(payload.identityType.name)
                 SecurityContextHolder.getContext().authentication =
                     PreAuthenticatedAuthenticationToken(payload.userId, null, listOf(authority))
+                // 인증된 요청의 userId 를 MDC 에 실어 이 요청 이후 전 로그(컨트롤러·서비스·async 워커)가 같은
+                // userId 를 단다 — traceId 가 요청 1건을 묶고, userId 가 그 유저의 여러 요청을 가로질러 묶는다.
+                // async 전파는 ContextPropagatingTaskDecorator(AsyncConfig)가 MDC 를 워커로 넘겨 보장한다.
+                MDC.put(LoggingKeys.USER_ID, payload.userId.toString())
+                // request attribute 에도 둔다 — AccessLogFilter(이 필터보다 바깥)는 자기 finally 시점에 아래 MDC.remove
+                // 가 이미 돈 뒤라 MDC 로는 userId 를 못 본다. attribute 는 요청 끝까지 살아있어 access log 가 그걸 읽는다.
+                request.setAttribute(LoggingKeys.USER_ID, payload.userId.toString())
             }
-        filterChain.doFilter(request, response)
+        try {
+            filterChain.doFilter(request, response)
+        } finally {
+            // 톰캣 워커 스레드는 풀에서 재사용되므로 요청 끝에 반드시 지운다 — 안 지우면 다음 요청(미인증 포함)이
+            // 이전 요청의 userId 를 물려받아 오염된다. put 안 한 경우에도 remove 는 무해(no-op).
+            MDC.remove(LoggingKeys.USER_ID)
+        }
     }
 
     // 헤더(APP) 우선 → 없으면 access_token 쿠키(WEB). 둘 다 있으면 헤더가 이긴다.
