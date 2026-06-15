@@ -39,7 +39,9 @@ data class DevPushRequest(
     companion object {
         const val DEFAULT_TITLE = "PIKI 테스트 알림"
         const val DEFAULT_BODY = "FCM 발송이 정상 동작하는지 확인하는 테스트 메시지입니다."
-        const val TOKEN_BLANK_MESSAGE = "알림 설정에 실패했어요. 잠시 후 다시 시도해 주세요."
+
+        // 입력 검증(400) 실패라 '잠시 후 다시 시도' 류 재시도 유도는 넣지 않는다 — 원인은 앱의 잘못된 요청이라 재시도로 풀리지 않는다.
+        const val TOKEN_BLANK_MESSAGE = "알림 설정에 실패했어요."
 
         private const val TEST_REF_ID = 0L
     }
