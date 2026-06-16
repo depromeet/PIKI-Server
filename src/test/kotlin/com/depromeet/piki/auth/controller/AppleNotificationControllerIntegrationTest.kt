@@ -96,7 +96,7 @@ class AppleNotificationControllerIntegrationTest : IntegrationTestSupport() {
         postNotification()
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.data").value(null))
-            .andExpect(jsonPath("$.detail").value("정상적으로 처리되었습니다."))
+            .andExpect(jsonPath("$.detail").value("완료했어요."))
 
         entityManager.flush()
         entityManager.clear()

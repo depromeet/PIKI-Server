@@ -5,6 +5,8 @@ import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.notification.fcm.controller.dto.FcmDeviceUnregisterRequest
+import com.depromeet.piki.notification.fcm.controller.dto.FcmTokenRegisterRequest
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -30,7 +32,7 @@ class FcmTokenApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                detail = "FCM 토큰과 기기 식별자는 비어 있을 수 없습니다.",
+                                detail = FcmTokenRegisterRequest.BLANK_MESSAGE,
                             ),
                     )
                     unauthorized()
@@ -49,7 +51,7 @@ class FcmTokenApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                detail = "기기 식별자는 비어 있을 수 없습니다.",
+                                detail = FcmDeviceUnregisterRequest.DEVICE_ID_BLANK_MESSAGE,
                             ),
                     )
                     unauthorized()

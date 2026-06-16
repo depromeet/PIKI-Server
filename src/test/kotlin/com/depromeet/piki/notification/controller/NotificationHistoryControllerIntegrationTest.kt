@@ -335,7 +335,7 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
                     .content("""{"all":true,"ids":[1]}""")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value("validSelection: ${NotificationReadRequest.VALID_SELECTION_MESSAGE}"))
+            .andExpect(jsonPath("$.detail").value(NotificationReadRequest.VALID_SELECTION_MESSAGE))
     }
 
     @Test
@@ -348,7 +348,7 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
                     .content("""{"ids":[]}""")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value("validSelection: ${NotificationReadRequest.VALID_SELECTION_MESSAGE}"))
+            .andExpect(jsonPath("$.detail").value(NotificationReadRequest.VALID_SELECTION_MESSAGE))
     }
 
     @Test

@@ -49,14 +49,14 @@ class ProductImageTest {
 
     @Test
     fun `빈 바이트 배열이면 예외가 발생한다`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<ProductImageException> {
             ProductImage.of(ByteArray(0), "image/png")
         }
     }
 
     @Test
     fun `MIME 타입이 null 이면 예외가 발생한다`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<ProductImageException> {
             ProductImage.of(byteArrayOf(1), null)
         }
     }
@@ -64,7 +64,7 @@ class ProductImageTest {
     @ParameterizedTest
     @ValueSource(strings = ["image/gif", "image/bmp", "image/svg+xml", "application/pdf", "text/plain", ""])
     fun `지원하지 않는 MIME 타입이면 예외가 발생한다`(mimeType: String) {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<ProductImageException> {
             ProductImage.of(byteArrayOf(1), mimeType)
         }
     }

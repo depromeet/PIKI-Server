@@ -48,22 +48,17 @@ class ProductImage private constructor(
             bytes: ByteArray,
             mimeType: String?,
         ): ProductImage {
-            require(bytes.isNotEmpty()) { "빈 이미지 파일은 처리할 수 없습니다." }
+            // 빈 파일·미지정/미지원 형식은 모두 사용자가 올린 이미지로 도달 가능한 계약 위반 → 400 (ProductImageException).
+            if (bytes.isEmpty()) throw ProductImageException.emptyImage()
             // media type 은 RFC 상 대소문자를 가리지 않고 `;` 뒤에 파라미터가 붙을 수 있다.
             // (예: "IMAGE/JPEG", "image/jpeg; charset=utf-8") 정규화 후 비교한다.
             val type =
-                requireNotNull(mimeType) { "이미지 타입이 지정되지 않았습니다." }
+                (mimeType ?: throw ProductImageException.unknownType())
                     .substringBefore(';')
                     .trim()
                     .lowercase()
-            require(type in SUPPORTED_MIME_TYPES) { unsupportedMimeTypeMessage(type) }
+            if (type !in SUPPORTED_MIME_TYPES) throw ProductImageException.unsupportedType()
             return ProductImage(bytes.copyOf(), type)
         }
-
-        // 미지원 형식 예외 메시지를 한 곳에서 만든다. OpenAPI example 의 에러 detail 이
-        // 같은 문구를 평문으로 복제하지 않고 이 함수를 참조하므로, 지원 목록이 바뀌어도
-        // 실제 응답과 example 이 같은 소스에서 함께 갱신된다.
-        fun unsupportedMimeTypeMessage(mimeType: String): String =
-            "지원하지 않는 이미지 형식입니다: $mimeType (지원: ${SUPPORTED_MIME_TYPES.joinToString()})"
     }
 }

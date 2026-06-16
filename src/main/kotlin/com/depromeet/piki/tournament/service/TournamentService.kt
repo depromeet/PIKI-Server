@@ -114,11 +114,10 @@ class TournamentService(
         if (!tournament.isRoot()) throw TournamentException.clonedTournamentCannotAddItems()
         tournamentUserRepository.findByTournamentIdAndUserId(command.tournamentId, userId)
             ?: throw TournamentException.forbiddenTournament()
+        // 토너먼트에 이미 출전한 item 들 — tournament_item 의 고정 snapshot 에서 itemId 를 모은다(snapshot 단일 출처).
+        val existingTournamentItems = tournamentItemRepository.findAllByTournamentId(command.tournamentId)
         val existingItemIds =
-            tournamentItemRepository
-                .findAllByTournamentId(command.tournamentId)
-                .map { it.itemId }
-                .toSet()
+            itemSnapshotRepository.findByIds(existingTournamentItems.map { it.snapshotId }).map { it.itemId }.toSet()
         // 요청 내 중복 확인 — wishCount 는 unique itemId 기준이라 먼저 걸러야 정확하다
         val requestedItemIds = command.itemIds.toSet()
         if (requestedItemIds.size != command.itemIds.size) throw TournamentException.duplicateTournamentItem()
@@ -134,26 +133,25 @@ class TournamentService(
             .toSet()
         if (command.itemIds.any { it !in foundItemIds }) throw TournamentException.notFoundItems()
         // 출전 시점에 위시의 활성 snapshot 을 tournament_item 에 고정한다 — 이후 위시 갱신과 무관하게 그 버전을 본다.
-        val snapshotIdByItemId =
-            wishRepository
-                .findByItemIdsAndUserId(command.itemIds, userId)
-                .associate { it.itemId to it.snapshotId }
+        // item 정체성은 snapshot.itemId 단일 출처다 — wish 의 활성 snapshot 을 끌어와 itemId→snapshot 으로 맵핑한다.
+        val activeSnapshotByItemId =
+            itemSnapshotRepository
+                .findByIds(wishRepository.findByItemIdsAndUserId(command.itemIds, userId).map { it.snapshotId })
+                .associateBy { it.itemId }
         // 파싱 대기·진행 중(PENDING·PROCESSING)이거나 실패(FAILED)한 상품은 이름·가격이 비어 출전에 부적합하다. 활성 snapshot 이 READY 인 것만 허용.
-        val activeSnapshots = itemSnapshotRepository.findByIds(snapshotIdByItemId.values.filterNotNull())
-        if (activeSnapshots.size != command.itemIds.size || activeSnapshots.any { !it.isReady() }) {
+        if (activeSnapshotByItemId.size != command.itemIds.size || activeSnapshotByItemId.values.any { !it.isReady() }) {
             throw TournamentException.itemNotReady()
         }
         val savedItemIds = tournamentItemRepository
             .saveAll(
                 command.itemIds.map { itemId ->
-                    val snapshotId =
-                        snapshotIdByItemId[itemId]
+                    val snapshot =
+                        activeSnapshotByItemId[itemId]
                             ?: error("wish 의 활성 snapshot 없음 — itemId=$itemId, userId=$userId")
                     TournamentItem(
                         tournamentId = command.tournamentId,
-                        itemId = itemId,
                         userId = userId,
-                        snapshotId = snapshotId,
+                        snapshotId = snapshot.getId(),
                     )
                 },
             )
@@ -195,12 +193,13 @@ class TournamentService(
         if (tournamentItems.size !in TOURNAMENT_MIN_ITEM_COUNT..TOURNAMENT_MAX_ITEM_COUNT) {
             throw TournamentException.invalidItemCount()
         }
+        val snapshotById = snapshotsOf(tournamentItems)
+        // item 정체성은 snapshot.itemId 단일 출처다 — 고정 snapshot 에서 itemId 를 모아 item 존재를 검증한다.
         val itemById =
             itemRepository
-                .findByIds(tournamentItems.map { it.itemId })
+                .findByIds(snapshotById.values.map { it.itemId })
                 .associate { it.getId() to it }
-        if (tournamentItems.any { it.itemId !in itemById }) throw TournamentException.notFoundItems()
-        val snapshotById = snapshotsOf(tournamentItems)
+        if (snapshotById.values.any { it.itemId !in itemById }) throw TournamentException.notFoundItems()
         for (tournamentItem in tournamentItems) {
             val snapshot = tournamentItem.requireSnapshot(snapshotById)
             if (!snapshot.isReady()) throw TournamentException.itemNotReadyToStart()
@@ -457,10 +456,10 @@ class TournamentService(
         val tournamentItem = tournamentItemRepository.findById(tournamentItemId)
             ?: throw TournamentException.notFoundTournamentItem()
         if (tournamentItem.tournamentId != tournamentId) throw TournamentException.notFoundTournamentItem()
-        // sourceUrl(상품 링크)은 정체성이라 item 에서, 표시값은 고정 snapshot 에서 읽는다.
-        val item = itemRepository.findById(tournamentItem.itemId)
-            ?: throw TournamentException.notFoundTournamentItem()
+        // 표시값은 고정 snapshot 에서, sourceUrl(상품 링크)은 그 snapshot 의 item(정체성)에서 읽는다.
         val snapshot = tournamentItem.requireSnapshot(snapshotsOf(listOf(tournamentItem)))
+        val item = itemRepository.findById(snapshot.itemId)
+            ?: throw TournamentException.notFoundTournamentItem()
         return TournamentItemDetail(
             tournamentItemId = tournamentItem.getId(),
             itemId = item.getId(),
@@ -615,7 +614,7 @@ class TournamentService(
                 RankedItem(
                     rank = rank,
                     tournamentItemId = tournamentItemId,
-                    itemId = tournamentItem.itemId,
+                    itemId = snapshot.itemId,
                     name = snapshot.name,
                     price = snapshot.currentPrice,
                     currency = snapshot.currency,
@@ -883,22 +882,20 @@ class TournamentService(
                 // snapshot 은 불변식상 반드시 있어야 한다 — 없으면 continue 로 삼키지 않고 fail-fast 로 터뜨려, 부분 집계된
                 // 랭킹이 200 으로 새어 나가는 것을 막는다.
                 val tItem = tItemById[tournamentItemId] ?: continue
-                val snapshot =
-                    tItem.snapshotId?.let { snapshotById[it] }
-                        ?: error("tournamentItem $tournamentItemId 의 snapshot ${tItem.snapshotId} 가 없다")
+                val snapshot = tItem.requireSnapshot(snapshotById)
                 // 우승 아이템(rank==1)을 고른 참여자만 집계 — 참여자마다 같은 아이템의 rank 가 다를 수 있으므로
                 // RankKey 로 묶으면 누락이 생긴다. itemId 기준으로 1위 선택자만 모은다.
                 if (rank == 1) {
-                    winnersByItemId.getOrPut(tItem.itemId) { mutableListOf() }.add(participant)
+                    winnersByItemId.getOrPut(snapshot.itemId) { mutableListOf() }.add(participant)
                 }
                 // 모든 play 가 ROOT 의 tournamentItemId 를 공유하므로, 첫 번째로 처리되는 play 의 값으로 고정한다.
                 // rank 는 이후 정렬 순위로 재계산되므로 여기서는 0 으로 채운다.
                 referenceItemsById.putIfAbsent(
-                    tItem.itemId,
+                    snapshot.itemId,
                     RankedItem(
                         rank = 0,
                         tournamentItemId = tournamentItemId,
-                        itemId = tItem.itemId,
+                        itemId = snapshot.itemId,
                         name = snapshot.name,
                         price = snapshot.currentPrice,
                         currency = snapshot.currency,
@@ -959,7 +956,7 @@ class TournamentService(
         val snapshot = tournamentItem.requireSnapshot(snapshotById)
         return TournamentDetail.ItemDetail(
             tournamentItemId = tournamentItem.getId(),
-            itemId = tournamentItem.itemId,
+            itemId = snapshot.itemId,
             name = snapshot.name,
             price = snapshot.currentPrice,
             currency = snapshot.currency,
@@ -975,12 +972,12 @@ class TournamentService(
     // tournament_item 들이 고정한 snapshot 을 한 번에 조회해 id→snapshot 맵으로. 표시값 조회의 메모리 조인 재료다.
     private fun snapshotsOf(tournamentItems: Collection<TournamentItem>): Map<Long, ItemSnapshot> =
         itemSnapshotRepository
-            .findByIds(tournamentItems.mapNotNull { it.snapshotId })
+            .findByIds(tournamentItems.map { it.snapshotId })
             .associateBy { it.getId() }
 
     // 고정 snapshot 은 출전 시점에 반드시 박힌다. 없으면 영속화 경로가 깨진 코드 버그다(전환 후 신규 출전부터 보장).
     private fun TournamentItem.requireSnapshot(snapshotById: Map<Long, ItemSnapshot>): ItemSnapshot =
-        snapshotId?.let { snapshotById[it] }
+        snapshotById[snapshotId]
             ?: error("snapshot 없음 — tournamentItemId=${getId()}, snapshotId=$snapshotId")
 
     private fun computeRanking(histories: List<TournamentHistory>): List<Pair<Long, Int>> {

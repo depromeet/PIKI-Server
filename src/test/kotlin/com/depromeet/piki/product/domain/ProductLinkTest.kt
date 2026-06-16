@@ -13,7 +13,7 @@ class ProductLinkTest {
                 assertFailsWith<ProductLinkException>("'$raw' 는 거부되어야 함") {
                     ProductLink.parse(raw)
                 }
-            assertEquals("URL이 비어 있습니다.", ex.message)
+            assertEquals("링크를 입력해 주세요.", ex.message)
         }
     }
 
@@ -32,7 +32,7 @@ class ProductLinkTest {
                 assertFailsWith<ProductLinkException>("$raw 는 거부되어야 함") {
                     ProductLink.parse(raw)
                 }
-            assertEquals("https URL만 허용합니다.", ex.message)
+            assertEquals("https 링크만 등록할 수 있어요.", ex.message)
         }
     }
 
@@ -43,7 +43,7 @@ class ProductLinkTest {
             assertFailsWith<ProductLinkException> {
                 ProductLink.parse("data:text/html,<h1>x</h1>")
             }
-        assertEquals("유효한 URL 형식이 아닙니다.", ex.message)
+        assertEquals("올바른 링크 형식이 아니에요. 다시 확인해 주세요.", ex.message)
     }
 
     @Test
@@ -55,7 +55,7 @@ class ProductLinkTest {
             assertFailsWith<ProductLinkException> {
                 ProductLink.parse(rawWithSecret)
             }
-        assertEquals("유효한 URL 형식이 아닙니다.", ex.message)
+        assertEquals("올바른 링크 형식이 아니에요. 다시 확인해 주세요.", ex.message)
     }
 
     @Test
@@ -64,7 +64,7 @@ class ProductLinkTest {
             assertFailsWith<ProductLinkException> {
                 ProductLink.parse("example.com/product")
             }
-        assertEquals("https URL만 허용합니다.", ex.message)
+        assertEquals("https 링크만 등록할 수 있어요.", ex.message)
     }
 
     @Test

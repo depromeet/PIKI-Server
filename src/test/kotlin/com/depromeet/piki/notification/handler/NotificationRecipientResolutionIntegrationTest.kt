@@ -1,7 +1,9 @@
 package com.depromeet.piki.notification.handler
 
+import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.event.ItemParsingCompleted
 import com.depromeet.piki.item.event.ItemParsingFailed
+import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.notification.domain.NotificationRouting
 import com.depromeet.piki.notification.repository.NotificationRepository
 import com.depromeet.piki.notification.service.NotificationDispatcher
@@ -58,6 +60,8 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
     @Autowired private lateinit var tournamentItemRepository: TournamentItemRepository
 
     @Autowired private lateinit var wishRepository: WishRepository
+
+    @Autowired private lateinit var itemSnapshotRepository: ItemSnapshotRepository
 
     @Autowired private lateinit var userRepository: UserRepository
 
@@ -182,8 +186,8 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val itemId = 2001L
         val owner1 = UUID.randomUUID()
         val owner2 = UUID.randomUUID()
-        wishRepository.save(Wish(owner1, itemId))
-        wishRepository.save(Wish(owner2, itemId))
+        wishRepository.save(Wish(owner1, snapshotIdFor(itemId)))
+        wishRepository.save(Wish(owner2, snapshotIdFor(itemId)))
 
         val recipients = parsingCompletedHandler.resolveRecipients(ItemParsingCompleted(itemId))
 
@@ -198,7 +202,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val otherParticipant = UUID.randomUUID()
         // otherParticipant 는 추가 시점에 TOURNAMENT_ITEM_ADDED 로 갱신하므로 파싱완료는 안 받는다 — 참가자로 깔아두고 제외를 확인.
         listOf(adder, otherParticipant).forEach { tournamentUserRepository.save(TournamentUser(tournamentId, it)) }
-        tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, itemId, adder)))
+        tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, adder, snapshotIdFor(itemId))))
 
         val recipients = parsingCompletedHandler.resolveRecipients(ItemParsingCompleted(itemId))
 
@@ -212,9 +216,9 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val wishOwner = UUID.randomUUID()
         val adder = UUID.randomUUID()
         val otherParticipant = UUID.randomUUID()
-        wishRepository.save(Wish(wishOwner, itemId))
+        wishRepository.save(Wish(wishOwner, snapshotIdFor(itemId)))
         listOf(adder, otherParticipant).forEach { tournamentUserRepository.save(TournamentUser(tournamentId, it)) }
-        tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, itemId, adder)))
+        tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, adder, snapshotIdFor(itemId))))
 
         val recipients = parsingCompletedHandler.resolveRecipients(ItemParsingCompleted(itemId))
 
@@ -232,7 +236,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
     fun `파싱 실패 핸들러도 완료와 동일한 역조회 규칙을 쓴다`() {
         val itemId = 2004L
         val owner = UUID.randomUUID()
-        wishRepository.save(Wish(owner, itemId))
+        wishRepository.save(Wish(owner, snapshotIdFor(itemId)))
 
         val recipients = parsingFailedHandler.resolveRecipients(ItemParsingFailed(itemId))
 
@@ -242,7 +246,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
     @Test
     fun `파싱 완료 라우팅 - 위시로 담긴 아이템은 WISH 다 (토너먼트 식별자 없음)`() {
         val itemId = 3001L
-        wishRepository.save(Wish(UUID.randomUUID(), itemId))
+        wishRepository.save(Wish(UUID.randomUUID(), snapshotIdFor(itemId)))
 
         val routing = parsingCompletedHandler.resolveRouting(ItemParsingCompleted(itemId))
 
@@ -254,7 +258,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val itemId = 3002L
         val tournamentId = 1100L
         val tournamentItem =
-            tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, itemId, UUID.randomUUID()))).first()
+            tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, UUID.randomUUID(), snapshotIdFor(itemId)))).first()
 
         val routing = parsingCompletedHandler.resolveRouting(ItemParsingCompleted(itemId))
 
@@ -266,7 +270,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val itemId = 3003L
         val tournamentId = 1101L
         val tournamentItem =
-            tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, itemId, UUID.randomUUID()))).first()
+            tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, UUID.randomUUID(), snapshotIdFor(itemId)))).first()
 
         val routing = parsingFailedHandler.resolveRouting(ItemParsingFailed(itemId))
 
@@ -276,7 +280,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
     @Test
     fun `파싱 실패 라우팅 - 위시로 담긴 아이템은 WISH 다`() {
         val itemId = 3004L
-        wishRepository.save(Wish(UUID.randomUUID(), itemId))
+        wishRepository.save(Wish(UUID.randomUUID(), snapshotIdFor(itemId)))
 
         val routing = parsingFailedHandler.resolveRouting(ItemParsingFailed(itemId))
 
@@ -372,6 +376,10 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         tournamentRepository.saveTournament(clone)
         return clone.getId()
     }
+
+    // 알림 역조회는 wish/tournament_item→item_snapshots 를 snapshot_id 로 조인해 s.item_id 로 매칭한다.
+    // 따라서 그 itemId 로 시딩한 snapshot 의 id 를 wish/tournament_item 의 snapshotId 로 넘겨야 역조회가 맞아떨어진다.
+    private fun snapshotIdFor(itemId: Long): Long = itemSnapshotRepository.save(ItemSnapshot.processing(itemId)).getId()
 
     private var inviteSeq = 0
 

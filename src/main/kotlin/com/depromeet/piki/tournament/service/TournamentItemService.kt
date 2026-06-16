@@ -86,9 +86,7 @@ class TournamentItemService(
         if (tournamentItem.userId != userId) throw TournamentException.forbiddenTournament()
         // 출전 시점 고정 snapshot 으로 사전 상태 검증 — FAILED 가 아니면 S3 업로드 전에 막는다(orphan 방지).
         // recover 가 READY/PROCESSING 에 사유별 409 를 던진다(트랜잭션 밖 조회라 던지기 전용, 실제 보정은 recoverItem).
-        val snapshotId =
-            tournamentItem.snapshotId
-                ?: error("snapshot 없음 — tournamentItemId=$tournamentItemId, itemId=${tournamentItem.itemId}")
+        val snapshotId = tournamentItem.snapshotId
         val snapshot =
             itemSnapshotRepository.findById(snapshotId)
                 ?: error("snapshot 없음 — tournamentItemId=$tournamentItemId, snapshotId=$snapshotId")

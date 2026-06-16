@@ -4,8 +4,9 @@ import com.depromeet.piki.common.exception.BaseException
 import com.depromeet.piki.common.exception.ErrorCategory
 import com.depromeet.piki.common.exception.HttpMappable
 import org.springframework.http.HttpStatus
-import java.util.UUID
 
+// userId 등 내부 식별자는 응답 detail 로 노출하지 않는다(GlobalExceptionHandler 가 message 를 detail 로 내보냄).
+// 디버깅에 필요한 userId 는 인증 컨텍스트·trace 로 추적 가능하므로 message 에는 고정 사용자 문구만 둔다.
 class UserException private constructor(
     message: String,
     override val category: ErrorCategory,
@@ -13,41 +14,42 @@ class UserException private constructor(
 ) : BaseException(message),
     HttpMappable {
     companion object {
-        fun notFound(userId: UUID): UserException =
+        fun notFound(): UserException =
             UserException(
-                "유저를 찾을 수 없습니다. userId=$userId",
+                "존재하지 않는 계정이에요.",
                 ErrorCategory.NOT_FOUND,
                 HttpStatus.NOT_FOUND,
             )
 
-        fun alreadyMember(userId: UUID): UserException =
+        fun alreadyMember(): UserException =
             UserException(
-                "이미 MEMBER 입니다. userId=$userId",
+                "이미 가입된 계정이에요.",
                 ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )
 
-        fun deletedUser(userId: UUID): UserException =
+        fun deletedUser(): UserException =
             UserException(
-                "탈퇴한 유저입니다. userId=$userId",
+                "탈퇴한 계정이에요.",
                 ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )
 
         fun duplicateNickname(): UserException =
             UserException(
-                "이미 사용 중인 닉네임입니다.",
+                "이미 누군가 쓰고 있는 닉네임이에요. 다른 걸 입력해 주세요.",
                 ErrorCategory.CONFLICT,
                 HttpStatus.CONFLICT,
             )
 
         fun nicknameGenerationFailed(): UserException =
             UserException(
-                "닉네임 생성에 실패했습니다. 다시 시도해주세요.",
+                "닉네임을 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
                 ErrorCategory.SERVER_ERROR,
                 HttpStatus.INTERNAL_SERVER_ERROR,
             )
 
+        // reason 은 User.validateNickname 이 넘기는 고정 사용자 문구다(임의 입력·LLM 원문이 아님).
         fun invalidNickname(reason: String): UserException =
             UserException(
                 reason,
@@ -59,7 +61,7 @@ class UserException private constructor(
         // 게스트는 보존할 PII 도, 스토어 요건상 "계정"도 없고, 공유 토너먼트 참조 때문에 하드삭제도 불가하다.
         fun guestCannotWithdraw(): UserException =
             UserException(
-                "게스트는 탈퇴할 수 없습니다.",
+                "게스트는 탈퇴할 수 없어요.",
                 ErrorCategory.FORBIDDEN,
                 HttpStatus.FORBIDDEN,
             )
@@ -68,22 +70,21 @@ class UserException private constructor(
         // 게스트 토큰으로 정상 요청을 보낼 수 있으므로 require/check(500)가 아니라 커스텀 예외다(guestCannotWithdraw 와 같은 결).
         fun guestCannotUpdateProfileImage(): UserException =
             UserException(
-                "프로필 이미지는 회원만 수정할 수 있습니다.",
+                "프로필 이미지는 회원만 바꿀 수 있어요.",
                 ErrorCategory.FORBIDDEN,
                 HttpStatus.FORBIDDEN,
             )
 
         fun emptyProfileImage(): UserException =
             UserException(
-                "빈 이미지 파일은 업로드할 수 없습니다.",
+                "빈 이미지 파일은 올릴 수 없어요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
 
-        // 지원 형식 목록은 클라이언트 안내 목적이라 노출돼도 안전하다(내부 정보 아님).
         fun unsupportedProfileImageType(): UserException =
             UserException(
-                "지원하지 않는 이미지 형식입니다. (지원: ${ProfileImageFile.SUPPORTED_MIME_TYPES.joinToString()})",
+                "지원하지 않는 이미지 형식이에요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
@@ -92,7 +93,7 @@ class UserException private constructor(
         // Content-Type 헤더는 클라이언트가 위조할 수 있으므로 실제 시그니처로 교차검증한다.
         fun malformedProfileImage(): UserException =
             UserException(
-                "이미지 파일이 손상되었거나 형식과 내용이 일치하지 않습니다.",
+                "이미지 파일이 손상되었거나 형식이 맞지 않아요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )

@@ -84,8 +84,7 @@ class TournamentWishAddConcurrencyIntegrationTest : IntegrationTestSupport() {
             items.map { item ->
                 Wish(
                     userId = ownerId,
-                    itemId = item.getId(),
-                    snapshotId = snapshotIdByItemId[item.getId()],
+                    snapshotId = snapshotIdByItemId.getValue(item.getId()),
                 )
             },
         )

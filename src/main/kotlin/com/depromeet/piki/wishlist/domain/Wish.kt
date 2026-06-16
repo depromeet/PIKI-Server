@@ -12,13 +12,16 @@ import java.util.UUID
 class Wish(
     @Column(name = "user_id", nullable = false, columnDefinition = "BINARY(16)")
     val userId: UUID,
-    @Column(name = "item_id", nullable = false)
-    val itemId: Long,
     // 활성 snapshot(현재 보여줄 버전) 참조. raw Long(FK 없음). 5단계 갱신에서 새 snapshot 으로 스왑된다.
-    // nullable — 3단계 전환기에 추가됐고 기존 dev 데이터는 비우고 가므로 신규 등록부터 채워진다.
-    @Column(name = "snapshot_id")
-    val snapshotId: Long? = null,
+    // item 정체성은 snapshot.itemId 단일 출처 — wish 는 itemId 를 따로 들지 않고 snapshot 으로 도달한다.
+    @Column(name = "snapshot_id", nullable = false)
+    val snapshotId: Long,
 ) : LongBaseEntity() {
+    // 엔티티 불변식 — 0·음수는 존재할 수 없는 참조다. 정상 흐름에선 닿지 않고, 닿으면 코드 버그.
+    init {
+        require(snapshotId > 0) { "snapshotId 는 양수여야 한다: $snapshotId" }
+    }
+
     // 소유자가 아니면 거부. 도메인이 자기방어해 어느 통로로 호출되든 같은 결과를 낸다.
     fun verifyOwnedBy(userId: UUID) {
         if (this.userId != userId) throw WishException.forbiddenWishItems()

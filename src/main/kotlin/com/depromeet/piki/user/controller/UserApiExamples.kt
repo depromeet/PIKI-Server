@@ -75,8 +75,8 @@ class UserApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    // @ModelAttribute(multipart) Bean Validation 위반도 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
-                                    detail = "nickname: ${UserUpdateRequest.NICKNAME_SIZE_MESSAGE}",
+                                    // @ModelAttribute(multipart) Bean Validation 위반도 GlobalExceptionHandler.detailOf 가 위반 필드의 메시지를 그대로 detail 로 내린다.
+                                    detail = UserUpdateRequest.NICKNAME_SIZE_MESSAGE,
                                 ),
                         )
                         // 빈 파일은 같은 detail (클라 액션 동일: 파일 재첨부)
@@ -86,7 +86,7 @@ class UserApiExamples(
                         // 선언한 Content-Type 과 실제 파일 시그니처가 어긋남 (헤더 위조·손상)
                         add(UserException.malformedProfileImage(), name = "형식과 내용 불일치")
                         add(UserException.duplicateNickname(), name = "닉네임 중복")
-                        add(UserException.deletedUser(SAMPLE_USER_ID), name = "탈퇴한 유저")
+                        add(UserException.deletedUser(), name = "탈퇴한 유저")
                         unauthorized()
                         add(UserException.guestCannotUpdateProfileImage(), name = "게스트의 프로필 이미지 수정 거부")
                         add(
@@ -144,8 +144,8 @@ class UserApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    // 쿼리 파라미터 바인딩 @Valid 위반도 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
-                                    detail = "nickname: ${NicknameCheckRequest.NICKNAME_SIZE_MESSAGE}",
+                                    // 쿼리 파라미터 바인딩 @Valid 위반도 GlobalExceptionHandler.detailOf 가 위반 필드의 메시지를 그대로 detail 로 내린다.
+                                    detail = NicknameCheckRequest.NICKNAME_SIZE_MESSAGE,
                                 ),
                         )
                         unauthorized()

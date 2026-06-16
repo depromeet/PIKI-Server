@@ -14,14 +14,14 @@ class AuthException private constructor(
     companion object {
         fun invalidToken(): AuthException =
             AuthException(
-                "유효하지 않은 토큰입니다.",
+                "로그인 정보가 만료됐어요. 다시 로그인해 주세요.",
                 ErrorCategory.UNAUTHORIZED,
                 HttpStatus.UNAUTHORIZED,
             )
 
         fun missingNickname(): AuthException =
             AuthException(
-                "MEMBER 생성 시 nickname 은 필수입니다.",
+                "닉네임을 입력해 주세요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
@@ -29,7 +29,7 @@ class AuthException private constructor(
         // refresh 토큰이 쿠키·body 어느 쪽에도 없을 때. 정상 클라이언트가 도달 가능한 계약 → 400.
         fun refreshTokenRequired(): AuthException =
             AuthException(
-                "리프레시 토큰이 필요합니다.",
+                "다시 로그인해 주세요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )

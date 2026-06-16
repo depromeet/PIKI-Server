@@ -30,7 +30,7 @@ class ProfileUpdateService(
         // 프로필 이미지 수정은 MEMBER 전용. 권한을 형식 검증·업로드보다 먼저 본다 — 게스트의 이미지 파트는
         // 내용과 무관하게 403 으로 끊고(authorization before payload processing), orphan S3 업로드도 함께 막는다.
         val user = userService.findById(userId)
-        user.deletedAt?.let { throw UserException.deletedUser(userId) }
+        user.deletedAt?.let { throw UserException.deletedUser() }
         if (user.identityType != IdentityType.MEMBER) throw UserException.guestCannotUpdateProfileImage()
         // 형식 검증(빈 바이트·미지원 MIME·내용 불일치)을 업로드 전에 끝낸다 — 실패 시 즉시 400.
         val profileImage = ProfileImageFile.of(image.bytes, image.contentType)

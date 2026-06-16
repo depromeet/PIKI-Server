@@ -15,7 +15,7 @@ class ProductSnapshotException private constructor(
         // LLM 이 "상품 페이지가 아님"으로 판정. 링크 재등록·재시도 모두 무의미.
         fun notProductPage(): ProductSnapshotException =
             ProductSnapshotException(
-                "상품 페이지가 아니라고 판단되어 등록할 수 없습니다.",
+                "상품 페이지 링크만 등록할 수 있어요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
@@ -25,7 +25,7 @@ class ProductSnapshotException private constructor(
         // message 는 응답 detail 로 노출되므로 구체 사유를 담지 않고 고정 문구로 둔다.
         fun untrustworthyValue(): ProductSnapshotException =
             ProductSnapshotException(
-                "추출된 상품 정보를 신뢰할 수 없어 등록할 수 없습니다.",
+                "상품 정보를 확인하지 못했어요. 직접 입력해 주세요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )

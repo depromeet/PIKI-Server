@@ -57,8 +57,18 @@ class OAuthLoginService(
         command.accessToken?.ifBlank { null }?.let { accessToken ->
             return runProvider { client.fetchUserInfoByAccessToken(accessToken) }
         }
-        val code = command.code?.ifBlank { null } ?: throw OAuthException.invalidRequest()
-        val redirectUri = command.redirectUri?.ifBlank { null } ?: throw OAuthException.invalidRequest()
+        val code =
+            command.code?.ifBlank { null }
+                ?: run {
+                    log.info("OAuth 요청 흐름 누락: code 없음")
+                    throw OAuthException.invalidRequest()
+                }
+        val redirectUri =
+            command.redirectUri?.ifBlank { null }
+                ?: run {
+                    log.info("OAuth 요청 흐름 누락: redirectUri 없음")
+                    throw OAuthException.invalidRequest()
+                }
         return runProvider { client.fetchUserInfoByCode(code, redirectUri) }
     }
 
