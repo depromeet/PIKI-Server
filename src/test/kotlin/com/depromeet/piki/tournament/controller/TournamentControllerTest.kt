@@ -1775,7 +1775,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
     private fun saveWishItem(owner: UUID = userId, name: String = "테스트 아이템", price: Int = 10_000): Long {
         val result = wishPersistenceService.persistProcessingImages(owner, 1).first()
         itemParsingService.markReady(
-            result.item.getId(),
+            result.snapshot.getId(),
             ProductSnapshot(name = name, currentPrice = price, currency = "KRW"),
         )
         return result.item.getId()

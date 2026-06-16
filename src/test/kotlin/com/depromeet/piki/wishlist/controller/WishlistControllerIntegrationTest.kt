@@ -93,7 +93,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val result = wishPersistenceService.persist(userId, Item(ProductLink.parse(url)))
         itemParsingService.claimDuePending(100)
         itemParsingService.markReady(
-            result.item.getId(),
+            result.snapshot.getId(),
             ProductSnapshot(
                 link = ProductLink.parse(url),
                 name = name,
@@ -113,7 +113,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     ): Long {
         val result = wishPersistenceService.persist(userId, Item(ProductLink.parse(url)))
         itemParsingService.claimDuePending(100)
-        itemParsingService.markFailed(result.item.getId())
+        itemParsingService.markFailed(result.snapshot.getId())
         return result.wish.getId()
     }
 

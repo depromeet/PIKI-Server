@@ -182,6 +182,9 @@ class TournamentServiceTest {
 
         override fun findById(id: Long): Wish? = wishes.find { it.getId() == id }
 
+        // 테스트 더블 — 락 시맨틱은 통합 테스트가 검증하므로 여기선 findById 와 동일하게 동작한다.
+        override fun findByIdForUpdate(id: Long): Wish? = wishes.find { it.getId() == id }
+
         override fun findAllByIds(ids: List<Long>): List<Wish> = wishes.filter { it.getId() in ids }
 
         override fun findByItemIdsAndUserId(

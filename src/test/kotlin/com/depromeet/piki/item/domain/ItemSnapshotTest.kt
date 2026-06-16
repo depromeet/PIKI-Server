@@ -9,6 +9,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ItemSnapshotTest {
     @Test
@@ -163,6 +164,15 @@ class ItemSnapshotTest {
         val snapshot = ItemSnapshot.pending(itemId = 1L)
         assertEquals(ItemStatus.PENDING, snapshot.status)
         assertFalse(snapshot.isReady())
+    }
+
+    @Test
+    fun `isInProgress 는 PENDING·PROCESSING 에서 true, READY·FAILED 에서 false 다`() {
+        // 수동 새로고침(5단계) 멱등 가드용 — 이미 진행 중이면 새 추출 버전을 만들지 않는다.
+        assertTrue(ItemSnapshot.pending(itemId = 1L).isInProgress())
+        assertTrue(ItemSnapshot.processing(itemId = 1L).isInProgress())
+        assertFalse(ItemSnapshot(itemId = 1L).apply { markReady(ProductSnapshot(name = "x")) }.isInProgress())
+        assertFalse(ItemSnapshot(itemId = 1L).apply { markFailed() }.isInProgress())
     }
 
     @Test
