@@ -80,6 +80,19 @@ jobs:
             exit 1
           fi
 
+      # dev/staging 은 ENV_ACCESS_GATE=true 라 도메인 전체가 allowlist IP 로만 열린다. 그 IP 를 등록하는 유일한 경로가
+      # 슬랙(/admin-access)인데, SLACK_ADMIN_SIGNING_SECRET 이 비면 서명 검증이 전부 실패해 IP 를 못 열어 도메인째 잠긴다(브릭).
+      # 빈 secret 으로 dev/staging 이 배포되는 걸 미리 끊는다(fail-fast).
+      - name: Guard — env gate 환경은 Slack signing secret 필수
+        if: ${{ needs.resolve.outputs.environment == 'dev' || needs.resolve.outputs.environment == 'staging' }}
+        env:
+          SLACK_ADMIN_SIGNING_SECRET: ${{ secrets.SLACK_ADMIN_SIGNING_SECRET }}
+        run: |
+          if [ -z "$SLACK_ADMIN_SIGNING_SECRET" ]; then
+            echo "::error::[${{ needs.resolve.outputs.environment }}] ENV_ACCESS_GATE=true 인데 SLACK_ADMIN_SIGNING_SECRET 이 비어 있음 — 슬랙으로 IP 를 못 열어 도메인 전체가 잠긴다(브릭). secret 설정 후 재배포."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:

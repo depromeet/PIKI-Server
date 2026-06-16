@@ -42,7 +42,10 @@ class EnvironmentAccessFilter(
     override fun shouldNotFilter(request: HttpServletRequest): Boolean {
         if (!adminProperties.environmentGate) return true // prod·로컬: 도메인 게이트 off
         val uri = request.requestURI
-        return uri.startsWith("/admin-access/") || uri == "/health" || uri.startsWith("/actuator")
+        // /admin-access(슬랙 진입, 없으면 IP 등록 자체가 막힘)·/health(라이브니스)만 무조건 통과시킨다.
+        // /actuator 는 필터를 '거치게' 두고 doFilterInternal 의 isLocalhost 로 EC2 내부 Grafana Alloy scrape 만 허용한다 —
+        // shouldNotFilter 로 통째 우회하면 nginx 차단이 흔들리는 순간 외부 IP 에서 관리 엔드포인트(/actuator/loggers 등)가 열린다(앱 레벨 2중 방어).
+        return uri.startsWith("/admin-access/") || uri == "/health"
     }
 
     private fun isLocalhost(ip: String): Boolean = ip == "127.0.0.1" || ip == "::1" || ip == "0:0:0:0:0:0:0:1"
