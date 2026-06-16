@@ -56,6 +56,12 @@ class UserDeviceRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
             assertEquals(emptyList(), errors.map { it.message }, "동시 등록에서 예외(500)가 나면 안 된다")
             assertEquals(1, countByToken(token), "동시 등록이 기기 1 row 로 수렴해야 한다")
         } finally {
+            // 실패 경로 정리 — ready.await 단언이 실패하면 start.countDown()/shutdown() 에 못 닿아 작업 스레드가
+            // start.await() 에서 영구 대기하고, non-daemon 풀이라 테스트 프로세스가 hang 된다. finally 에서 게이트
+            // 해제 + 풀 강제 종료를 보장한다 (정상 경로에선 이미 0/shutdown 이라 멱등하게 no-op).
+            start.countDown()
+            pool.shutdownNow()
+            pool.awaitTermination(5, TimeUnit.SECONDS)
             jdbcTemplate.update("DELETE FROM user_devices WHERE fcm_token = ?", token)
         }
     }
