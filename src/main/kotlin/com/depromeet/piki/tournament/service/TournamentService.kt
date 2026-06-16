@@ -304,6 +304,7 @@ class TournamentService(
                             .toSet(),
                     )
                     .associateBy { it.id }
+                val itemCountByUserId = tournamentItems.groupingBy { it.userId }.eachCount()
                 TournamentDetail.Pending(
                     tournamentId = tournament.getId(),
                     name = tournament.name,
@@ -318,6 +319,7 @@ class TournamentService(
                                     nickname = user.nickname,
                                     profileImage = user.profileImage,
                                     isWithdrawn = !user.isActive(),
+                                    itemCount = itemCountByUserId[tu.userId] ?: 0,
                                 )
                             }
                         },
@@ -420,6 +422,7 @@ class TournamentService(
         val userById = userRepository
             .findByIds(tournamentUsers.map { it.userId }.toSet())
             .associateBy { it.id }
+        val itemCountByUserId = tournamentItems.groupingBy { it.userId }.eachCount()
         return TournamentDetail.Pending(
             tournamentId = root.getId(),
             name = root.name,
@@ -433,6 +436,7 @@ class TournamentService(
                         nickname = user.nickname,
                         profileImage = user.profileImage,
                         isWithdrawn = !user.isActive(),
+                        itemCount = itemCountByUserId[tu.userId] ?: 0,
                     )
                 }
             },
