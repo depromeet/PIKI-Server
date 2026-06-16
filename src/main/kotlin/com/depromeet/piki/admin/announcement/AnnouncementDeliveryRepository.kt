@@ -13,10 +13,13 @@ interface AnnouncementDeliveryRepository : JpaRepository<AnnouncementDelivery, L
         status: DeliveryStatus,
     ): Long
 
-    // 실패 사유 분포 — FAILED 행을 FCM 에러코드별로 센다(결과 화면의 "UNREGISTERED 3 · SENDER_ID_MISMATCH 1").
+    // 실패 사유 분포 — FAILED 행만 FCM 에러코드별로 센다(결과 화면의 "UNREGISTERED 3 · SENDER_ID_MISMATCH 1").
+    // status=FAILED 를 명시한다 — fcm_code IS NOT NULL 만으론, 비정상 데이터(SUCCESS 인데 코드가 박힌 백필·수동수정 등)가
+    // 실패 집계를 부풀릴 수 있다. "실패 사유"라는 의도를 쿼리에 못 박아 그런 행을 배제한다.
     @Query(
         "SELECT d.fcmCode AS code, COUNT(d) AS count FROM AnnouncementDelivery d " +
-            "WHERE d.announcementId = :announcementId AND d.fcmCode IS NOT NULL GROUP BY d.fcmCode",
+            "WHERE d.announcementId = :announcementId AND d.status = com.depromeet.piki.notification.service.DeliveryStatus.FAILED " +
+            "AND d.fcmCode IS NOT NULL GROUP BY d.fcmCode",
     )
     fun countByFcmCode(
         @Param("announcementId") announcementId: Long,

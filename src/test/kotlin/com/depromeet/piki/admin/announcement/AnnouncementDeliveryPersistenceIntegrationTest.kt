@@ -27,15 +27,17 @@ class AnnouncementDeliveryPersistenceIntegrationTest : IntegrationTestSupport() 
                 AnnouncementDelivery(announcementId, UUID.randomUUID(), DeliveryStatus.FAILED, "UNREGISTERED"),
                 AnnouncementDelivery(announcementId, UUID.randomUUID(), DeliveryStatus.FAILED, "SENDER_ID_MISMATCH"),
                 AnnouncementDelivery(announcementId, UUID.randomUUID(), DeliveryStatus.NO_TOKEN, null),
+                // 음수 케이스 — SUCCESS 인데 fcm_code 가 박힌 비정상 행(백필·수동수정·미래 코드변경). 실패 집계에 새면 안 된다.
+                AnnouncementDelivery(announcementId, UUID.randomUUID(), DeliveryStatus.SUCCESS, "UNREGISTERED"),
             ),
         )
 
-        assertEquals(5, deliveryRepository.countByAnnouncementId(announcementId))
-        assertEquals(2, deliveryRepository.countByAnnouncementIdAndStatus(announcementId, DeliveryStatus.SUCCESS))
+        assertEquals(6, deliveryRepository.countByAnnouncementId(announcementId))
+        assertEquals(3, deliveryRepository.countByAnnouncementIdAndStatus(announcementId, DeliveryStatus.SUCCESS))
         assertEquals(2, deliveryRepository.countByAnnouncementIdAndStatus(announcementId, DeliveryStatus.FAILED))
         assertEquals(1, deliveryRepository.countByAnnouncementIdAndStatus(announcementId, DeliveryStatus.NO_TOKEN))
 
-        // FCM 실패 사유 분포 — fcm_code 가 있는 FAILED 행만 코드별로 센다(결과 화면의 "UNREGISTERED 1 · SENDER_ID_MISMATCH 1").
+        // FCM 실패 사유 분포 — FAILED 행만 코드별로 센다. SUCCESS+UNREGISTERED 비정상 행은 제외돼 UNREGISTERED 가 2 로 부풀지 않는다.
         val byCode = deliveryRepository.countByFcmCode(announcementId).associate { it.code to it.count }
         assertEquals(mapOf("UNREGISTERED" to 1L, "SENDER_ID_MISMATCH" to 1L), byCode)
     }
