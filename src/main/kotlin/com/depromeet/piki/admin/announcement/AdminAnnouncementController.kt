@@ -1,6 +1,7 @@
 package com.depromeet.piki.admin.announcement
 
 import com.depromeet.piki.admin.access.AdminSession
+import com.depromeet.piki.admin.config.ClientIp
 import com.depromeet.piki.admin.config.ConditionalOnAdminEnabled
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.stereotype.Controller
@@ -104,6 +105,6 @@ class AdminAnnouncementController(
     private fun actor(request: HttpServletRequest): String =
         request.getSession(false)?.let { AdminSession.slackName(it) } ?: "운영자"
 
-    private fun clientIp(request: HttpServletRequest): String =
-        request.getHeader("X-Forwarded-For")?.split(",")?.firstOrNull()?.trim()?.ifBlank { null } ?: request.remoteAddr
+    // 게이트와 동일한 안전 추출(X-Real-IP, 위조 불가)을 audit 에도 쓴다 — XFF 첫 hop 은 스푸핑 가능.
+    private fun clientIp(request: HttpServletRequest): String = ClientIp.of(request)
 }
