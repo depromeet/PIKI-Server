@@ -19,8 +19,9 @@ class ProductLink private constructor(
     }
 
     // host 가 미지원 목록과 같거나 그 서브도메인이면 미지원. host 가 없으면(형식 이상은 parse 가 이미 처리) 판정 대상 아님.
+    // trailing dot(절대 도메인 표기, 예: "naver.com.")은 제거해 차단 우회를 막는다. Kotlin lowercase() 는 locale 무관(invariant).
     private fun isFromUnsupportedPlatform(): Boolean {
-        val host = value.host?.lowercase() ?: return false
+        val host = value.host?.trimEnd('.')?.lowercase() ?: return false
         return UNSUPPORTED_HOSTS.any { host == it || host.endsWith(".$it") }
     }
 

@@ -118,6 +118,8 @@ class ProductLinkTest {
                 "https://smartstore.naver.com/somestore/products/1",
                 "https://brand.naver.com/nike/products/1",
                 "https://naver.me/5AbCdEf", // naver.me 단축 링크
+                "https://naver.com./x", // trailing dot(절대 도메인 표기)로 차단 우회 시도 — 정규화로 막혀야 한다
+                "https://www.coupang.com./vp/products/1", // trailing dot
             )
         cases.forEach { raw ->
             val link = ProductLink.parse(raw) // parse 자체는 형식이 정상이라 통과한다
