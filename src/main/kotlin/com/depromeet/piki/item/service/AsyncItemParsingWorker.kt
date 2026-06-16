@@ -90,9 +90,12 @@ class AsyncItemParsingWorker(
         e: Throwable,
     ) {
         if (isRetryable(e)) {
-            // 일시 외부 오류(네트워크·timeout·Gemini 5xx 등) — 다시 하면 될 수도 있으므로 FAILED 로 종결하지 않고
+            // 일시 외부 오류(네트워크·timeout·5xx 게이트웨이 등) — 다시 하면 될 수도 있으므로 FAILED 로 종결하지 않고
             // PROCESSING 그대로 둔다. recover 가 stale 로 잡아 상한까지 재실행한다(execution at-least-once, #461).
-            log.warn("item {} 파싱 실패(일시 외부 오류) → PROCESSING 유지, recover 가 재실행: url={}", itemId, link.safeLogString(), e)
+            // 종결이 아니라 메트릭은 여기서 세지 않고(recover 가 종결 시 retry_exhausted/ready 로 집계, 중복 방지),
+            // 풀 stack_trace 대신 logfmt 한 줄만 남긴다 — fetch 실패 상세(status 등)는 HttpPageFetcher 가 같은
+            // traceId 로 이미 WARN 을 남기므로, 여기선 "어느 item 이 재시도 대기에 들어갔나"만 구조화해 남긴다.
+            log.warn("item.parse.retry item={} url={}", itemId, link.safeLogString())
             return
         }
         // 확정 실패 — 상품 아님·추출값 신뢰 불가·호스트 차단·4xx 접근 불가 등. 같은 URL 을 다시 파싱해도 결과가
