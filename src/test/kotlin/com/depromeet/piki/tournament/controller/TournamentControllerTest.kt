@@ -1396,6 +1396,12 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .content("""{"url":"https://kream.co.kr/products/950123"}"""),
             ).andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.detail").value("아직 지원하지 않는 쇼핑몰이에요."))
+
+        // 등록 입력 경계에서 차단되므로 tournament item 이 생성되면 안 된다(검증 위치가 뒤로 밀려 일부라도 영속화되는 회귀 방지).
+        assertTrue(
+            tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).isEmpty(),
+            "미지원 플랫폼은 등록 입력 경계에서 차단되어 tournament item 이 생성되면 안 됩니다.",
+        )
     }
 
     @Test

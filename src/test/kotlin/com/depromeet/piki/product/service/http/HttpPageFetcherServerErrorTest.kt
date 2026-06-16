@@ -40,6 +40,7 @@ class HttpPageFetcherServerErrorTest {
                 }
 
             assertEquals(ErrorCategory.SERVER_ERROR, ex.category)
+            assertEquals(HttpStatus.BAD_GATEWAY, ex.httpStatus)
         }
     }
 
@@ -57,6 +58,7 @@ class HttpPageFetcherServerErrorTest {
                 }
 
             assertEquals(ErrorCategory.RETRYABLE, ex.category)
+            assertEquals(HttpStatus.BAD_GATEWAY, ex.httpStatus)
         }
     }
 
@@ -73,5 +75,6 @@ class HttpPageFetcherServerErrorTest {
             }
 
         assertEquals(ErrorCategory.INVALID_INPUT, ex.category)
+        assertEquals(HttpStatus.BAD_REQUEST, ex.httpStatus)
     }
 }
