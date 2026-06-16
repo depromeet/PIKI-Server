@@ -161,6 +161,14 @@
           render();
         });
       });
+      // 과거 시각 제출 차단(서버 require 와 이중 방어) — 비우면 즉시 발송이라 통과시킨다.
+      document.getElementById('schedAt').form.addEventListener('submit', function (e) {
+        var d = fp.selectedDates[0];
+        if (d && d.getTime() <= Date.now()) {
+          e.preventDefault();
+          alert('과거 시각은 예약할 수 없습니다. 미래 시각을 고르거나, 비워서 즉시 발송하세요.');
+        }
+      });
       render();
     })();
   </script>

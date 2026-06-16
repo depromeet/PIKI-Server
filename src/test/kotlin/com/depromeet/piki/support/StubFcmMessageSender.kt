@@ -2,6 +2,7 @@ package com.depromeet.piki.support
 
 import com.depromeet.piki.notification.domain.Notification
 import com.depromeet.piki.notification.fcm.service.FcmMessageSender
+import com.depromeet.piki.notification.fcm.service.FcmFailureCode
 import com.depromeet.piki.notification.fcm.service.FcmSendResult
 
 // 외부 FCM(FirebaseMessaging) 호출을 통합 테스트에서 격리하기 위한 stub(#245).
@@ -27,7 +28,7 @@ class StubFcmMessageSender : FcmMessageSender {
         notification: Notification,
     ): FcmSendResult {
         val stale = onSend(tokens, notification)
-        val failureByCode = if (stale.isEmpty()) emptyMap() else mapOf("UNREGISTERED" to stale.size)
+        val failureByCode = if (stale.isEmpty()) emptyMap() else mapOf(FcmFailureCode.UNREGISTERED to stale.size)
         return FcmSendResult(staleTokens = stale, successCount = tokens.size - stale.size, failureByCode = failureByCode)
     }
 }

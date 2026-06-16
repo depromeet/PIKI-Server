@@ -52,7 +52,8 @@ class AdminAnnouncementService(
             sendService.execute(id, actor, clientIp)
             return
         }
-        require(scheduledAt.isAfter(LocalDateTime.now())) { "예약 시각은 현재보다 미래여야 합니다." }
+        // scheduledAt 은 운영자가 입력한 KST wall-clock 이므로 KST 기준으로 미래인지 본다(서버 JVM TZ 와 무관).
+        require(scheduledAt.isAfter(LocalDateTime.now(Announcement.KST))) { "예약 시각은 현재보다 미래여야 합니다." }
         announcement.schedule(scheduledAt)
         announcementRepository.save(announcement)
         auditService.record(actor, AdminAuditAction.ANNOUNCEMENT_SEND, "공지 발송 예약 id=$id at=$scheduledAt", clientIp)

@@ -5,6 +5,7 @@ import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Table
 import java.time.LocalDateTime
+import java.time.ZoneId
 
 // 백오피스에서 작성·발송한 공지의 원본·발송 내역(#391/#489). 알림센터 fan-out 은 #489 가 별도로 다룬다.
 @Entity
@@ -131,7 +132,7 @@ class Announcement(
     fun markSent() {
         check(isSending) { "완료 처리는 SENDING 상태에서만 가능하다. status=$status" }
         this.status = STATUS_SENT
-        this.sentAt = LocalDateTime.now()
+        this.sentAt = LocalDateTime.now(KST)
     }
 
     companion object {
@@ -139,5 +140,10 @@ class Announcement(
         const val STATUS_SCHEDULED = "SCHEDULED"
         const val STATUS_SENDING = "SENDING"
         const val STATUS_SENT = "SENT"
+
+        // 공지 예약·발송 시각은 전부 KST 로 다룬다 — JVM 기본 TZ 는 UTC 라(application.yml 173) now() 를 그대로 쓰면
+        // 운영자가 입력한 KST wall-clock(예약 12:00)과 9시간 어긋나 오발송한다. scheduledAt 은 KST wall-clock 으로 저장하고
+        // 스케줄러·미래검증·완료시각도 now(KST)로 비교해, 입력·저장·표시·발송을 모두 KST 로 자기일관하게 둔다(전역 TZ 미변경).
+        val KST: ZoneId = ZoneId.of("Asia/Seoul")
     }
 }

@@ -69,7 +69,8 @@ class AnnouncementBroadcaster(
         // 한 기기라도 도달하면 그 유저는 받은 것 → SUCCESS. 전 기기 실패면 대표 코드와 함께 FAILED.
         return when {
             result.successCount > 0 -> RecipientDelivery(userId, DeliveryStatus.SUCCESS, null)
-            else -> RecipientDelivery(userId, DeliveryStatus.FAILED, result.dominantFailureCode)
+            // delivery 행의 fcm_code 는 String(우리 INTERNAL_ERROR 등도 담음)이라 enum 을 name 으로 박는다.
+            else -> RecipientDelivery(userId, DeliveryStatus.FAILED, result.dominantFailureCode?.name)
         }
     }
 

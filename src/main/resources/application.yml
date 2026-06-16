@@ -4,7 +4,7 @@ server:
       # admin 백오피스 세션 수명. 메인 API 체인은 STATELESS(세션 미사용)라 이 값은 admin form-login 세션에만 적용된다.
       # 환경별로 다르게: dev·staging 은 길게(개발 편의, 사실상 무제한), prod 는 짧게(24h). staging 이 prod 프로파일을
       # 공유하므로(deploy.yml) 프로파일로는 못 가른다 → env 변수로 주입한다. 미설정(로컬) 기본은 30d.
-      timeout: ${ADMIN_SESSION_TIMEOUT:30d}
+      timeout: ${ADMIN_SESSION_TIMEOUT:7d}
 
 # 운영 백오피스(#249) + 슬랙-IP 접근 게이트(#526). 게이트가 보호하므로 enabled 를 전 환경에 둬도 안전하다 —
 # /admin 은 슬랙 세션, dev/staging 도메인은 IP allowlist 로 막힌다. 로컬은 ADMIN_ENABLED=true + ADMIN_LOCAL_BYPASS=true 로 게이트 없이 본다.

@@ -99,9 +99,17 @@ class SlackAccessController(
         slackUserId: String,
         slackName: String,
     ): Map<String, String> {
+        // 오타로 엉뚱한 값이 allowlist 키로 박히는 걸 막는다 — 형식 안 맞으면 등록하지 않고 안내만.
+        if (!isValidIp(ip)) return ephemeral("유효한 IP 형식이 아닙니다: `$ip` (예: 121.130.45.67)")
         allowlistService.grant(ip, slackName)
         auditService.record(slackName, AdminAuditAction.ACCESS_GRANTED, "직접 입력으로 IP $ip 허용", ip)
         return ephemeral("IP $ip 를 허용했습니다 (등록자: $slackName).")
+    }
+
+    // IPv4 는 옥텟 범위까지 엄격히, IPv6 는 hex·콜론 구성만 느슨히 본다(정확한 파싱보다 오타 차단이 목적).
+    private fun isValidIp(ip: String): Boolean {
+        IPV4.matchEntire(ip)?.let { m -> return m.groupValues.drop(1).all { it.toInt() in 0..255 } }
+        return ip.contains(":") && ip.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' || it == ':' || it == '.' }
     }
 
     private fun listAllowed(): Map<String, String> {
@@ -135,4 +143,8 @@ class SlackAccessController(
             }
 
     private fun ephemeral(text: String): Map<String, String> = mapOf("response_type" to "ephemeral", "text" to text)
+
+    companion object {
+        private val IPV4 = Regex("""^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$""")
+    }
 }

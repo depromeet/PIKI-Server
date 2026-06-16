@@ -19,7 +19,8 @@ class AnnouncementScheduler(
 
     @Scheduled(fixedDelay = POLL_INTERVAL_MS)
     fun dispatchDue() {
-        val due = announcementRepository.findByStatusAndScheduledAtLessThanEqual(Announcement.STATUS_SCHEDULED, LocalDateTime.now())
+        // scheduledAt 은 KST wall-clock 으로 저장되므로 비교도 now(KST). JVM 기본 TZ(UTC) now() 를 쓰면 9시간 늦게 발송된다.
+        val due = announcementRepository.findByStatusAndScheduledAtLessThanEqual(Announcement.STATUS_SCHEDULED, LocalDateTime.now(Announcement.KST))
         if (due.isEmpty()) return
         log.info("예약 공지 발송 폴링 — 도래 {}건", due.size)
         // execute 는 @Async — 외부 빈 호출이라 proxy 를 거쳐 각자 별도 스레드에서 돈다.

@@ -42,7 +42,7 @@ class FirebaseMessageSender(
         // 발송 결과 집계 — 성공 수와 실패 사유(FCM messagingErrorCode)별 분포를 모아 마지막에 한 줄로 요약한다.
         // 토큰 원문은 크리덴셜이라 지문(maskToken)으로만 남긴다.
         var success = 0
-        val failureCodes = mutableMapOf<String, Int>()
+        val failureCodes = mutableMapOf<FcmFailureCode, Int>()
         tokens.chunked(MULTICAST_LIMIT).forEach { chunk ->
             val response =
                 runCatching { messaging.sendEachForMulticast(buildMessage(chunk, notification)) }
@@ -57,7 +57,7 @@ class FirebaseMessageSender(
                     return@forEachIndexed
                 }
                 val code = result.exception?.messagingErrorCode
-                failureCodes.merge(code?.name ?: "UNKNOWN", 1, Int::plus)
+                failureCodes.merge(FcmFailureCode.from(code), 1, Int::plus)
                 if (isStaleToken(code)) {
                     stale += chunk[i]
                     log.info("FCM 죽은 토큰 감지 → 정리 대상 token={} code={}", SensitiveData.maskToken(chunk[i]), code)
