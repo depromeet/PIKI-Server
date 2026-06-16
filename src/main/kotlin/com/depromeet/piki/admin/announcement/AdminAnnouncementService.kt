@@ -76,7 +76,9 @@ class AdminAnnouncementService(
     @Transactional
     fun delete(id: Long) {
         val announcement = get(id)
-        require(announcement.isDraft) { "발송됐거나 예약된 공지는 삭제할 수 없습니다(예약은 먼저 취소)." }
+        // DRAFT(미발송 초안) 또는 MISSED(유예 초과 미발송)만 삭제 가능 — 둘 다 발송 안 된 정리 대상이다.
+        // SENT/SENDING(발송 내역)·SCHEDULED(예약, 먼저 취소)는 삭제 불가.
+        require(announcement.isDraft || announcement.isMissed) { "발송됐거나 예약된 공지는 삭제할 수 없습니다(예약은 먼저 취소)." }
         announcementRepository.delete(announcement)
     }
 

@@ -27,6 +27,14 @@ class Announcement(
     var target: String = target
         protected set
 
+    // 엔티티 불변식 — 최후의 보루(입력 경계가 먼저 거른다). 누가 어떤 경로로 만들든 컬럼 길이를 넘으면
+    // DB 저장 시점이 아니라 생성 시점에 깨지게 한다(데이터 truncation 방지).
+    init {
+        require(title.isNotBlank()) { "공지 제목이 비어 있습니다." }
+        require(title.length <= MAX_TITLE_LENGTH) { "공지 제목 길이가 ${MAX_TITLE_LENGTH}자를 초과했습니다." }
+        require(body.length <= MAX_BODY_LENGTH) { "공지 본문 길이가 ${MAX_BODY_LENGTH}자를 초과했습니다." }
+    }
+
     @Column(name = "recipient_count", nullable = false)
     var recipientCount: Int = 0
         protected set
@@ -149,6 +157,10 @@ class Announcement(
         const val STATUS_SENDING = "SENDING"
         const val STATUS_SENT = "SENT"
         const val STATUS_MISSED = "MISSED"
+
+        // 컬럼 길이와 공유하는 입력 상한(title 255 / body 1000).
+        const val MAX_TITLE_LENGTH = 255
+        const val MAX_BODY_LENGTH = 1000
 
         // 공지 예약·발송 시각은 전부 KST 로 다룬다 — JVM 기본 TZ 는 UTC 라(application.yml 173) now() 를 그대로 쓰면
         // 운영자가 입력한 KST wall-clock(예약 12:00)과 9시간 어긋나 오발송한다. scheduledAt 은 KST wall-clock 으로 저장하고

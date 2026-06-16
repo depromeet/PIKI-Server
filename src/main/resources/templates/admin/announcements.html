@@ -44,7 +44,8 @@
     <div class="ok" th:if="${param.registered}">공지가 등록됐습니다. 아래 목록에서 발송하거나 예약하세요.</div>
     <div class="ok" th:if="${param.scheduled}">공지가 예약됐습니다. 예약 시각에 자동 발송됩니다.</div>
     <div class="ok" th:if="${param.canceled}">예약을 취소했습니다.</div>
-    <div class="ok" th:if="${param.deleted}">초안을 삭제했습니다.</div>
+    <div class="ok" th:if="${param.deleted}">공지를 삭제했습니다.</div>
+    <div class="ok" th:if="${param.error == 'length'}" style="background:#fee2e2;color:#b42318">제목은 255자, 본문은 1000자를 넘을 수 없습니다.</div>
 
     <h2>공지 등록</h2>
     <form class="card" th:action="@{/admin/announcements}" method="post">
@@ -81,8 +82,8 @@
             <td>
               <div style="display:flex;gap:6px;align-items:center">
                 <a th:if="${a.draft}" class="btn sm" style="display:inline-block;text-decoration:none" th:href="@{/admin/announcements/{id}/send(id=${a.id})}">발송/예약</a>
-                <form th:if="${a.draft}" th:action="@{/admin/announcements/{id}/delete(id=${a.id})}" method="post" style="margin:0"
-                      onsubmit="return confirm('이 초안을 삭제할까요?');">
+                <form th:if="${a.draft or a.missed}" th:action="@{/admin/announcements/{id}/delete(id=${a.id})}" method="post" style="margin:0"
+                      onsubmit="return confirm('삭제할까요?');">
                   <button class="btn sm ghost" type="submit">삭제</button>
                 </form>
                 <form th:if="${a.scheduled}" th:action="@{/admin/announcements/{id}/cancel(id=${a.id})}" method="post" style="margin:0"
