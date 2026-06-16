@@ -73,7 +73,11 @@ class AdminAnnouncementController(
         @RequestParam(required = false) scheduledAt: String?,
         request: HttpServletRequest,
     ): String {
-        val at = scheduledAt?.trim()?.ifBlank { null }?.let { LocalDateTime.parse(it) }
+        // 잘못된 형식의 scheduledAt(직접 POST·UI 버그 등)이 500 으로 떨어지지 않게 친화적으로 막는다.
+        val at =
+            scheduledAt?.trim()?.ifBlank { null }?.let {
+                runCatching { LocalDateTime.parse(it) }.getOrElse { return "redirect:/admin/announcements/$id/send?error=time" }
+            }
         adminAnnouncementService.schedule(id, at, actor = actor(request), clientIp = clientIp(request))
         // 예약이면 목록에서 예약 상태를 보고, 즉시면 바로 결과(진행률) 화면으로 보낸다.
         return at?.let { "redirect:/admin/announcements?scheduled" } ?: "redirect:/admin/announcements/$id/result"

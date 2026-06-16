@@ -10,10 +10,16 @@ import jakarta.servlet.http.HttpServletRequest
 object ClientIp {
     private const val REAL_IP = "X-Real-IP"
 
-    fun of(request: HttpServletRequest): String =
-        request
-            .getHeader(REAL_IP)
-            ?.trim()
-            ?.ifBlank { null }
-            ?: request.remoteAddr
+    // 신뢰 프록시 — 앱은 127.0.0.1 바인딩 뒤의 nginx 로만 닿으므로(deploy.yml), 정상 트래픽의 remoteAddr 은 항상 loopback 이다.
+    private val TRUSTED_PROXIES = setOf("127.0.0.1", "::1", "0:0:0:0:0:0:0:1")
+
+    // X-Real-IP 는 신뢰 프록시(nginx)가 $remote_addr 로 '덮어쓴' 값일 때만 신뢰한다.
+    // remoteAddr 이 loopback 이 아니면(직접 접근 경로 생김·바인딩 가정 깨짐 등) 헤더가 위조됐을 수 있어 채택하지 않고 remoteAddr 를 쓴다.
+    fun of(request: HttpServletRequest): String {
+        val remote = request.remoteAddr
+        if (remote in TRUSTED_PROXIES) {
+            request.getHeader(REAL_IP)?.trim()?.ifBlank { null }?.let { return it }
+        }
+        return remote
+    }
 }

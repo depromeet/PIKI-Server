@@ -63,13 +63,16 @@ class AdminAnnouncementService(
     }
 
     // 예약 취소 — SCHEDULED → DRAFT 로 되돌린다(다시 편집·삭제·재예약 가능).
+    // claim 과 같은 비관적 락으로 조회한다 — 락 없이 get() 하면, 운영자가 취소를 누른 순간 스케줄러 claim 이
+    // 같은 SCHEDULED 를 집어 SENDING 으로 전환하는 경합에서 상태가 어긋날 수 있다(취소했는데 발송 시작 등).
     @Transactional
     fun cancelSchedule(
         id: Long,
         actor: String,
         clientIp: String?,
     ) {
-        val announcement = get(id)
+        val announcement =
+            announcementRepository.findByIdForUpdate(id) ?: throw IllegalArgumentException("공지를 찾을 수 없습니다.")
         announcement.cancelSchedule()
         announcementRepository.save(announcement)
         auditService.record(actor, AdminAuditAction.ANNOUNCEMENT_SEND, "공지 예약 취소 id=$id", clientIp)
