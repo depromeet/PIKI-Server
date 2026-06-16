@@ -5,6 +5,7 @@ import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.wishlist.domain.Wish
+import com.depromeet.piki.wishlist.domain.WishException
 import com.depromeet.piki.wishlist.repository.WishRepository
 import com.depromeet.piki.wishlist.service.dto.WishWithItem
 import org.springframework.stereotype.Service
@@ -60,19 +61,49 @@ class WishPersistenceService(
     // FAILED 버전의 수동 보정 영속화 — S3 업로드(외부 호출)는 호출부가 트랜잭션 바깥에서 끝내고,
     // 여기선 snapshot.recover(값 변경 + FAILED→READY 전이)만 짧은 트랜잭션으로 묶는다(dirty checking).
     // recover 가 READY/PROCESSING 을 409, 이름 없음을 400 으로 막는다(도메인 자기방어). item 은 정체성이라 건드리지 않는다.
+    // 호출부가 검증한 그 snapshot 을 id 로 직접 보정한다 — findLatestByItemId(최신)가 아니다. 갱신(refresh)이 끼어들어
+    // 활성≠최신이 되어도, 검증한 행과 보정 대상 행이 어긋나지 않는다(refresh-vs-recover race 로 엉뚱한 버전 보정·409 방지).
     @Transactional
     fun recoverItem(
-        itemId: Long,
+        snapshotId: Long,
         name: String?,
         currentPrice: Int?,
         imageUrl: String?,
         currency: String?,
     ): Item {
-        val item = itemRepository.findById(itemId) ?: error("item $itemId 가 없다")
         val snapshot =
-            itemSnapshotRepository.findLatestByItemId(itemId)
-                ?: error("item $itemId 의 snapshot 이 없다")
+            itemSnapshotRepository.findById(snapshotId)
+                ?: error("snapshot $snapshotId 이 없다")
+        val item = itemRepository.findById(snapshot.itemId) ?: error("item ${snapshot.itemId} 가 없다")
         snapshot.recover(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
         return item
+    }
+
+    // 위시 item 을 원본 링크로 재추출해 최신화한다(수동 새로고침). 새 PENDING snapshot 을 outbox 에 적재하고
+    // wish 활성 포인터를 즉시 그 버전으로 스왑한다 — 디스패처가 PENDING 을 집어 추출해 READY/FAILED 로 전이한다(등록과 동일 흐름).
+    // 옛 snapshot 행은 유지돼 토너먼트 출전 격리를 지킨다. 외부 호출(추출)은 디스패처가 트랜잭션 밖에서 하므로 여기선 적재만 한다.
+    // 동시 새로고침은 wish 행 락(findByIdForUpdate)으로 직렬화하고, 이미 진행 중이면 멱등(no-op)으로 새 추출을 만들지 않는다.
+    @Transactional
+    fun refresh(
+        userId: UUID,
+        wishId: Long,
+    ): WishWithItem {
+        val wish = wishRepository.findByIdForUpdate(wishId) ?: throw WishException.notFound()
+        wish.verifyOwnedBy(userId)
+        // item 정체성은 snapshot.itemId 단일 출처. snapshot·item 은 영속화 경로상 반드시 존재한다(없으면 코드 버그).
+        val activeSnapshot =
+            itemSnapshotRepository.findById(wish.snapshotId)
+                ?: error("wish ${wish.getId()} 의 snapshot ${wish.snapshotId} 가 없다")
+        val item =
+            itemRepository.findById(activeSnapshot.itemId)
+                ?: error("wish ${wish.getId()} 의 item ${activeSnapshot.itemId} 가 없다")
+        // link 없는 item(이미지 등록분)은 재추출 입력이 없어 새로고침 대상이 아니다(400).
+        item.link ?: throw WishException.notRefreshable()
+        // 이미 진행 중(PENDING·PROCESSING)이면 새 추출을 만들지 않고 현재 진행 상태를 그대로 반환(멱등).
+        if (activeSnapshot.isInProgress()) return WishWithItem(wish = wish, item = item, snapshot = activeSnapshot)
+        // 새 PENDING 버전을 outbox 에 적재하고 활성 포인터를 즉시 스왑한다.
+        val newSnapshot = itemSnapshotRepository.save(ItemSnapshot.pending(item.getId()))
+        wish.swapSnapshot(newSnapshot.getId())
+        return WishWithItem(wish = wish, item = item, snapshot = newSnapshot)
     }
 }

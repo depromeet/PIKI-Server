@@ -9,6 +9,7 @@ import com.depromeet.piki.product.domain.ProductLink
 interface ItemParsingWorker {
     fun parse(
         itemId: Long,
+        snapshotId: Long,
         link: ProductLink,
     )
 }

@@ -49,5 +49,12 @@ class WishException private constructor(
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
+
+        fun notRefreshable(): WishException =
+            WishException(
+                "링크가 없는 항목은 새로고침할 수 없습니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
     }
 }

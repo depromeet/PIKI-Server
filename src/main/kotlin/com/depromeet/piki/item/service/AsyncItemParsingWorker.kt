@@ -32,6 +32,7 @@ class AsyncItemParsingWorker(
     @Async(AsyncConfig.ITEM_PARSING_EXECUTOR)
     override fun parse(
         itemId: Long,
+        snapshotId: Long,
         link: ProductLink,
     ) {
         // 파싱 한 건을 "item.parse" span 하나로 묶는다 — fetch·structured·Gemini 호출이 그 자식 span 으로 붙어,
@@ -40,20 +41,21 @@ class AsyncItemParsingWorker(
         Observation.createNotStarted(PARSE_OBSERVATION, observationRegistry).observe {
             val started = System.nanoTime()
             runCatching { productLinkExtractor.extract(link) }
-                .onSuccess { snapshot -> onExtracted(itemId, link, snapshot, started) }
-                .onFailure { e -> onExtractFailed(itemId, link, e) }
+                .onSuccess { snapshot -> onExtracted(itemId, snapshotId, link, snapshot, started) }
+                .onFailure { e -> onExtractFailed(itemId, snapshotId, link, e) }
         }
     }
 
     private fun onExtracted(
         itemId: Long,
+        snapshotId: Long,
         link: ProductLink,
         snapshot: ProductSnapshot,
         started: Long,
     ) {
         val elapsedMs = (System.nanoTime() - started) / 1_000_000
         // 전이가 실패(추출값 도메인 검증 위반·DB 오류·sweeper 와의 레이스로 이미 전이됨)해도 예외를 흡수한다.
-        runCatching { itemParsingService.markReady(itemId, snapshot) }
+        runCatching { itemParsingService.markReady(snapshotId, snapshot) }
             .onSuccess {
                 log.info(
                     "item.parse.result item={} result={} reason={} latency={}ms url={}",
@@ -76,7 +78,7 @@ class AsyncItemParsingWorker(
                 )
                 // 예외 상세(스택)는 별도 줄로 — 구조화(item.parse.result) 줄에 스택을 붙이면 logfmt 파싱이 깨진다.
                 log.warn("item.parse.error item={} reason={} READY 전이 거부", itemId, ItemParsingMetrics.REASON_READY_REJECTED, e)
-                markFailedQuietly(itemId)
+                markFailedQuietly(itemId, snapshotId)
                 ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, ItemParsingMetrics.REASON_READY_REJECTED)
             }
     }
@@ -86,6 +88,7 @@ class AsyncItemParsingWorker(
     // 재시도 무의미)는 즉시 FAILED. HttpMappable 이 아닌 예상 못한 예외는 일시·영구를 단정할 수 없어 보수적으로 일시로 둔다.
     private fun onExtractFailed(
         itemId: Long,
+        snapshotId: Long,
         link: ProductLink,
         e: Throwable,
     ) {
@@ -107,7 +110,7 @@ class AsyncItemParsingWorker(
         )
         // 실패 사유 원문(공백 포함 가능)은 별도 줄로 — 구조화 줄의 logfmt 필드 파싱을 깨지 않게 분리한다.
         log.info("item.parse.error item={} reason={} cause={}", itemId, reason, e.message)
-        markFailedQuietly(itemId)
+        markFailedQuietly(itemId, snapshotId)
         ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, reason)
     }
 
@@ -124,8 +127,11 @@ class AsyncItemParsingWorker(
         }
 
     // FAILED 전이도 sweeper 와의 레이스로 실패할 수 있어(이미 전이됨) 잡아 흡수한다.
-    private fun markFailedQuietly(itemId: Long) {
-        runCatching { itemParsingService.markFailed(itemId) }
+    private fun markFailedQuietly(
+        itemId: Long,
+        snapshotId: Long,
+    ) {
+        runCatching { itemParsingService.markFailed(snapshotId) }
             .onFailure { e ->
                 when (e) {
                     is IllegalStateException -> log.info("item {} 는 이미 전이됨, FAILED 처리 생략: {}", itemId, e.message)

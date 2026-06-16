@@ -165,6 +165,10 @@ class ItemSnapshot(
     // 미리 걸러 헛된 비용(orphan 업로드)을 막는 사전 가드용. 도메인 최후 보루는 recover 가 진다.
     fun isFailed(): Boolean = status == ItemStatus.FAILED
 
+    // 추출 작업이 아직 끝나지 않은(진행 중) 버전인지 — PENDING(claim 대기)·PROCESSING(파싱 중). 수동 새로고침의 멱등
+    // 가드에서 쓴다: 이미 진행 중이면 새 추출 버전을 만들지 않는다. READY/FAILED 만 새로고침으로 새 버전을 띄운다.
+    fun isInProgress(): Boolean = status == ItemStatus.PENDING || status == ItemStatus.PROCESSING
+
     // READY 불변식 — "쓸 수 있는 버전"은 최소한 이름이 있어야 한다. isReady() 게이트(목록 노출·토너먼트 출전)가
     // 미완성 버전을 정상으로 취급하지 않도록, READY 가 되는 명시 경로(markReady)에서 검사한다. 엔티티 최후의 보루이므로
     // require(500) — 정상 흐름에선 입력 경계(recover 의 nameRequiredForReady, 추출 워커의 FAILED 흡수)가 먼저 거른다.
