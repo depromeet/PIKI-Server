@@ -2,6 +2,7 @@ package com.depromeet.piki.admin.template
 
 import com.depromeet.piki.admin.access.AdminSession
 import com.depromeet.piki.admin.config.ConditionalOnAdminEnabled
+import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.notification.domain.NotificationType
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
@@ -68,11 +69,12 @@ class AdminTemplateController(
         @PathVariable type: NotificationType,
         @RequestParam title: String,
         @RequestParam(required = false) body: String?,
-    ): TemplatePreview {
+    ): ApiResponseBody<TemplatePreview> {
         if (type == NotificationType.ANNOUNCEMENT) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "ANNOUNCEMENT 템플릿은 미리보기 대상이 아닙니다.")
         }
-        return adminTemplateService.preview(type, title, body ?: "")
+        // 내부 SSR 엔드포인트도 공통 응답 래퍼로 통일한다.
+        return ApiResponseBody.ok(adminTemplateService.preview(type, title, body ?: ""))
     }
 
     // 감사 actor — 슬랙 게이트(#526)가 세션에 바인딩한 신원. 게이트를 우회하는 로컬(admin.enabled)엔 세션이 없어 "운영자" 로 폴백.

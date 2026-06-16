@@ -96,7 +96,8 @@
       function poll() {
         fetch(url, { headers: { 'Accept': 'application/json' } })
           .then(function (res) { return res.json(); })
-          .then(function (r) { render(r); if (!r.done) setTimeout(poll, 1500); })
+          // 공통 래퍼(ApiResponseBody) 라 실제 결과는 .data 에 있다.
+          .then(function (body) { var r = body.data; render(r); if (!r.done) setTimeout(poll, 1500); })
           .catch(function () { setTimeout(poll, 3000); });
       }
       // 서버 렌더가 이미 done 이면 폴링 불필요.

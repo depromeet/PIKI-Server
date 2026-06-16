@@ -3,6 +3,7 @@ package com.depromeet.piki.admin.announcement
 import com.depromeet.piki.admin.access.AdminSession
 import com.depromeet.piki.admin.config.ClientIp
 import com.depromeet.piki.admin.config.ConditionalOnAdminEnabled
+import com.depromeet.piki.common.response.ApiResponseBody
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
@@ -23,8 +24,16 @@ class AdminAnnouncementController(
     private val adminAnnouncementService: AdminAnnouncementService,
 ) {
     @GetMapping
-    fun page(model: Model): String {
-        model.addAttribute("announcements", adminAnnouncementService.list())
+    fun page(
+        @RequestParam(defaultValue = "0") page: Int,
+        model: Model,
+    ): String {
+        val announcements = adminAnnouncementService.list(page)
+        model.addAttribute("announcements", announcements.content)
+        model.addAttribute("page", announcements.number)
+        model.addAttribute("hasPrev", announcements.hasPrevious())
+        model.addAttribute("hasNext", announcements.hasNext())
+        model.addAttribute("totalPages", announcements.totalPages)
         model.addAttribute("recipientCount", adminAnnouncementService.recipientCount())
         return "admin/announcements"
     }
@@ -90,12 +99,12 @@ class AdminAnnouncementController(
         return "admin/announcement-result"
     }
 
-    // 진행률·집계 폴링용 JSON(SSR 내부 엔드포인트 — 공개 API 래퍼와 무관).
+    // 진행률·집계 폴링용 JSON — 내부 SSR 엔드포인트도 공통 응답 래퍼(ApiResponseBody)로 통일한다.
     @GetMapping("/{id}/result.json")
     @ResponseBody
     fun resultJson(
         @PathVariable id: Long,
-    ): AnnouncementResult = adminAnnouncementService.result(id)
+    ): ApiResponseBody<AnnouncementResult> = ApiResponseBody.ok(adminAnnouncementService.result(id))
 
     // 등록한 초안 삭제 (발송·예약된 건 불가).
     @PostMapping("/{id}/delete")

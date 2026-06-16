@@ -98,6 +98,12 @@
         </tbody>
       </table>
     </div>
+
+    <div th:if="${totalPages > 1}" style="display:flex;gap:10px;align-items:center;justify-content:center;margin-top:16px">
+      <a th:if="${hasPrev}" class="btn sm alt" style="text-decoration:none" th:href="@{/admin/announcements(page=${page - 1})}">← 이전</a>
+      <span class="meta" th:text="${page + 1} + ' / ' + ${totalPages}">1 / 1</span>
+      <a th:if="${hasNext}" class="btn sm alt" style="text-decoration:none" th:href="@{/admin/announcements(page=${page + 1})}">다음 →</a>
+    </div>
   </div>
 </body>
 </html>

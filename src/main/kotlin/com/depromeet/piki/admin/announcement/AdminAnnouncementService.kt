@@ -5,6 +5,8 @@ import com.depromeet.piki.admin.audit.AdminAuditService
 import com.depromeet.piki.admin.config.ConditionalOnAdminEnabled
 import com.depromeet.piki.notification.fcm.service.UserDeviceService
 import com.depromeet.piki.notification.service.DeliveryStatus
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -20,7 +22,8 @@ class AdminAnnouncementService(
     private val sendService: AnnouncementSendService,
     private val auditService: AdminAuditService,
 ) {
-    fun list(): List<Announcement> = announcementRepository.findAllByOrderByCreatedAtDesc()
+    // 목록(최신순) 페이징 — 누적되는 발송 내역을 한 페이지(PAGE_SIZE)씩만 로드한다.
+    fun list(page: Int): Page<Announcement> = announcementRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page.coerceAtLeast(0), PAGE_SIZE))
 
     fun get(id: Long): Announcement =
         announcementRepository.findById(id).orElseThrow { IllegalArgumentException("공지를 찾을 수 없습니다.") }
@@ -109,6 +112,7 @@ class AdminAnnouncementService(
 
     companion object {
         private const val TARGET_ALL = "토큰 보유자 전체"
+        private const val PAGE_SIZE = 20
     }
 }
 
