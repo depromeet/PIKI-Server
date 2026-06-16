@@ -1,3 +1,25 @@
+server:
+  servlet:
+    session:
+      # admin 백오피스 세션 수명. 메인 API 체인은 STATELESS(세션 미사용)라 이 값은 admin form-login 세션에만 적용된다.
+      # 환경별로 다르게: dev·staging 은 길게(개발 편의, 사실상 무제한), prod 는 짧게(24h). staging 이 prod 프로파일을
+      # 공유하므로(deploy.yml) 프로파일로는 못 가른다 → env 변수로 주입한다. 미설정(로컬) 기본은 30d.
+      timeout: ${ADMIN_SESSION_TIMEOUT:7d}
+
+# 운영 백오피스(#249) + 슬랙-IP 접근 게이트(#526). 게이트가 보호하므로 enabled 를 전 환경에 둬도 안전하다 —
+# /admin 은 슬랙 세션, dev/staging 도메인은 IP allowlist 로 막힌다. 로컬은 ADMIN_ENABLED=true + ADMIN_LOCAL_BYPASS=true 로 게이트 없이 본다.
+admin:
+  enabled: ${ADMIN_ENABLED:false}
+  # dev/staging 도메인 전체를 allowlist IP 로만 연다(공개 차단). prod 는 false(실유저 공개, /admin 만 세션 게이트).
+  environment-gate: ${ENV_ACCESS_GATE:false}
+  # 슬랙 슬래시커맨드 HMAC 검증 키(민감 — GitHub secret). 비면 슬랙 진입이 거부돼 게이트를 못 열고 /admin 은 404 유지.
+  slack-signing-secret: ${SLACK_ADMIN_SIGNING_SECRET:}
+  # 허용 IP sliding TTL(무활동 만료, IP 변동 흡수). grant-token 은 원타임 링크 수명.
+  allowlist-ttl: ${ADMIN_ALLOWLIST_TTL:24h}
+  grant-token-ttl: 5m
+  # 로컬에서만 /admin 게이트(AdminAccessFilter) 우회. 배포 환경은 항상 false.
+  local-bypass: ${ADMIN_LOCAL_BYPASS:false}
+
 spring:
   application:
     name: PIKI

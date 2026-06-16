@@ -4,6 +4,7 @@ import com.depromeet.piki.auth.filter.JwtAuthenticationFilter
 import com.depromeet.piki.user.domain.IdentityType
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.annotation.Order
 import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
@@ -17,7 +18,10 @@ class SecurityConfig(
     private val authenticationEntryPoint: ApiResponseAuthenticationEntryPoint,
     private val accessDeniedHandler: ApiResponseAccessDeniedHandler,
 ) {
+    // @Order(2): admin 백오피스 체인(AdminSecurityConfig, @Order(1))이 /admin/** 를 먼저 관할하고, 그 외 모든 요청을
+    // 이 메인 JWT(stateless) 체인이 잡는다. admin 체인이 securityMatcher 로 자기 경로만 매칭하므로 이 체인은 그대로 catch-all.
     @Bean
+    @Order(2)
     fun securityFilterChain(
         http: HttpSecurity,
         jwtAuthenticationFilter: JwtAuthenticationFilter,

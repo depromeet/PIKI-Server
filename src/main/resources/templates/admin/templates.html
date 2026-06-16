@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <title>알림 템플릿 · PiKi 백오피스</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <style>
+    :root { --accent:#0EA5E9; --accent-soft:#E0F2FE; --ink:#111827; --muted:#6b7280; --border:#e5e7eb; --system:#475569; --system-soft:#f1f5f9; }
+    *{box-sizing:border-box;} body{margin:0;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:#f7f8fa;color:var(--ink);}
+    .bar{display:flex;align-items:center;gap:12px;padding:14px 24px;background:#fff;border-bottom:1px solid var(--border);}
+    .brand{font-weight:800;font-size:17px;letter-spacing:-.03em;} .brand .dot{color:var(--accent);}
+    .bar a{font-size:13px;color:var(--muted);text-decoration:none;font-weight:600;} .bar a:hover{color:var(--accent);}
+    .wrap{max-width:880px;margin:0 auto;padding:28px 24px;}
+    h1{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0 0 6px;}
+    .lede{color:var(--muted);font-size:13.5px;margin:0 0 22px;}
+    .ok{background:#dcfce7;color:#15803d;border-radius:8px;padding:9px 14px;font-size:13px;margin-bottom:16px;}
+    .card{background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+    table{width:100%;border-collapse:collapse;font-size:13.5px;}
+    th{background:#fafbfc;color:var(--muted);font-weight:700;text-align:left;padding:11px 16px;border-bottom:1px solid var(--border);font-size:12px;}
+    td{padding:12px 16px;border-bottom:1px solid #f1f3f5;vertical-align:middle;}
+    tr:last-child td{border-bottom:none;} tr:hover td{background:#fcfcfd;}
+    .type{font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;color:#384049;}
+    .title{color:var(--ink);}
+    .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;}
+    .badge.ACTIVITY{background:var(--accent-soft);color:var(--accent);} .badge.SYSTEM{background:var(--system-soft);color:var(--system);}
+    .edit{color:var(--accent);font-weight:700;text-decoration:none;font-size:13px;}
+  </style>
+</head>
+<body>
+  <div class="bar"><span class="brand"><img src="/favicon.ico" alt="PiKi" style="width:19px;height:19px;border-radius:5px;vertical-align:-4px;margin-right:6px">PiKi<span class="dot">.</span> 백오피스</span>
+    <a th:href="@{/admin}">← 홈</a></div>
+  <div class="wrap">
+    <h1>알림 템플릿</h1>
+    <p class="lede">배포 없이 알림 문구를 수정합니다. 수정은 <b>앞으로 발송될 알림</b>에만 적용됩니다(과거 알림 불변).<br>
+      <span style="color:#92400e">새 알림 <b>타입</b> 추가는 코드 변경(이벤트·핸들러·변수)이 필요해 <b>백엔드 담당자에게 문의</b>하세요 — 여기선 기존 타입의 문구만 수정합니다.</span></p>
+    <div class="ok" th:if="${param.updated}">템플릿이 저장됐습니다.</div>
+    <div class="card">
+      <table>
+        <thead><tr><th>타입</th><th>카테고리</th><th>현재 문구</th><th></th></tr></thead>
+        <tbody>
+          <tr th:each="t : ${templates}">
+            <td><span class="type" th:text="${t.type}">TYPE</span></td>
+            <td><span class="badge" th:classappend="${t.category}" th:text="${t.category == T(com.depromeet.piki.notification.domain.NotificationCategory).ACTIVITY ? '활동' : '시스템'}">활동</span></td>
+            <td><span class="title" th:text="${#strings.isEmpty(t.title)} ? '(빈 제목)' : ${t.title}">제목</span></td>
+            <td><a class="edit" th:href="@{/admin/templates/{type}(type=${t.type})}">편집 →</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

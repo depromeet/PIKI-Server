@@ -58,6 +58,14 @@ class UserDeviceService(
     @Transactional(readOnly = true)
     fun findTokens(userId: UUID): List<String> = userDeviceRepository.findAllByUserId(userId).map { it.fcmToken }
 
+    // 토큰 보유자(앱 푸시 수신 가능 유저) 수 — 백오피스 공지 발송 대상 인원 표시(#391).
+    @Transactional(readOnly = true)
+    fun countTokenHolders(): Long = userDeviceRepository.countTokenHolders()
+
+    // 토큰 보유 유저 전체의 식별자(#489) — 공지 브로드캐스트가 이 id 들을 돌며 유저별 알림 생성·발송한다.
+    @Transactional(readOnly = true)
+    fun findAllTokenHolderIds(): List<UUID> = userDeviceRepository.findAllTokenHolderIds()
+
     // 발송 후 정리(#245) — FCM 이 UNREGISTERED/INVALID 로 응답한 죽은 토큰을 일괄 제거한다.
     // 발송 결과가 비면(전부 정상) 호출자 분기 없이 여기서 멱등하게 흡수한다.
     @Transactional

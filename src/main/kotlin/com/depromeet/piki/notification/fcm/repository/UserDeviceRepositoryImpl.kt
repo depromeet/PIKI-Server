@@ -10,6 +10,10 @@ class UserDeviceRepositoryImpl(
 ) : UserDeviceRepository {
     override fun save(userDevice: UserDevice): UserDevice = userDeviceJpaRepository.save(userDevice)
 
+    override fun countTokenHolders(): Long = userDeviceJpaRepository.countDistinctUsers()
+
+    override fun findAllTokenHolderIds(): List<UUID> = userDeviceJpaRepository.findDistinctUserIds()
+
     override fun findByFcmToken(fcmToken: String): UserDevice? = userDeviceJpaRepository.findByFcmToken(fcmToken)
 
     override fun findByUserIdAndDeviceId(
