@@ -634,6 +634,28 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `GET tournaments 에서 status=IN_PROGRESS 로 조회하면 COMPLETED 토너먼트는 포함되지 않는다`() {
+        val mockMvc = buildMockMvc()
+        val (completedId, _, _) = completeTournamentWith2Items(mockMvc)
+        val inProgressId = createTournament(mockMvc, "진행중")
+        addItemsToTournament(mockMvc, inProgressId, userId, saveWishItem(), saveWishItem())
+        mockMvc.perform(
+            post("/api/v1/tournaments/$inProgressId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .param("status", "IN_PROGRESS"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].tournamentId").value(inProgressId))
+            .andExpect(jsonPath("$.data[?(@.tournamentId == $completedId)]").doesNotExist())
+    }
+
+    @Test
     fun `GET tournaments 에서 토너먼트가 없으면 빈 배열을 반환한다`() {
         val mockMvc = buildMockMvc()
 
