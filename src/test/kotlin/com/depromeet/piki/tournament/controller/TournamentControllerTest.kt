@@ -1405,6 +1405,28 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `POST tournaments-id-items-link 에서 미지원 플랫폼(KREAM) URL 이면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        // 미지원 플랫폼(봇 차단으로 fetch 불가)은 등록 입력 시점에 동기 400 으로 막는다 — 위시 등록과 같은 메커니즘.
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/items/link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"url":"https://kream.co.kr/products/950123"}"""),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.detail").value("아직 지원하지 않는 쇼핑몰이에요."))
+
+        // 등록 입력 경계에서 차단되므로 tournament item 이 생성되면 안 된다(검증 위치가 뒤로 밀려 일부라도 영속화되는 회귀 방지).
+        assertTrue(
+            tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).isEmpty(),
+            "미지원 플랫폼은 등록 입력 경계에서 차단되어 tournament item 이 생성되면 안 됩니다.",
+        )
+    }
+
+    @Test
     fun `POST tournaments-id-items-link 에서 토너먼트 참여자가 아니면 403 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
