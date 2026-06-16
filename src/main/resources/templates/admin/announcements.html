@@ -30,6 +30,7 @@
     .st{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;}
     .st.SENT{background:#e4f6ec;color:#15a05a;} .st.DRAFT{background:#fef3c7;color:#92400e;}
     .st.SCHEDULED{background:#e0f2fe;color:#0369a1;} .st.SENDING{background:#e0f2fe;color:#0284c7;}
+    .st.MISSED{background:#fee2e2;color:#b42318;}
     .btn.alt{background:#fff;color:var(--accent);border:1px solid #bae6fd;}
     .empty{color:var(--muted);font-size:13px;padding:20px;text-align:center;}
     .meta{font-size:11.5px;color:var(--muted);}
@@ -65,6 +66,7 @@
                 <span th:case="'SCHEDULED'">예약됨</span>
                 <span th:case="'SENDING'">발송중</span>
                 <span th:case="'SENT'">발송됨</span>
+                <span th:case="'MISSED'">미발송(시각초과)</span>
                 <span th:case="*" th:text="${a.status}">상태</span>
               </span>
             </td>

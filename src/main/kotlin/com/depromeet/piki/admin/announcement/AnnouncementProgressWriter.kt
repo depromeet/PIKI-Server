@@ -67,4 +67,14 @@ class AnnouncementProgressWriter(
         announcement.markSent()
         announcementRepository.save(announcement)
     }
+
+    // 유예시간 넘긴 예약을 MISSED 로 정리. 중복 처리·경합을 막으려 claim 과 같은 비관적 락으로 직렬화한다.
+    // SCHEDULED 가 아니면(이미 발송/정리됨) 조용히 넘어간다.
+    @Transactional
+    fun markMissed(announcementId: Long) {
+        val announcement = announcementRepository.findByIdForUpdate(announcementId) ?: return
+        if (!announcement.isScheduled) return
+        announcement.markMissed()
+        announcementRepository.save(announcement)
+    }
 }

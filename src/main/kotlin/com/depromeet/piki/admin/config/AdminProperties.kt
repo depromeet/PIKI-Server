@@ -15,6 +15,8 @@ import java.time.Duration
  * @property allowlistTtl 허용 IP sliding TTL(무활동 만료, IP 변동 흡수).
  * @property grantTokenTtl 원타임 grant 링크 토큰 수명(짧게).
  * @property localBypass 로컬 개발에서 /admin 게이트(AdminAccessFilter)를 건너뛴다. 배포 환경은 false.
+ * @property scheduleGraceWindow 예약 발송 유예시간. 예약시각을 이 시간보다 더 넘겨 도래하면(다운타임 등) 발송하지 않고 MISSED 로 정리한다.
+ * @property schedulerAutoDispatch 스케줄러의 주기 폴링 자동 실행. 테스트는 false 로 끄고 dispatchDue() 를 직접 호출해 결정적으로 검증한다.
  */
 @ConfigurationProperties(prefix = "admin")
 data class AdminProperties(
@@ -24,6 +26,8 @@ data class AdminProperties(
     val allowlistTtl: Duration = Duration.ofHours(24),
     val grantTokenTtl: Duration = Duration.ofMinutes(5),
     val localBypass: Boolean = false,
+    val scheduleGraceWindow: Duration = Duration.ofHours(1),
+    val schedulerAutoDispatch: Boolean = true,
 ) {
     // slackSigningSecret 는 크리덴셜이라 로그·디버그 출력에 평문이 새지 않게 마스킹한다(data class toString 자동 노출 차단).
     override fun toString(): String =

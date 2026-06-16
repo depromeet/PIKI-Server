@@ -71,6 +71,7 @@ class Announcement(
     val isScheduled: Boolean get() = status == STATUS_SCHEDULED
     val isSending: Boolean get() = status == STATUS_SENDING
     val isSent: Boolean get() = status == STATUS_SENT
+    val isMissed: Boolean get() = status == STATUS_MISSED
 
     // 처리 완료 수(성공+실패+미도달). 진행률 분자다 — 토큰 없는 유저까지 다 처리해야 100%가 된다.
     val processedCount: Int get() = successCount + failureCount + skippedCount
@@ -135,11 +136,19 @@ class Announcement(
         this.sentAt = LocalDateTime.now(KST)
     }
 
+    // 유예시간 넘긴 예약을 정리 — SCHEDULED → MISSED. 다운타임 등으로 예약시각을 한참 넘겨 도래했을 때,
+    // 철 지난 공지(점심 이벤트가 저녁에)를 자동 발송하지 않고 미발송으로 닫는다. 재발송은 운영자 판단(복제 등).
+    fun markMissed() {
+        check(isScheduled) { "MISSED 처리는 SCHEDULED 상태에서만 가능하다. status=$status" }
+        this.status = STATUS_MISSED
+    }
+
     companion object {
         const val STATUS_DRAFT = "DRAFT"
         const val STATUS_SCHEDULED = "SCHEDULED"
         const val STATUS_SENDING = "SENDING"
         const val STATUS_SENT = "SENT"
+        const val STATUS_MISSED = "MISSED"
 
         // 공지 예약·발송 시각은 전부 KST 로 다룬다 — JVM 기본 TZ 는 UTC 라(application.yml 173) now() 를 그대로 쓰면
         // 운영자가 입력한 KST wall-clock(예약 12:00)과 9시간 어긋나 오발송한다. scheduledAt 은 KST wall-clock 으로 저장하고
