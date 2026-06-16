@@ -70,8 +70,10 @@ class FirebaseMessageSender(
         // 어떤 페이로드(type·refId)를 몇 토큰에 보내 몇 건 성공/실패했고, 실패 사유(FCM code)별 분포 + 죽은 토큰 정리 수.
         // 렌더된 title/body 는 닉네임 등 PII 를 담을 수 있어 싣지 않는다 — 라우팅 식별자(type·refId·category)만.
         log.info(
+            // getIdOrNull — DevFcmController(/dev/fcm/push)는 영속화 안 한 throwaway Notification 을 넘긴다.
+            // getId() 면 "id 없음" 예외로 발송 자체가 500 으로 깨진다. 로그용 식별자라 미영속이면 null 로 둔다.
             "FCM 발송 결과 notificationId={} type={} category={} refId={} 토큰={} 성공={} 실패={} 실패사유={} 죽은토큰정리={}",
-            notification.getId(),
+            notification.getIdOrNull(),
             notification.type,
             NotificationCategory.of(notification.type),
             notification.refId,
