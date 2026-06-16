@@ -484,6 +484,37 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
         }
     }
 
+    @Test
+    fun `미지원 플랫폼(KREAM) URL 을 등록하면 등록 시점에 400 으로 거부되고 위시가 생기지 않는다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            // 미지원 플랫폼은 비동기 파싱(FAILED)이 아니라 등록 입력 시점에 동기 400 으로 막는다 — 담기 전에 빠르게 안내한다.
+            val body = objectMapper.writeValueAsString(mapOf("url" to "https://kream.co.kr/products/950123"))
+
+            mockMvc
+                .perform(
+                    post("/api/v1/wishlists")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}")
+                        .content(body),
+                ).andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.detail").value("아직 지원하지 않는 쇼핑몰이에요."))
+
+            // 등록 자체가 막혀 위시가 생기지 않는다(파싱 큐 적재 전 차단).
+            val wishCount =
+                jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM wishes WHERE user_id = ?",
+                    Int::class.java,
+                    uuidToBytes(userId),
+                )
+            assertEquals(0, wishCount)
+        } finally {
+            cleanup(userId)
+        }
+    }
+
     private fun registerAndGetItemId(
         mockMvc: MockMvc,
         userId: UUID,

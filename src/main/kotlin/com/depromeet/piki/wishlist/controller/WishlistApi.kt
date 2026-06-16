@@ -40,7 +40,7 @@ interface WishlistApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (URL 이 비어 있음 · 유효한 URL 형식이 아님 · https 외 스킴)",
+                description = "잘못된 요청 (URL 이 비어 있음 · 유효한 URL 형식이 아님 · https 외 스킴 · 지원하지 않는 쇼핑몰)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
