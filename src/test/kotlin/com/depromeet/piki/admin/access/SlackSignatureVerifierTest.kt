@@ -41,6 +41,23 @@ class SlackSignatureVerifierTest {
     }
 
     @Test
+    fun `미래로 5분을 넘은 timestamp 도 거부한다 (시계 오차·미래 위조 방지)`() {
+        // 윈도우는 abs(now - ts) 라 미래 방향도 같은 5분 경계로 막혀야 한다.
+        val ts = (Instant.now().epochSecond + 301).toString()
+        val body = "text="
+        assertFalse(verifier.verify(ts, sign(ts, body), body))
+    }
+
+    @Test
+    fun `5분 윈도우 안이면 과거·미래 모두 허용한다`() {
+        // 경계 직전(±299초)은 둘 다 통과해야 한다(정확히 300초 경계는 실행 중 시간 경과로 flaky 라 ±299 로 고정).
+        val past = (Instant.now().epochSecond - 299).toString()
+        val future = (Instant.now().epochSecond + 299).toString()
+        assertTrue(verifier.verify(past, sign(past, "b"), "b"))
+        assertTrue(verifier.verify(future, sign(future, "b"), "b"))
+    }
+
+    @Test
     fun `서명이 안 맞으면 거부한다`() {
         assertFalse(verifier.verify(now(), "v0=deadbeef", "text="))
     }

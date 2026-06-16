@@ -84,12 +84,15 @@ jobs:
       # 슬랙(/admin-access)인데, SLACK_ADMIN_SIGNING_SECRET 이 비면 서명 검증이 전부 실패해 IP 를 못 열어 도메인째 잠긴다(브릭).
       # 빈 secret 으로 dev/staging 이 배포되는 걸 미리 끊는다(fail-fast).
       - name: Guard — env gate 환경은 Slack signing secret 필수
+        id: secret_guard
         if: ${{ needs.resolve.outputs.environment == 'dev' || needs.resolve.outputs.environment == 'staging' }}
         env:
           SLACK_ADMIN_SIGNING_SECRET: ${{ secrets.SLACK_ADMIN_SIGNING_SECRET }}
         run: |
           if [ -z "$SLACK_ADMIN_SIGNING_SECRET" ]; then
-            echo "::error::[${{ needs.resolve.outputs.environment }}] ENV_ACCESS_GATE=true 인데 SLACK_ADMIN_SIGNING_SECRET 이 비어 있음 — 슬랙으로 IP 를 못 열어 도메인 전체가 잠긴다(브릭). secret 설정 후 재배포."
+            REASON="[${{ needs.resolve.outputs.environment }}] ENV_ACCESS_GATE=true 인데 SLACK_ADMIN_SIGNING_SECRET 이 비어 있음 — 슬랙으로 IP 를 못 열어 도메인 전체가 잠긴다(브릭). secret 설정 후 재배포."
+            echo "reason=$REASON" >> "$GITHUB_OUTPUT"
+            echo "::error::$REASON"
             exit 1
           fi
 
@@ -522,6 +525,8 @@ jobs:
             STATUS="✅ 성공"
           elif [ "${{ steps.guard.outcome }}" = "failure" ]; then
             STATUS="❌ 중단 (환경↔호스트 불일치 가드)"
+          elif [ "${{ steps.secret_guard.outcome }}" = "failure" ]; then
+            STATUS="❌ 중단 (Slack signing secret 누락 가드)"
           elif [ "${{ steps.health.outcome }}" = "failure" ]; then
             STATUS="❌ 실패 (헬스체크)"
           elif [ "${{ steps.deploy.outcome }}" = "failure" ]; then
@@ -541,7 +546,7 @@ jobs:
           else
             STATUS="⚠️ 알 수 없음"
           fi
-          GUARD_REASON="${{ steps.guard.outputs.reason }}"
+          GUARD_REASON="${{ steps.guard.outputs.reason }}${{ steps.secret_guard.outputs.reason }}"
 
           {
             echo "## 배포 결과: $STATUS"
@@ -610,6 +615,9 @@ jobs:
           if [ "${{ steps.guard.outcome }}" = "failure" ]; then
             CAUSE="${{ steps.guard.outputs.reason }}"
             CAUSE="${CAUSE:-환경 도메인↔EC2_HOST 불일치 (secret 오설정 — dev/prod 교차배선)}"
+          elif [ "${{ steps.secret_guard.outcome }}" = "failure" ]; then
+            CAUSE="${{ steps.secret_guard.outputs.reason }}"
+            CAUSE="${CAUSE:-SLACK_ADMIN_SIGNING_SECRET 누락 (dev/staging 도메인 잠금 방지 가드)}"
           elif [ "${{ steps.build.outcome }}" = "failure" ]; then
             CAUSE="Gradle 빌드 실패 (Build JAR)"
           elif [ "${{ steps.docker_login.outcome }}" = "failure" ]; then
