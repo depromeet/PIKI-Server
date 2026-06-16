@@ -74,7 +74,7 @@ class AnnouncementSchedulingIntegrationTest : IntegrationTestSupport() {
     fun `broadcast 는 토큰 보유자에게 알림을 만들고 FCM 성공이면 delivery 가 SUCCESS 다`() {
         val userId = UUID.randomUUID()
         userDeviceJpaRepository.save(UserDevice(userId = userId, deviceId = "device-1", fcmToken = "tok-${UUID.randomUUID()}"))
-        stubFcm.onSend = { _, _ -> emptyList() } // 죽은 토큰 없음 → 전부 성공
+        stubFcm.onSend = { _, _, _ -> emptyList() } // 죽은 토큰 없음 → 전부 성공
 
         val deliveries = mutableListOf<RecipientDelivery>()
         broadcaster.broadcast("공지 제목", "공지 본문", refId = 999_001L, recipients = listOf(userId)) { deliveries += it }

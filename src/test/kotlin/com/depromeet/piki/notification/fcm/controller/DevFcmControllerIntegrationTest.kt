@@ -46,7 +46,7 @@ class DevFcmControllerIntegrationTest : IntegrationTestSupport() {
     fun `GUEST 가 토큰을 지정해 발송하면 200 과 함께 그 토큰으로 발송된다`() {
         val userId = UUID.randomUUID()
         var captured: List<String>? = null
-        stubFcmMessageSender.onSend = { tokens, _ ->
+        stubFcmMessageSender.onSend = { tokens, _, _ ->
             captured = tokens
             emptyList()
         }

@@ -53,7 +53,7 @@ class PushNotificationChannelIntegrationTest : IntegrationTestSupport() {
         userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-1", fcmToken = "token-1"))
         userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-2", fcmToken = "token-2"))
         var captured: List<String>? = null
-        stubFcmMessageSender.onSend = { tokens, _ ->
+        stubFcmMessageSender.onSend = { tokens, _, _ ->
             captured = tokens
             emptyList()
         }
@@ -61,6 +61,23 @@ class PushNotificationChannelIntegrationTest : IntegrationTestSupport() {
         pushNotificationChannel.send(userId, saveNotification(userId))
 
         assertEquals(setOf("token-1", "token-2"), captured?.toSet())
+    }
+
+    @Test
+    fun `발송 시 수신자의 전체 안읽음 수를 badge 로 싣는다`() {
+        val userId = UUID.randomUUID()
+        userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-1", fcmToken = "token-1"))
+        // 안읽음 2건을 미리 쌓고, send 가 방금 도착분(아래 saveNotification)까지 포함해 전체 안읽음 수를 badge 로 싣는지 본다.
+        repeat(2) { saveNotification(userId) }
+        var capturedBadge: Int? = null
+        stubFcmMessageSender.onSend = { _, _, badge ->
+            capturedBadge = badge
+            emptyList()
+        }
+
+        pushNotificationChannel.send(userId, saveNotification(userId))
+
+        assertEquals(3, capturedBadge)
     }
 
     @Test
@@ -72,7 +89,7 @@ class PushNotificationChannelIntegrationTest : IntegrationTestSupport() {
         userDeviceRepository.save(UserDevice(userId = userId, deviceId = "android-ssaid-xyz", fcmToken = "android-token"))
         userDeviceRepository.save(UserDevice(userId = userId, deviceId = "web-uuid-9f8e7d", fcmToken = "web-token"))
         var captured: List<String>? = null
-        stubFcmMessageSender.onSend = { tokens, _ ->
+        stubFcmMessageSender.onSend = { tokens, _, _ ->
             captured = tokens
             emptyList()
         }
@@ -87,7 +104,7 @@ class PushNotificationChannelIntegrationTest : IntegrationTestSupport() {
         val userId = UUID.randomUUID()
         userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-1", fcmToken = "live-token"))
         userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-2", fcmToken = "dead-token"))
-        stubFcmMessageSender.onSend = { _, _ -> listOf("dead-token") }
+        stubFcmMessageSender.onSend = { _, _, _ -> listOf("dead-token") }
 
         pushNotificationChannel.send(userId, saveNotification(userId))
 
@@ -96,10 +113,41 @@ class PushNotificationChannelIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `syncBadge 는 그 유저의 모든 기기로 silent 발송하며 갱신 badge 를 전달한다`() {
+        val userId = UUID.randomUUID()
+        userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-1", fcmToken = "token-1"))
+        userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-2", fcmToken = "token-2"))
+        var capturedTokens: List<String>? = null
+        var capturedBadge: Int? = null
+        stubFcmMessageSender.onSendBadgeSync = { tokens, badge ->
+            capturedTokens = tokens
+            capturedBadge = badge
+            emptyList()
+        }
+
+        pushNotificationChannel.syncBadge(userId, 5)
+
+        assertEquals(setOf("token-1", "token-2"), capturedTokens?.toSet())
+        assertEquals(5, capturedBadge)
+    }
+
+    @Test
+    fun `syncBadge 도 죽은 토큰을 user_devices 에서 정리한다`() {
+        val userId = UUID.randomUUID()
+        userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-1", fcmToken = "live-token"))
+        userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-2", fcmToken = "dead-token"))
+        stubFcmMessageSender.onSendBadgeSync = { _, _ -> listOf("dead-token") }
+
+        pushNotificationChannel.syncBadge(userId, 0)
+
+        assertEquals(listOf("live-token"), userDeviceRepository.findAllByUserId(userId).map { it.fcmToken })
+    }
+
+    @Test
     fun `토큰이 없는 유저면 외부 발송을 시도하지 않는다`() {
         val userId = UUID.randomUUID()
         var called = false
-        stubFcmMessageSender.onSend = { _, _ ->
+        stubFcmMessageSender.onSend = { _, _, _ ->
             called = true
             emptyList()
         }

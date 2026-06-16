@@ -5,10 +5,13 @@ import com.depromeet.piki.notification.controller.dto.NotificationReadRequest
 import com.depromeet.piki.notification.domain.Notification
 import com.depromeet.piki.notification.domain.NotificationRouting
 import com.depromeet.piki.notification.domain.NotificationType
+import com.depromeet.piki.notification.fcm.domain.UserDevice
+import com.depromeet.piki.notification.fcm.repository.UserDeviceRepository
 import com.depromeet.piki.notification.repository.NotificationJpaRepository
 import com.depromeet.piki.notification.repository.NotificationRepository
 import com.depromeet.piki.notification.service.DefaultPushImage
 import com.depromeet.piki.support.IntegrationTestSupport
+import com.depromeet.piki.support.StubFcmMessageSender
 import com.depromeet.piki.user.domain.IdentityType
 import org.hamcrest.Matchers.notNullValue
 import org.hamcrest.Matchers.nullValue
@@ -42,6 +45,10 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var notificationJpaRepository: NotificationJpaRepository
 
     @Autowired private lateinit var defaultPushImage: DefaultPushImage
+
+    @Autowired private lateinit var userDeviceRepository: UserDeviceRepository
+
+    @Autowired private lateinit var stubFcmMessageSender: StubFcmMessageSender
 
     private fun authHeader(userId: UUID): String = "Bearer ${jwtProvider.generateAccessToken(userId, IdentityType.MEMBER)}"
 
@@ -323,6 +330,34 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
         assertTrue(notificationJpaRepository.findById(target).get().isRead)
         assertFalse(notificationJpaRepository.findById(untouched).get().isRead)
         assertFalse(notificationJpaRepository.findById(others).get().isRead)
+    }
+
+    @Test
+    fun `read 처리 후 그 유저의 기기로 갱신된 안읽음 수를 silent push 한다`() {
+        val userId = UUID.randomUUID()
+        userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-1", fcmToken = "token-1"))
+        val target = seed(userId, isRead = false)
+        seed(userId, isRead = false) // 읽지 않을 1건 → read 후 남는 안읽음 = 1
+        var capturedTokens: List<String>? = null
+        var capturedBadge: Int? = null
+        stubFcmMessageSender.onSendBadgeSync = { tokens, badge ->
+            capturedTokens = tokens
+            capturedBadge = badge
+            emptyList()
+        }
+
+        buildMockMvc()
+            .perform(
+                post("/api/v1/notifications/read")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"ids":[$target]}""")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.unreadCount").value(1))
+
+        // 멀티 디바이스 동기화 — 읽은 기기 외 다른 기기가 badge 를 맞추도록 갱신 안읽음 수(1)를 그 유저 토큰으로 silent push.
+        assertEquals(listOf("token-1"), capturedTokens)
+        assertEquals(1, capturedBadge)
     }
 
     @Test
