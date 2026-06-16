@@ -24,6 +24,8 @@ data class DevPushRequest(
     @field:Size(max = Notification.MAX_TEXT_LENGTH)
     @field:Schema(description = "푸시 본문", example = DEFAULT_BODY, defaultValue = DEFAULT_BODY)
     val body: String = DEFAULT_BODY,
+    @field:Schema(description = "OS 아이콘 badge 숫자(#487) — FE 가 badge 표시를 확인하는 테스트 값", example = "1", defaultValue = "0")
+    val badge: Int = 0,
 ) {
     // 받는 쪽(Notification)이 매핑을 책임진다. 테스트 발송은 딥링크 대상이 없어 더미 type·refId.
     // userId 는 발송 메시지에 실리지 않고 throwaway Notification 구성에만 쓰여, 호출자(인증 유저)를 그대로 넣는다.

@@ -4,6 +4,7 @@ import com.depromeet.piki.notification.domain.Notification
 import com.depromeet.piki.notification.domain.NotificationType
 import com.depromeet.piki.notification.fcm.service.FcmMessageSender
 import com.depromeet.piki.notification.fcm.service.UserDeviceService
+import com.depromeet.piki.notification.repository.NotificationRepository
 import com.depromeet.piki.notification.sse.SseNotificationChannel
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.ObjectProvider
@@ -24,6 +25,7 @@ import java.util.UUID
 class AnnouncementBroadcaster(
     private val userDeviceService: UserDeviceService,
     private val persistence: NotificationPersistenceService,
+    private val notificationRepository: NotificationRepository,
     private val sseChannel: SseNotificationChannel,
     private val fcmSenderProvider: ObjectProvider<FcmMessageSender>,
 ) {
@@ -64,7 +66,9 @@ class AnnouncementBroadcaster(
         sender ?: return RecipientDelivery(userId, DeliveryStatus.SKIPPED, null)
         val tokens = userDeviceService.findTokens(userId)
         if (tokens.isEmpty()) return RecipientDelivery(userId, DeliveryStatus.NO_TOKEN, null)
-        val result = sender.send(tokens, notification)
+        // 공지도 안읽음 알림이라 수신자의 전체 안읽음 수(방금 저장한 공지 포함)를 OS 아이콘 badge 로 싣는다(#487).
+        val badge = notificationRepository.countUnreadByCategory(userId).toBadgeCount()
+        val result = sender.send(tokens, notification, badge)
         userDeviceService.removeStaleTokens(result.staleTokens)
         // 한 기기라도 도달하면 그 유저는 받은 것 → SUCCESS. 전 기기 실패면 대표 코드와 함께 FAILED.
         return when {
