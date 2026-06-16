@@ -20,9 +20,16 @@ class PageFetchException private constructor(
         // 접근 실패는 사용자에겐 같은 안내라 한 상수를 공유한다(어느 단계 실패인지는 호출 지점 로그로 구분).
         private const val LINK_UNREACHABLE = "링크에 접근하지 못했어요. 주소를 다시 확인해 주세요."
 
-        // 대상 페이지 서버가 5xx 또는 연결 실패. 재시도로 복구 가능성 있음.
+        // 대상 페이지 서버가 502/503/504(게이트웨이 오류·과부하·타임아웃) 또는 연결 실패. 일시적일 수 있어
+        // 재시도로 복구 가능성이 있다(RETRYABLE).
         fun upstreamError(cause: Throwable): PageFetchException =
             PageFetchException(LINK_UNREACHABLE, ErrorCategory.RETRYABLE, HttpStatus.BAD_GATEWAY, cause)
+
+        // 대상 서버가 500/501 을 준 경우. 일부 쇼핑몰이 봇 차단을 500(no body)으로 응답하는데, 같은 요청을
+        // 재시도해도 결정론적으로 재실패한다. 502/503/504(일시) 와 달리 500/501 은 영구로 보아 재시도하지 않는다
+        // (SERVER_ERROR → 워커가 즉시 FAILED). status 는 외부 의존성 실패라 502.
+        fun permanentUpstreamError(cause: Throwable): PageFetchException =
+            PageFetchException(LINK_UNREACHABLE, ErrorCategory.SERVER_ERROR, HttpStatus.BAD_GATEWAY, cause)
 
         // 4xx (404, 403 로그인 벽, 410 등). 입력 URL 자체가 문제이므로 사용자에게 400 으로 노출.
         fun clientError(cause: Throwable): PageFetchException =
