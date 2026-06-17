@@ -108,6 +108,38 @@ class WishPriceHistoryIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `soft-delete 된 READY snapshot 은 가격 히스토리에서 제외된다`() {
+        // production 쿼리의 deletedAt IS NULL 필터 회귀 방지 — status 필터와 별개로 삭제된 행이 새지 않는지 고정한다.
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        val itemId = saveItem("https://shop.example.com/products/soft-deleted")
+        val live = saveReadySnapshot(itemId, "살아있는 버전", 30_000, LocalDateTime.now())
+        // 같은 item 에 soft-delete 된 READY 버전을 섞는다 — deletedAt 이 채워져 히스토리에서 빠져야 한다.
+        itemSnapshotRepository.save(
+            ItemSnapshot(
+                itemId = itemId,
+                name = "삭제된 버전",
+                currentPrice = 99_000,
+                currency = "KRW",
+                imageUrl = "https://cdn.example.com/p/deleted.jpg",
+                status = ItemStatus.READY,
+                extractedAt = LocalDateTime.now(),
+            ).apply { deletedAt = LocalDateTime.now() },
+        )
+        val wishId = saveWish(userId, live)
+
+        mockMvc
+            .perform(
+                get("/api/v1/wishlists/$wishId/history")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.entries.length()").value(1))
+            .andExpect(jsonPath("$.data.entries[0].snapshotId").value(live))
+            .andExpect(jsonPath("$.data.entries[0].name").value("살아있는 버전"))
+    }
+
+    @Test
     fun `아직 추출 성공 이력이 없으면 빈 히스토리를 반환한다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
