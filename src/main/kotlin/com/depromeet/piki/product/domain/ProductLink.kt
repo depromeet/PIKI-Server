@@ -38,6 +38,10 @@ class ProductLink private constructor(
 
         // 직접 GET 접근을 봇 차단(TLS 지문·WAF·JS 챌린지)해 fetch 로 상품 정보를 가져올 수 없는 플랫폼.
         // 2026-06-16 dev 실측: KREAM=500(no body)·쿠팡=403·네이버 쇼핑=418, 네이버 스토어=CAPTCHA(429/490).
+        // 2026-06-18 dev 실측 추가: 올리브영(www·m)=전 UA(Chrome·iPhone·Android·Googlebot·facebookexternalhit) 403
+        //   JS 챌린지("잠시만 기다려 주세요"). 공유 단축 oy.run 은 브라우저 UA 엔 상품정보 없는 제너럴 페이지,
+        //   봇 UA 엔 m.oliveyoung(403)로 리다이렉트 — 어느 경로로도 상품 데이터(name·price)가 0이라 LLM 도 불가.
+        //   (oy.run 단축은 olive young 의 별도 도메인이라 naver.me 처럼 따로 나열한다.)
         // UA·풀 브라우저 헤더·모바일 어느 조합도 우회 안 됨(헤드리스 브라우저·공식 API 영역). 등록 시점에
         // verifySupportedPlatform 으로 거른다 — 담아봐야 파싱이 무의미하게 실패하고 사용자에겐 "주소를 다시 확인"
         // 이라는 틀린 안내가 나가기 때문. host 가 항목과 같거나 그 서브도메인이면 미지원(부분 문자열 매칭이 아니라
@@ -50,6 +54,8 @@ class ProductLink private constructor(
                 "coupang.com",
                 "naver.com",
                 "naver.me",
+                "oliveyoung.co.kr",
+                "oy.run",
             )
 
         fun parse(raw: String): ProductLink {

@@ -120,6 +120,9 @@ class ProductLinkTest {
                 "https://naver.me/5AbCdEf", // naver.me 단축 링크
                 "https://naver.com./x", // trailing dot(절대 도메인 표기)로 차단 우회 시도 — 정규화로 막혀야 한다
                 "https://www.coupang.com./vp/products/1", // trailing dot
+                "https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000223265", // 올리브영 PC
+                "https://m.oliveyoung.co.kr/m/goods/getGoodsDetail.do?goodsNo=A000000213261", // 올리브영 모바일
+                "https://oy.run/EiU6PnnqjxJeJ5", // 올리브영 공유 단축 도메인
             )
         cases.forEach { raw ->
             val link = ProductLink.parse(raw) // parse 자체는 형식이 정상이라 통과한다
@@ -141,6 +144,7 @@ class ProductLinkTest {
                 "https://kream.co.kr.evil.com/p", // 접미사만 같은 다른 도메인(접미사 매칭 우회 방지)
                 "https://coupang.com.evil.com/p", // 접미사만 같은 다른 도메인
                 "https://navermart.com/p", // 'naver' 부분문자열이지만 naver.com 도메인이 아니므로 통과(도메인 단위 매칭)
+                "https://oy.run.evil.com/p", // 접미사만 같은 다른 도메인(oy.run 매칭 우회 방지)
             )
         cases.forEach { raw ->
             // 통과하면 예외가 없다.
