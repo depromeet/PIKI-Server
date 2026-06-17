@@ -255,6 +255,7 @@ class TournamentApiExamples(
                                                         TournamentDetailResponse.ItemDetailResponse(
                                                             tournamentItemId = 1,
                                                             itemId = 10,
+                                                            userId = UUID.fromString("11111111-2222-3333-4444-555555555555"),
                                                             name = "나이키 에어맥스",
                                                             price = 129_000,
                                                             currency = "KRW",
@@ -264,6 +265,7 @@ class TournamentApiExamples(
                                                         TournamentDetailResponse.ItemDetailResponse(
                                                             tournamentItemId = 2,
                                                             itemId = 20,
+                                                            userId = UUID.fromString("11111111-2222-3333-4444-555555555555"),
                                                             name = "아디다스 울트라부스트",
                                                             price = 189_000,
                                                             currency = "KRW",
@@ -311,6 +313,7 @@ class TournamentApiExamples(
                                                         TournamentDetailResponse.ItemDetailResponse(
                                                             tournamentItemId = 1,
                                                             itemId = 10,
+                                                            userId = UUID.fromString("11111111-2222-3333-4444-555555555555"),
                                                             name = "나이키 에어맥스",
                                                             price = 129_000,
                                                             currency = "KRW",
@@ -320,6 +323,7 @@ class TournamentApiExamples(
                                                         TournamentDetailResponse.ItemDetailResponse(
                                                             tournamentItemId = 2,
                                                             itemId = 20,
+                                                            userId = UUID.fromString("22222222-3333-4444-5555-666666666666"),
                                                             name = "아디다스 울트라부스트",
                                                             price = 189_000,
                                                             currency = "KRW",
@@ -379,6 +383,7 @@ class TournamentApiExamples(
                                                         TournamentDetailResponse.ItemDetailResponse(
                                                             tournamentItemId = 3,
                                                             itemId = 30,
+                                                            userId = UUID.fromString("11111111-2222-3333-4444-555555555555"),
                                                             name = "뉴발란스 993",
                                                             price = 259_000,
                                                             currency = "KRW",
@@ -388,6 +393,7 @@ class TournamentApiExamples(
                                                         TournamentDetailResponse.ItemDetailResponse(
                                                             tournamentItemId = 4,
                                                             itemId = 40,
+                                                            userId = UUID.fromString("22222222-3333-4444-5555-666666666666"),
                                                             name = "살로몬 XT-6",
                                                             price = 279_000,
                                                             currency = "KRW",
