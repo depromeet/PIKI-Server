@@ -10,6 +10,7 @@ import com.depromeet.piki.tournament.domain.TournamentStatus
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.event.TournamentCompleted
 import com.depromeet.piki.tournament.event.TournamentItemAdded
+import com.depromeet.piki.tournament.event.TournamentItemDeleted
 import com.depromeet.piki.tournament.event.TournamentJoined
 import com.depromeet.piki.tournament.event.TournamentPlayedFromLink
 import com.depromeet.piki.tournament.event.TournamentResultReady
@@ -950,6 +951,18 @@ class TournamentService(
 
         val deleted = tournamentItemRepository.softDeleteIfPending(tournamentItemId, tournamentId)
         if (deleted == 0) throw TournamentException.notPendingTournament()
+
+        // 삭제로 출전 목록이 바뀌었음을 다른 참가자에게 알린다(폴링 대체) — 추가(TournamentItemAdded)와 대칭.
+        // tournamentItemId·snapshotId 를 함께 실어 알림 도메인이 어느 아이템인지·상품명을 끌어내게 한다
+        // (tournament_item 은 방금 soft delete 돼 핸들러가 역조회로 못 닿지만, snapshot 은 살아 있다).
+        eventPublisher.publishEvent(
+            TournamentItemDeleted(
+                tournamentId = tournamentId,
+                tournamentItemId = tournamentItemId,
+                snapshotId = tournamentItem.snapshotId,
+                actorId = userId,
+            ),
+        )
     }
 
     private fun toItemDetail(

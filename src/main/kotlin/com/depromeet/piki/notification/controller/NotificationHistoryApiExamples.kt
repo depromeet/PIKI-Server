@@ -132,7 +132,7 @@ class NotificationHistoryApiExamples(
 
     // 토너먼트 출처 파싱 완료 알림 (kind=TOURNAMENT + 두 식별자) — 시스템, imageUrl=defaultPushImg, 안읽음.
     private val tournamentParsingItem =
-        NotificationSsePayload.TournamentParsing(
+        NotificationSsePayload.TournamentRouted(
             id = 1024,
             type = NotificationType.ITEM_PARSING_COMPLETED,
             category = NotificationCategory.SYSTEM,

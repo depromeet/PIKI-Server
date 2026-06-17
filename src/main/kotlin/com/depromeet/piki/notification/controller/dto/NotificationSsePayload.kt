@@ -54,8 +54,10 @@ sealed interface NotificationSsePayload {
         val kind: NotificationKind = NotificationKind.WISH
     }
 
-    // 토너먼트 출처 파싱 알림. refId(=itemId) + kind=TOURNAMENT + 입장(tournamentId)·아이템 지목(tournamentItemId).
-    data class TournamentParsing(
+    // 토너먼트 아이템을 지목하는 알림. kind=TOURNAMENT + 입장(tournamentId)·아이템 지목(tournamentItemId) 좌표를 싣는다.
+    // 두 용도가 공유한다: 파싱 알림(refId=itemId) · 아이템 삭제 알림(refId=tournamentId). refId 의미는 type 별로 갈리니
+    // 클라는 type 으로 먼저 분기한다. (파싱 전용이 아니라 "토너먼트 아이템 라우팅" 셰입이라 이름이 중립적이다.)
+    data class TournamentRouted(
         override val id: Long,
         override val type: NotificationType,
         override val category: NotificationCategory,
@@ -111,7 +113,7 @@ sealed interface NotificationSsePayload {
                     )
 
                 is NotificationRouting.Tournament ->
-                    TournamentParsing(
+                    TournamentRouted(
                         id = id,
                         type = notification.type,
                         category = category,

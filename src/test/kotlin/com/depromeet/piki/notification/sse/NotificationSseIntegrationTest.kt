@@ -191,7 +191,7 @@ class NotificationSseIntegrationTest : IntegrationTestSupport() {
         try {
             sseNotificationChannel.send(userId, notification)
 
-            val payload = emitter.sentData.filterIsInstance<NotificationSsePayload.TournamentParsing>().first()
+            val payload = emitter.sentData.filterIsInstance<NotificationSsePayload.TournamentRouted>().first()
             assertEquals(NotificationKind.TOURNAMENT, payload.kind)
             assertEquals(99L, payload.tournamentId)
             assertEquals(555L, payload.tournamentItemId)
@@ -245,7 +245,7 @@ class NotificationSseIntegrationTest : IntegrationTestSupport() {
         val reloaded = notificationJpaRepository.findById(saved.getId()).orElseThrow()
 
         val payload = NotificationSsePayload.from(reloaded, DEFAULT_PUSH_IMAGE_URL)
-        val tournament = assertIs<NotificationSsePayload.TournamentParsing>(payload)
+        val tournament = assertIs<NotificationSsePayload.TournamentRouted>(payload)
         assertEquals(NotificationKind.TOURNAMENT, tournament.kind)
         assertEquals(99L, tournament.tournamentId)
         assertEquals(555L, tournament.tournamentItemId)
