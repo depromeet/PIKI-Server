@@ -634,6 +634,28 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `GET tournaments 에서 status=IN_PROGRESS 로 조회하면 COMPLETED 토너먼트는 포함되지 않는다`() {
+        val mockMvc = buildMockMvc()
+        val (completedId, _, _) = completeTournamentWith2Items(mockMvc)
+        val inProgressId = createTournament(mockMvc, "진행중")
+        addItemsToTournament(mockMvc, inProgressId, userId, saveWishItem(), saveWishItem())
+        mockMvc.perform(
+            post("/api/v1/tournaments/$inProgressId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .param("status", "IN_PROGRESS"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].tournamentId").value(inProgressId))
+            .andExpect(jsonPath("$.data[?(@.tournamentId == $completedId)]").doesNotExist())
+    }
+
+    @Test
     fun `GET tournaments 에서 토너먼트가 없으면 빈 배열을 반환한다`() {
         val mockMvc = buildMockMvc()
 
@@ -1383,6 +1405,28 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `POST tournaments-id-items-link 에서 미지원 플랫폼(KREAM) URL 이면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        // 미지원 플랫폼(봇 차단으로 fetch 불가)은 등록 입력 시점에 동기 400 으로 막는다 — 위시 등록과 같은 메커니즘.
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/items/link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"url":"https://kream.co.kr/products/950123"}"""),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.detail").value("아직 지원하지 않는 쇼핑몰이에요."))
+
+        // 등록 입력 경계에서 차단되므로 tournament item 이 생성되면 안 된다(검증 위치가 뒤로 밀려 일부라도 영속화되는 회귀 방지).
+        assertTrue(
+            tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).isEmpty(),
+            "미지원 플랫폼은 등록 입력 경계에서 차단되어 tournament item 이 생성되면 안 됩니다.",
+        )
+    }
+
+    @Test
     fun `POST tournaments-id-items-link 에서 토너먼트 참여자가 아니면 403 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
@@ -1964,40 +2008,32 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `PATCH tournaments-id-invite 는 주최자가 200 과 함께 새 inviteExpiresAt 을 반환하고 DB 에도 반영된다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        val before = LocalDateTime.now()
-
-        val result = mockMvc
-            .perform(
-                patch("/api/v1/tournaments/$tournamentId/invite")
-                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":60}"""),
-            ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.data").isString)
-            .andReturn()
-
-        val expiresAtStr = objectMapper.readTree(result.response.contentAsString)["data"].asText()
-        val expiresAt = java.time.OffsetDateTime.parse(expiresAtStr, DateTimeFormatter.ISO_OFFSET_DATE_TIME).toLocalDateTime()
-        val expectedMin = before.plusMinutes(60)
-        val expectedMax = LocalDateTime.now().plusMinutes(60)
-        assertTrue(expiresAt >= expectedMin && expiresAt <= expectedMax)
-
-        // 응답뿐 아니라 엔티티에 실제로 반영됐는지 확인 — backing field dirty-check가 깨져도 응답은 통과하므로
-        val saved = tournamentJpaRepository.findByIdAndDeletedAtIsNull(tournamentId)!!
-        assertTrue(saved.inviteExpiresAt >= expectedMin && saved.inviteExpiresAt <= expectedMax)
-    }
-
-    @Test
-    fun `PATCH tournaments-id-invite 에서 inviteDurationMinutes 가 0 이면 400 을 반환한다`() {
-        val mockMvc = buildMockMvc()
-        val tournamentId = createTournament(mockMvc)
+        val newExpiresAt = LocalDateTime.now().plusMinutes(60).withNano(0)
 
         mockMvc
             .perform(
                 patch("/api/v1/tournaments/$tournamentId/invite")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":0}"""),
+                    .content("""{"newExpiresAt":"$newExpiresAt"}"""),
+            ).andExpect(status().isOk)
+
+        val saved = tournamentJpaRepository.findByIdAndDeletedAtIsNull(tournamentId)!!
+        assertEquals(newExpiresAt, saved.inviteExpiresAt)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-invite 에서 newExpiresAt 이 과거 시각이면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val pastTime = LocalDateTime.now().minusMinutes(1).withNano(0)
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/invite")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"newExpiresAt":"$pastTime"}"""),
             ).andExpect(status().isBadRequest)
     }
 
@@ -2012,7 +2048,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 patch("/api/v1/tournaments/$tournamentId/invite")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":60}"""),
+                    .content("""{"newExpiresAt":"${LocalDateTime.now().plusMinutes(60).withNano(0)}"}"""),
             ).andExpect(status().isForbidden)
     }
 
@@ -2025,7 +2061,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 patch("/api/v1/tournaments/999999/invite")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":60}"""),
+                    .content("""{"newExpiresAt":"${LocalDateTime.now().plusMinutes(60).withNano(0)}"}"""),
             ).andExpect(status().isNotFound)
     }
 
@@ -2039,7 +2075,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 patch("/api/v1/tournaments/$tournamentId/invite")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":60}"""),
+                    .content("""{"newExpiresAt":"${LocalDateTime.now().plusMinutes(60).withNano(0)}"}"""),
             ).andExpect(status().isConflict)
     }
 

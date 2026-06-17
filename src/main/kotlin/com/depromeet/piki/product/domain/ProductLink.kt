@@ -10,6 +10,21 @@ class ProductLink private constructor(
     // 로그/메트릭용. 쿼리스트링·fragment 에 토큰/세션이 섞일 수 있어 host+path 만 노출한다.
     fun safeLogString(): String = "${value.host ?: "?"}${value.rawPath ?: ""}"
 
+    // 등록 입력 경계 전용 — fetch 로 상품 정보를 가져올 수 없는 플랫폼이면 등록을 거른다(400).
+    // parse(형식 불변식)와 분리해 여기서만 검사한다: parse 는 DB 읽기(ProductLinkConverter)·redirect 추적과
+    // 공유되므로, 미지원 판정을 parse 에 넣으면 이미 저장된 미지원 URL 을 조회할 때 깨지고, 차단이 시점에 따라
+    // 풀려도(봇 차단은 변동적) 과거 행 읽기가 막힌다. 미지원은 "정책 계약"이라 입력 경계가 진다.
+    fun verifySupportedPlatform() {
+        if (isFromUnsupportedPlatform()) throw ProductLinkException.unsupportedPlatform()
+    }
+
+    // host 가 미지원 목록과 같거나 그 서브도메인이면 미지원. host 가 없으면(형식 이상은 parse 가 이미 처리) 판정 대상 아님.
+    // trailing dot(절대 도메인 표기, 예: "naver.com.")은 제거해 차단 우회를 막는다. Kotlin lowercase() 는 locale 무관(invariant).
+    private fun isFromUnsupportedPlatform(): Boolean {
+        val host = value.host?.trimEnd('.')?.lowercase() ?: return false
+        return UNSUPPORTED_HOSTS.any { host == it || host.endsWith(".$it") }
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is ProductLink) return false
@@ -20,6 +35,22 @@ class ProductLink private constructor(
 
     companion object {
         private val HTTP_SCHEMES = setOf("https")
+
+        // 직접 GET 접근을 봇 차단(TLS 지문·WAF·JS 챌린지)해 fetch 로 상품 정보를 가져올 수 없는 플랫폼.
+        // 2026-06-16 dev 실측: KREAM=500(no body)·쿠팡=403·네이버 쇼핑=418, 네이버 스토어=CAPTCHA(429/490).
+        // UA·풀 브라우저 헤더·모바일 어느 조합도 우회 안 됨(헤드리스 브라우저·공식 API 영역). 등록 시점에
+        // verifySupportedPlatform 으로 거른다 — 담아봐야 파싱이 무의미하게 실패하고 사용자에겐 "주소를 다시 확인"
+        // 이라는 틀린 안내가 나가기 때문. host 가 항목과 같거나 그 서브도메인이면 미지원(부분 문자열 매칭이 아니라
+        // 도메인 단위라 navermart.com 같은 무관 도메인은 안 걸린다). 네이버는 쇼핑 서브도메인이 전부 차단이고
+        // 비쇼핑(블로그·카페)은 애초에 상품 페이지가 아니라, 서브도메인을 나열하지 않고 naver.com 을 통째로 막는다
+        // (naver.me 단축은 별도 도메인이라 따로). 차단이 풀리면(특히 네이버는 변동적) 목록에서 뺀다.
+        private val UNSUPPORTED_HOSTS =
+            setOf(
+                "kream.co.kr",
+                "coupang.com",
+                "naver.com",
+                "naver.me",
+            )
 
         fun parse(raw: String): ProductLink {
             val trimmed = raw.trim()

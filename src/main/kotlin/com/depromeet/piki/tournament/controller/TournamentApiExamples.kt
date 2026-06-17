@@ -281,6 +281,7 @@ class TournamentApiExamples(
                                                             nickname = "참여자1",
                                                             profileImage = "https://cdn.example.com/profiles/user1.jpg",
                                                             isWithdrawn = false,
+                                                            itemCount = 2,
                                                         ),
                                                     ),
                                             ),
@@ -333,12 +334,14 @@ class TournamentApiExamples(
                                                             nickname = "주최자",
                                                             profileImage = "https://cdn.example.com/profiles/user1.jpg",
                                                             isWithdrawn = false,
+                                                            itemCount = 2,
                                                         ),
                                                         TournamentDetailResponse.ParticipantResponse(
                                                             userId = UUID.fromString("22222222-3333-4444-5555-666666666666"),
                                                             nickname = "참여자",
                                                             profileImage = "https://cdn.example.com/profiles/user2.jpg",
                                                             isWithdrawn = false,
+                                                            itemCount = 0,
                                                         ),
                                                     ),
                                                 ownerStarted = true,
@@ -485,11 +488,11 @@ class TournamentApiExamples(
                         )
                         add(
                             status = HttpStatus.BAD_REQUEST,
-                            name = "유효 시간 범위 초과",
+                            name = "과거 시각 입력",
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    detail = UpdateInviteDurationRequest.INVITE_DURATION_MAX_MESSAGE,
+                                    detail = UpdateInviteDurationRequest.INVITE_EXPIRY_PAST_MESSAGE,
                                 ),
                         )
                         unauthorized()

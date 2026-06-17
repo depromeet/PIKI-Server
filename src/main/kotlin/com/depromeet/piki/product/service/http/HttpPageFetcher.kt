@@ -76,6 +76,9 @@ class HttpPageFetcher(
         } catch (e: RestClientResponseException) {
             log.warn("link fetch failed: status={} url={}", e.statusCode, current.safeLogString())
             throw when {
+                // 500/501 은 봇 차단처럼 결정론적 영구 실패가 흔해 재시도하지 않는다(SERVER_ERROR).
+                // 502/503/504 는 일시(게이트웨이·과부하·타임아웃)일 수 있어 재시도 대상(RETRYABLE)으로 둔다.
+                e.statusCode.value() in PERMANENT_SERVER_ERRORS -> PageFetchException.permanentUpstreamError(e)
                 e.statusCode.is5xxServerError -> PageFetchException.upstreamError(e)
                 else -> PageFetchException.clientError(e)
             }
@@ -202,6 +205,10 @@ class HttpPageFetcher(
 
         // Location 을 가진 진짜 redirect 상태 코드. 304/300/305 등 다른 3xx 는 따라가지 않는다.
         private val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
+
+        // 재시도해도 결정론적으로 재실패하는 5xx 로 보는 상태 코드. 500(Internal)·501(Not Implemented)이며,
+        // 봇 차단을 500(no body)으로 응답하는 쇼핑몰이 흔해 영구 실패로 처리한다. 502/503/504 는 제외(일시 가능).
+        private val PERMANENT_SERVER_ERRORS = setOf(500, 501)
 
         // fetch 본문의 보관·파싱 비용을 막는 안전 상한이다. LLM 토큰 상한이 아니다 — 그건 Gemini 입력 직전
         // GeminiHtmlExtractor 가 정리(sanitize)된 HTML 에 따로 적용한다. 이 상한을 넉넉히 둬야 구조화 추출

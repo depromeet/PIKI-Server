@@ -165,7 +165,7 @@ class TournamentController(
         @PathVariable tournamentId: Long,
         @Valid @RequestBody request: UpdateInviteDurationRequest,
     ): ApiResponseBody<LocalDateTime> {
-        val newExpiresAt = tournamentService.updateInviteExpiry(userId, tournamentId, request.inviteDurationMinutes)
+        val newExpiresAt = tournamentService.updateInviteExpiry(userId, tournamentId, request.newExpiresAt)
         return ApiResponseBody.ok(newExpiresAt)
     }
 
