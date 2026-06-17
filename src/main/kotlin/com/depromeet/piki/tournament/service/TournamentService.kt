@@ -666,7 +666,8 @@ class TournamentService(
         tournamentId: Long,
         newExpiresAt: LocalDateTime,
     ): LocalDateTime {
-        require(newExpiresAt.isBefore(LocalDateTime.now().plusHours(24))) { "초대 마감 시각은 24시간 이내여야 합니다" }
+        val now = LocalDateTime.now()
+        require(!newExpiresAt.isAfter(now.plusHours(24))) { "초대 마감 시각은 24시간 이내여야 합니다" }
         val tournament =
             tournamentRepository.findTournamentByIdForUpdate(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
