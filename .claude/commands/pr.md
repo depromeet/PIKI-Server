@@ -144,10 +144,28 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
 - 해당 섹션에 `- TODO: 작성자가 직접 보완해주세요` 를 남긴다
 - 부분적으로만 파악 가능한 경우, 파악된 내용만 적고 나머지에 `- TODO: ...` 를 추가한다
 
+### 본문 확인 — IDE 로 열기 (create · update 공통)
+
+본문 초안을 채팅에 길게 펼치지 않고, 저장한 본문 파일을 IntelliJ 로 열어 사용자가 **직접 보고 편집**하게 한다. 임시 파일이 single source 이므로 사용자가 IDE 에서 고친 내용이 그대로 `--body-file` 로 올라간다 (채팅 copy-paste 왕복 제거, 마크다운 프리뷰로 표가 표처럼 보임).
+
+```bash
+SLUG=$(git branch --show-current | tr '/' '_')
+BODY=/tmp/pr_body_$SLUG.md
+if command -v idea >/dev/null 2>&1; then
+  idea "$BODY"        # IntelliJ 로 본문 열기 (사람이 도는 로컬의 기본 경로)
+else
+  cat "$BODY"         # idea 런처가 없는 환경(CI·headless 등) 폴백: 인라인 출력
+fi
+```
+
+- 연 뒤 **채팅에는 짧게만** 남긴다: 제목 한 줄 + "IntelliJ 에 본문을 열었습니다. 검토 후 진행하라고 하시거나, 파일을 직접 편집·저장한 뒤 알려주세요." 확인 게이트 자체는 채팅에 유지한다 (GUI 만 띄우고 끝내지 않는다).
+- 사용자가 IDE 에서 본문을 편집·저장할 수 있으므로, **확인 이후 그 파일을 다시 Write 로 덮어쓰지 않는다.** `gh pr create` / `gh pr edit` 는 `--body-file` 로 파일을 그 시점에 읽어 사용자 편집을 자동 반영한다. 최종 본문을 알아야 하면 Write 가 아니라 Read 로 다시 읽는다.
+- 폴백(`idea` 없음)은 CI·headless 처럼 GUI 가 없는 실행 한정이다 — 사람이 도는 로컬은 IntelliJ 가 깔려 있다고 가정한다.
+
 ### 3-A. Create 모드 — PR 신규 생성
 
 1. 원격에 푸시되지 않았으면 `git push -u origin {브랜치명}`
-2. PR 제목과 본문 초안을 작성해 **`/tmp/pr_body_$SLUG.md` 에 저장(Write)**한 뒤, 사용자에게 보여주고 확인받는다 (경로 규칙은 0단계 참조 — Claude 가 현재 브랜치 슬러그를 박는다).
+2. PR 제목과 본문 초안을 작성해 **`/tmp/pr_body_$SLUG.md` 에 저장(Write)**한다 (경로 규칙은 0단계 참조 — Claude 가 현재 브랜치 슬러그를 박는다). 이어서 본문 파일을 IDE 로 열어 확인받는다 (위 "본문 확인 — IDE 로 열기"). 제목은 채팅에 한 줄로 함께 보인다.
 3. 확인 후 PR 생성 — assignee / 라벨을 함께 부여한다:
    ```bash
    SLUG=$(git branch --show-current | tr '/' '_')
@@ -212,7 +230,7 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
    - 항목은 날짜 또는 추가 변경의 의도를 sub-heading 으로 (`### CodeRabbit 리뷰 대응`, `### dev 머지 충돌 해결` 등)
 5. **기존 본문은 절대 덮어쓰지 않는다.** 갱신본 = 기존 본문 + Updates 항목 추가만.
 6. **제목 변경 필요 검토**: 추가 변경으로 작업 의도/스코프가 바뀌었거나 기존 제목에 오타·부정확한 표현이 있으면 새 제목 제안. 그 외엔 제목 유지.
-7. 사용자에게 갱신본(필요시 새 제목 포함, 변경 이유 짚어서)을 보여주고 확인받는다.
+7. 갱신본(기존 본문 + Updates)을 `/tmp/pr_body_$SLUG.md` 에 저장(Write)한 뒤 IDE 로 열어 확인받는다 (위 "본문 확인 — IDE 로 열기"). 새 제목이 있으면 채팅에 제목·변경 이유를 함께 짚는다.
 8. 확인 후 `gh pr edit --body-file /tmp/pr_body_$SLUG.md` 로 갱신 (1번과 같은 브랜치 경로 — 별도 bash 호출이라 `SLUG=$(git branch --show-current | tr '/' '_')` 를 다시 구한다). 제목 변경이 있으면 `--title "새 제목"` 추가.
 9. **CodeRabbit 리뷰 대응** — 이번 변경이 CodeRabbit 리뷰 대응이라면 commit + push 로 끝내지 않는다. CodeRabbit 리뷰(인라인 thread + review body nitpick) 조회·평가·reply·resolve 는 **`/coderabbit` 스킬**로 처리한다. 그 스킬이 author 매칭(GraphQL `reviewThreads` 는 `coderabbitai`, REST `reviews` 는 `coderabbitai[bot]` 이라 `coderabbitai` 로 시작하는지로 판별), nitpick 조회, accept/reject reply·resolve 정책을 담는다. (사람 리뷰 thread 는 작성자가 직접 답하므로 `/coderabbit` 도 건드리지 않는다.)
 
