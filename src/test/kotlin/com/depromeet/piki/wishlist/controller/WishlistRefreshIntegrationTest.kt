@@ -88,7 +88,7 @@ class WishlistRefreshIntegrationTest : IntegrationTestSupport() {
             }
             val (wishId, itemId, oldSnapshotId) = seedReadyWish(userId, "https://shop.example.com/products/refresh", "옛 상품", 10_000)
 
-            // 새로고침 — 같은 item 의 새 PENDING 버전이 즉시 활성이 된다(등록과 동일 폴링 모델).
+            // 새로고침 — 같은 item 의 새 PENDING 버전이 즉시 활성이 된다(등록과 동일 비동기 전이 모델: 완료는 SSE 알림으로 통보).
             mockMvc
                 .perform(
                     post("/api/v1/wishlists/$wishId/refresh")
