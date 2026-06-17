@@ -488,11 +488,11 @@ class TournamentApiExamples(
                         )
                         add(
                             status = HttpStatus.BAD_REQUEST,
-                            name = "유효 시간 범위 초과",
+                            name = "과거 시각 입력",
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    detail = UpdateInviteDurationRequest.INVITE_DURATION_MAX_MESSAGE,
+                                    detail = UpdateInviteDurationRequest.INVITE_EXPIRY_PAST_MESSAGE,
                                 ),
                         )
                         unauthorized()

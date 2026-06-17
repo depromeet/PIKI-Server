@@ -687,7 +687,7 @@ interface TournamentApi {
 
     @Operation(
         summary = "친구 초대 마감 시각 수정",
-        description = "PENDING 상태 토너먼트의 초대 마감 시각을 지금으로부터 N분 후로 재설정한다. 주최자만 가능. 최소 1분, 최대 1440분(24시간).",
+        description = "PENDING 상태 토너먼트의 초대 마감 시각을 재설정한다. 주최자만 가능. 현재 시각 이후, 최대 24시간 이내의 절대 시각을 입력한다.",
     )
     @ApiResponses(
         value = [
@@ -698,7 +698,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (inviteDurationMinutes 1 미만 또는 1440 초과)",
+                description = "잘못된 요청 (newExpiresAt 가 현재 시각 이전 · 24시간 초과)",
                 content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
             ApiResponse(

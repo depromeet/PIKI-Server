@@ -664,8 +664,10 @@ class TournamentService(
     fun updateInviteExpiry(
         userId: UUID,
         tournamentId: Long,
-        inviteDurationMinutes: Long,
+        newExpiresAt: LocalDateTime,
     ): LocalDateTime {
+        val now = LocalDateTime.now()
+        require(!newExpiresAt.isAfter(now.plusHours(24))) { "초대 마감 시각은 24시간 이내여야 합니다" }
         val tournament =
             tournamentRepository.findTournamentByIdForUpdate(tournamentId)
                 ?: throw TournamentException.notFoundTournament()
@@ -674,9 +676,6 @@ class TournamentService(
                 ?: throw TournamentException.forbiddenTournament()
         if (tournamentUser.getId() != tournament.ownerTournamentUserId) throw TournamentException.forbiddenTournament()
         if (!tournament.isPending()) throw TournamentException.notPendingTournament()
-        val newExpiresAt = LocalDateTime
-            .now()
-            .plusMinutes(inviteDurationMinutes)
         tournament.updateInviteExpiry(newExpiresAt)
         return newExpiresAt
     }
