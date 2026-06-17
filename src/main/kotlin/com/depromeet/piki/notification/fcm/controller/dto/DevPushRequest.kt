@@ -5,6 +5,7 @@ import com.depromeet.piki.notification.domain.NotificationType
 import com.depromeet.piki.notification.fcm.domain.UserDevice
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.PositiveOrZero
 import jakarta.validation.constraints.Size
 import java.util.UUID
 
@@ -24,6 +25,9 @@ data class DevPushRequest(
     @field:Size(max = Notification.MAX_TEXT_LENGTH)
     @field:Schema(description = "푸시 본문", example = DEFAULT_BODY, defaultValue = DEFAULT_BODY)
     val body: String = DEFAULT_BODY,
+    @field:PositiveOrZero(message = BADGE_NON_NEGATIVE_MESSAGE)
+    @field:Schema(description = "OS 아이콘 badge 숫자(#487) — FE 가 badge 표시를 확인하는 테스트 값", example = "1", defaultValue = "0")
+    val badge: Int = 0,
 ) {
     // 받는 쪽(Notification)이 매핑을 책임진다. 테스트 발송은 딥링크 대상이 없어 더미 type·refId.
     // userId 는 발송 메시지에 실리지 않고 throwaway Notification 구성에만 쓰여, 호출자(인증 유저)를 그대로 넣는다.
@@ -42,6 +46,9 @@ data class DevPushRequest(
 
         // 입력 검증(400) 실패라 '잠시 후 다시 시도' 류 재시도 유도는 넣지 않는다 — 원인은 앱의 잘못된 요청이라 재시도로 풀리지 않는다.
         const val TOKEN_BLANK_MESSAGE = "알림 설정에 실패했어요."
+
+        // badge 는 OS 아이콘 카운트라 음수가 의미 없다. 음수면 FCM 이 INVALID_ARGUMENT 로 떨구기 전에 경계에서 400 으로 막는다.
+        const val BADGE_NON_NEGATIVE_MESSAGE = "badge 는 0 이상이어야 해요."
 
         private const val TEST_REF_ID = 0L
     }
