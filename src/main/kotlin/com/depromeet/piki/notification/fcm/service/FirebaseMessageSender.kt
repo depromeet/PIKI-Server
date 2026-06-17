@@ -267,7 +267,7 @@ class FirebaseMessageSender(
                 when (payload) {
                     is NotificationSsePayload.Reference -> Unit
                     is NotificationSsePayload.WishParsing -> put(DATA_KEY_KIND, payload.kind.name)
-                    is NotificationSsePayload.TournamentParsing -> {
+                    is NotificationSsePayload.TournamentRouted -> {
                         put(DATA_KEY_KIND, payload.kind.name)
                         put(DATA_KEY_TOURNAMENT_ID, payload.tournamentId.toString())
                         put(DATA_KEY_TOURNAMENT_ITEM_ID, payload.tournamentItemId.toString())

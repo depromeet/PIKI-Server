@@ -15,6 +15,7 @@ enum class NotificationCategory {
             when (type) {
                 NotificationType.TOURNAMENT_JOINED,
                 NotificationType.TOURNAMENT_ITEM_ADDED,
+                NotificationType.TOURNAMENT_ITEM_DELETED,
                 NotificationType.TOURNAMENT_STARTED,
                 NotificationType.TOURNAMENT_PLAYED_FROM_LINK,
                 NotificationType.TOURNAMENT_COMPLETED,
