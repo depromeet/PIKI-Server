@@ -101,6 +101,10 @@ class WishPersistenceService(
         item.link ?: throw WishException.notRefreshable()
         // 이미 진행 중(PENDING·PROCESSING)이면 새 추출을 만들지 않고 현재 진행 상태를 그대로 반환(멱등).
         if (activeSnapshot.isInProgress()) return WishWithItem(wish = wish, item = item, snapshot = activeSnapshot)
+        // 추출 실패(FAILED) 항목은 새로고침 대상이 아니다 — 보정(recover)으로 복구한다(409). 새로고침은 성공(READY)
+        // 항목의 재추출 전용이라, 보정(FAILED 대상)과 상태로 갈려 recover-vs-refresh 동시 요청이 서로의 활성 포인터를
+        // 침범하지 않는다(보정 진행 중엔 FAILED 라 새로고침이 여기서 막혀, 보정이 끝나기 전 활성이 스왑되지 않는다).
+        if (activeSnapshot.isFailed()) throw WishException.failedNotRefreshable()
         // 새 PENDING 버전을 outbox 에 적재하고 활성 포인터를 즉시 스왑한다.
         val newSnapshot = itemSnapshotRepository.save(ItemSnapshot.pending(item.getId()))
         wish.swapSnapshot(newSnapshot.getId())

@@ -56,5 +56,12 @@ class WishException private constructor(
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
+
+        fun failedNotRefreshable(): WishException =
+            WishException(
+                "추출에 실패한 항목은 새로고침 대신 정보를 직접 입력해 복구해 주세요.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
+            )
     }
 }

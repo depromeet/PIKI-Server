@@ -294,8 +294,9 @@ interface WishlistApi {
         description = """
             위시 항목의 상품 정보를 원본 링크로 다시 추출해 최신(가격·이미지 등)으로 새로고침한다. 추출은 외부 LLM 호출이라
             동기로 기다리지 않는다 — 새 추출 버전(item.status=PENDING)을 즉시 활성으로 띄워 200 으로 반환하고, 백그라운드 디스패처가
-            집어 PROCESSING→READY(완료)/FAILED(실패) 로 전이한다. 클라이언트는 등록과 동일하게 단건 조회를 폴링해 status 변화를 확인한다.
+            집어 PROCESSING→READY(완료)/FAILED(실패) 로 전이한다. 클라이언트는 등록과 동일하게 SSE(`/api/v1/notifications/subscribe`)로 status 변화(완료·실패 알림)를 통보받는다.
             이미 새로고침이 진행 중(PENDING·PROCESSING)이면 새 추출을 만들지 않고 현재 진행 상태를 그대로 반환한다(멱등).
+            새로고침은 성공(READY) 항목의 재추출 전용이다. 추출에 실패(FAILED)한 항목은 새로고침 대신 보정으로 복구한다(409).
             링크가 없는 항목(이미지로 등록한 위시)은 재추출 입력이 없어 새로고침할 수 없다(400). 본인 위시만 가능하다.
             옛 추출 버전은 보존돼, 이 위시를 토너먼트에 출전시켜 둔 경우 출전 시점 정보가 새로고침에 영향받지 않는다.
         """,
@@ -345,6 +346,16 @@ interface WishlistApi {
             ApiResponse(
                 responseCode = "404",
                 description = "존재하지 않는 위시 항목 (삭제된 항목 포함)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "추출 실패(FAILED) 항목은 새로고침 대상이 아님 (보정으로 복구) · 새로고침은 성공(READY) 항목 전용",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

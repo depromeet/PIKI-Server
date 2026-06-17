@@ -220,6 +220,29 @@ class WishlistRefreshIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `추출 실패(FAILED) 위시를 새로고침하면 409 로 거부된다`() {
+        // 새로고침은 성공(READY) 항목의 재추출 전용 — 추출 실패(FAILED) 항목은 보정(recover)으로 복구한다.
+        // 보정(FAILED)과 새로고침(READY)이 상태로 갈려, recover-vs-refresh 동시 요청이 서로의 활성 포인터를 침범하지 않는다.
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            val item = itemRepository.save(Item(ProductLink.parse("https://shop.example.com/products/failed")))
+            val snapshot = itemSnapshotRepository.save(ItemSnapshot(itemId = item.getId(), status = ItemStatus.FAILED))
+            val wish = wishRepository.save(Wish(userId = userId, snapshotId = snapshot.getId()))
+
+            mockMvc
+                .perform(
+                    post("/api/v1/wishlists/${wish.getId()}/refresh")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
+                ).andExpect(status().isConflict)
+                .andExpect(jsonPath("$.detail").value("추출에 실패한 항목은 새로고침 대신 정보를 직접 입력해 복구해 주세요."))
+        } finally {
+            cleanup(userId)
+        }
+    }
+
+    @Test
     fun `토너먼트에 출전한 위시를 새로고침해도 출전 시점 snapshot 은 바뀌지 않는다`() {
         // #362 의 핵심 회귀 — 위시 갱신이 tournament_item 의 고정 snapshot 을 침범하면 출전 공정성이 깨진다.
         val mockMvc = buildMockMvc()

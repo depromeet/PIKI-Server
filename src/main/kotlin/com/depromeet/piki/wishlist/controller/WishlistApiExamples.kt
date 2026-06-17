@@ -126,6 +126,7 @@ class WishlistApiExamples(
                         payload = ApiResponseBody.ok(processingSampleEntry),
                     )
                     add(WishException.notRefreshable(), name = "링크 없는 항목(이미지 등록) — 새로고침 불가")
+                    add(WishException.failedNotRefreshable(), name = "추출 실패(FAILED) 항목 — 보정으로 복구")
                     add(WishException.forbiddenWishItems(), name = "본인 위시 아님")
                     add(WishException.notFound(), name = "존재하지 않는 위시 항목")
                     unauthorized()
