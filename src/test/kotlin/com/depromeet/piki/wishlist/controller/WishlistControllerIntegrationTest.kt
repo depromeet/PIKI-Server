@@ -86,9 +86,9 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         userId: UUID,
         url: String,
         name: String,
-        currentPrice: Int? = null,
-        currency: String? = null,
-        imageUrl: String? = null,
+        currentPrice: Int? = 10_000,
+        currency: String? = "KRW",
+        imageUrl: String? = "https://img.example.com/a.png",
     ): Long {
         val result = wishPersistenceService.persist(userId, Item(ProductLink.parse(url)))
         itemParsingService.claimDuePending(100)
@@ -366,9 +366,11 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val authHeader = "Bearer ${memberToken(userId)}"
         val wishId = seedFailedWish(userId, "https://shop.example.com/products/1")
 
+        val image = MockMultipartFile("image", "p.png", "image/png", byteArrayOf(1, 2, 3))
         mockMvc
             .perform(
                 multipart("/api/v1/wishlists/$wishId")
+                    .file(image)
                     .param("name", "직접 입력한 이름")
                     .param("currentPrice", "50000")
                     .with {
@@ -475,6 +477,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 multipart("/api/v1/wishlists/$wishId")
                     .file(image)
                     .param("name", "직접 입력한 이름")
+                    .param("currentPrice", "50000")
                     .with {
                         it.method = "PATCH"
                         it
