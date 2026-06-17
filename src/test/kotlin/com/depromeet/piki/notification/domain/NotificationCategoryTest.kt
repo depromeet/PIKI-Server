@@ -11,6 +11,7 @@ class NotificationCategoryTest {
     @CsvSource(
         "TOURNAMENT_JOINED, ACTIVITY",
         "TOURNAMENT_ITEM_ADDED, ACTIVITY",
+        "TOURNAMENT_ITEM_DELETED, ACTIVITY",
         "TOURNAMENT_STARTED, ACTIVITY",
         "TOURNAMENT_PLAYED_FROM_LINK, ACTIVITY",
         "TOURNAMENT_COMPLETED, ACTIVITY",
@@ -38,6 +39,7 @@ class NotificationCategoryTest {
             listOf(
                 NotificationType.TOURNAMENT_JOINED,
                 NotificationType.TOURNAMENT_ITEM_ADDED,
+                NotificationType.TOURNAMENT_ITEM_DELETED,
                 NotificationType.TOURNAMENT_STARTED,
                 NotificationType.TOURNAMENT_PLAYED_FROM_LINK,
                 NotificationType.TOURNAMENT_COMPLETED,

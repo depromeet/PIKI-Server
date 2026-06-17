@@ -20,10 +20,14 @@ object NotificationTemplateVariables {
             TemplateVariable("tournamentId", "42"),
         )
 
+    // 삭제 알림은 어느 상품이 빠졌는지 문구에 담는다 — 공유 TOURNAMENT 변수에 itemName 을 더한다.
+    private val TOURNAMENT_WITH_ITEM = TOURNAMENT + TemplateVariable("itemName", "나이키 에어맥스")
+
     private val catalog: Map<NotificationType, List<TemplateVariable>> =
         mapOf(
             NotificationType.TOURNAMENT_JOINED to TOURNAMENT,
             NotificationType.TOURNAMENT_ITEM_ADDED to TOURNAMENT,
+            NotificationType.TOURNAMENT_ITEM_DELETED to TOURNAMENT_WITH_ITEM,
             NotificationType.TOURNAMENT_STARTED to TOURNAMENT,
             NotificationType.TOURNAMENT_PLAYED_FROM_LINK to TOURNAMENT,
             NotificationType.TOURNAMENT_COMPLETED to TOURNAMENT,
