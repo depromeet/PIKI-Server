@@ -196,7 +196,7 @@ class WishlistApiExamples(
                 ),
         )
 
-    // 파싱 진행 중 항목 (PROCESSING) — 디스패처가 집어 추출 중인 상태. 목록·단건 폴링에서 등장한다.
+    // 파싱 진행 중 항목 (PROCESSING) — 디스패처가 집어 추출 중인 상태. 목록·단건 조회에서 등장한다.
     private val processingSampleEntry =
         WishItemResponse(
             wish =
