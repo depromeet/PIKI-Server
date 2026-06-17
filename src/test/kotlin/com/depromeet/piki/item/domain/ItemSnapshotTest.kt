@@ -96,10 +96,26 @@ class ItemSnapshotTest {
     }
 
     @Test
-    fun `markReady 시 추출 결과에 name 이 없으면 READY 불변식 위반으로 실패한다`() {
+    fun `markReady 시 name 이 없으면 READY 불변식 위반으로 실패한다`() {
         val snapshot = ItemSnapshot(itemId = 1L)
         assertFailsWith<IllegalArgumentException> {
-            snapshot.markReady(ProductSnapshot(currentPrice = 1_000))
+            snapshot.markReady(ProductSnapshot(currentPrice = 1_000, imageUrl = "https://img.example.com/a.png"))
+        }
+    }
+
+    @Test
+    fun `markReady 시 price 가 없으면 READY 불변식 위반으로 실패한다`() {
+        val snapshot = ItemSnapshot(itemId = 1L)
+        assertFailsWith<IllegalArgumentException> {
+            snapshot.markReady(ProductSnapshot(name = "나이키", imageUrl = "https://img.example.com/a.png"))
+        }
+    }
+
+    @Test
+    fun `markReady 시 imageUrl 이 없으면 READY 불변식 위반으로 실패한다`() {
+        val snapshot = ItemSnapshot(itemId = 1L)
+        assertFailsWith<IllegalArgumentException> {
+            snapshot.markReady(ProductSnapshot(name = "나이키", currentPrice = 99_000))
         }
     }
 
@@ -114,7 +130,7 @@ class ItemSnapshotTest {
     fun `FAILED 스냅샷을 recover 하면 채워지고 READY 와 extractedAt 이 설정된다`() {
         val snapshot = ItemSnapshot(itemId = 1L)
         snapshot.markFailed()
-        snapshot.recover(name = "수동 보정", currentPrice = 5_000, imageUrl = null, currency = "KRW")
+        snapshot.recover(name = "수동 보정", currentPrice = 5_000, imageUrl = "https://img.example.com/a.png", currency = "KRW")
         assertEquals(ItemStatus.READY, snapshot.status)
         assertEquals("수동 보정", snapshot.name)
         assertNotNull(snapshot.extractedAt)
@@ -125,7 +141,7 @@ class ItemSnapshotTest {
         val snapshot = ItemSnapshot(itemId = 1L)
         snapshot.markFailed()
         assertFailsWith<IllegalStateException> {
-            snapshot.markReady(ProductSnapshot(name = "x"))
+            snapshot.markReady(ProductSnapshot(name = "x", currentPrice = 1_000, imageUrl = "https://img.example.com/a.png"))
         }
     }
 
@@ -134,7 +150,7 @@ class ItemSnapshotTest {
     @Test
     fun `READY 스냅샷을 recover 하면 이미 완료라 ItemException(409)`() {
         val snapshot = ItemSnapshot(itemId = 1L)
-        snapshot.markReady(ProductSnapshot(name = "나이키"))
+        snapshot.markReady(ProductSnapshot(name = "나이키", currentPrice = 99_000, imageUrl = "https://img.example.com/a.png"))
         assertFailsWith<ItemException> {
             snapshot.recover(name = "수정", currentPrice = null, imageUrl = null, currency = null)
         }
@@ -153,7 +169,25 @@ class ItemSnapshotTest {
         val snapshot = ItemSnapshot(itemId = 1L)
         snapshot.markFailed()
         assertFailsWith<ItemException> {
-            snapshot.recover(name = null, currentPrice = 1_000, imageUrl = null, currency = "KRW")
+            snapshot.recover(name = null, currentPrice = 1_000, imageUrl = "https://img.example.com/a.png", currency = "KRW")
+        }
+    }
+
+    @Test
+    fun `FAILED 스냅샷을 보정해도 price 가 없으면 ItemException(400)`() {
+        val snapshot = ItemSnapshot(itemId = 1L)
+        snapshot.markFailed()
+        assertFailsWith<ItemException> {
+            snapshot.recover(name = "수동 보정", currentPrice = null, imageUrl = "https://img.example.com/a.png", currency = "KRW")
+        }
+    }
+
+    @Test
+    fun `FAILED 스냅샷을 보정해도 imageUrl 이 없으면 ItemException(400)`() {
+        val snapshot = ItemSnapshot(itemId = 1L)
+        snapshot.markFailed()
+        assertFailsWith<ItemException> {
+            snapshot.recover(name = "수동 보정", currentPrice = 5_000, imageUrl = null, currency = "KRW")
         }
     }
 
@@ -171,7 +205,11 @@ class ItemSnapshotTest {
         // 수동 새로고침(5단계) 멱등 가드용 — 이미 진행 중이면 새 추출 버전을 만들지 않는다.
         assertTrue(ItemSnapshot.pending(itemId = 1L).isInProgress())
         assertTrue(ItemSnapshot.processing(itemId = 1L).isInProgress())
-        assertFalse(ItemSnapshot(itemId = 1L).apply { markReady(ProductSnapshot(name = "x")) }.isInProgress())
+        assertFalse(
+            ItemSnapshot(itemId = 1L)
+                .apply { markReady(ProductSnapshot(name = "x", currentPrice = 1_000, imageUrl = "https://img.example.com/a.png")) }
+                .isInProgress(),
+        )
         assertFalse(ItemSnapshot(itemId = 1L).apply { markFailed() }.isInProgress())
     }
 
@@ -187,7 +225,9 @@ class ItemSnapshotTest {
         // 이미 claim 된(PROCESSING)·완료(READY)·실패(FAILED)는 다시 claim 할 수 없다 — 디스패처 중복 집기 방어.
         assertFailsWith<IllegalStateException> { ItemSnapshot.processing(1L).markProcessing() }
         assertFailsWith<IllegalStateException> {
-            ItemSnapshot(itemId = 1L).apply { markReady(ProductSnapshot(name = "x")) }.markProcessing()
+            ItemSnapshot(itemId = 1L)
+                .apply { markReady(ProductSnapshot(name = "x", currentPrice = 1_000, imageUrl = "https://img.example.com/a.png")) }
+                .markProcessing()
         }
         assertFailsWith<IllegalStateException> { ItemSnapshot(itemId = 1L).apply { markFailed() }.markProcessing() }
     }
@@ -225,7 +265,9 @@ class ItemSnapshotTest {
         // PENDING(claim 전)·READY(완료)·FAILED(실패)는 재실행 claim 대상이 아니다 — recover 가 잘못된 행을 집은 코드 버그 방어.
         assertFailsWith<IllegalStateException> { ItemSnapshot.pending(1L).reclaim() }
         assertFailsWith<IllegalStateException> {
-            ItemSnapshot(itemId = 1L).apply { markReady(ProductSnapshot(name = "x")) }.reclaim()
+            ItemSnapshot(itemId = 1L)
+                .apply { markReady(ProductSnapshot(name = "x", currentPrice = 1_000, imageUrl = "https://img.example.com/a.png")) }
+                .reclaim()
         }
         assertFailsWith<IllegalStateException> { ItemSnapshot(itemId = 1L).apply { markFailed() }.reclaim() }
     }

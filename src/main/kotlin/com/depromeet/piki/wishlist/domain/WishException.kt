@@ -17,35 +17,35 @@ class WishException private constructor(
     companion object {
         fun forbiddenWishItems(): WishException =
             WishException(
-                "해당 위시 아이템에 접근할 권한이 없습니다.",
+                "내 위시 아이템만 볼 수 있어요.",
                 ErrorCategory.FORBIDDEN,
                 HttpStatus.FORBIDDEN,
             )
 
         fun invalidCursor(): WishException =
             WishException(
-                "유효하지 않은 cursor 입니다.",
+                "페이지를 불러오지 못했어요. 새로고침 해주세요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
 
         fun notFound(): WishException =
             WishException(
-                "존재하지 않는 위시리스트 항목입니다.",
+                "이미 삭제된 아이템이에요.",
                 ErrorCategory.NOT_FOUND,
                 HttpStatus.NOT_FOUND,
             )
 
         fun invalidImageCount(): WishException =
             WishException(
-                "이미지는 최소 1개, 최대 5개까지 전송할 수 있습니다.",
+                "이미지는 1~5장만 올릴 수 있어요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
 
         fun invalidIdCount(): WishException =
             WishException(
-                "삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다.",
+                "한 번에 최대 100개까지 삭제할 수 있어요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )

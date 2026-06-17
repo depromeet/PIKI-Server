@@ -118,7 +118,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
         insertMember(userId)
         try {
             stubProductLinkExtractor.build = {
-                ProductSnapshot(link = it, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW")
+                ProductSnapshot(link = it, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW", imageUrl = "https://img.example.com/a.png")
             }
             val readyBefore = parseCount("ready", "none")
             val itemId = registerAndGetItemId(mockMvc, userId, "https://shop.example.com/products/42")
@@ -360,7 +360,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
         // 디스패처가 claim(attempt 1)한 직후 워커가 크래시해 실행 0회로 PROCESSING 에 갇힌 상황.
         // recover 가 재실행(reclaim)해 완성시킨다 — claim-at-least-once 를 execution at-least-once 로 끌어올리는 핵심(#461).
         stubProductLinkExtractor.build = {
-            ProductSnapshot(link = it, name = "되살아난 상품", currentPrice = 1_000, currency = "KRW")
+            ProductSnapshot(link = it, name = "되살아난 상품", currentPrice = 1_000, currency = "KRW", imageUrl = "https://img.example.com/a.png")
         }
         val item = itemRepository.save(Item(ProductLink.parse("https://shop.example.com/products/revive")))
         val snapshot = itemSnapshotRepository.save(ItemSnapshot.pending(item.getId()).apply { markProcessing() })
@@ -479,6 +479,37 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             val snapshot = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
             assertEquals(ItemStatus.FAILED, snapshot.status)
             assertNull(snapshot.name)
+        } finally {
+            cleanup(userId)
+        }
+    }
+
+    @Test
+    fun `미지원 플랫폼(KREAM) URL 을 등록하면 등록 시점에 400 으로 거부되고 위시가 생기지 않는다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            // 미지원 플랫폼은 비동기 파싱(FAILED)이 아니라 등록 입력 시점에 동기 400 으로 막는다 — 담기 전에 빠르게 안내한다.
+            val body = objectMapper.writeValueAsString(mapOf("url" to "https://kream.co.kr/products/950123"))
+
+            mockMvc
+                .perform(
+                    post("/api/v1/wishlists")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}")
+                        .content(body),
+                ).andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.detail").value("아직 지원하지 않는 쇼핑몰이에요."))
+
+            // 등록 자체가 막혀 위시가 생기지 않는다(파싱 큐 적재 전 차단).
+            val wishCount =
+                jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM wishes WHERE user_id = ?",
+                    Int::class.java,
+                    uuidToBytes(userId),
+                )
+            assertEquals(0, wishCount)
         } finally {
             cleanup(userId)
         }

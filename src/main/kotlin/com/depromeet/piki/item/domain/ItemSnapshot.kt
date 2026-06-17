@@ -149,8 +149,10 @@ class ItemSnapshot(
             ItemStatus.PENDING, ItemStatus.PROCESSING -> throw ItemException.stillProcessing()
             ItemStatus.FAILED -> {
                 apply(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
-                // 입력 경계 계약 — 보정 후에도 이름이 없으면 쓸 수 없는 버전이 READY 로 새어 들어간다(409 아닌 400).
+                // 입력 경계 계약 — 보정 후에도 필수 필드가 없으면 쓸 수 없는 버전이 READY 로 새어 들어간다(400).
                 if (this.name.isNullOrBlank()) throw ItemException.nameRequiredForReady()
+                this.currentPrice ?: throw ItemException.priceRequiredForReady()
+                this.imageUrl ?: throw ItemException.imageRequiredForReady()
                 status = ItemStatus.READY
                 this.extractedAt = LocalDateTime.now()
             }
@@ -169,11 +171,14 @@ class ItemSnapshot(
     // 가드에서 쓴다: 이미 진행 중이면 새 추출 버전을 만들지 않는다. READY/FAILED 만 새로고침으로 새 버전을 띄운다.
     fun isInProgress(): Boolean = status == ItemStatus.PENDING || status == ItemStatus.PROCESSING
 
-    // READY 불변식 — "쓸 수 있는 버전"은 최소한 이름이 있어야 한다. isReady() 게이트(목록 노출·토너먼트 출전)가
-    // 미완성 버전을 정상으로 취급하지 않도록, READY 가 되는 명시 경로(markReady)에서 검사한다. 엔티티 최후의 보루이므로
-    // require(500) — 정상 흐름에선 입력 경계(recover 의 nameRequiredForReady, 추출 워커의 FAILED 흡수)가 먼저 거른다.
+    // READY 불변식 — 유저가 가격·이미지·이름을 보고 아이템을 선택하는 구조라 셋 다 있어야 쓸 수 있는 버전이다.
+    // isReady() 게이트(목록 노출·토너먼트 출전)가 미완성 버전을 정상으로 취급하지 않도록,
+    // READY 가 되는 명시 경로(markReady)에서 검사한다. 엔티티 최후의 보루이므로
+    // require(500) — 정상 흐름에선 입력 경계(recover 의 *RequiredForReady, 추출 워커의 FAILED 흡수)가 먼저 거른다.
     private fun requireReadyInvariant() {
-        require(!name.isNullOrBlank()) { "READY snapshot 은 최소한 name 이 있어야 한다 (status=$status)" }
+        require(!name.isNullOrBlank()) { "READY snapshot 은 name 이 있어야 한다 (status=$status)" }
+        requireNotNull(currentPrice) { "READY snapshot 은 price 가 있어야 한다 (status=$status)" }
+        requireNotNull(imageUrl) { "READY snapshot 은 imageUrl 이 있어야 한다 (status=$status)" }
     }
 
     private fun validate(

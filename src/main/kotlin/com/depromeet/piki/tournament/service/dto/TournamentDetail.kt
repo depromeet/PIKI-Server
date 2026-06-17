@@ -45,6 +45,7 @@ sealed class TournamentDetail {
     data class ItemDetail(
         val tournamentItemId: Long,
         val itemId: Long,
+        val userId: UUID,
         val name: String?,
         val price: Int?,
         val currency: String?,
@@ -75,5 +76,6 @@ sealed class TournamentDetail {
         val profileImage: String,
         // 탈퇴 유저 여부. 익명화된 닉네임·프로필 대신 FE 가 이 플래그로 "유저 알수없음" 을 렌더한다.
         val isWithdrawn: Boolean,
+        val itemCount: Int,
     )
 }

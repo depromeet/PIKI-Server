@@ -38,12 +38,14 @@ class WishlistService(
     // link 만 가진 item 과 PENDING snapshot 을 즉시 커밋해 응답을 돌려주고(클라이언트는 "담는 중" 표시),
     // 실제 파싱은 디스패처(@Scheduled)가 PENDING 을 집어 워커에 넘겨 READY/FAILED 로 전이시킨다.
     // DB 의 PENDING 행이 작업의 진실 원천이라 @Async 큐 유실(인스턴스 재시작 등)과 무관하게 최소 1회는 claim 된다(at-least-once).
-    // URL 형식 같은 계약 위반은 ProductLink.parse 가 동기로 거른다(400). 파싱 결과 실패만 FAILED 로 간다.
+    // URL 형식·미지원 플랫폼 같은 계약 위반은 등록 시점에 동기로 거른다(400). 파싱 결과 실패만 FAILED 로 간다.
     fun registerFromUrl(
         rawUrl: String,
         userId: UUID,
     ): WishWithItem {
         val link = ProductLink.parse(rawUrl)
+        // fetch 불가 플랫폼(봇 차단)은 담아봐야 파싱이 무의미하게 실패한다 — 등록 시점에 막아 빠르게 안내한다.
+        link.verifySupportedPlatform()
         return wishPersistenceService.persist(userId, Item(link))
     }
 

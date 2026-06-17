@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <title th:text="${template.type} + ' · 템플릿 편집'">템플릿 편집</title>
+  <meta name="_csrf" th:content="${_csrf.token}">
+  <meta name="_csrf_header" th:content="${_csrf.headerName}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <style>
+    :root{--accent:#0EA5E9;--accent-soft:#E0F2FE;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;}
+    *{box-sizing:border-box;} body{margin:0;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:#f7f8fa;color:var(--ink);}
+    .bar{display:flex;align-items:center;gap:12px;padding:14px 24px;background:#fff;border-bottom:1px solid var(--border);}
+    .brand{font-weight:800;font-size:17px;letter-spacing:-.03em;}.brand .dot{color:var(--accent);}
+    .bar a{font-size:13px;color:var(--muted);text-decoration:none;font-weight:600;}
+    .wrap{max-width:980px;margin:0 auto;padding:26px 24px;}
+    .type{font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:700;background:#f4f6f8;color:#384049;padding:3px 9px;border-radius:7px;}
+    .grid{display:grid;grid-template-columns:1fr 360px;gap:22px;margin-top:18px;align-items:start;}
+    .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px;}
+    label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:14px 0 6px;}
+    label:first-of-type{margin-top:0;}
+    input,textarea{width:100%;border:1px solid #e3e6ea;border-radius:10px;padding:11px 13px;font-size:14px;font-family:inherit;background:#fbfcfd;}
+    input:focus,textarea:focus{outline:2px solid var(--accent);border-color:var(--accent);}
+    textarea{resize:vertical;min-height:60px;}
+    .vars{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+    .chip{font-family:ui-monospace,monospace;font-size:12px;background:var(--accent-soft);color:var(--accent);padding:4px 9px;border-radius:7px;border:none;cursor:pointer;font-weight:600;}
+    .chip:hover{background:#e0f2fe;} .chip .s{color:var(--muted);font-weight:400;margin-left:4px;}
+    .none{font-size:12.5px;color:var(--muted);}
+    .warn{display:none;margin-top:12px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:9px 12px;font-size:12.5px;}
+    .err{margin-top:12px;background:#fee4e2;border:1px solid #fecaca;color:#b42318;border-radius:8px;padding:9px 12px;font-size:13px;}
+    .btn{margin-top:18px;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px 22px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;}
+    .btn.ghost{background:#fff;color:var(--muted);border:1px solid var(--border);margin-left:8px;text-decoration:none;display:inline-block;padding:11px 18px;}
+    .side .t{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;}
+    .render{font-size:13.5px;line-height:1.6;} .render .rt{font-weight:700;} .render .rb{color:var(--muted);}
+    /* push mockup */
+    .phone{background:linear-gradient(160deg,#3a4a6b,#1f2740);border-radius:26px;padding:20px 12px;margin-top:14px;}
+    .banner{background:rgba(255,255,255,.95);border-radius:16px;padding:11px 12px;display:flex;gap:10px;align-items:flex-start;}
+    .app{width:34px;height:34px;border-radius:8px;background:#cfe6fb;flex:none;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;font-style:italic;color:#1c2330;}
+    .bt{flex:1;min-width:0;} .nm{font-size:10.5px;font-weight:700;color:#6b7280;text-transform:uppercase;}
+    .pt{font-size:13px;font-weight:700;color:#1c1f24;margin-top:1px;word-break:break-all;} .pb{font-size:12px;color:#4b5159;margin-top:1px;word-break:break-all;}
+  </style>
+</head>
+<body th:attr="data-type=${template.type}">
+  <div class="bar"><span class="brand"><img src="/favicon.ico" alt="PiKi" style="width:19px;height:19px;border-radius:5px;vertical-align:-4px;margin-right:6px">PiKi<span class="dot">.</span> 백오피스</span><a th:href="@{/admin/templates}">← 템플릿 목록</a></div>
+  <div class="wrap">
+    <span class="type" th:text="${template.type}">TYPE</span>
+
+    <div class="err" th:if="${error}" th:text="${error}">에러</div>
+
+    <div class="grid">
+      <form class="card" th:action="@{/admin/templates/{type}(type=${template.type})}" method="post">
+        <label for="title">제목 (title)</label>
+        <input id="title" name="title" type="text" th:value="${template.title}" autocomplete="off">
+
+        <label for="body">본문 (body) <span style="font-weight:400">— 비우면 제목만 표시</span></label>
+        <textarea id="body" name="body" th:text="${template.body}"></textarea>
+
+        <label>사용 가능한 변수 (클릭하면 삽입)</label>
+        <div class="vars" th:if="${!template.variables.isEmpty()}">
+          <button type="button" class="chip" th:each="v : ${template.variables}"
+                  th:attr="data-var=${v.name}" th:utext="'${' + ${v.name} + '}' + '<span class=\'s\'>= ' + ${v.sample} + '</span>'">var</button>
+        </div>
+        <div class="none" th:if="${template.variables.isEmpty()}">이 타입은 변수가 없습니다 (고정 문구).</div>
+
+        <div class="warn" id="warn"></div>
+
+        <button class="btn" type="submit">저장</button>
+        <a class="btn ghost" th:href="@{/admin/templates}">취소</a>
+      </form>
+
+      <div class="card side">
+        <div class="t">미리보기 (샘플값 적용)</div>
+        <div class="render"><span class="rt" id="rt"></span><div class="rb" id="rb"></div></div>
+        <div class="phone">
+          <div class="banner">
+            <div class="app"><img src="/favicon.ico" alt="PiKi" style="width:100%;height:100%;border-radius:8px;object-fit:cover"></div>
+            <div class="bt"><div class="nm">PiKi</div><div class="pt" id="pt"></div><div class="pb" id="pb"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const type = document.body.dataset.type;
+    const csrf = document.querySelector('meta[name=_csrf]').content;
+    const csrfHeader = document.querySelector('meta[name=_csrf_header]').content;
+    const titleEl = document.getElementById('title'), bodyEl = document.getElementById('body');
+    const rt = document.getElementById('rt'), rb = document.getElementById('rb');
+    const pt = document.getElementById('pt'), pb = document.getElementById('pb'), warn = document.getElementById('warn');
+    let last = null;
+
+    function insertAtCursor(el, text) {
+      const s = el.selectionStart ?? el.value.length, e = el.selectionEnd ?? el.value.length;
+      el.value = el.value.slice(0, s) + text + el.value.slice(e);
+      el.focus(); el.selectionStart = el.selectionEnd = s + text.length;
+      refresh();
+    }
+    document.querySelectorAll('.chip').forEach(c =>
+      c.addEventListener('click', () => insertAtCursor(last === bodyEl ? bodyEl : titleEl, '${' + c.dataset.var + '}')));
+    titleEl.addEventListener('focus', () => last = titleEl);
+    bodyEl.addEventListener('focus', () => last = bodyEl);
+
+    let timer;
+    async function refresh() {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const res = await fetch(`/admin/templates/${type}/preview`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', [csrfHeader]: csrf },
+          body: new URLSearchParams({ title: titleEl.value, body: bodyEl.value })
+        });
+        const p = (await res.json()).data; // 공통 래퍼(ApiResponseBody) — 실제 미리보기는 .data
+        rt.textContent = p.title || '(빈 제목)';
+        rb.textContent = p.body || '';
+        pt.textContent = p.title || '(빈 제목)';
+        pb.textContent = p.body || '';
+        if (p.unknownVariables.length) {
+          warn.style.display = 'block';
+          warn.textContent = '선언 안 된 변수: ' + p.unknownVariables.map(v => '${' + v + '}').join(', ') + ' — 저장 시 거부됩니다.';
+        } else { warn.style.display = 'none'; }
+      }, 250);
+    }
+    titleEl.addEventListener('input', refresh);
+    bodyEl.addEventListener('input', refresh);
+    refresh();
+  </script>
+</body>
+</html>

@@ -86,9 +86,9 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         userId: UUID,
         url: String,
         name: String,
-        currentPrice: Int? = null,
-        currency: String? = null,
-        imageUrl: String? = null,
+        currentPrice: Int? = 10_000,
+        currency: String? = "KRW",
+        imageUrl: String? = "https://img.example.com/a.png",
     ): Long {
         val result = wishPersistenceService.persist(userId, Item(ProductLink.parse(url)))
         itemParsingService.claimDuePending(100)
@@ -162,7 +162,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}")
                     .content(body),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value("유효한 URL 형식이 아닙니다."))
+            .andExpect(jsonPath("$.detail").value("올바른 링크 형식이 아니에요. 다시 확인해 주세요."))
     }
 
     @Test
@@ -334,7 +334,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isConflict)
-            .andExpect(jsonPath("$.detail").value("이미 등록 완료된 상품은 수정할 수 없습니다."))
+            .andExpect(jsonPath("$.detail").value("이미 등록된 상품은 수정할 수 없어요."))
     }
 
     @Test
@@ -355,7 +355,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isConflict)
-            .andExpect(jsonPath("$.detail").value("아직 처리 중인 상품은 수정할 수 없습니다."))
+            .andExpect(jsonPath("$.detail").value("상품 정보를 가져오는 중이에요. 잠시만 기다려 주세요."))
     }
 
     @Test
@@ -366,9 +366,11 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val authHeader = "Bearer ${memberToken(userId)}"
         val wishId = seedFailedWish(userId, "https://shop.example.com/products/1")
 
+        val image = MockMultipartFile("image", "p.png", "image/png", byteArrayOf(1, 2, 3))
         mockMvc
             .perform(
                 multipart("/api/v1/wishlists/$wishId")
+                    .file(image)
                     .param("name", "직접 입력한 이름")
                     .param("currentPrice", "50000")
                     .with {
@@ -400,7 +402,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value("상품명을 입력해야 합니다."))
+            .andExpect(jsonPath("$.detail").value("상품 이름을 입력해 주세요."))
     }
 
     @Test
@@ -458,7 +460,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isBadRequest)
             // 응답 detail 이 OpenAPI example(WishlistApiExamples 가격 음수)과 같은 형식인지 contract 로 고정.
-            .andExpect(jsonPath("$.detail").value("currentPrice: ${WishlistUpdateRequest.PRICE_MIN_MESSAGE}"))
+            .andExpect(jsonPath("$.detail").value(WishlistUpdateRequest.PRICE_MIN_MESSAGE))
     }
 
     @Test
@@ -475,6 +477,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 multipart("/api/v1/wishlists/$wishId")
                     .file(image)
                     .param("name", "직접 입력한 이름")
+                    .param("currentPrice", "50000")
                     .with {
                         it.method = "PATCH"
                         it
@@ -711,7 +714,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 delete("/api/v1/wishlists")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value("삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다."))
+            .andExpect(jsonPath("$.detail").value("한 번에 최대 100개까지 삭제할 수 있어요."))
     }
 
     @Test

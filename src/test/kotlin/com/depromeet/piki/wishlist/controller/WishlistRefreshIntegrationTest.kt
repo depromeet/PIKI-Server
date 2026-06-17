@@ -84,7 +84,7 @@ class WishlistRefreshIntegrationTest : IntegrationTestSupport() {
         insertMember(userId)
         try {
             stubProductLinkExtractor.build = {
-                ProductSnapshot(link = it, name = "새 상품", currentPrice = 20_000, currency = "KRW")
+                ProductSnapshot(link = it, name = "새 상품", currentPrice = 20_000, currency = "KRW", imageUrl = "https://img.example.com/a.png")
             }
             val (wishId, itemId, oldSnapshotId) = seedReadyWish(userId, "https://shop.example.com/products/refresh", "옛 상품", 10_000)
 
@@ -227,7 +227,7 @@ class WishlistRefreshIntegrationTest : IntegrationTestSupport() {
         insertMember(userId)
         try {
             stubProductLinkExtractor.build = {
-                ProductSnapshot(link = it, name = "새 상품", currentPrice = 20_000, currency = "KRW")
+                ProductSnapshot(link = it, name = "새 상품", currentPrice = 20_000, currency = "KRW", imageUrl = "https://img.example.com/a.png")
             }
             val (wishId, itemId, oldSnapshotId) = seedReadyWish(userId, "https://shop.example.com/products/inplay", "옛 상품", 10_000)
             // 출전 시점 고정 — tournament_item 이 옛 snapshot 을 가리킨다(FK 없으니 tournament 행 없이도 격리만 검증).
@@ -272,7 +272,7 @@ class WishlistRefreshIntegrationTest : IntegrationTestSupport() {
         insertMember(userId)
         try {
             stubProductLinkExtractor.build = {
-                ProductSnapshot(link = it, name = "새 상품", currentPrice = 20_000, currency = "KRW")
+                ProductSnapshot(link = it, name = "새 상품", currentPrice = 20_000, currency = "KRW", imageUrl = "https://img.example.com/a.png")
             }
             val (wishId, itemId, _) = seedReadyWish(userId, "https://shop.example.com/products/refresh-notify", "옛 상품", 10_000)
 
@@ -308,7 +308,7 @@ class WishlistRefreshIntegrationTest : IntegrationTestSupport() {
             // v1(더 낮은 id, 최신 아님)을 지정해 전이 — findLatest 였다면 v2 가 전이됐을 것이다.
             itemParsingService.markReady(
                 v1.getId(),
-                ProductSnapshot(link = null, name = "버전1", currentPrice = 100, currency = "KRW"),
+                ProductSnapshot(link = null, name = "버전1", currentPrice = 100, currency = "KRW", imageUrl = "https://img.example.com/a.png"),
             )
 
             assertEquals(ItemStatus.READY, itemSnapshotRepository.findById(v1.getId())?.status)
@@ -341,7 +341,7 @@ class WishlistRefreshIntegrationTest : IntegrationTestSupport() {
             val newer = itemSnapshotRepository.save(ItemSnapshot.pending(item.getId()).apply { markProcessing() })
 
             // FAILED 인 failed(최신 아님)를 지정해 보정 — findLatest 였다면 newer(최신, PROCESSING)를 잡아 stillProcessing 409 였을 것.
-            wishPersistenceService.recoverItem(failed.getId(), name = "보정", currentPrice = 200, imageUrl = null, currency = "KRW")
+            wishPersistenceService.recoverItem(failed.getId(), name = "보정", currentPrice = 200, imageUrl = "https://img.example.com/a.png", currency = "KRW")
 
             assertEquals(ItemStatus.READY, itemSnapshotRepository.findById(failed.getId())?.status)
             assertEquals("보정", itemSnapshotRepository.findById(failed.getId())?.name)

@@ -13,7 +13,7 @@ class ProductLinkTest {
                 assertFailsWith<ProductLinkException>("'$raw' 는 거부되어야 함") {
                     ProductLink.parse(raw)
                 }
-            assertEquals("URL이 비어 있습니다.", ex.message)
+            assertEquals("링크를 입력해 주세요.", ex.message)
         }
     }
 
@@ -32,7 +32,7 @@ class ProductLinkTest {
                 assertFailsWith<ProductLinkException>("$raw 는 거부되어야 함") {
                     ProductLink.parse(raw)
                 }
-            assertEquals("https URL만 허용합니다.", ex.message)
+            assertEquals("https 링크만 등록할 수 있어요.", ex.message)
         }
     }
 
@@ -43,7 +43,7 @@ class ProductLinkTest {
             assertFailsWith<ProductLinkException> {
                 ProductLink.parse("data:text/html,<h1>x</h1>")
             }
-        assertEquals("유효한 URL 형식이 아닙니다.", ex.message)
+        assertEquals("올바른 링크 형식이 아니에요. 다시 확인해 주세요.", ex.message)
     }
 
     @Test
@@ -55,7 +55,7 @@ class ProductLinkTest {
             assertFailsWith<ProductLinkException> {
                 ProductLink.parse(rawWithSecret)
             }
-        assertEquals("유효한 URL 형식이 아닙니다.", ex.message)
+        assertEquals("올바른 링크 형식이 아니에요. 다시 확인해 주세요.", ex.message)
     }
 
     @Test
@@ -64,7 +64,7 @@ class ProductLinkTest {
             assertFailsWith<ProductLinkException> {
                 ProductLink.parse("example.com/product")
             }
-        assertEquals("https URL만 허용합니다.", ex.message)
+        assertEquals("https 링크만 등록할 수 있어요.", ex.message)
     }
 
     @Test
@@ -102,5 +102,57 @@ class ProductLinkTest {
         val raw = "https://shop.example.com/items/42"
         val link = ProductLink.parse(raw)
         assertEquals(raw, link.toString())
+    }
+
+    @Test
+    fun `미지원 플랫폼 호스트는 verifySupportedPlatform 에서 거부한다`() {
+        val cases =
+            listOf(
+                "https://kream.co.kr/products/950123",
+                "https://www.kream.co.kr/products/1",
+                "https://api.kream.co.kr/x",
+                "https://KREAM.co.kr/products/2", // host 대소문자 무관
+                "https://www.coupang.com/vp/products/6584047366",
+                "https://m.coupang.com/vm/products/7573479386",
+                "https://search.shopping.naver.com/catalog/47788995857",
+                "https://smartstore.naver.com/somestore/products/1",
+                "https://brand.naver.com/nike/products/1",
+                "https://naver.me/5AbCdEf", // naver.me 단축 링크
+                "https://naver.com./x", // trailing dot(절대 도메인 표기)로 차단 우회 시도 — 정규화로 막혀야 한다
+                "https://www.coupang.com./vp/products/1", // trailing dot
+            )
+        cases.forEach { raw ->
+            val link = ProductLink.parse(raw) // parse 자체는 형식이 정상이라 통과한다
+            val ex =
+                assertFailsWith<ProductLinkException>("$raw 는 미지원으로 거부되어야 함") {
+                    link.verifySupportedPlatform()
+                }
+            assertEquals("아직 지원하지 않는 쇼핑몰이에요.", ex.message)
+        }
+    }
+
+    @Test
+    fun `지원 플랫폼 호스트는 verifySupportedPlatform 을 통과한다`() {
+        val cases =
+            listOf(
+                "https://www.nike.com/kr/t/x",
+                "https://shop.example.com/p/1",
+                "https://notkream.co.kr/p", // 서브도메인이 아닌 다른 호스트(접두만 다름)
+                "https://kream.co.kr.evil.com/p", // 접미사만 같은 다른 도메인(접미사 매칭 우회 방지)
+                "https://coupang.com.evil.com/p", // 접미사만 같은 다른 도메인
+                "https://navermart.com/p", // 'naver' 부분문자열이지만 naver.com 도메인이 아니므로 통과(도메인 단위 매칭)
+            )
+        cases.forEach { raw ->
+            // 통과하면 예외가 없다.
+            ProductLink.parse(raw).verifySupportedPlatform()
+        }
+    }
+
+    @Test
+    fun `미지원 플랫폼 URL 도 parse 자체는 성공한다 - 저장된 행 읽기가 깨지지 않도록`() {
+        // verifySupportedPlatform 은 등록 입력 경계 전용이고, parse(형식 불변식)는 컨버터·redirect 와 공유된다.
+        // 미지원 검증을 parse 에 넣으면 이미 저장된 미지원 URL 읽기가 깨지므로, parse 는 미지원이어도 통과해야 한다.
+        val link = ProductLink.parse("https://kream.co.kr/products/950123")
+        assertEquals("kream.co.kr", link.value.host)
     }
 }

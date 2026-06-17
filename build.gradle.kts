@@ -54,6 +54,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
 
+    // admin 백오피스 SSR 뷰(로그인·관리 화면). #505 가 옛 dev 백오피스와 함께 제거했고, prod 운영 백오피스(#249)로 재도입.
+    implementation("org.springframework.boot:spring-boot-starter-thymeleaf")
+
     // 알림 템플릿 플레이스홀더 치환 (StringSubstitutor). Spring Boot BOM 미관리라 버전 명시 (Maven Central 최신 안정).
     implementation("org.apache.commons:commons-text:1.15.0")
 

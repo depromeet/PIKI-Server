@@ -138,7 +138,7 @@ class WithdrawalIntegrationTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.MEMBER)}"),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.data").value(null))
-            .andExpect(jsonPath("$.detail").value("정상적으로 처리되었습니다."))
+            .andExpect(jsonPath("$.detail").value("완료했어요."))
     }
 
     @Test
@@ -177,7 +177,7 @@ class WithdrawalIntegrationTest : IntegrationTestSupport() {
                 delete("/api/v1/users/me")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${token(userId, IdentityType.GUEST)}"),
             ).andExpect(status().isForbidden)
-            .andExpect(jsonPath("$.detail").value("게스트는 탈퇴할 수 없습니다."))
+            .andExpect(jsonPath("$.detail").value("게스트는 탈퇴할 수 없어요."))
             .andExpect(jsonPath("$.data").value(null))
     }
 
