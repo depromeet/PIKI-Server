@@ -960,6 +960,7 @@ class TournamentService(
         return TournamentDetail.ItemDetail(
             tournamentItemId = tournamentItem.getId(),
             itemId = snapshot.itemId,
+            userId = tournamentItem.userId,
             name = snapshot.name,
             price = snapshot.currentPrice,
             currency = snapshot.currency,

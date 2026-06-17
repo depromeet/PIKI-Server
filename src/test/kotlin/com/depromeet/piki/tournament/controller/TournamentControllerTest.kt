@@ -912,6 +912,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.pending.items[0].price").value(99_000))
             .andExpect(jsonPath("$.data.pending.items[0].tournamentItemId").isNumber)
             .andExpect(jsonPath("$.data.pending.items[0].itemId").value(itemId))
+            .andExpect(jsonPath("$.data.pending.items[0].userId").value(userId.toString()))
     }
 
     @Test
