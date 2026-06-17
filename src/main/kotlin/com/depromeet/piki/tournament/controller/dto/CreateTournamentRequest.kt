@@ -10,8 +10,8 @@ import jakarta.validation.constraints.NotBlank
 data class CreateTournamentRequest(
     @field:NotBlank(message = "토너먼트 이름을 입력해 주세요.")
     val name: String,
-    @field:Min(value = 1, message = UpdateInviteDurationRequest.INVITE_DURATION_MIN_MESSAGE)
-    @field:Max(value = TOURNAMENT_INVITE_MAX_DURATION_MINUTES, message = UpdateInviteDurationRequest.INVITE_DURATION_MAX_MESSAGE)
+    @field:Min(value = 1, message = INVITE_DURATION_MIN_MESSAGE)
+    @field:Max(value = TOURNAMENT_INVITE_MAX_DURATION_MINUTES, message = INVITE_DURATION_MAX_MESSAGE)
     val inviteDurationMinutes: Long? = null,
 ) {
     fun toCreateTournament(): CreateTournament =
@@ -19,4 +19,9 @@ data class CreateTournamentRequest(
             name = name,
             inviteDurationMinutes = inviteDurationMinutes ?: TOURNAMENT_INVITE_DEFAULT_DURATION_MINUTES,
         )
+
+    companion object {
+        const val INVITE_DURATION_MIN_MESSAGE = "초대 유효 시간은 1분 이상으로 입력해 주세요."
+        const val INVITE_DURATION_MAX_MESSAGE = "초대 유효 시간은 24시간 이내로 입력해 주세요."
+    }
 }

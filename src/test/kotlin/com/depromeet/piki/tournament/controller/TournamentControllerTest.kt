@@ -2008,40 +2008,32 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `PATCH tournaments-id-invite 는 주최자가 200 과 함께 새 inviteExpiresAt 을 반환하고 DB 에도 반영된다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        val before = LocalDateTime.now()
-
-        val result = mockMvc
-            .perform(
-                patch("/api/v1/tournaments/$tournamentId/invite")
-                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":60}"""),
-            ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.data").isString)
-            .andReturn()
-
-        val expiresAtStr = objectMapper.readTree(result.response.contentAsString)["data"].asText()
-        val expiresAt = java.time.OffsetDateTime.parse(expiresAtStr, DateTimeFormatter.ISO_OFFSET_DATE_TIME).toLocalDateTime()
-        val expectedMin = before.plusMinutes(60)
-        val expectedMax = LocalDateTime.now().plusMinutes(60)
-        assertTrue(expiresAt >= expectedMin && expiresAt <= expectedMax)
-
-        // 응답뿐 아니라 엔티티에 실제로 반영됐는지 확인 — backing field dirty-check가 깨져도 응답은 통과하므로
-        val saved = tournamentJpaRepository.findByIdAndDeletedAtIsNull(tournamentId)!!
-        assertTrue(saved.inviteExpiresAt >= expectedMin && saved.inviteExpiresAt <= expectedMax)
-    }
-
-    @Test
-    fun `PATCH tournaments-id-invite 에서 inviteDurationMinutes 가 0 이면 400 을 반환한다`() {
-        val mockMvc = buildMockMvc()
-        val tournamentId = createTournament(mockMvc)
+        val newExpiresAt = LocalDateTime.now().plusMinutes(60).withNano(0)
 
         mockMvc
             .perform(
                 patch("/api/v1/tournaments/$tournamentId/invite")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":0}"""),
+                    .content("""{"newExpiresAt":"$newExpiresAt"}"""),
+            ).andExpect(status().isOk)
+
+        val saved = tournamentJpaRepository.findByIdAndDeletedAtIsNull(tournamentId)!!
+        assertEquals(newExpiresAt, saved.inviteExpiresAt)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-invite 에서 newExpiresAt 이 과거 시각이면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val pastTime = LocalDateTime.now().minusMinutes(1).withNano(0)
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/invite")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"newExpiresAt":"$pastTime"}"""),
             ).andExpect(status().isBadRequest)
     }
 
@@ -2056,7 +2048,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 patch("/api/v1/tournaments/$tournamentId/invite")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":60}"""),
+                    .content("""{"newExpiresAt":"${LocalDateTime.now().plusMinutes(60).withNano(0)}"}"""),
             ).andExpect(status().isForbidden)
     }
 
@@ -2069,7 +2061,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 patch("/api/v1/tournaments/999999/invite")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":60}"""),
+                    .content("""{"newExpiresAt":"${LocalDateTime.now().plusMinutes(60).withNano(0)}"}"""),
             ).andExpect(status().isNotFound)
     }
 
@@ -2083,7 +2075,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 patch("/api/v1/tournaments/$tournamentId/invite")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":60}"""),
+                    .content("""{"newExpiresAt":"${LocalDateTime.now().plusMinutes(60).withNano(0)}"}"""),
             ).andExpect(status().isConflict)
     }
 
