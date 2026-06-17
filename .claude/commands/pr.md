@@ -151,16 +151,16 @@ ISSUE_LABELS=$(gh issue view {번호} --json labels --jq '[.labels[].name] | joi
 ```bash
 SLUG=$(git branch --show-current | tr '/' '_')
 BODY=/tmp/pr_body_$SLUG.md
-if command -v idea >/dev/null 2>&1; then
+if [[ -z "${CI:-}" ]] && command -v idea >/dev/null 2>&1; then
   idea "$BODY"        # IntelliJ 로 본문 열기 (사람이 도는 로컬의 기본 경로)
 else
-  cat "$BODY"         # idea 런처가 없는 환경(CI·headless 등) 폴백: 인라인 출력
+  cat "$BODY"         # idea 가 없거나 CI 등 GUI 없는 실행: 인라인 출력 폴백
 fi
 ```
 
 - 연 뒤 **채팅에는 짧게만** 남긴다: 제목 한 줄 + "IntelliJ 에 본문을 열었습니다. 검토 후 진행하라고 하시거나, 파일을 직접 편집·저장한 뒤 알려주세요." 확인 게이트 자체는 채팅에 유지한다 (GUI 만 띄우고 끝내지 않는다).
 - 사용자가 IDE 에서 본문을 편집·저장할 수 있으므로, **확인 이후 그 파일을 다시 Write 로 덮어쓰지 않는다.** `gh pr create` / `gh pr edit` 는 `--body-file` 로 파일을 그 시점에 읽어 사용자 편집을 자동 반영한다. 최종 본문을 알아야 하면 Write 가 아니라 Read 로 다시 읽는다.
-- 폴백(`idea` 없음)은 CI·headless 처럼 GUI 가 없는 실행 한정이다 — 사람이 도는 로컬은 IntelliJ 가 깔려 있다고 가정한다.
+- 폴백은 `idea` 가 없거나 `CI` 가 설정된 실행(GitHub Actions 등) 한정이다 — 사람이 도는 로컬은 IntelliJ 가 깔려 있다고 가정한다. `DISPLAY` / `WAYLAND_DISPLAY` 로 GUI 가능 여부를 판별하지 않는다: macOS 는 그 둘이 없어도 GUI 가 동작해, 그 변수로 막으면 로컬 맥에서 늘 폴백으로 떨어져 기능이 죽는다.
 
 ### 3-A. Create 모드 — PR 신규 생성
 
