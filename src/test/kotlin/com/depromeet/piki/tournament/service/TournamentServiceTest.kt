@@ -233,6 +233,13 @@ class TournamentServiceTest {
         override fun findLatestByItemId(itemId: Long): ItemSnapshot? =
             snapshots.lastOrNull { it.itemId == itemId }?.also { applyOverrides(it) }
 
+        override fun findReadyHistoryByItemId(itemId: Long): List<ItemSnapshot> =
+            snapshots
+                .filter { it.itemId == itemId }
+                .onEach { applyOverrides(it) }
+                .filter { it.status == ItemStatus.READY }
+                .sortedByDescending { it.getId() }
+
         override fun findById(id: Long): ItemSnapshot? =
             snapshots.find { it.getId() == id }?.also { applyOverrides(it) }
 
