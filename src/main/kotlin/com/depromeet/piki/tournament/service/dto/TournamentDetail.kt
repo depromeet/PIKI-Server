@@ -45,6 +45,7 @@ sealed class TournamentDetail {
     data class ItemDetail(
         val tournamentItemId: Long,
         val itemId: Long,
+        val userId: UUID,
         val name: String?,
         val price: Int?,
         val currency: String?,

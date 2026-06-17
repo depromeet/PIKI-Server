@@ -30,17 +30,13 @@ class AsyncImageParsingWorker(
     ) {
         runCatching {
             val extraction = productImageExtractor.extract(image)
-            val imageUrl =
+            // bbox 있으면 크롭 이미지를, 없으면 원본 이미지를 S3에 올린다.
+            // 어떤 경우든 이미지 파일로 등록한 이상 imageUrl 이 채워져야 한다(READY 불변식).
+            val bytes =
                 extraction.boundingBox
                     ?.let { imageCropper.crop(image.bytes, it) }
-                    ?.let { cropped ->
-                        runCatching {
-                            imageStorage.upload(cropped, "items/${UUID.randomUUID()}.png", "image/png")
-                        }.getOrElse { e ->
-                            log.warn("item {} 크롭 이미지 S3 업로드 실패, imageUrl 없이 등록: {}", itemId, e.message)
-                            null
-                        }
-                    }
+                    ?: image.bytes
+            val imageUrl = imageStorage.upload(bytes, "items/${UUID.randomUUID()}.png", "image/png")
             extraction.snapshot.copy(imageUrl = imageUrl)
         }.onSuccess { snapshot ->
             runCatching { itemParsingService.markReady(itemId, snapshot) }

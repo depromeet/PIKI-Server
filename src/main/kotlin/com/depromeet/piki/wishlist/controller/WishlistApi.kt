@@ -23,7 +23,7 @@ interface WishlistApi {
             상품 페이지 URL 을 받아 위시리스트에 등록한다. 메타데이터(이름/가격/이미지) 추출은 외부 LLM 호출이라
             오래 걸리므로 동기로 기다리지 않는다. 등록 즉시 item.status=PENDING 인 항목을 201 로 반환하고,
             실제 파싱은 백그라운드 디스패처가 PENDING 을 집어 PROCESSING 으로 전이한 뒤 READY(완료) 또는 FAILED(파싱 실패) 로 전이한다.
-            클라이언트는 위시리스트 조회를 폴링해 status 변화(PENDING→PROCESSING→READY/FAILED)를 확인한다. URL 형식 오류는 등록 전에 400 으로 거른다.
+            클라이언트는 SSE(`/api/v1/notifications/subscribe`)로 status 변화(PENDING→PROCESSING→READY/FAILED, 완료·실패 알림)를 통보받고 위시리스트를 재조회해 확인한다. URL 형식 오류는 등록 전에 400 으로 거른다.
         """,
     )
     @ApiResponses(
@@ -83,7 +83,7 @@ interface WishlistApi {
             마지막 페이지면 nextCursor 는 null, hasNext 는 false.
             size 는 미지정 시 20, 1~50 범위를 벗어나면 양 끝으로 보정된다.
             각 항목의 item.status 로 파싱 상태(PENDING/PROCESSING/READY/FAILED)를 구분한다 —
-            등록 직후 PENDING·PROCESSING 인 항목은 이 조회를 폴링해 READY/FAILED 로 전이되는지 확인한다.
+            등록 직후 PENDING·PROCESSING 인 항목은 SSE(`/api/v1/notifications/subscribe`)로 READY/FAILED 전이를 통보받고 이 조회로 확인한다.
         """,
     )
     @ApiResponses(
@@ -143,7 +143,7 @@ interface WishlistApi {
         description = """
             wishId 로 위시 항목 하나를 조회한다. 응답 모양은 목록 조회 항목과 같은 WishItemResponse(wish + item).
             본인 위시만 조회 가능하며, item 을 직접 노출하지 않고 위시 소유 단위로 권한을 검증한다.
-            item.status 로 파싱 상태(PENDING/PROCESSING/READY/FAILED)를 구분한다 — 상세 화면 진입 시 단건 폴링에 쓸 수 있다.
+            item.status 로 파싱 상태(PENDING/PROCESSING/READY/FAILED)를 구분한다. 상세 화면 진입 시 현재 status 확인에 쓰고, 전이 통보는 SSE(`/api/v1/notifications/subscribe`)로 받는다.
         """,
     )
     @ApiResponses(
@@ -402,7 +402,7 @@ interface WishlistApi {
             상품 페이지를 캡처한 이미지 1~5장을 받아, 각 이미지를 PROCESSING 상태의 위시 항목으로 즉시 등록하고 목록을 반환한다.
             실제 상품 정보 추출(Gemini Vision)은 백그라운드에서 비동기로 진행되어 각 항목을 READY 또는 FAILED 로 전이시킨다.
             URL 등록과 결과 모양(WishItemResponse)이 같다. 이미지 등록 항목은 URL 이 없어 sourceUrl 이 null 이며,
-            추출 결과는 조회로 폴링하며, 추출 실패(FAILED) 항목은 보정 API(PATCH)로 직접 채워 복구한다.
+            추출 결과는 SSE(`/api/v1/notifications/subscribe`)로 완료·실패를 통보받아 재조회하며, 추출 실패(FAILED) 항목은 보정 API(PATCH)로 직접 채워 복구한다.
         """,
     )
     @ApiResponses(

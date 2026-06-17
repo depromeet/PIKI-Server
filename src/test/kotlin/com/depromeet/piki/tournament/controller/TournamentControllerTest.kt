@@ -912,6 +912,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.pending.items[0].price").value(99_000))
             .andExpect(jsonPath("$.data.pending.items[0].tournamentItemId").isNumber)
             .andExpect(jsonPath("$.data.pending.items[0].itemId").value(itemId))
+            .andExpect(jsonPath("$.data.pending.items[0].userId").value(userId.toString()))
     }
 
     @Test
@@ -1214,7 +1215,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         val failedItem = itemJpaRepository.save(Item())
-        val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED)
+        // imageUrl 있는 FAILED — recover 시 imageUrl 파라미터를 보내지 않아도 apply 가 기존 값을 유지해 READY 불변식 통과
+        val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED, imageUrl = "https://img.example.com/a.png")
         tournamentItemJpaRepository.save(
             TournamentItem(tournamentId = tournamentId, userId = userId, snapshotId = snapshot.getId()),
         )
@@ -1315,9 +1317,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `PATCH tournaments-id-items-itemId 는 이름이 있는 FAILED 아이템에 가격만 보내면 이름을 유지하며 200 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        // 이름이 이미 있는 FAILED snapshot — 가격만 보정해도 이름이 유지되는지 검증한다(표시값은 snapshot 소관).
+        // 이름과 imageUrl 이 이미 있는 FAILED snapshot — 가격만 보정해도 이름과 이미지가 유지되는지 검증한다(apply 가 기존 값 보존).
         val failedItem = itemJpaRepository.save(Item())
-        val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED, name = "기존 이름")
+        val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED, name = "기존 이름", imageUrl = "https://img.example.com/a.png")
         tournamentItemJpaRepository.save(
             TournamentItem(tournamentId = tournamentId, userId = userId, snapshotId = snapshot.getId()),
         )
@@ -1820,7 +1822,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val result = wishPersistenceService.persistProcessingImages(owner, 1).first()
         itemParsingService.markReady(
             result.item.getId(),
-            ProductSnapshot(name = name, currentPrice = price, currency = "KRW"),
+            ProductSnapshot(name = name, currentPrice = price, currency = "KRW", imageUrl = "https://img.example.com/a.png"),
         )
         return result.item.getId()
     }

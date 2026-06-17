@@ -27,6 +27,7 @@ data class TournamentDetailResponse(
     data class ItemDetailResponse(
         val tournamentItemId: Long,
         val itemId: Long,
+        val userId: UUID,
         val name: String?,
         val price: Int?,
         val currency: String?,
@@ -35,7 +36,7 @@ data class TournamentDetailResponse(
     ) {
         companion object {
             fun from(d: TournamentDetail.ItemDetail): ItemDetailResponse =
-                ItemDetailResponse(d.tournamentItemId, d.itemId, d.name, d.price, d.currency, d.imageUrl, d.status)
+                ItemDetailResponse(d.tournamentItemId, d.itemId, d.userId, d.name, d.price, d.currency, d.imageUrl, d.status)
         }
     }
 

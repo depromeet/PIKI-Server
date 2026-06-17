@@ -78,6 +78,7 @@ interface TournamentApi {
             응답의 status 필드에 따라 포함되는 데이터가 달라진다.
             - PENDING: pending 필드 (아이템 목록, 참여자 목록)
               - 각 아이템에 status 포함 (READY / PENDING / PROCESSING / FAILED). PENDING·PROCESSING 이면 name·price·imageUrl 은 null 이라 응답에서 제외됨
+              - 각 아이템에 userId 포함 (해당 아이템을 담은 참여자의 userId)
               - 각 참여자에 itemCount 포함 (해당 참여자가 이 토너먼트에 담은 아이템 수)
               - pending.ownerStarted = false
             - IN_PROGRESS: 요청자 역할에 따라 두 가지 응답이 있다.
