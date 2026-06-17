@@ -118,7 +118,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
         insertMember(userId)
         try {
             stubProductLinkExtractor.build = {
-                ProductSnapshot(link = it, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW")
+                ProductSnapshot(link = it, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW", imageUrl = "https://img.example.com/a.png")
             }
             val readyBefore = parseCount("ready", "none")
             val itemId = registerAndGetItemId(mockMvc, userId, "https://shop.example.com/products/42")
@@ -360,7 +360,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
         // 디스패처가 claim(attempt 1)한 직후 워커가 크래시해 실행 0회로 PROCESSING 에 갇힌 상황.
         // recover 가 재실행(reclaim)해 완성시킨다 — claim-at-least-once 를 execution at-least-once 로 끌어올리는 핵심(#461).
         stubProductLinkExtractor.build = {
-            ProductSnapshot(link = it, name = "되살아난 상품", currentPrice = 1_000, currency = "KRW")
+            ProductSnapshot(link = it, name = "되살아난 상품", currentPrice = 1_000, currency = "KRW", imageUrl = "https://img.example.com/a.png")
         }
         val item = itemRepository.save(Item(ProductLink.parse("https://shop.example.com/products/revive")))
         val snapshot = itemSnapshotRepository.save(ItemSnapshot.pending(item.getId()).apply { markProcessing() })
