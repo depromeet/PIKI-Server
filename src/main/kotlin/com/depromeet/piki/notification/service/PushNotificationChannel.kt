@@ -1,11 +1,13 @@
 package com.depromeet.piki.notification.service
 
+import com.depromeet.piki.common.config.AsyncConfig
 import com.depromeet.piki.notification.domain.Notification
 import com.depromeet.piki.notification.fcm.service.FcmMessageSender
 import com.depromeet.piki.notification.fcm.service.UserDeviceService
 import com.depromeet.piki.notification.repository.NotificationRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.ObjectProvider
+import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -47,16 +49,26 @@ class PushNotificationChannel(
 
     // 읽음 처리 후 갱신된 안읽음 수만 silent 푸시로 보내 OS 아이콘 badge 를 내린다(#487, 멀티 디바이스 동기화).
     // 읽은 기기는 응답 body 로 이미 badge 를 받으므로 이 푸시의 목적은 같은 유저의 다른 기기 동기화다.
-    // badge 산정·트랜잭션 경계는 호출자(NotificationReadOrchestrator)가 책임진다 — 여기선 갱신 값을 받아 전달만 한다.
+    // badge 산정은 호출자(NotificationReadOrchestrator)가 책임진다 — 여기선 갱신 값을 받아 전달만 한다.
+    //
+    // @Async — 읽음 응답(POST /read)이 외부 FCM latency 에 묶이지 않게 응답 경로에서 떼어 notificationExecutor 로 돌린다
+    // (발송 send 가 디스패처의 @Async AFTER_COMMIT 워커에서 도는 것과 대칭). 비동기라 예외가 호출 스레드로 전파되지 않으므로
+    // best-effort 흡수도 여기서 한다 — 읽음은 이미 커밋됐고 못 받은 기기는 재진입 시 GET /notifications 로 보정되므로
+    // 푸시 실패가 읽음을 깨면 안 된다.
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     fun syncBadge(
         userId: UUID,
         badge: Int,
     ) {
-        val sender = sender() ?: return
-        val tokens = userDeviceService.findTokens(userId)
-        if (tokens.isEmpty()) return
-        val result = sender.sendBadgeSync(tokens, badge)
-        userDeviceService.removeStaleTokens(result.staleTokens)
+        try {
+            val sender = sender() ?: return
+            val tokens = userDeviceService.findTokens(userId)
+            if (tokens.isEmpty()) return
+            val result = sender.sendBadgeSync(tokens, badge)
+            userDeviceService.removeStaleTokens(result.staleTokens)
+        } catch (e: Exception) {
+            log.warn("읽음 후 badge 동기화 푸시 실패 userId={}", userId, e)
+        }
     }
 
     private fun sender(): FcmMessageSender? =

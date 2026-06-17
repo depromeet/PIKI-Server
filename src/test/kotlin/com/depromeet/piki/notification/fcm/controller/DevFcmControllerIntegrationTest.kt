@@ -73,4 +73,18 @@ class DevFcmControllerIntegrationTest : IntegrationTestSupport() {
                     .content(objectMapper.writeValueAsString(DevPushRequest(token = "t"))),
             ).andExpect(status().isUnauthorized)
     }
+
+    @Test
+    fun `badge 가 음수면 400 이 ApiResponseBody contract 로 내려간다`() {
+        val userId = UUID.randomUUID()
+
+        buildMockMvc()
+            .perform(
+                post("/api/v1/dev/fcm/push")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${guestToken(userId)}")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(DevPushRequest(token = "live-token", badge = -1))),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.detail").value(DevPushRequest.BADGE_NON_NEGATIVE_MESSAGE))
+    }
 }

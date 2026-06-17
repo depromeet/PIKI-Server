@@ -112,36 +112,9 @@ class PushNotificationChannelIntegrationTest : IntegrationTestSupport() {
         assertEquals(listOf("live-token"), remaining)
     }
 
-    @Test
-    fun `syncBadge 는 그 유저의 모든 기기로 silent 발송하며 갱신 badge 를 전달한다`() {
-        val userId = UUID.randomUUID()
-        userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-1", fcmToken = "token-1"))
-        userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-2", fcmToken = "token-2"))
-        var capturedTokens: List<String>? = null
-        var capturedBadge: Int? = null
-        stubFcmMessageSender.onSendBadgeSync = { tokens, badge ->
-            capturedTokens = tokens
-            capturedBadge = badge
-            emptyList()
-        }
-
-        pushNotificationChannel.syncBadge(userId, 5)
-
-        assertEquals(setOf("token-1", "token-2"), capturedTokens?.toSet())
-        assertEquals(5, capturedBadge)
-    }
-
-    @Test
-    fun `syncBadge 도 죽은 토큰을 user_devices 에서 정리한다`() {
-        val userId = UUID.randomUUID()
-        userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-1", fcmToken = "live-token"))
-        userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-2", fcmToken = "dead-token"))
-        stubFcmMessageSender.onSendBadgeSync = { _, _ -> listOf("dead-token") }
-
-        pushNotificationChannel.syncBadge(userId, 0)
-
-        assertEquals(listOf("live-token"), userDeviceRepository.findAllByUserId(userId).map { it.fcmToken })
-    }
+    // syncBadge 는 @Async(notificationExecutor)라 별도 워커 스레드·새 트랜잭션에서 돈다 — @Transactional 자동 롤백
+    // 컨텍스트의 미커밋 데이터를 워커가 못 보므로 여기서 검증할 수 없다. silent badge 동기화 검증은
+    // NotificationBadgeSyncAsyncIntegrationTest(실제 커밋 + Awaitility)로 옮겼다.
 
     @Test
     fun `토큰이 없는 유저면 외부 발송을 시도하지 않는다`() {
