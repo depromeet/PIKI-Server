@@ -35,12 +35,13 @@ interface NotificationHistoryApi {
                 "사람/시스템 구분은 `category`. 클라는 `imageUrl` 을 그대로 아바타로 렌더한다.\n" +
                 "- 각 항목 셰입은 SSE `notification` 이벤트 payload 와 동일하다 — `type` 으로 화면을, " +
                 "`refId` 로 딥링크 이동을, 파싱 알림은 `kind` 로 출처(위시/토너먼트)를 분기하고, `id` 로 단건 읽음 처리(`POST /read`)를 한다.\n\n" +
-                "**알림 타입 카탈로그 (전 9종)**\n\n" +
+                "**알림 타입 카탈로그 (전 10종)**\n\n" +
                 "`type` 으로 화면을 분기하고 `refId` 로 이동 대상을 정한다. `body` 는 현재 전 타입 빈 문자열(`\"\"`).\n\n" +
                 "| `type` | 트리거 | 카테고리 | `refId` | `title` 예시 | 아바타(`imageUrl`) |\n" +
                 "|---|---|---|---|---|---|\n" +
                 "| `TOURNAMENT_JOINED` | 토너먼트 참가 | ACTIVITY | tournamentId | {참가자}님이 참가했어요 | 행위자 프사 |\n" +
                 "| `TOURNAMENT_ITEM_ADDED` | 아이템 추가 | ACTIVITY | tournamentId | {참가자}님이 아이템을 추가했어요 | 행위자 프사 |\n" +
+                "| `TOURNAMENT_ITEM_DELETED` | 아이템 삭제 | ACTIVITY | tournamentId | {참가자}님이 '{상품명}'을(를) 삭제했어요 | 행위자 프사 |\n" +
                 "| `TOURNAMENT_STARTED` | 토너먼트 시작 | ACTIVITY | tournamentId | {주최자}님이 토너먼트를 시작했어요 | 행위자 프사 |\n" +
                 "| `TOURNAMENT_PLAYED_FROM_LINK` | 플레이링크로 플레이 시작 | ACTIVITY | ROOT 토너먼트 id | {플레이어}님이 회원님 토너먼트를 플레이했어요 | 행위자 프사 |\n" +
                 "| `TOURNAMENT_COMPLETED` | 멤버가 클론 완료 | ACTIVITY | ROOT 토너먼트 id | {멤버}님이 회원님 토너먼트를 완료했어요 | 행위자 프사 |\n" +
@@ -48,8 +49,9 @@ interface NotificationHistoryApi {
                 "| `ITEM_PARSING_COMPLETED` | 상품 추출 성공 | SYSTEM | itemId | 상품 정보가 저장됐어요 | 피키 로고 |\n" +
                 "| `ITEM_PARSING_FAILED` | 상품 추출 실패 | SYSTEM | itemId | 상품 정보를 가져오지 못했어요 | 피키 로고 |\n" +
                 "| `ANNOUNCEMENT` | 관리자 공지(후속) | SYSTEM | 공지 id/0 | (관리자 입력) | 피키 로고 |\n\n" +
-                "> 파싱 알림(`ITEM_PARSING_*`)만 출처별 `kind`(WISH/TOURNAMENT)·`tournamentId`·`tournamentItemId` 가 추가로 실린다. " +
-                "나머지 타입엔 그 키가 없다. `title` 은 발송 시점 렌더 값이라 클라는 문구가 아니라 `type` 으로 분기한다.",
+                "> 아이템 좌표(`kind`·`tournamentId`·`tournamentItemId`)가 추가로 실리는 타입: 파싱 알림(`ITEM_PARSING_*`)은 출처 `kind`(WISH/TOURNAMENT), " +
+                "토너먼트 출처면 `tournamentId`·`tournamentItemId` 까지. 아이템 삭제(`TOURNAMENT_ITEM_DELETED`)는 `kind`=TOURNAMENT·`tournamentId`·`tournamentItemId` 를 실어 " +
+                "클라가 재조회 없이 그 항목만 제거하게 한다. 나머지 타입엔 그 키가 없다. `title` 은 발송 시점 렌더 값이라 클라는 문구가 아니라 `type` 으로 분기한다.",
     )
     @ApiResponses(
         value = [

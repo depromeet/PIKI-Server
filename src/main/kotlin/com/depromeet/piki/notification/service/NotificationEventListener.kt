@@ -4,6 +4,7 @@ import com.depromeet.piki.common.config.AsyncConfig
 import com.depromeet.piki.item.event.ItemParsingCompleted
 import com.depromeet.piki.item.event.ItemParsingFailed
 import com.depromeet.piki.tournament.event.TournamentItemAdded
+import com.depromeet.piki.tournament.event.TournamentItemDeleted
 import com.depromeet.piki.tournament.event.TournamentJoined
 import com.depromeet.piki.tournament.event.TournamentStarted
 import org.springframework.scheduling.annotation.Async
@@ -34,6 +35,12 @@ class NotificationEventListener(
     @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun on(event: TournamentItemAdded) {
+        dispatcher.dispatch(event)
+    }
+
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    fun on(event: TournamentItemDeleted) {
         dispatcher.dispatch(event)
     }
 

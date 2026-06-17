@@ -37,7 +37,7 @@ interface DevFcmApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (token 비어 있음 · 길이 초과)",
+                description = "잘못된 요청 (token 비어 있음 · 길이 초과 · badge 가 음수)",
                 content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
             ApiResponse(

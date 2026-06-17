@@ -325,6 +325,10 @@ class NotificationHistoryControllerIntegrationTest : IntegrationTestSupport() {
         assertFalse(notificationJpaRepository.findById(others).get().isRead)
     }
 
+    // read 후 silent badge 동기화 push 는 @Async(notificationExecutor)라 요청 스레드 밖·새 트랜잭션에서 돈다.
+    // @Transactional 자동 롤백 컨텍스트에선 워커가 미커밋 데이터를 못 보므로, 그 검증은
+    // NotificationBadgeSyncAsyncIntegrationTest(실제 커밋 + Awaitility)가 맡는다.
+
     @Test
     fun `all 과 ids 를 함께 보내면 400 이고 detail 에 위반 메시지가 실린다`() {
         val userId = UUID.randomUUID()
