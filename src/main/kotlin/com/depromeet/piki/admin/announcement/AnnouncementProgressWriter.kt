@@ -1,4 +1,5 @@
 package com.depromeet.piki.admin.announcement
+import com.depromeet.piki.announcement.repository.AnnouncementRepository
 
 import com.depromeet.piki.notification.fcm.service.UserDeviceService
 import org.springframework.stereotype.Service

@@ -86,6 +86,7 @@ class OpenApiConfig {
                 "Tournament",
                 "Tournament Item",
                 "Notification",
+                "Announcement",
                 "FCM",
                 "Dev",
             )
