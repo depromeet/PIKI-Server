@@ -49,4 +49,22 @@ class AppleCallbackBridgeIntegrationTest : IntegrationTestSupport() {
             ).andExpect(status().isSeeOther)
             .andExpect(redirectedUrl("https://test.piki.day/auth/callback/apple?error=user_cancelled"))
     }
+
+    // Apple 은 top-level 폼 POST 로 Origin: https://appleid.apple.com 을 박아 보낸다. 전역 CORS 의 allowedOrigins 에
+    // 그 origin 이 없어 CorsFilter 가 컨트롤러 도달 전에 403("Invalid CORS request")으로 막던 회귀(#430)를 잡는다.
+    // 이 콜백 경로만 Apple origin 을 허용하므로, Origin 헤더가 박혀도 403 이 아니라 303 으로 정상 변환돼야 한다.
+    @Test
+    fun `Apple origin 을 단 form_post 콜백은 CORS 로 막히지 않고 303 한다`() {
+        mockMvc()
+            .perform(
+                post("/api/v1/auth/apple/callback")
+                    .header("Origin", "https://appleid.apple.com")
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .param("code", "apple-auth-code")
+                    .param("state", "csrf-state-1"),
+            ).andExpect(status().isSeeOther)
+            .andExpect(
+                redirectedUrl("https://test.piki.day/auth/callback/apple?code=apple-auth-code&state=csrf-state-1"),
+            )
+    }
 }
