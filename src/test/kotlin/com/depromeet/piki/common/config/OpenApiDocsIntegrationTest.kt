@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class OpenApiDocsIntegrationTest : IntegrationTestSupport() {
@@ -66,5 +67,21 @@ class OpenApiDocsIntegrationTest : IntegrationTestSupport() {
                 "${tag.get("name").asText()} 태그에 description 이 비어 있다",
             )
         }
+    }
+
+    @Test
+    fun `admin·내부 컨트롤러는 api-docs 에 노출되지 않는다`() {
+        // admin Thymeleaf 페이지(/admin/**)·슬랙 웹훅(/admin-access/**)은 유저 API 가 아니라
+        // 각 컨트롤러의 @Hidden 으로 spec 에서 제외한다. paths 에 /admin* 가 없어야 한다.
+        val response =
+            mockMvc()
+                .perform(get("/v3/api-docs"))
+                .andExpect(status().isOk)
+                .andReturn()
+                .response
+                .contentAsString
+
+        val pathsJson = objectMapper.readTree(response).get("paths").toString()
+        assertFalse(pathsJson.contains("/admin"), "admin 경로가 api-docs paths 에 노출됨")
     }
 }
