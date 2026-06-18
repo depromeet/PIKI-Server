@@ -1,6 +1,7 @@
 package com.depromeet.piki.notification.service
 
 import com.depromeet.piki.notification.domain.Notification
+import com.depromeet.piki.notification.domain.NotificationChannelPolicy
 import com.depromeet.piki.notification.handler.NotificationEventHandler
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -35,9 +36,18 @@ class NotificationDispatcher(
                 ?: error("핸들러 미등록: ${event::class.simpleName}")
 
         val recipients = handler.resolveRecipients(event)
+        // 타입별 채널 선택 — sync 성 알림(아이템 추가/삭제)은 SSE 만, alert 성은 SSE+FCM 둘 다. 정적 결정이라 presence 갭이 없다.
+        // 영속(persistence.save)은 채널과 무관하게 그대로 — SSE only 타입도 알림센터·히스토리엔 남고 FCM 만 빠진다.
+        val selectedChannels = channels.filter { it.kind in NotificationChannelPolicy.kindsOf(handler.notificationType) }
         // 이벤트 수신 → 수신자 도출(인원). 디스패치는 async 워커라 MDC userId 는 이벤트를 유발한 actor 의 것이고,
         // 수신자는 actor 와 다른 유저들이라 수신자 userId 는 아래 fan-out 에서 명시적으로 남긴다.
-        log.info("알림 디스패치 type={} event={} 수신자={}명", handler.notificationType, event::class.simpleName, recipients.size)
+        log.info(
+            "알림 디스패치 type={} event={} 수신자={}명 채널={}",
+            handler.notificationType,
+            event::class.simpleName,
+            recipients.size,
+            selectedChannels.map { it.kind },
+        )
         if (recipients.isEmpty()) return
 
         val refId = handler.resolveRefId(event)
@@ -67,8 +77,8 @@ class NotificationDispatcher(
                             actorImageUrl = actorImageUrl,
                         ),
                     )
-                // 한 채널의 실패도 다른 채널 전달을 막지 않게 추가로 격리한다.
-                channels.forEach { channel ->
+                // 한 채널의 실패도 다른 채널 전달을 막지 않게 추가로 격리한다. (타입별로 고른 채널만 순회)
+                selectedChannels.forEach { channel ->
                     runCatching { channel.send(userId, notification) }
                         .onFailure { e -> log.warn("채널 {} 전송 실패 userId={}", channel::class.simpleName, userId, e) }
                 }

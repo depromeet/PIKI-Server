@@ -1,6 +1,7 @@
 package com.depromeet.piki.notification.service
 
 import com.depromeet.piki.common.config.AsyncConfig
+import com.depromeet.piki.notification.domain.ChannelKind
 import com.depromeet.piki.notification.domain.Notification
 import com.depromeet.piki.notification.fcm.service.FcmMessageSender
 import com.depromeet.piki.notification.fcm.service.UserDeviceService
@@ -27,6 +28,8 @@ class PushNotificationChannel(
     private val userDeviceService: UserDeviceService,
     private val notificationRepository: NotificationRepository,
 ) : NotificationChannel {
+    override val kind: ChannelKind = ChannelKind.PUSH
+
     private val log = LoggerFactory.getLogger(javaClass)
 
     // sender 부재는 로컬에선 정상(키 없음)이지만 운영에선 설정 누락 신호다. 매 발송마다 찍으면
