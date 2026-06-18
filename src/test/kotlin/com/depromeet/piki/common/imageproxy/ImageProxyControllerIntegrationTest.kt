@@ -2,6 +2,7 @@ package com.depromeet.piki.common.imageproxy
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.support.IntegrationTestSupport
+import com.depromeet.piki.support.StubImageProxyFetcher
 import com.depromeet.piki.user.domain.IdentityType
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -22,6 +23,9 @@ class ImageProxyControllerIntegrationTest : IntegrationTestSupport() {
     @Autowired
     private lateinit var jwtProvider: JwtProvider
 
+    @Autowired
+    private lateinit var stubImageProxyFetcher: StubImageProxyFetcher
+
     @Test
     fun `토큰 없이 호출하면 401 응답이 반환된다`() {
         buildMockMvc()
@@ -34,6 +38,7 @@ class ImageProxyControllerIntegrationTest : IntegrationTestSupport() {
     @Test
     fun `허용되지 않은 도메인이면 400 blockedDomain 응답이 반환된다`() {
         val token = jwtProvider.generateAccessToken(UUID.randomUUID(), IdentityType.GUEST)
+        stubImageProxyFetcher.handler = { throw ImageProxyException.blockedDomain() }
 
         buildMockMvc()
             .perform(
@@ -42,6 +47,20 @@ class ImageProxyControllerIntegrationTest : IntegrationTestSupport() {
                     .param("url", "https://not-allowed-domain.com/image.jpg"),
             ).andExpect(status().isBadRequest)
             .andExpect(jsonPath("$.detail").value(ImageProxyException.blockedDomain().message))
+    }
+
+    @Test
+    fun `외부 이미지 서버 오류 시 502 fetchFailed 응답이 반환된다`() {
+        val token = jwtProvider.generateAccessToken(UUID.randomUUID(), IdentityType.GUEST)
+        stubImageProxyFetcher.handler = { throw ImageProxyException.fetchFailed() }
+
+        buildMockMvc()
+            .perform(
+                get("/api/v1/image-proxy")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer $token")
+                    .param("url", "https://msscdn.net/image.jpg"),
+            ).andExpect(status().isBadGateway)
+            .andExpect(jsonPath("$.detail").value(ImageProxyException.fetchFailed().message))
     }
 
     private fun buildMockMvc() =

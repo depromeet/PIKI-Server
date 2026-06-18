@@ -5,7 +5,7 @@ import kotlin.test.assertFailsWith
 
 class ImageProxyFetcherTest {
     private val fetcher =
-        ImageProxyFetcher(
+        DefaultImageProxyFetcher(
             ImageProxyProperties(
                 allowedDomains = listOf("msscdn.net", "pstatic.net"),
                 maxBytes = 5 * 1024 * 1024,

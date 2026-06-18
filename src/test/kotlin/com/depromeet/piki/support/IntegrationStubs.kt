@@ -86,4 +86,10 @@ class IntegrationStubs {
     // 구현하지만 oauth.client.enabled=false 로 꺼지므로, 이 stub 이 유일한 AppleNotificationVerifier 라 @Primary 불필요.
     @Bean
     fun appleNotificationVerifier(): StubAppleNotificationVerifier = StubAppleNotificationVerifier()
+
+    // 이미지 프록시 외부 HTTP 호출 경계. DefaultImageProxyFetcher 는 실제 외부 CDN 을 호출하므로
+    // 통합 테스트에서 stub 으로 교체한다.
+    @Bean
+    @Primary
+    fun imageProxyFetcher(): StubImageProxyFetcher = StubImageProxyFetcher()
 }
