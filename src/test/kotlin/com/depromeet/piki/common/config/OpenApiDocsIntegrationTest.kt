@@ -41,6 +41,7 @@ class OpenApiDocsIntegrationTest : IntegrationTestSupport() {
                 "Tournament",
                 "Tournament Item",
                 "Notification",
+                "Announcement",
                 "FCM",
                 "Dev",
             )

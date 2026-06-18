@@ -1,4 +1,5 @@
 package com.depromeet.piki.admin.announcement
+import com.depromeet.piki.announcement.domain.Announcement
 
 import com.depromeet.piki.admin.access.AdminSession
 import com.depromeet.piki.admin.config.ClientIp
