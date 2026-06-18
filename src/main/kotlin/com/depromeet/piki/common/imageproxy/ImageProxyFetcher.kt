@@ -52,7 +52,7 @@ class ImageProxyFetcher(
         val host =
             try {
                 val uri = URI.create(url)
-                if (uri.scheme != "https" && uri.scheme != "http") throw ImageProxyException.blockedDomain()
+                if (uri.scheme != "https") throw ImageProxyException.blockedDomain()
                 uri.host ?: throw ImageProxyException.blockedDomain()
             } catch (e: IllegalArgumentException) {
                 throw ImageProxyException.blockedDomain()

@@ -30,7 +30,7 @@ interface ImageProxyApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (허용되지 않은 도메인 · 이미지 크기 5 MB 초과)",
+                description = "잘못된 요청 (허용되지 않은 도메인 · https 외 스킴 · 이미지 크기 5 MB 초과)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

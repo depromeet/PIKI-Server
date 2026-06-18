@@ -21,6 +21,13 @@ class ImageProxyFetcherTest {
     }
 
     @Test
+    fun `http 스킴이면 blockedDomain 예외를 던진다`() {
+        assertFailsWith<ImageProxyException> {
+            fetcher.fetch("http://msscdn.net/image.jpg")
+        }
+    }
+
+    @Test
     fun `file 스킴이면 blockedDomain 예외를 던진다`() {
         assertFailsWith<ImageProxyException> {
             fetcher.fetch("file:///etc/passwd")
