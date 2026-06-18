@@ -15,6 +15,16 @@ class WishException private constructor(
 ) : BaseException(message),
     HttpMappable {
     companion object {
+        // 위시리스트는 회원 전용 — 게스트(인증은 됐으나 회원 아님)가 정상 요청으로 닿을 수 있는 계약 응답이라 커스텀 예외(403).
+        // Security 에서 MEMBER 만 허용하면 detail 없는 권한 없음 403 으로 떨어져 "회원 전용" 사유를 못 전달하므로,
+        // authenticated() 로 통과시킨 뒤 서비스가 이 예외로 막는다(UserException.guestCannotWithdraw 와 같은 패턴).
+        fun guestCannotUseWishlist(): WishException =
+            WishException(
+                "위시리스트는 회원만 이용할 수 있어요.",
+                ErrorCategory.FORBIDDEN,
+                HttpStatus.FORBIDDEN,
+            )
+
         fun forbiddenWishItems(): WishException =
             WishException(
                 "내 위시 아이템만 볼 수 있어요.",

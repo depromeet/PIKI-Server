@@ -86,8 +86,12 @@ class SecurityConfig(
                     // docs 등 어디서든 401 없이 뜨도록 permit 한다. 민감정보 없는 공개 파일.
                     .requestMatchers(HttpMethod.GET, "/favicon.ico")
                     .permitAll()
+                    // 위시리스트는 회원 전용 — 인증만 요구한다(GUEST 도 통과). 게스트 거부(403)는 Security 권한이 아니라
+                    // WishlistService 가 도메인 계약(WishException.guestCannotUseWishlist)으로 내린다 —
+                    // Security 에서 MEMBER 만 허용하면 게스트가 권한 없음 403(detail 없음)으로 떨어져
+                    // "위시리스트는 회원 전용" 이라는 구체 사유를 못 전달하기 때문. (회원 탈퇴 DELETE /users/me 와 같은 패턴)
                     .requestMatchers("/api/v1/wishlists/**")
-                    .hasAuthority(IdentityType.MEMBER.name)
+                    .authenticated()
                     // 소셜 토너먼트 게스트 합류: 계정 없이 초대 코드 + 닉네임으로 가입과 동시에 참여
                     .requestMatchers(HttpMethod.POST, "/api/v1/tournaments/*/join/guest")
                     .permitAll()
