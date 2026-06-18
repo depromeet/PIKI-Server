@@ -37,7 +37,8 @@ class AnnouncementApiExamples(
                         payload =
                             ApiResponseBody.ok(
                                 data = listOf(sampleAnnouncement),
-                                pageResponse = PageResponse(nextCursor = "42", hasNext = true),
+                                // nextCursor 는 (sentAt, id)를 base64 로 인코딩한 opaque 토큰 — 다음 요청의 cursor 로 그대로 넘긴다.
+                                pageResponse = PageResponse(nextCursor = "MjAyNi0wNi0xOFQxMDowMDowMF80Mw", hasNext = true),
                             ),
                     )
                     add(

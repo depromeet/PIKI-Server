@@ -22,16 +22,28 @@ interface AnnouncementRepository : JpaRepository<Announcement, Long> {
         status: String,
     ): Announcement?
 
-    // 목록 첫 페이지(커서 없음) — SENT 만 최신순(id desc). limit 는 Pageable 로 +1 조회해 hasNext 판정.
-    fun findByStatusOrderByIdDesc(
+    // 목록 첫 페이지(커서 없음) — SENT 만 발송순(sentAt desc, 동시각 tie-breaker id desc).
+    // 정렬 키를 id 가 아니라 sentAt 으로 둔다 — 오래전 등록(낮은 id)한 공지를 나중에 예약 발송하면
+    // id 순과 실제 발송순이 어긋나, "방금 온 공지"가 목록 아래로 내려가기 때문. limit 는 Pageable 로 +1 조회해 hasNext 판정.
+    fun findByStatusOrderBySentAtDescIdDesc(
         status: String,
         pageable: Pageable,
     ): List<Announcement>
 
-    // 목록 다음 페이지 — cursor(id) 이전(더 오래된) SENT 만 최신순.
-    fun findByStatusAndIdLessThanOrderByIdDesc(
-        status: String,
-        id: Long,
+    // 목록 다음 페이지 — (sentAt, id) 복합 키셋 커서보다 "이전(더 오래된)" SENT 만. 동시각이면 id 로 가른다.
+    // 파생 쿼리로는 (a < b) OR (a = b AND c < d) 형태를 못 만들어 JPQL 로 둔다.
+    @Query(
+        """
+        select a from Announcement a
+        where a.status = :status
+          and (a.sentAt < :sentAt or (a.sentAt = :sentAt and a.id < :id))
+        order by a.sentAt desc, a.id desc
+        """,
+    )
+    fun findNextByStatusAndSentAtCursor(
+        @Param("status") status: String,
+        @Param("sentAt") sentAt: LocalDateTime,
+        @Param("id") id: Long,
         pageable: Pageable,
     ): List<Announcement>
 
