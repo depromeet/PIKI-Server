@@ -1,4 +1,6 @@
 package com.depromeet.piki.admin.announcement
+import com.depromeet.piki.announcement.domain.Announcement
+import com.depromeet.piki.announcement.repository.AnnouncementRepository
 
 import com.depromeet.piki.notification.domain.NotificationType
 import com.depromeet.piki.notification.fcm.domain.UserDevice
