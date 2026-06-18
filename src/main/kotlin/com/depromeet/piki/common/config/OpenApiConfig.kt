@@ -87,6 +87,7 @@ class OpenApiConfig {
                 "Tournament Item",
                 "Notification",
                 "Announcement",
+                "Image Proxy",
                 "FCM",
                 "Dev",
             )

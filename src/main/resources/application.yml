@@ -113,6 +113,22 @@ s3:
   region: ${S3_REGION:ap-northeast-2}
   public-base-url: ${S3_PUBLIC_BASE_URL:}
 
+image:
+  proxy:
+    # CORS 우회 이미지 프록시 허용 도메인 목록. 서브도메인 포함 (host == domain || host.endsWith(".domain")).
+    allowed-domains:
+      - msscdn.net         # 무신사
+      - pstatic.net        # 네이버 / 스마트스토어
+      - kakaocdn.net       # 카카오
+      - coupangcdn.com     # 쿠팡
+      - thumbnail.10x10.co.kr
+      - image.29cm.co.kr
+      - image.ably.team
+      - static.zara.com
+      - lp2.hm.com
+    max-bytes: 5242880     # 5 MB
+    timeout-seconds: 10
+
 springdoc:
   api-docs:
     path: /v3/api-docs
