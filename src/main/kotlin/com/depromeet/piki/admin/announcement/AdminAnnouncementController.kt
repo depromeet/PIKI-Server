@@ -1,4 +1,5 @@
 package com.depromeet.piki.admin.announcement
+import io.swagger.v3.oas.annotations.Hidden
 import com.depromeet.piki.announcement.domain.Announcement
 
 import com.depromeet.piki.admin.access.AdminSession
@@ -18,6 +19,7 @@ import java.time.LocalDateTime
 
 // 공지 등록·예약/발송·결과 화면(#391/#489). 등록(초안)과 발송(목록에서 선택)을 분리해 발송 시 자유입력이 없어 오타가 안 생긴다.
 // 발송은 즉시 또는 예약(시각 지정), 결과는 집계+진행률 폴링으로 본다. 게이트(슬랙-세션)·actor 신원은 #526.
+@Hidden
 @Controller
 @ConditionalOnAdminEnabled
 @RequestMapping("/admin/announcements")
