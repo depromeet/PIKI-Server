@@ -12,11 +12,12 @@ import org.springframework.web.util.UriComponentsBuilder
 
 // Apple 웹 OAuth 콜백 브릿지(#430). Apple 은 scope=email name 이면 response_mode=form_post 를 강제해
 // 콜백을 POST(form_post)로 보낸다. Kakao·Google 은 GET 쿼리라 프론트 공용 콜백이 그대로 처리하지만 Apple 만
-// POST 라 못 받는다. 이 엔드포인트가 Apple 의 POST 를 받아 code·state 를 프론트 공용 콜백으로 302(GET 쿼리)
-// 시켜, Apple 도 Kakao·Google 과 동일한 흐름을 타게 한다.
+// POST 라 못 받는다. 이 엔드포인트가 Apple 의 POST 를 받아 code·state 를 프론트 공용 콜백으로 303(GET 쿼리)
+// 시켜, Apple 도 Kakao·Google 과 동일한 흐름을 타게 한다. POST→GET 전환이라 302(메서드 유지 재량)가 아니라
+// 303 See Other(메서드를 GET 으로 강제)가 의도에 정확하다 (RFC 7231 §6.4.4).
 //
-// 로그인은 하지 않는다 — 토큰교환·로그인·쿠키 발급은 302 이후 프론트 공용 핸들러가 기존 /api/v1/auth/login/apple
-// 을 호출해 수행한다(state 검증도 그쪽). 따라서 여기선 state 를 소비하지 않고 그대로 넘긴다.
+// 로그인은 하지 않는다 — 토큰교환·로그인·쿠키 발급은 리다이렉트 이후 프론트 공용 핸들러가 기존
+// /api/v1/auth/login/apple 을 호출해 수행한다(state 검증도 그쪽). 따라서 여기선 state 를 소비하지 않고 그대로 넘긴다.
 @RestController
 @RequestMapping("/api/v1/auth/apple")
 class AppleCallbackController(
@@ -41,7 +42,7 @@ class AppleCallbackController(
                 }.build()
                 .encode()
                 .toUri()
-        return ResponseEntity.status(HttpStatus.FOUND).location(location).build()
+        return ResponseEntity.status(HttpStatus.SEE_OTHER).location(location).build()
     }
 
     companion object {

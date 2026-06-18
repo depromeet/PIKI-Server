@@ -1,6 +1,7 @@
 package com.depromeet.piki.auth.infrastructure.oauth.apple
 
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Pattern
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.validation.annotation.Validated
 
@@ -27,7 +28,13 @@ data class AppleProperties(
     val redirectUri: String,
     // Apple form_post 브릿지(#430)가 code·state 를 붙여 302 시킬 프론트 공용 콜백 URL (예: https://dev.piki.day/auth/callback/apple).
     // redirectUri(BE 브릿지)와 짝 — Apple 의 POST 를 받아 이 주소로 GET 쿼리 리다이렉트해 Kakao·Google 과 흐름을 통일한다.
+    // 브릿지가 UriComponentsBuilder.fromUriString 으로 302 Location 을 만들므로, 절대 URL(http/https)이어야 한다.
+    // @NotBlank 만으론 상대경로·스킴 오타가 부팅을 통과해 요청 시점에 깨지므로, 절대 URL 검증을 부팅 fail-fast 로 둔다.
     @field:NotBlank(message = "Apple Web Callback URL 이 필요합니다 (env: APPLE_WEB_CALLBACK_URL / property: oauth.apple.web-callback-url).")
+    @field:Pattern(
+        regexp = "^https?://.+",
+        message = "Apple Web Callback URL 은 절대 URL(http:// 또는 https://)이어야 합니다 (env: APPLE_WEB_CALLBACK_URL).",
+    )
     val webCallbackUrl: String,
 ) {
     // data class 의 자동 toString() 은 .p8 평문을 그대로 노출시킨다. 부팅 로그·BindException·디버그
