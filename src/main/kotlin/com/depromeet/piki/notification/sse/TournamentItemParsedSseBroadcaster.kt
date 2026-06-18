@@ -12,7 +12,6 @@ import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener
-import java.util.UUID
 
 // 토너먼트 출전 아이템의 파싱 완료/실패를 그 토너먼트 참여자 화면에 실시간 반영한다.
 //
@@ -47,11 +46,15 @@ class TournamentItemParsedSseBroadcaster(
         broadcast(event.itemId, ItemStatus.FAILED)
     }
 
-    // itemId 가 출전한 각 토너먼트마다 그 좌표(tournamentItemId)와 참여자 전원을 풀어, 참여자 화면에 카드 갱신을 보낸다.
-    // 한 아이템이 여러 토너먼트에 공유될 수 있어 좌표가 복수다 — 알림 라우팅(firstOrNull 단건)과 달리 전부 순회해
-    // 각 토너먼트 참여자에게 그 토너먼트의 좌표를 보낸다. adder(주최자)도 참여자라 함께 받는다(이 신호는 "알림"이 아니라
-    // 카드 갱신이라, 모든 보는 화면이 동일하게 갱신되는 게 옳다 — adder 의 ITEM_PARSING_COMPLETED 알림과는 목적이 다르다).
-    // 위시 전용(어느 토너먼트에도 없는) 아이템이면 routings 가 비어 아무 것도 보내지 않는다(위시 주인은 ITEM_PARSING_* 로 받음).
+    // itemId 로 그 아이템의 토너먼트 출전 좌표(tournamentItemId)와 참여자 전원을 풀어 카드 갱신을 보낸다.
+    // adder(주최자)도 참여자라 함께 받는다 — 이 신호는 "알림"이 아니라 카드 갱신이라, 보는 화면이 모두 동일하게
+    // 갱신되는 게 옳다(adder 의 ITEM_PARSING_COMPLETED 알림과는 목적이 다르다).
+    //
+    // 파싱 시점엔 add 마다 새 item·snapshot 이 생겨(persistLinkItem·persistProcessingItems) 한 itemId 가 한
+    // tournament_item 에만 매이므로 routings 는 0~1 행이다. List·순회로 둔 건 향후 item 공유(한 아이템이 여러
+    // 토너먼트에 동시 출전) 도입 대비이며, 그땐 routing 별로 각 snapshot 의 실제 상태를 확인해야 한다 — 지금은
+    // 단일이라 이벤트 status 를 그대로 싣는다(공유 도입 시 spurious 갱신 주의, 후속 이슈). 위시 전용(어느 토너먼트에도
+    // 없는) 아이템이면 routings 가 비어 아무 것도 보내지 않는다(위시 주인은 ITEM_PARSING_* 알림으로 받음).
     fun broadcast(
         itemId: Long,
         status: ItemStatus,
@@ -59,23 +62,35 @@ class TournamentItemParsedSseBroadcaster(
         val routings = tournamentItemRepository.findRoutingByItemId(itemId)
         if (routings.isEmpty()) return
         routings.forEach { routing ->
-            val participants: List<UUID> =
-                tournamentUserRepository.findByTournamentId(routing.tournamentId).map { it.userId }
-            localDelivery.deliverTournamentItemParsed(
-                participants,
-                TournamentItemParsedPayload(
-                    tournamentId = routing.tournamentId,
-                    tournamentItemId = routing.tournamentItemId,
-                    status = status,
-                ),
-            )
-            log.info(
-                "토너먼트 아이템 파싱 동기화 전송 tournamentId={} tournamentItemId={} status={} 참여자={}명",
-                routing.tournamentId,
-                routing.tournamentItemId,
-                status,
-                participants.size,
-            )
+            // 한 토너먼트의 조회·전달 실패가 나머지 fan-out 을 막지 않게 토너먼트 단위로 격리한다
+            // (NotificationDispatcher 의 수신자 단위 격리와 같은 결). @Async 워커라 여기서 삼키지 않으면 기본
+            // 핸들러가 맥락 없는 스택트레이스만 남겨 동기화 누락이 무음이 된다 — itemId 맥락을 실어 warn 으로 남긴다.
+            runCatching {
+                val participants = tournamentUserRepository.findByTournamentId(routing.tournamentId).map { it.userId }
+                localDelivery.deliverTournamentItemParsed(
+                    participants,
+                    TournamentItemParsedPayload(
+                        tournamentId = routing.tournamentId,
+                        tournamentItemId = routing.tournamentItemId,
+                        status = status,
+                    ),
+                )
+                log.info(
+                    "토너먼트 아이템 파싱 동기화 전송 tournamentId={} tournamentItemId={} status={} 참여자={}명",
+                    routing.tournamentId,
+                    routing.tournamentItemId,
+                    status,
+                    participants.size,
+                )
+            }.onFailure { e ->
+                log.warn(
+                    "토너먼트 아이템 파싱 동기화 실패 tournamentId={} itemId={} status={}",
+                    routing.tournamentId,
+                    itemId,
+                    status,
+                    e,
+                )
+            }
         }
     }
 }
