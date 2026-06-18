@@ -42,7 +42,7 @@ class ProductLinkException private constructor(
         // 어느 플랫폼인지는 message 에 박지 않는다(safeLogString 으로 로그). 사용자에겐 "아직 안 되는 곳" 안내만.
         fun unsupportedPlatform(): ProductLinkException =
             ProductLinkException(
-                "아직 지원하지 않는 쇼핑몰이에요.",
+                "아직 지원하지 않는 쇼핑몰이에요. 상품 이미지를 직접 등록해 주세요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
