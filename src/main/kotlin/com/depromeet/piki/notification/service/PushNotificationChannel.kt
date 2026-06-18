@@ -1,8 +1,8 @@
 package com.depromeet.piki.notification.service
 
 import com.depromeet.piki.common.config.AsyncConfig
-import com.depromeet.piki.notification.domain.ChannelKind
 import com.depromeet.piki.notification.domain.Notification
+import com.depromeet.piki.notification.domain.NotificationChannelPolicy
 import com.depromeet.piki.notification.fcm.service.FcmMessageSender
 import com.depromeet.piki.notification.fcm.service.UserDeviceService
 import com.depromeet.piki.notification.repository.NotificationRepository
@@ -28,8 +28,6 @@ class PushNotificationChannel(
     private val userDeviceService: UserDeviceService,
     private val notificationRepository: NotificationRepository,
 ) : NotificationChannel {
-    override val kind: ChannelKind = ChannelKind.PUSH
-
     private val log = LoggerFactory.getLogger(javaClass)
 
     // sender 부재는 로컬에선 정상(키 없음)이지만 운영에선 설정 누락 신호다. 매 발송마다 찍으면
@@ -40,6 +38,8 @@ class PushNotificationChannel(
         userId: UUID,
         notification: Notification,
     ) {
+        // sync 성 알림(인앱 SSE 로 충분)은 OS 트레이 푸시를 보내지 않는다 — 토큰 게이트와 같은 자리의 자기-적용 판단.
+        if (!NotificationChannelPolicy.pushable(notification.type)) return
         val sender = sender() ?: return
         val tokens = userDeviceService.findTokens(userId)
         if (tokens.isEmpty()) return

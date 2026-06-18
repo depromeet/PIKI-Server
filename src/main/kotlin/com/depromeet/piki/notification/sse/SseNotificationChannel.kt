@@ -1,6 +1,5 @@
 package com.depromeet.piki.notification.sse
 
-import com.depromeet.piki.notification.domain.ChannelKind
 import com.depromeet.piki.notification.domain.Notification
 import com.depromeet.piki.notification.service.NotificationChannel
 import org.springframework.stereotype.Component
@@ -15,8 +14,6 @@ import java.util.UUID
 class SseNotificationChannel(
     private val localDelivery: LocalSseDelivery,
 ) : NotificationChannel {
-    override val kind: ChannelKind = ChannelKind.SSE
-
     override fun send(
         userId: UUID,
         notification: Notification,
