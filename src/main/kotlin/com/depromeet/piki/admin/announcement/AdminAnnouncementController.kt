@@ -46,13 +46,14 @@ class AdminAnnouncementController(
     fun register(
         @RequestParam title: String,
         @RequestParam(required = false) body: String?,
+        request: HttpServletRequest,
     ): String {
         // 입력 경계 검증 — 길이 초과는 등록 전에 친화적으로 막는다(엔티티 init 불변식이 최후의 보루).
         val safeBody = body ?: ""
         if (title.isBlank() || title.length > Announcement.MAX_TITLE_LENGTH || safeBody.length > Announcement.MAX_BODY_LENGTH) {
             return "redirect:/admin/announcements?error=length"
         }
-        adminAnnouncementService.register(title, safeBody)
+        adminAnnouncementService.register(title, safeBody, actor(request), clientIp(request))
         return "redirect:/admin/announcements?registered"
     }
 
