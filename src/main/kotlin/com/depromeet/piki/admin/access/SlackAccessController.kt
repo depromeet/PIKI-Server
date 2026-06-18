@@ -1,4 +1,5 @@
 package com.depromeet.piki.admin.access
+import io.swagger.v3.oas.annotations.Hidden
 
 import com.depromeet.piki.admin.audit.AdminAuditAction
 import com.depromeet.piki.admin.audit.AdminAuditService
@@ -19,6 +20,7 @@ import java.nio.charset.StandardCharsets
 
 // 백오피스 접근의 유일한 공개 표면 — 슬랙 슬래시커맨드 + grant 링크. 두 게이트 필터(EnvironmentAccessFilter·
 // AdminAccessFilter)는 이 경로(/admin-access/**)를 항상 통과시킨다(여기서 IP 를 등록해야 게이트를 열 수 있으므로).
+@Hidden
 @RestController
 @ConditionalOnAdminEnabled
 @RequestMapping("/admin-access")

@@ -53,11 +53,12 @@ class TournamentItemService(
         val persisted = tournamentItemPersistenceService.persistProcessingItems(userId, tournamentId, productImages.size)
         persisted.zip(productImages).forEach { (persistedItem, productImage) ->
             val itemId = persistedItem.itemId
+            val snapshotId = persistedItem.snapshotId
             try {
-                imageParsingWorker.parse(itemId, productImage)
+                imageParsingWorker.parse(itemId, snapshotId, productImage)
             } catch (e: TaskRejectedException) {
                 log.warn("item {} async 디스패치 거부 → FAILED 처리", itemId, e)
-                runCatching { itemParsingService.markFailed(itemId) }
+                runCatching { itemParsingService.markFailed(snapshotId) }
                     .onFailure { ex -> log.error("item {} FAILED 전이 실패, PROCESSING 방치 위험", itemId, ex) }
             }
         }

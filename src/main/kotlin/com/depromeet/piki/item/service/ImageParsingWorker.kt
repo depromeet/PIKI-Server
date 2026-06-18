@@ -8,6 +8,7 @@ import com.depromeet.piki.image.domain.ProductImage
 interface ImageParsingWorker {
     fun parse(
         itemId: Long,
+        snapshotId: Long,
         image: ProductImage,
     )
 }

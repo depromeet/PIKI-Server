@@ -32,7 +32,7 @@ class DevFcmController(
         val sender =
             fcmSenderProvider.getIfAvailable()
                 ?: return ApiResponseBody.ok(DevPushResponse(fcmEnabled = false, staleTokenCount = 0))
-        val result = sender.send(listOf(request.token.trim()), request.toNotification(userId))
+        val result = sender.send(listOf(request.token.trim()), request.toNotification(userId), request.badge)
         return ApiResponseBody.ok(DevPushResponse(fcmEnabled = true, staleTokenCount = result.staleTokens.size))
     }
 }

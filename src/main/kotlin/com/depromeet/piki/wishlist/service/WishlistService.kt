@@ -63,12 +63,13 @@ class WishlistService(
         val results = wishPersistenceService.persistProcessingImages(userId, productImages.size)
         results.zip(productImages).forEach { (result, productImage) ->
             val itemId = result.item.getId()
+            val snapshotId = result.snapshot.getId()
             // 워커 디스패치가 큐 포화 등으로 거부되면 PROCESSING 으로 방치하지 않고 즉시 FAILED 로 떨어뜨린다.
             try {
-                imageParsingWorker.parse(itemId, productImage)
+                imageParsingWorker.parse(itemId, snapshotId, productImage)
             } catch (e: TaskRejectedException) {
                 log.warn("파싱 워커 디스패치 거부, item {} 를 FAILED 처리: {}", itemId, e.message)
-                runCatching { itemParsingService.markFailed(itemId) }
+                runCatching { itemParsingService.markFailed(snapshotId) }
                     .onFailure { ex -> log.error("item {} FAILED 전이 실패, PROCESSING 방치 위험", itemId, ex) }
             }
         }
@@ -162,13 +163,21 @@ class WishlistService(
             productImage?.let {
                 imageStorage.upload(it.bytes, "items/${UUID.randomUUID()}.${it.extension}", it.mimeType)
             }
-        wishPersistenceService.recoverItem(activeSnapshot.itemId, name, currentPrice, imageUrl, currency)
+        wishPersistenceService.recoverItem(activeSnapshot.getId(), name, currentPrice, imageUrl, currency)
         // recoverItem 이 같은 트랜잭션에서 활성 snapshot 을 보정했다. 응답 표시값은 그 snapshot 을 재조회해 읽는다.
         val snapshot =
             itemSnapshotRepository.findById(wish.snapshotId)
                 ?: error("wish ${wish.getId()} 의 snapshot ${wish.snapshotId} 가 없다")
         return WishWithItem(wish = wish, item = item, snapshot = snapshot)
     }
+
+    // 위시 item 의 상품 정보를 원본 링크로 재추출해 최신화한다(수동 새로고침). 추출(Gemini)은 디스패처가 비동기로
+    // 하므로 여기엔 외부 호출이 없고, 영속화(새 PENDING 적재 + 활성 포인터 즉시 스왑)만 wishPersistenceService.refresh
+    // (@Transactional, wish 행 락)에 위임한다. 등록과 같은 폴링 흐름(PENDING→PROCESSING→READY/FAILED)으로 전이한다.
+    fun refreshWishItem(
+        userId: UUID,
+        wishId: Long,
+    ): WishWithItem = wishPersistenceService.refresh(userId = userId, wishId = wishId)
 
     // 멱등 삭제: 없거나 이미 삭제됐으면 "이미 목표 상태(없음)"이므로 성공으로 본다(no-op).
     // 단 존재하는 위시가 남의 것이면 소유권은 보안 경계라 403 으로 막는다.

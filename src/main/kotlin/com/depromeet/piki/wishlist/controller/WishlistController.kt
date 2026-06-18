@@ -95,6 +95,15 @@ class WishlistController(
         return ApiResponseBody.ok(WishItemResponse.from(result.wish, result.item, result.snapshot))
     }
 
+    @PostMapping("/{wishId}/refresh")
+    override fun refreshWishItem(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable wishId: Long,
+    ): ApiResponseBody<WishItemResponse> {
+        val result = wishlistService.refreshWishItem(userId = userId, wishId = wishId)
+        return ApiResponseBody.ok(WishItemResponse.from(result.wish, result.item, result.snapshot))
+    }
+
     @DeleteMapping("/{wishId}")
     override fun deleteWish(
         @AuthenticationPrincipal userId: UUID,

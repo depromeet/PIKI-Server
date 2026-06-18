@@ -1,4 +1,5 @@
 package com.depromeet.piki.admin.template
+import io.swagger.v3.oas.annotations.Hidden
 
 import com.depromeet.piki.admin.access.AdminSession
 import com.depromeet.piki.admin.config.ConditionalOnAdminEnabled
@@ -18,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException
 
 // 알림 템플릿 관리 화면(#250). 목록·편집(SSR) + 라이브 미리보기(AJAX). 게이트(슬랙-세션)는 #526 — 토대 단계는
 // admin.enabled 로컬에서만 노출된다. actor 신원도 세션(#526) 전까지 "운영자" 로 둔다.
+@Hidden
 @Controller
 @ConditionalOnAdminEnabled
 @RequestMapping("/admin/templates")

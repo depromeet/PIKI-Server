@@ -42,6 +42,15 @@ class DevFcmApiExamples(
                                 detail = DevPushRequest.TOKEN_BLANK_MESSAGE,
                             ),
                     )
+                    add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "badge 음수",
+                        payload =
+                            ApiResponseBody.fail<DevPushResponse>(
+                                category = ErrorCategory.INVALID_INPUT,
+                                detail = DevPushRequest.BADGE_NON_NEGATIVE_MESSAGE,
+                            ),
+                    )
                     unauthorized()
                     forbidden(name = "GUEST 권한 없음")
                 }

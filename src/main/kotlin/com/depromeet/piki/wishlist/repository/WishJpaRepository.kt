@@ -1,8 +1,10 @@
 package com.depromeet.piki.wishlist.repository
 
 import com.depromeet.piki.wishlist.domain.Wish
+import jakarta.persistence.LockModeType
 import org.springframework.data.domain.Limit
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
@@ -46,6 +48,12 @@ interface WishJpaRepository : JpaRepository<Wish, Long> {
     ): List<Wish>
 
     fun findByIdAndDeletedAtIsNull(id: Long): Wish?
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT w FROM Wish w WHERE w.id = :id AND w.deletedAt IS NULL")
+    fun findByIdForUpdate(
+        @Param("id") id: Long,
+    ): Wish?
 
     fun findByIdInAndDeletedAtIsNull(ids: Collection<Long>): List<Wish>
 

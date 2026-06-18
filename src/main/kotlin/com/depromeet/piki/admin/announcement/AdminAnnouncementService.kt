@@ -1,4 +1,6 @@
 package com.depromeet.piki.admin.announcement
+import com.depromeet.piki.announcement.domain.Announcement
+import com.depromeet.piki.announcement.repository.AnnouncementRepository
 
 import com.depromeet.piki.admin.audit.AdminAuditAction
 import com.depromeet.piki.admin.audit.AdminAuditService
@@ -32,11 +34,18 @@ class AdminAnnouncementService(
     fun recipientCount(): Long = userDeviceService.countTokenHolders()
 
     // 공지 초안 등록 — 발송 전 상태(DRAFT). 발송/예약은 schedule() 로만.
+    // 누가 등록했는지(#558)를 audit 으로 남긴다 — 발송 전 단계도 행위자 추적 대상이다.
     @Transactional
     fun register(
         title: String,
         body: String,
-    ): Announcement = announcementRepository.save(Announcement(title = title, body = body, target = TARGET_ALL))
+        actor: String,
+        clientIp: String?,
+    ): Announcement {
+        val announcement = announcementRepository.save(Announcement(title = title, body = body, target = TARGET_ALL))
+        auditService.record(actor, AdminAuditAction.ANNOUNCEMENT_REGISTER, "공지 초안 등록 id=${announcement.getId()}", clientIp)
+        return announcement
+    }
 
     // 발송 예약/즉시 발송 — scheduledAt 이 null 이면 지금 발송, 있으면 그 시각으로 예약(스케줄러가 발송).
     // 즉시 발송은 async execute 를 직접 호출(claim 이 DRAFT→SENDING 전환, 별도 트랜잭션). 예약은 여기서 SCHEDULED 로 박는다.
@@ -59,7 +68,7 @@ class AdminAnnouncementService(
         require(scheduledAt.isAfter(LocalDateTime.now(Announcement.KST))) { "예약 시각은 현재보다 미래여야 합니다." }
         announcement.schedule(scheduledAt)
         announcementRepository.save(announcement)
-        auditService.record(actor, AdminAuditAction.ANNOUNCEMENT_SEND, "공지 발송 예약 id=$id at=$scheduledAt", clientIp)
+        auditService.record(actor, AdminAuditAction.ANNOUNCEMENT_SCHEDULE, "공지 발송 예약 id=$id at=$scheduledAt", clientIp)
     }
 
     // 예약 취소 — SCHEDULED → DRAFT 로 되돌린다(다시 편집·삭제·재예약 가능).
@@ -75,7 +84,7 @@ class AdminAnnouncementService(
             announcementRepository.findByIdForUpdate(id) ?: throw IllegalArgumentException("공지를 찾을 수 없습니다.")
         announcement.cancelSchedule()
         announcementRepository.save(announcement)
-        auditService.record(actor, AdminAuditAction.ANNOUNCEMENT_SEND, "공지 예약 취소 id=$id", clientIp)
+        auditService.record(actor, AdminAuditAction.ANNOUNCEMENT_SCHEDULE_CANCEL, "공지 예약 취소 id=$id", clientIp)
     }
 
     // 등록한 초안 삭제. 발송된·예약된 공지는 삭제하지 않는다(예약은 먼저 취소).

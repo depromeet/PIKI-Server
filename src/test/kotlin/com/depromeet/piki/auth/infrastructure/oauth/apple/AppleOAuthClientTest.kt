@@ -35,6 +35,7 @@ class AppleOAuthClientTest {
         bundleId: String = "com.test.app",
         privateKey: String = testP8Pem,
         redirectUri: String = "https://example.com/callback",
+        webCallbackUrl: String = "https://example.com/auth/callback/apple",
     ) = AppleProperties(
         teamId = teamId,
         keyId = keyId,
@@ -42,6 +43,7 @@ class AppleOAuthClientTest {
         bundleId = bundleId,
         privateKey = privateKey,
         redirectUri = redirectUri,
+        webCallbackUrl = webCallbackUrl,
     )
 
     @Nested

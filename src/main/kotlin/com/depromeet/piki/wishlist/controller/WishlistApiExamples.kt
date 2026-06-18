@@ -113,6 +113,25 @@ class WishlistApiExamples(
                     unauthorized()
                 }
             }
+            if (handlerMethod.binds(WishlistController::refreshWishItem)) {
+                operation.examples(openApiObjectMapper.delegate) {
+                    add(
+                        status = HttpStatus.OK,
+                        name = "새로고침 접수 (새 추출 버전 — PENDING)",
+                        payload = ApiResponseBody.ok(pendingSampleEntry),
+                    )
+                    add(
+                        status = HttpStatus.OK,
+                        name = "이미 새로고침 진행 중 (멱등 — 현재 진행 상태)",
+                        payload = ApiResponseBody.ok(processingSampleEntry),
+                    )
+                    add(WishException.notRefreshable(), name = "링크 없는 항목(이미지 등록) — 새로고침 불가")
+                    add(WishException.failedNotRefreshable(), name = "추출 실패(FAILED) 항목 — 보정으로 복구")
+                    add(WishException.forbiddenWishItems(), name = "본인 위시 아님")
+                    add(WishException.notFound(), name = "존재하지 않는 위시 항목")
+                    unauthorized()
+                }
+            }
             if (handlerMethod.binds(WishlistController::deleteWish)) {
                 operation.examples(openApiObjectMapper.delegate) {
                     add(

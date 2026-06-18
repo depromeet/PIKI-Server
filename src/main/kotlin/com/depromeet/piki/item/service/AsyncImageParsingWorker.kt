@@ -26,6 +26,7 @@ class AsyncImageParsingWorker(
     @Async(AsyncConfig.ITEM_PARSING_EXECUTOR)
     override fun parse(
         itemId: Long,
+        snapshotId: Long,
         image: ProductImage,
     ) {
         runCatching {
@@ -39,20 +40,23 @@ class AsyncImageParsingWorker(
             val imageUrl = imageStorage.upload(bytes, "items/${UUID.randomUUID()}.png", "image/png")
             extraction.snapshot.copy(imageUrl = imageUrl)
         }.onSuccess { snapshot ->
-            runCatching { itemParsingService.markReady(itemId, snapshot) }
+            runCatching { itemParsingService.markReady(snapshotId, snapshot) }
                 .onSuccess { log.info("item {} 이미지 파싱 완료 → READY", itemId) }
                 .onFailure { e ->
                     log.warn("item {} READY 전이 실패 → FAILED: {}", itemId, e.message)
-                    markFailedQuietly(itemId)
+                    markFailedQuietly(itemId, snapshotId)
                 }
         }.onFailure { e ->
             log.warn("item {} 이미지 파싱 실패: {}", itemId, e.message)
-            markFailedQuietly(itemId)
+            markFailedQuietly(itemId, snapshotId)
         }
     }
 
-    private fun markFailedQuietly(itemId: Long) {
-        runCatching { itemParsingService.markFailed(itemId) }
+    private fun markFailedQuietly(
+        itemId: Long,
+        snapshotId: Long,
+    ) {
+        runCatching { itemParsingService.markFailed(snapshotId) }
             .onFailure { e ->
                 when (e) {
                     is IllegalStateException -> log.info("item {} 는 이미 전이됨, FAILED 처리 생략: {}", itemId, e.message)
