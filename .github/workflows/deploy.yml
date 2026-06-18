@@ -351,6 +351,12 @@ jobs:
               echo "::error::SLACK_ADMIN_SIGNING_SECRET is empty while ADMIN_ENABLED=true"
               exit 1
             fi
+            # APPLE_WEB_CALLBACK_URL 은 AppleProperties.webCallbackUrl(@NotBlank)로 필수다(#430). 비면 컨테이너 기동이
+            # BindException 으로 죽어 배포가 늦게 실패하므로, 배포 전에 fail-fast 로 원인을 즉시 드러낸다.
+            if [ -z "$APPLE_WEB_CALLBACK_URL" ]; then
+              echo "::error::APPLE_WEB_CALLBACK_URL is empty"
+              exit 1
+            fi
 
             IMAGE="$DOCKERHUB_USERNAME/team3-server:$IMAGE_TAG"
 
