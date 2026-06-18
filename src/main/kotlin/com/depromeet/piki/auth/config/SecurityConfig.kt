@@ -1,7 +1,6 @@
 package com.depromeet.piki.auth.config
 
 import com.depromeet.piki.auth.filter.JwtAuthenticationFilter
-import com.depromeet.piki.user.domain.IdentityType
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.annotation.Order
@@ -80,8 +79,12 @@ class SecurityConfig(
                     .authenticated()
                     .requestMatchers(HttpMethod.GET, "/api/v1/dev/users", "/api/v1/dev/users/*")
                     .permitAll()
+                    // dev 전용 도구(@Profile("!prod"), 운영엔 라우트 없음)는 인증만 요구한다(GUEST·MEMBER 모두 통과).
+                    // 과거 hasAuthority(GUEST) 가 회원을 403 으로 막았으나, 이 엔드포인트들(테스트 유저 생성·토큰 발급·FCM 푸시)은
+                    // 호출자 신분과 무관하게 동작하고 게스트 토큰은 permitAll 로 누구나 발급받아 게스트 전용이 보안 이득도 없어,
+                    // 회원만 불필요하게 막던 제한을 제거한다.
                     .requestMatchers("/api/v1/dev/**")
-                    .hasAuthority(IdentityType.GUEST.name)
+                    .authenticated()
                     // API 문서: Stoplight Elements UI (/docs/**, static resource) + OpenAPI spec
                     // (/v3/api-docs/**, springdoc 제공). Swagger UI 는 사용하지 않음.
                     .requestMatchers("/docs/**", "/v3/api-docs/**")

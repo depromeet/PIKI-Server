@@ -52,7 +52,6 @@ class DevFcmApiExamples(
                             ),
                     )
                     unauthorized()
-                    forbidden(name = "GUEST 권한 없음")
                 }
             }
             operation

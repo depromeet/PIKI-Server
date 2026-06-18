@@ -87,6 +87,22 @@ class DevAuthControllerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `MEMBER 토큰으로 호출해도 dev 토큰 발급에 성공한다 (게스트 전용 제한 제거)`() {
+        // 과거 SecurityConfig 의 hasAuthority(GUEST) 가 회원 호출자를 403 으로 막았다.
+        // authenticated() 전환 후 회원도 dev 도구를 쓸 수 있다 — 변경 전이면 이 테스트는 403 으로 실패한다.
+        val targetUserId = UUID.randomUUID()
+        insertUser(targetUserId, IdentityType.MEMBER, deleted = false)
+        val memberCallerToken = jwtProvider.generateAccessToken(UUID.randomUUID(), IdentityType.MEMBER)
+
+        buildMockMvc()
+            .perform(
+                post("/api/v1/dev/$targetUserId/token")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer $memberCallerToken"),
+            ).andExpect(status().isCreated)
+            .andExpect(jsonPath("$.data.user.id").value(targetUserId.toString()))
+    }
+
+    @Test
     fun `존재하지 않는 userId 로 토큰 발급 요청 시 404 가 ApiResponseBody 로 반환된다`() {
         val unknownUserId = UUID.randomUUID()
         val guestToken = jwtProvider.generateAccessToken(UUID.randomUUID(), IdentityType.GUEST)
