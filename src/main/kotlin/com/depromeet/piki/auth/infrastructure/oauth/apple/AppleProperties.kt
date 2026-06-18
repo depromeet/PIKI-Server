@@ -21,12 +21,18 @@ data class AppleProperties(
     // .p8 파일 내용. 환경변수로 주입 시 개행을 \n 으로 치환해 한 줄로 넣는다.
     @field:NotBlank(message = "Apple Private Key 가 필요합니다 (env: APPLE_PRIVATE_KEY / property: oauth.apple.private-key).")
     val privateKey: String,
+    // Apple 웹 OAuth 의 redirect_uri. v1(웹) 흐름에서 Apple 이 form_post 콜백을 보낼 주소이자 token 교환의 redirect_uri.
+    // 웹 form_post 브릿지(#430) 도입 후엔 이 값이 BE 브릿지 엔드포인트(/api/v1/auth/apple/callback)를 가리킨다.
     @field:NotBlank(message = "Apple Redirect URI 가 필요합니다 (env: APPLE_REDIRECT_URI / property: oauth.apple.redirect-uri).")
     val redirectUri: String,
+    // Apple form_post 브릿지(#430)가 code·state 를 붙여 302 시킬 프론트 공용 콜백 URL (예: https://dev.piki.day/auth/callback/apple).
+    // redirectUri(BE 브릿지)와 짝 — Apple 의 POST 를 받아 이 주소로 GET 쿼리 리다이렉트해 Kakao·Google 과 흐름을 통일한다.
+    @field:NotBlank(message = "Apple Web Callback URL 이 필요합니다 (env: APPLE_WEB_CALLBACK_URL / property: oauth.apple.web-callback-url).")
+    val webCallbackUrl: String,
 ) {
     // data class 의 자동 toString() 은 .p8 평문을 그대로 노출시킨다. 부팅 로그·BindException·디버그
     // 로그에 새지 않도록 오버라이드해 privateKey 만 마스킹한다 (equals/hashCode 는 data class 기본 유지).
     override fun toString(): String =
         "AppleProperties(teamId=$teamId, keyId=$keyId, clientId=$clientId, bundleId=$bundleId, " +
-            "privateKey=***MASKED***, redirectUri=$redirectUri)"
+            "privateKey=***MASKED***, redirectUri=$redirectUri, webCallbackUrl=$webCallbackUrl)"
 }
