@@ -55,42 +55,42 @@ class TournamentItemParsedSseBroadcaster(
     // 토너먼트에 동시 출전) 도입 대비이며, 그땐 routing 별로 각 snapshot 의 실제 상태를 확인해야 한다 — 지금은
     // 단일이라 이벤트 status 를 그대로 싣는다(공유 도입 시 spurious 갱신 주의, 후속 이슈). 위시 전용(어느 토너먼트에도
     // 없는) 아이템이면 routings 가 비어 아무 것도 보내지 않는다(위시 주인은 ITEM_PARSING_* 알림으로 받음).
+    // @Async 워커라 여기서 throw 를 삼키지 않으면 기본 핸들러가 맥락 없는 스택트레이스만 남겨 동기화 누락이 무음이 된다.
+    // 전체를 runCatching 으로 감싸 itemId 맥락을 실어 warn 으로 남긴다(NotificationDispatcher 가 fan-out 실패를
+    // 격리·기록하는 결). emitter write 실패는 deliver 내부(sendOrEvict)가 연결 단위로 이미 격리한다.
     fun broadcast(
         itemId: Long,
         status: ItemStatus,
     ) {
-        val routings = tournamentItemRepository.findRoutingByItemId(itemId)
-        if (routings.isEmpty()) return
-        routings.forEach { routing ->
-            // 한 토너먼트의 조회·전달 실패가 나머지 fan-out 을 막지 않게 토너먼트 단위로 격리한다
-            // (NotificationDispatcher 의 수신자 단위 격리와 같은 결). @Async 워커라 여기서 삼키지 않으면 기본
-            // 핸들러가 맥락 없는 스택트레이스만 남겨 동기화 누락이 무음이 된다 — itemId 맥락을 실어 warn 으로 남긴다.
-            runCatching {
-                val participants = tournamentUserRepository.findByTournamentId(routing.tournamentId).map { it.userId }
-                localDelivery.deliverTournamentItemParsed(
-                    participants,
-                    TournamentItemParsedPayload(
-                        tournamentId = routing.tournamentId,
-                        tournamentItemId = routing.tournamentItemId,
-                        status = status,
-                    ),
-                )
-                log.info(
-                    "토너먼트 아이템 파싱 동기화 전송 tournamentId={} tournamentItemId={} status={} 참여자={}명",
-                    routing.tournamentId,
-                    routing.tournamentItemId,
-                    status,
-                    participants.size,
-                )
-            }.onFailure { e ->
-                log.warn(
-                    "토너먼트 아이템 파싱 동기화 실패 tournamentId={} itemId={} status={}",
-                    routing.tournamentId,
-                    itemId,
-                    status,
-                    e,
-                )
+        runCatching {
+            val routings = tournamentItemRepository.findRoutingByItemId(itemId)
+            if (routings.isNotEmpty()) {
+                // 참여자는 토너먼트들을 한 번에 모아 bulk 조회한다(반복문 내 쿼리 N+1 회피). tournamentId -> userIds 색인 후 재사용.
+                val participantsByTournament =
+                    tournamentUserRepository
+                        .findByTournamentIds(routings.map { it.tournamentId }.distinct())
+                        .groupBy({ it.tournamentId }, { it.userId })
+                routings.forEach { routing ->
+                    val participants = participantsByTournament[routing.tournamentId].orEmpty()
+                    localDelivery.deliverTournamentItemParsed(
+                        participants,
+                        TournamentItemParsedPayload(
+                            tournamentId = routing.tournamentId,
+                            tournamentItemId = routing.tournamentItemId,
+                            status = status,
+                        ),
+                    )
+                    log.info(
+                        "토너먼트 아이템 파싱 동기화 전송 tournamentId={} tournamentItemId={} status={} 참여자={}명",
+                        routing.tournamentId,
+                        routing.tournamentItemId,
+                        status,
+                        participants.size,
+                    )
+                }
             }
+        }.onFailure { e ->
+            log.warn("토너먼트 아이템 파싱 동기화 실패 itemId={} status={}", itemId, status, e)
         }
     }
 }
