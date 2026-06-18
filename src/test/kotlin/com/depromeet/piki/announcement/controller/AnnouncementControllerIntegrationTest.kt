@@ -5,6 +5,7 @@ import com.depromeet.piki.announcement.repository.AnnouncementRepository
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.user.domain.IdentityType
+import com.jayway.jsonpath.JsonPath
 import org.hamcrest.Matchers.notNullValue
 import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.Test
@@ -29,8 +30,10 @@ class AnnouncementControllerIntegrationTest : IntegrationTestSupport() {
 
     @Autowired private lateinit var announcementRepository: AnnouncementRepository
 
-    private fun authHeader(userId: UUID = UUID.randomUUID()): String =
-        "Bearer ${jwtProvider.generateAccessToken(userId, IdentityType.MEMBER)}"
+    private fun authHeader(
+        userId: UUID = UUID.randomUUID(),
+        identityType: IdentityType = IdentityType.MEMBER,
+    ): String = "Bearer ${jwtProvider.generateAccessToken(userId, identityType)}"
 
     private fun buildMockMvc(): MockMvc =
         MockMvcBuilders
@@ -108,28 +111,49 @@ class AnnouncementControllerIntegrationTest : IntegrationTestSupport() {
         val third = sent(title = "3")
         val mockMvc = buildMockMvc()
 
-        // 1페이지: size=2 → 최신 2건(third, second), 다음 페이지 있음, 커서=second
-        mockMvc
-            .perform(get("/api/v1/announcements").param("size", "2").header(HttpHeaders.AUTHORIZATION, authHeader()))
-            .andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.length()").value(2))
-            .andExpect(jsonPath("$.data[0].id").value(third.getId()))
-            .andExpect(jsonPath("$.data[1].id").value(second.getId()))
-            .andExpect(jsonPath("$.pageResponse.hasNext").value(true))
-            .andExpect(jsonPath("$.pageResponse.nextCursor").value(second.getId().toString()))
+        // 1페이지: size=2 → 발송순 최신 2건(third, second), 다음 페이지 있음. nextCursor 는 opaque 토큰이라 값을 받아 다음 요청에 그대로 넘긴다.
+        val page1 =
+            mockMvc
+                .perform(get("/api/v1/announcements").param("size", "2").header(HttpHeaders.AUTHORIZATION, authHeader()))
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].id").value(third.getId()))
+                .andExpect(jsonPath("$.data[1].id").value(second.getId()))
+                .andExpect(jsonPath("$.pageResponse.hasNext").value(true))
+                .andExpect(jsonPath("$.pageResponse.nextCursor", notNullValue()))
+                .andReturn()
+        val nextCursor: String = JsonPath.read(page1.response.getContentAsString(Charsets.UTF_8), "$.pageResponse.nextCursor")
 
-        // 2페이지: cursor=second → 남은 1건(first), 다음 페이지 없음
+        // 2페이지: 1페이지가 준 커서 → 남은 1건(first), 다음 페이지 없음
         mockMvc
             .perform(
                 get("/api/v1/announcements")
                     .param("size", "2")
-                    .param("cursor", second.getId().toString())
+                    .param("cursor", nextCursor)
                     .header(HttpHeaders.AUTHORIZATION, authHeader()),
             ).andExpect(status().isOk)
             .andExpect(jsonPath("$.data.length()").value(1))
             .andExpect(jsonPath("$.data[0].id").value(first.getId()))
             .andExpect(jsonPath("$.pageResponse.hasNext").value(false))
             .andExpect(jsonPath("$.pageResponse.nextCursor").value(nullValue()))
+    }
+
+    @Test
+    fun `게스트도 발송된 공지를 목록·단건으로 조회할 수 있다`() {
+        val announcement = sent(title = "게스트도 보는 공지")
+        val mockMvc = buildMockMvc()
+        val guest = authHeader(identityType = IdentityType.GUEST)
+
+        mockMvc
+            .perform(get("/api/v1/announcements").header(HttpHeaders.AUTHORIZATION, guest))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].id").value(announcement.getId()))
+
+        mockMvc
+            .perform(get("/api/v1/announcements/${announcement.getId()}").header(HttpHeaders.AUTHORIZATION, guest))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.id").value(announcement.getId()))
     }
 
     @Test
