@@ -61,9 +61,9 @@ data class WishPriceHistoryResponse(
         val isActive: Boolean,
     ) {
         companion object {
-            // READY 버전만 조회하므로 currentPrice·name·imageUrl·extractedAt 은 READY 불변식(ItemSnapshot.requireReadyInvariant
-            // + markReady 의 extractedAt set)에 따라 항상 채워져 있다. 비어 있으면 그 불변식이 깨진 코드 버그이므로
-            // requireNotNull(500)으로 드러낸다 — 정상 흐름의 클라이언트는 닿지 않는다.
+            // READY 버전만 조회하므로 네 필드(currentPrice·name·imageUrl·extractedAt)는 ItemSnapshot 의 READY 불변식
+            // (requireReadyInvariant)이 모두 보장한다 — 항상 채워져 있다. 비어 있으면 그 불변식이 깨진 코드 버그이므로
+            // requireNotNull(500)으로 드러낸다(정상 흐름의 클라이언트는 닿지 않는다).
             fun from(
                 snapshot: ItemSnapshot,
                 activeSnapshotId: Long,
