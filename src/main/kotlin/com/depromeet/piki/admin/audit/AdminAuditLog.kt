@@ -1,4 +1,4 @@
-package com.depromeet.piki.admin.domain
+package com.depromeet.piki.admin.audit
 
 import com.depromeet.piki.common.domain.LongBaseEntity
 import jakarta.persistence.Column

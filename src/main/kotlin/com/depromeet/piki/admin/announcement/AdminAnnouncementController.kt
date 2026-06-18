@@ -1,4 +1,6 @@
 package com.depromeet.piki.admin.announcement
+import io.swagger.v3.oas.annotations.Hidden
+import com.depromeet.piki.announcement.domain.Announcement
 
 import com.depromeet.piki.admin.access.AdminSession
 import com.depromeet.piki.admin.config.ClientIp
@@ -17,6 +19,7 @@ import java.time.LocalDateTime
 
 // 공지 등록·예약/발송·결과 화면(#391/#489). 등록(초안)과 발송(목록에서 선택)을 분리해 발송 시 자유입력이 없어 오타가 안 생긴다.
 // 발송은 즉시 또는 예약(시각 지정), 결과는 집계+진행률 폴링으로 본다. 게이트(슬랙-세션)·actor 신원은 #526.
+@Hidden
 @Controller
 @ConditionalOnAdminEnabled
 @RequestMapping("/admin/announcements")
@@ -43,13 +46,14 @@ class AdminAnnouncementController(
     fun register(
         @RequestParam title: String,
         @RequestParam(required = false) body: String?,
+        request: HttpServletRequest,
     ): String {
         // 입력 경계 검증 — 길이 초과는 등록 전에 친화적으로 막는다(엔티티 init 불변식이 최후의 보루).
         val safeBody = body ?: ""
         if (title.isBlank() || title.length > Announcement.MAX_TITLE_LENGTH || safeBody.length > Announcement.MAX_BODY_LENGTH) {
             return "redirect:/admin/announcements?error=length"
         }
-        adminAnnouncementService.register(title, safeBody)
+        adminAnnouncementService.register(title, safeBody, actor(request), clientIp(request))
         return "redirect:/admin/announcements?registered"
     }
 

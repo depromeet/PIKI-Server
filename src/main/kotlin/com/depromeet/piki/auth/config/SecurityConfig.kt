@@ -70,6 +70,10 @@ class SecurityConfig(
                     // 진위는 payload JWT 의 서명(Apple JWKS)으로 가린다(AppleNotificationVerifier). 위조는 401.
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/apple/notifications")
                     .permitAll()
+                    // Apple 웹 OAuth form_post 콜백 브릿지(#430) — Apple 이 redirect_uri 로 직접 POST 하는 외부 진입점이라
+                    // 우리 JWT 인증이 없다. 로그인은 하지 않고 code·state 를 프론트 공용 콜백으로 302 만 한다(state 검증은 이후 login API).
+                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/apple/callback")
+                    .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/token/refresh")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout")

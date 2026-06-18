@@ -75,8 +75,8 @@ class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
         // 새 쿠키 + 전환기 cleanup 쿠키로 2개 내려간다) Set-Cookie 헤더 문자열로 확인한다.
         val setCookies = result.response.getHeaders(HttpHeaders.SET_COOKIE)
         assertTrue(
-            setCookies.any { it.startsWith("access_token=") && it.contains("SameSite=Strict") },
-            "access_token 쿠키에 SameSite=Strict 가 있어야 한다",
+            setCookies.any { it.startsWith("access_token=") && it.contains("SameSite=Lax") },
+            "access_token 쿠키에 SameSite=Lax 가 있어야 한다",
         )
         // #512: refresh_token 은 Path=/ 로 넓혀 내려간다 — 엣지 proxy 가 페이지 네비게이션에서 읽도록.
         assertTrue(

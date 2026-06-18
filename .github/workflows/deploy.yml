@@ -320,6 +320,9 @@ jobs:
           APPLE_BUNDLE_ID: ${{ secrets.APPLE_BUNDLE_ID }}
           APPLE_PRIVATE_KEY: ${{ secrets.APPLE_PRIVATE_KEY }}
           APPLE_REDIRECT_URI: ${{ secrets.APPLE_REDIRECT_URI }}
+          # Apple 웹 form_post 브릿지(#430)가 302 시킬 프론트 공용 콜백 URL (예: https://dev.piki.day/auth/callback/apple).
+          # APPLE_REDIRECT_URI(=BE 브릿지)와 짝. 환경별 secret. 비면 부팅 BindException(@NotBlank)이라 배포 전 3환경 모두 설정 필요.
+          APPLE_WEB_CALLBACK_URL: ${{ secrets.APPLE_WEB_CALLBACK_URL }}
           S3_BUCKET: ${{ secrets.S3_BUCKET }}
           S3_PUBLIC_BASE_URL: ${{ secrets.S3_PUBLIC_BASE_URL }}
           # FCM 푸시(#242) — Firebase 서비스계정 키(JSON base64). dev/prod 가 같은 piki 프로젝트를 공유해 공통 secret.
@@ -340,12 +343,18 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: GEMINI_API_KEY,DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,JWT_SECRET,REDIS_HOST,REDIS_PORT,KAKAO_CLIENT_ID,KAKAO_CLIENT_SECRET,KAKAO_REDIRECT_URI,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,APPLE_TEAM_ID,APPLE_KEY_ID,APPLE_CLIENT_ID,APPLE_BUNDLE_ID,APPLE_PRIVATE_KEY,APPLE_REDIRECT_URI,S3_BUCKET,S3_PUBLIC_BASE_URL,FIREBASE_SERVICE_ACCOUNT,SPRING_PROFILES_ACTIVE,ADMIN_ENABLED,ENV_ACCESS_GATE,SLACK_ADMIN_SIGNING_SECRET,DOCKERHUB_USERNAME,IMAGE_TAG
+          envs: GEMINI_API_KEY,DB_HOST,DB_PORT,DB_NAME,DB_USERNAME,DB_PASSWORD,JWT_SECRET,REDIS_HOST,REDIS_PORT,KAKAO_CLIENT_ID,KAKAO_CLIENT_SECRET,KAKAO_REDIRECT_URI,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REDIRECT_URI,APPLE_TEAM_ID,APPLE_KEY_ID,APPLE_CLIENT_ID,APPLE_BUNDLE_ID,APPLE_PRIVATE_KEY,APPLE_REDIRECT_URI,APPLE_WEB_CALLBACK_URL,S3_BUCKET,S3_PUBLIC_BASE_URL,FIREBASE_SERVICE_ACCOUNT,SPRING_PROFILES_ACTIVE,ADMIN_ENABLED,ENV_ACCESS_GATE,SLACK_ADMIN_SIGNING_SECRET,DOCKERHUB_USERNAME,IMAGE_TAG
           script: |
             # ADMIN_ENABLED=true 인데 서명 시크릿이 비면 /admin-access 서명 검증이 전부 실패해 allowlist 를 열 수 없고
             # /admin 이 영구 차단된다. 배포가 성공해버리기 전에 fail-fast 로 막는다(#249).
             if [ "$ADMIN_ENABLED" = "true" ] && [ -z "$SLACK_ADMIN_SIGNING_SECRET" ]; then
               echo "::error::SLACK_ADMIN_SIGNING_SECRET is empty while ADMIN_ENABLED=true"
+              exit 1
+            fi
+            # APPLE_WEB_CALLBACK_URL 은 AppleProperties.webCallbackUrl(@NotBlank)로 필수다(#430). 비면 컨테이너 기동이
+            # BindException 으로 죽어 배포가 늦게 실패하므로, 배포 전에 fail-fast 로 원인을 즉시 드러낸다.
+            if [ -z "$APPLE_WEB_CALLBACK_URL" ]; then
+              echo "::error::APPLE_WEB_CALLBACK_URL is empty"
               exit 1
             fi
 
@@ -443,6 +452,7 @@ jobs:
               -e APPLE_BUNDLE_ID="$APPLE_BUNDLE_ID" \
               -e APPLE_PRIVATE_KEY="$APPLE_PRIVATE_KEY" \
               -e APPLE_REDIRECT_URI="$APPLE_REDIRECT_URI" \
+              -e APPLE_WEB_CALLBACK_URL="$APPLE_WEB_CALLBACK_URL" \
               -e S3_BUCKET="$S3_BUCKET" \
               -e S3_PUBLIC_BASE_URL="$S3_PUBLIC_BASE_URL" \
               -e FIREBASE_SERVICE_ACCOUNT="$FIREBASE_SERVICE_ACCOUNT" \

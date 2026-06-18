@@ -1,8 +1,6 @@
 package com.depromeet.piki.admin.audit
 
 import com.depromeet.piki.admin.config.ConditionalOnAdminEnabled
-import com.depromeet.piki.admin.domain.AdminAuditLog
-import com.depromeet.piki.admin.repository.AdminAuditLogRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional

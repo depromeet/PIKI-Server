@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component
 // - refresh_token: Path=/ (#512) — 웹 Next.js proxy(엣지 미들웨어)가 페이지 네비게이션(/archive·/home)에서
 //   refresh_token 유무를 읽어 transparent refresh 를 판단해야 한다. /api/v1/auth 로 좁히면 일반 페이지
 //   요청엔 쿠키가 안 실려 proxy 의 refresh 분기가 죽는다. Path 좁히기는 defense-in-depth 였을 뿐, 실제
-//   보호는 HttpOnly·SameSite=Strict·Secure 가 하며 이 셋은 그대로 둔다. 넓힘으로 늘어나는 노출은 "모든
+//   보호는 HttpOnly·SameSite=Lax·Secure 가 하며 이 셋은 그대로 둔다. 넓힘으로 늘어나는 노출은 "모든
 //   same-origin 요청에 refresh_token 이 실려 로그 Cookie 헤더에 찍힘" 한 곳뿐이라 로그 마스킹으로 상쇄(#497).
 // - 전환기 cleanup: 배포 전 발급된 옛 refresh_token 은 Path=/api/v1/auth 로 남는다. 새 Path=/ 쿠키와
 //   공존하면 /api/v1/auth/token/refresh 요청에 둘 다 실리고, RFC 6265 상 더 구체적인 옛 경로 쿠키가 먼저
@@ -20,7 +20,10 @@ import org.springframework.stereotype.Component
 //   실패한다. 그래서 토큰을 새로 내리거나(setCookies) 만료시킬(clearCookies) 때마다 옛 경로 쿠키를 함께
 //   Max-Age=0 으로 지운다. 활성 refresh TTL 이 지나 옛 쿠키가 전부 사라지면 이 cleanup 은 제거 가능.
 // - Domain 미설정(host-only): 쿠키는 api 호스트만 소비하므로 서브도메인 공유 불필요
-// - SameSite=Strict: same-site 전제라 SPA fetch 는 전송되고 third-party CSRF 는 차단
+// - SameSite=Lax: OAuth provider 콜백처럼 cross-site 리다이렉트로 우리 사이트에 도착한 직후의 top-level
+//   네비게이션에도 쿠키가 실려야 로그인이 끊기지 않는다. Strict 는 그 첫 요청에 안 붙어 OAuth 후 로그아웃처럼
+//   보였다(provider 마다 FE 가 따로 패치하던 문제의 근원). Lax 도 state-changing(POST·PUT·DELETE) cross-site
+//   요청엔 쿠키를 안 보내 third-party CSRF 는 그대로 차단한다. FE·BE 가 same-site(piki.day)라 None 은 불필요.
 @Component
 class TokenCookieWriter(
     private val jwtProperties: JwtProperties,
@@ -66,6 +69,6 @@ class TokenCookieWriter(
         const val REFRESH_COOKIE = "refresh_token"
         private const val ROOT_PATH = "/"
         private const val LEGACY_REFRESH_PATH = "/api/v1/auth" // 전환기 cleanup 전용 (#512), 옛 쿠키 만료 후 제거 가능
-        private const val SAME_SITE = "Strict"
+        private const val SAME_SITE = "Lax"
     }
 }

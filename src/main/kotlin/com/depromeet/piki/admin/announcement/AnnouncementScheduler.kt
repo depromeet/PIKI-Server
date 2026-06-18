@@ -1,4 +1,6 @@
 package com.depromeet.piki.admin.announcement
+import com.depromeet.piki.announcement.domain.Announcement
+import com.depromeet.piki.announcement.repository.AnnouncementRepository
 
 import com.depromeet.piki.admin.config.AdminProperties
 import com.depromeet.piki.admin.config.ConditionalOnAdminEnabled
