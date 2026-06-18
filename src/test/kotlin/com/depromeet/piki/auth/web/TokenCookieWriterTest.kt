@@ -22,13 +22,13 @@ class TokenCookieWriterTest {
         )
 
     @Test
-    fun `access_token 쿠키는 정책대로 HttpOnly·SameSite=Strict·Path 루트·만료시간을 갖는다`() {
+    fun `access_token 쿠키는 정책대로 HttpOnly·SameSite=Lax·Path 루트·만료시간을 갖는다`() {
         val access = writer().setCookies(TokenPair("at", "rt")).first { it.name == "access_token" }
 
         assertEquals("at", access.value)
         assertTrue(access.isHttpOnly)
         assertTrue(access.isSecure)
-        assertEquals("Strict", access.sameSite)
+        assertEquals("Lax", access.sameSite)
         assertEquals("/", access.path)
         assertEquals(accessExpiry, access.maxAge)
     }
