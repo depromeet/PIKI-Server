@@ -42,6 +42,9 @@ class ProductLink private constructor(
         //   JS 챌린지("잠시만 기다려 주세요"). 공유 단축 oy.run 은 브라우저 UA 엔 상품정보 없는 제너럴 페이지,
         //   봇 UA 엔 m.oliveyoung(403)로 리다이렉트 — 어느 경로로도 상품 데이터(name·price)가 0이라 LLM 도 불가.
         //   (oy.run 단축은 olive young 의 별도 도메인이라 naver.me 처럼 따로 나열한다.)
+        // 2026-06-18 dev 실측 추가: 에이블리(a-bly.com)=Chrome UA fetch 로 m.a-bly·applink 모두 403 "보안 확인 중".
+        //   모바일/봇 UA 로 공유 OG(이름+이미지)는 받으나 가격이 OG·실페이지(전 UA 403) 어디에도 없어 가격 필수인 추출 불가.
+        //   m.a-bly·www·applink 가 a-bly.com 서브도메인이라 통째로 막는다. (헤드리스로 이름+이미지는 닿을 수 있어 그때 목록에서 빼면 됨.)
         // UA·풀 브라우저 헤더·모바일 어느 조합도 우회 안 됨(헤드리스 브라우저·공식 API 영역). 등록 시점에
         // verifySupportedPlatform 으로 거른다 — 담아봐야 파싱이 무의미하게 실패하고 사용자에겐 "주소를 다시 확인"
         // 이라는 틀린 안내가 나가기 때문. host 가 항목과 같거나 그 서브도메인이면 미지원(부분 문자열 매칭이 아니라
@@ -56,6 +59,7 @@ class ProductLink private constructor(
                 "naver.me",
                 "oliveyoung.co.kr",
                 "oy.run",
+                "a-bly.com",
             )
 
         fun parse(raw: String): ProductLink {

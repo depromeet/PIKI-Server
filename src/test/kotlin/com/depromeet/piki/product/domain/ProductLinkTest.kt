@@ -123,6 +123,8 @@ class ProductLinkTest {
                 "https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000223265", // 올리브영 PC
                 "https://m.oliveyoung.co.kr/m/goods/getGoodsDetail.do?goodsNo=A000000213261", // 올리브영 모바일
                 "https://oy.run/EiU6PnnqjxJeJ5", // 올리브영 공유 단축 도메인
+                "https://m.a-bly.com/goods/70626988", // 에이블리 PC(모바일웹)
+                "https://applink.a-bly.com/1eso6m", // 에이블리 공유 딥링크
             )
         cases.forEach { raw ->
             val link = ProductLink.parse(raw) // parse 자체는 형식이 정상이라 통과한다
@@ -130,7 +132,7 @@ class ProductLinkTest {
                 assertFailsWith<ProductLinkException>("$raw 는 미지원으로 거부되어야 함") {
                     link.verifySupportedPlatform()
                 }
-            assertEquals("아직 지원하지 않는 쇼핑몰이에요.", ex.message)
+            assertEquals("아직 지원하지 않는 쇼핑몰이에요. 상품 이미지를 직접 등록해 주세요.", ex.message)
         }
     }
 
