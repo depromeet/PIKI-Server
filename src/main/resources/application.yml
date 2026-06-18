@@ -94,6 +94,7 @@ oauth:
     bundle-id: ${APPLE_BUNDLE_ID:}
     private-key: ${APPLE_PRIVATE_KEY:}
     redirect-uri: ${APPLE_REDIRECT_URI:}
+    web-callback-url: ${APPLE_WEB_CALLBACK_URL:}
 
 gemini:
   api-key: ${GEMINI_API_KEY:}
