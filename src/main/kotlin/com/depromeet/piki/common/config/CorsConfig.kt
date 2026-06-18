@@ -60,7 +60,23 @@ class CorsConfig(
                 allowCredentials = true
             }
         return UrlBasedCorsConfigurationSource().apply {
+            // Apple 웹 form_post 콜백 브릿지(#430)는 appleid.apple.com 이 top-level 폼 POST 로 Origin 을 박아 보낸다.
+            // 그 origin 은 아래 /** 전역 allowedOrigins 에 없어 CorsFilter 가 컨트롤러 도달 전에 403("Invalid CORS request")으로
+            // 막는다(브라우저 네비게이션이라 정작 브라우저는 CORS 를 강제하지 않는데 서버가 먼저 거부). 이 경로는 JS 가 읽는
+            // API 가 아니라 브라우저 네비게이션(303 리다이렉트, 노출 데이터 없음)이라 credentials 가 불필요하므로,
+            // Apple origin 만 credentials 없이 허용해 CORS 거부만 피한다.
+            // UrlBasedCorsConfigurationSource 는 등록 순서로 '첫 매칭'을 반환하므로, /** 보다 먼저 등록해야 이 경로가 /** 에
+            // 잡혀 전역 설정(Apple origin 미허용)으로 떨어지지 않는다.
+            registerCorsConfiguration("/api/v1/auth/apple/callback", appleCallbackCorsConfiguration())
             registerCorsConfiguration("/**", configuration)
         }
     }
+
+    private fun appleCallbackCorsConfiguration(): CorsConfiguration =
+        CorsConfiguration().apply {
+            allowedOrigins = listOf("https://appleid.apple.com")
+            allowedMethods = listOf("POST", "OPTIONS")
+            allowedHeaders = listOf("*")
+            allowCredentials = false
+        }
 }
