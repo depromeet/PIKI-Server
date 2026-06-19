@@ -101,6 +101,7 @@ class WishlistApiExamples(
                         payload = ApiResponseBody.ok(emptyPriceHistorySample),
                     )
                     add(WishException.forbiddenWishItems(), name = "본인 위시 아님")
+                    forbidden("권한 없음 (MEMBER 필요)")
                     add(WishException.notFound(), name = "존재하지 않는 위시 항목")
                     unauthorized()
                 }
