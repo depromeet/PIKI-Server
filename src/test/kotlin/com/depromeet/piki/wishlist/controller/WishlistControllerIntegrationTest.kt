@@ -72,6 +72,19 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
     private fun memberToken(userId: UUID): String = jwtProvider.generateAccessToken(userId, IdentityType.MEMBER)
 
+    // 위시리스트는 회원 전용 — 게스트는 인증(authenticated)은 통과하나 WishlistService.requireMember 가 도메인 계약으로 막는다.
+    // 가드가 findById 로 identityType 을 확인하므로 게스트 유저 행이 실제로 존재해야 403(없으면 404)이 나온다.
+    private fun insertGuest(userId: UUID) {
+        jdbcTemplate.update(
+            "INSERT INTO users (id, nickname, identity_type, created_at, updated_at) VALUES (?, ?, ?, NOW(6), NOW(6))",
+            uuidToBytes(userId),
+            userId.toString().take(10),
+            "GUEST",
+        )
+    }
+
+    private fun guestToken(userId: UUID): String = jwtProvider.generateAccessToken(userId, IdentityType.GUEST)
+
     private fun buildMockMvc(): MockMvc =
         MockMvcBuilders
             .webAppContextSetup(webApplicationContext)
@@ -126,6 +139,55 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val result = wishPersistenceService.persist(userId, Item(ProductLink.parse(url)))
         itemParsingService.claimDuePending(100)
         return result.wish.getId()
+    }
+
+    @Test
+    fun `게스트가 URL 로 위시 등록을 시도하면 403 과 회원 전용 안내가 반환된다`() {
+        // 게스트 토큰은 Security authenticated() 를 통과하지만, WishlistService 가 회원 전용 계약으로 막아
+        // generic 권한없음(detail 없음)이 아니라 "회원만 이용 가능" 이라는 구체 사유를 detail 로 내려준다.
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertGuest(userId)
+        val body = objectMapper.writeValueAsString(mapOf("url" to "https://shop.example.com/products/1"))
+
+        mockMvc
+            .perform(
+                post("/api/v1/wishlists")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${guestToken(userId)}")
+                    .content(body),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value("위시리스트는 회원만 이용할 수 있어요."))
+            .andExpect(jsonPath("$.data").value(nullValue()))
+    }
+
+    @Test
+    fun `게스트가 위시리스트를 조회하면 403 과 회원 전용 안내가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertGuest(userId)
+
+        mockMvc
+            .perform(
+                get("/api/v1/wishlists")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${guestToken(userId)}"),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value("위시리스트는 회원만 이용할 수 있어요."))
+    }
+
+    @Test
+    fun `게스트는 멱등 삭제 경로보다 회원 가드가 먼저 걸려 403 이 반환된다`() {
+        // 회원 가드는 소유권·존재 검증(멱등 no-op)보다 먼저 돈다 — 없는 위시 삭제도 게스트면 200 이 아니라 403.
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertGuest(userId)
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists/1")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${guestToken(userId)}"),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value("위시리스트는 회원만 이용할 수 있어요."))
     }
 
     @Test

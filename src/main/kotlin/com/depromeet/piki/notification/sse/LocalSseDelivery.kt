@@ -1,6 +1,7 @@
 package com.depromeet.piki.notification.sse
 
 import com.depromeet.piki.notification.controller.dto.NotificationSsePayload
+import com.depromeet.piki.notification.controller.dto.TournamentItemParsedPayload
 import com.depromeet.piki.notification.domain.Notification
 import com.depromeet.piki.notification.service.DefaultPushImage
 import org.slf4j.LoggerFactory
@@ -32,6 +33,21 @@ class LocalSseDelivery(
                 .name(EVENT_NOTIFICATION)
                 .data(NotificationSsePayload.from(notification, defaultPushImage.url))
         registry.emittersOf(userId).forEach { sendOrEvict(userId, it, event) }
+    }
+
+    // 토너먼트 출전 아이템의 파싱 완료/실패를 그 토너먼트 참여자들 연결에 실시간 흘려보낸다(라이브 동기화, 알림 아님).
+    // notification 전달과 같은 emitter write 경로(sendOrEvict)를 공유하되 이벤트 name 만 다르다(클라가 name 으로 구분).
+    // 한 payload 이벤트를 만들어 대상 유저 전원의 emitter 에 재사용한다 — 같은 토너먼트 참여자들이 같은 카드 갱신을 받는다.
+    fun deliverTournamentItemParsed(
+        userIds: Collection<UUID>,
+        payload: TournamentItemParsedPayload,
+    ) {
+        val event =
+            SseEmitter
+                .event()
+                .name(EVENT_TOURNAMENT_ITEM_PARSED)
+                .data(payload)
+        userIds.forEach { userId -> registry.emittersOf(userId).forEach { sendOrEvict(userId, it, event) } }
     }
 
     // 탈퇴 시 그 유저의 모든 SSE 연결을 즉시 끊는다(best-effort). 레지스트리에서 키째 빼고 각 emitter 를
@@ -69,5 +85,9 @@ class LocalSseDelivery(
     companion object {
         // SSE 이벤트 name. 클라이언트는 이 이름으로 알림 이벤트와 connect/하트비트를 구분한다.
         const val EVENT_NOTIFICATION = "notification"
+
+        // 토너먼트 출전 아이템 파싱 완료/실패 화면 갱신 신호의 SSE 이벤트 name. notification 과 구분되며,
+        // 알림이 아니라 라이브 동기화라 알림센터·FCM 을 거치지 않는다(TournamentItemParsedPayload).
+        const val EVENT_TOURNAMENT_ITEM_PARSED = "tournament-item-parsed"
     }
 }

@@ -181,9 +181,12 @@ class WishlistRefreshIntegrationTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val owner = UUID.randomUUID()
         insertMember(owner)
+        // 회원 가드(requireMember)가 findById 로 identityType 을 보므로 attacker 도 실제 회원 행이 있어야
+        // 가드를 통과해 소유권 검증(403)까지 닿는다. 행이 없으면 가드가 먼저 404(notFound)로 막는다.
+        val attacker = UUID.randomUUID()
+        insertMember(attacker)
         try {
             val (wishId, _, _) = seedReadyWish(owner, "https://shop.example.com/products/owned", "옛 상품", 10_000)
-            val attacker = UUID.randomUUID() // 토큰만 있으면 되고 user 행은 필요 없다(소유권에서 막힌다).
 
             mockMvc
                 .perform(
@@ -192,6 +195,7 @@ class WishlistRefreshIntegrationTest : IntegrationTestSupport() {
                 ).andExpect(status().isForbidden)
         } finally {
             cleanup(owner)
+            cleanup(attacker)
         }
     }
 

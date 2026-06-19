@@ -1,7 +1,6 @@
 package com.depromeet.piki.auth.config
 
 import com.depromeet.piki.auth.filter.JwtAuthenticationFilter
-import com.depromeet.piki.user.domain.IdentityType
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.annotation.Order
@@ -80,8 +79,12 @@ class SecurityConfig(
                     .authenticated()
                     .requestMatchers(HttpMethod.GET, "/api/v1/dev/users", "/api/v1/dev/users/*")
                     .permitAll()
+                    // dev 전용 도구(@Profile("!prod"), 운영엔 라우트 없음)는 인증만 요구한다(GUEST·MEMBER 모두 통과).
+                    // 과거 hasAuthority(GUEST) 가 회원을 403 으로 막았으나, 이 엔드포인트들(테스트 유저 생성·토큰 발급·FCM 푸시)은
+                    // 호출자 신분과 무관하게 동작하고 게스트 토큰은 permitAll 로 누구나 발급받아 게스트 전용이 보안 이득도 없어,
+                    // 회원만 불필요하게 막던 제한을 제거한다.
                     .requestMatchers("/api/v1/dev/**")
-                    .hasAuthority(IdentityType.GUEST.name)
+                    .authenticated()
                     // API 문서: Stoplight Elements UI (/docs/**, static resource) + OpenAPI spec
                     // (/v3/api-docs/**, springdoc 제공). Swagger UI 는 사용하지 않음.
                     .requestMatchers("/docs/**", "/v3/api-docs/**")
@@ -90,8 +93,12 @@ class SecurityConfig(
                     // docs 등 어디서든 401 없이 뜨도록 permit 한다. 민감정보 없는 공개 파일.
                     .requestMatchers(HttpMethod.GET, "/favicon.ico")
                     .permitAll()
+                    // 위시리스트는 회원 전용 — 인증만 요구한다(GUEST 도 통과). 게스트 거부(403)는 Security 권한이 아니라
+                    // WishlistService 가 도메인 계약(WishException.guestCannotUseWishlist)으로 내린다 —
+                    // Security 에서 MEMBER 만 허용하면 게스트가 권한 없음 403(detail 없음)으로 떨어져
+                    // "위시리스트는 회원 전용" 이라는 구체 사유를 못 전달하기 때문. (회원 탈퇴 DELETE /users/me 와 같은 패턴)
                     .requestMatchers("/api/v1/wishlists/**")
-                    .hasAuthority(IdentityType.MEMBER.name)
+                    .authenticated()
                     // 소셜 토너먼트 게스트 합류: 계정 없이 초대 코드 + 닉네임으로 가입과 동시에 참여
                     .requestMatchers(HttpMethod.POST, "/api/v1/tournaments/*/join/guest")
                     .permitAll()

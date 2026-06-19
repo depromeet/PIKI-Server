@@ -8,6 +8,8 @@ import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.item.service.ImageParsingWorker
 import com.depromeet.piki.item.service.ItemParsingService
 import com.depromeet.piki.product.domain.ProductLink
+import com.depromeet.piki.user.domain.IdentityType
+import com.depromeet.piki.user.service.UserService
 import com.depromeet.piki.wishlist.domain.WishCursor
 import com.depromeet.piki.wishlist.domain.WishDeleteIds
 import com.depromeet.piki.wishlist.domain.WishException
@@ -32,8 +34,17 @@ class WishlistService(
     private val wishRepository: WishRepository,
     private val itemRepository: ItemRepository,
     private val itemSnapshotRepository: ItemSnapshotRepository,
+    private val userService: UserService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    // 위시리스트는 회원 전용. 게스트(인증은 됐으나 회원 아님)는 Security 가 아니라 여기서 도메인 계약으로 막아
+    // "회원만 이용 가능" 이라는 구체 사유를 내려준다(SecurityConfig 의 wishlists authenticated() 주석 참고).
+    // 인증 principal 은 userId 뿐이라 identityType 은 조회로 확인한다 — 모든 진입 메서드가 처리 전에 가장 먼저 호출한다.
+    private fun requireMember(userId: UUID) {
+        val user = userService.findById(userId)
+        if (user.identityType != IdentityType.MEMBER) throw WishException.guestCannotUseWishlist()
+    }
 
     // registerFromUrl 는 외부 LLM 호출(read-timeout 60s)을 동기로 기다리지 않는다.
     // link 만 가진 item 과 PENDING snapshot 을 즉시 커밋해 응답을 돌려주고(클라이언트는 "담는 중" 표시),
@@ -44,6 +55,7 @@ class WishlistService(
         rawUrl: String,
         userId: UUID,
     ): WishWithItem {
+        requireMember(userId)
         val link = ProductLink.parse(rawUrl)
         // fetch 불가 플랫폼(봇 차단)은 담아봐야 파싱이 무의미하게 실패한다 — 등록 시점에 막아 빠르게 안내한다.
         link.verifySupportedPlatform()
@@ -58,6 +70,7 @@ class WishlistService(
         images: List<MultipartFile>,
         userId: UUID,
     ): List<WishWithItem> {
+        requireMember(userId)
         if (images.size !in MIN_IMAGE_COUNT..MAX_IMAGE_COUNT) throw WishException.invalidImageCount()
         // 형식 검증(빈 바이트·미지원 MIME) — 실패 시 즉시 400. 유효한 이미지만 PROCESSING 으로 등록한다.
         val productImages = images.map { ProductImage.of(it.bytes, it.contentType) }
@@ -83,6 +96,7 @@ class WishlistService(
         rawCursor: String?,
         rawSize: Int?,
     ): WishlistPage {
+        requireMember(userId)
         val cursor = WishCursor.parse(rawCursor)
         val size = WishlistSize.of(rawSize).value
         // hasNext 판단을 위해 한 건 더 조회하고, 초과분은 응답에서 잘라낸다.
@@ -121,6 +135,7 @@ class WishlistService(
         userId: UUID,
         wishId: Long,
     ): WishWithItem {
+        requireMember(userId)
         val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
         wish.verifyOwnedBy(userId)
         // wish 가 가리키는 snapshot·item 은 반드시 존재한다. 없으면 영속화 경로가 깨진 코드 버그다.
@@ -166,6 +181,7 @@ class WishlistService(
         currency: String?,
         image: MultipartFile?,
     ): WishWithItem {
+        requireMember(userId)
         // 이미지 형식 검증(빈 바이트·미지원 MIME) — 외부 호출 전에 동기로 거른다(400).
         val productImage = image?.let { ProductImage.of(it.bytes, it.contentType) }
         val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
@@ -199,7 +215,10 @@ class WishlistService(
     fun refreshWishItem(
         userId: UUID,
         wishId: Long,
-    ): WishWithItem = wishPersistenceService.refresh(userId = userId, wishId = wishId)
+    ): WishWithItem {
+        requireMember(userId)
+        return wishPersistenceService.refresh(userId = userId, wishId = wishId)
+    }
 
     // 멱등 삭제: 없거나 이미 삭제됐으면 "이미 목표 상태(없음)"이므로 성공으로 본다(no-op).
     // 단 존재하는 위시가 남의 것이면 소유권은 보안 경계라 403 으로 막는다.
@@ -208,6 +227,7 @@ class WishlistService(
         userId: UUID,
         wishId: Long,
     ) {
+        requireMember(userId)
         val wish = wishRepository.findById(wishId) ?: return
         wish.verifyOwnedBy(userId)
         wish.delete()
@@ -220,6 +240,7 @@ class WishlistService(
         userId: UUID,
         wishIds: WishDeleteIds,
     ) {
+        requireMember(userId)
         // WishDeleteIds 가 distinct·개수(1~100) 검증을 끝낸 값이라 여기선 조회·소유검증·삭제만 한다.
         val wishes = wishRepository.findAllByIds(wishIds.values)
         wishes.forEach { it.verifyOwnedBy(userId) }

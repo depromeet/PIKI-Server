@@ -37,9 +37,9 @@ class WishlistApiExamples(
                     )
                     add(ProductLinkException.invalidFormat(urlFormatCause), name = "유효하지 않은 URL 형식")
                     add(ProductLinkException.unsupportedScheme(), name = "https 외 스킴")
-                    add(ProductLinkException.unsupportedPlatform(), name = "지원하지 않는 쇼핑몰 (KREAM·쿠팡·네이버)")
+                    add(ProductLinkException.unsupportedPlatform(), name = "지원하지 않는 쇼핑몰 (KREAM·쿠팡·네이버·올리브영·에이블리)")
                     unauthorized()
-                    forbidden("권한 없음 (MEMBER 필요)")
+                    add(WishException.guestCannotUseWishlist(), name = "게스트의 위시리스트 이용 거부 (회원 전용)")
                 }
             }
             if (handlerMethod.binds(WishlistController::getWishlist)) {
@@ -73,7 +73,7 @@ class WishlistApiExamples(
                     )
                     add(WishException.invalidCursor(), name = "유효하지 않은 cursor")
                     unauthorized()
-                    forbidden("권한 없음 (MEMBER 필요)")
+                    add(WishException.guestCannotUseWishlist(), name = "게스트의 위시리스트 이용 거부 (회원 전용)")
                 }
             }
             if (handlerMethod.binds(WishlistController::getWish)) {
@@ -83,6 +83,7 @@ class WishlistApiExamples(
                         name = "조회 성공",
                         payload = ApiResponseBody.ok(sampleEntry),
                     )
+                    add(WishException.guestCannotUseWishlist(), name = "게스트의 위시리스트 이용 거부 (회원 전용)")
                     add(WishException.forbiddenWishItems(), name = "본인 위시 아님")
                     add(WishException.notFound(), name = "존재하지 않는 위시 항목")
                     unauthorized()
@@ -124,6 +125,7 @@ class WishlistApiExamples(
                             ),
                     )
                     add(ItemException.nameRequiredForReady(), name = "상품명 없이 복구 시도")
+                    add(WishException.guestCannotUseWishlist(), name = "게스트의 위시리스트 이용 거부 (회원 전용)")
                     add(WishException.forbiddenWishItems(), name = "본인 위시 아님")
                     add(WishException.notFound(), name = "존재하지 않는 위시 항목")
                     add(ItemException.alreadyReady(), name = "이미 등록 완료(READY) 항목 — 수정 불가")
@@ -146,6 +148,7 @@ class WishlistApiExamples(
                     )
                     add(WishException.notRefreshable(), name = "링크 없는 항목(이미지 등록) — 새로고침 불가")
                     add(WishException.failedNotRefreshable(), name = "추출 실패(FAILED) 항목 — 보정으로 복구")
+                    add(WishException.guestCannotUseWishlist(), name = "게스트의 위시리스트 이용 거부 (회원 전용)")
                     add(WishException.forbiddenWishItems(), name = "본인 위시 아님")
                     add(WishException.notFound(), name = "존재하지 않는 위시 항목")
                     unauthorized()
@@ -158,6 +161,7 @@ class WishlistApiExamples(
                         name = "삭제 성공",
                         payload = ApiResponseBody.ok<Unit>(),
                     )
+                    add(WishException.guestCannotUseWishlist(), name = "게스트의 위시리스트 이용 거부 (회원 전용)")
                     add(WishException.forbiddenWishItems(), name = "본인 위시 아님")
                     unauthorized()
                 }
@@ -170,6 +174,7 @@ class WishlistApiExamples(
                         payload = ApiResponseBody.ok<Unit>(),
                     )
                     add(WishException.invalidIdCount(), name = "ids 누락/빈 목록/100개 초과")
+                    add(WishException.guestCannotUseWishlist(), name = "게스트의 위시리스트 이용 거부 (회원 전용)")
                     add(WishException.forbiddenWishItems(), name = "본인 위시 아닌 항목 포함")
                     unauthorized()
                 }
@@ -184,7 +189,7 @@ class WishlistApiExamples(
                     add(WishException.invalidImageCount(), name = "이미지 개수 위반 (1~5개 아님)")
                     add(ProductImageException.unsupportedType(), name = "지원하지 않는 이미지 형식")
                     unauthorized()
-                    forbidden("권한 없음 (MEMBER 필요)")
+                    add(WishException.guestCannotUseWishlist(), name = "게스트의 위시리스트 이용 거부 (회원 전용)")
                 }
             }
             operation
