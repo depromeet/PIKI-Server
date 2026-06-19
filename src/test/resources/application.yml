@@ -49,6 +49,7 @@ jwt:
   secret: ${JWT_SECRET:test-jwt-secret-key-must-be-at-least-32-chars!}
   access-token-expiry: 1h
   refresh-token-expiry: 14d
+  refresh-token-grace: 10s
 
 # S3 업로드는 ImageStorage stub 으로 격리되지만, S3Properties·S3Client 빈 자체는 컨텍스트에 생성되므로
 # 더미 값으로 부팅만 통과시킨다 (S3Properties.init 의 notBlank 검증 충족).
