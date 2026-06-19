@@ -17,6 +17,7 @@ class TokenCookieWriterTest {
                 secret = "x".repeat(32),
                 accessTokenExpiry = accessExpiry,
                 refreshTokenExpiry = refreshExpiry,
+                refreshTokenGrace = Duration.ofSeconds(10),
             ),
             AuthCookieProperties(secure = secure),
         )

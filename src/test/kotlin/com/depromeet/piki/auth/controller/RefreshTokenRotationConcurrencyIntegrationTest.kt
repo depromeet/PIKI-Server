@@ -18,10 +18,15 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 // 일반 통합 테스트와 달리 @Transactional 을 사용하지 않는다 — 별도 트랜잭션 동시 진행이
 // race 시뮬레이션의 본질이다. 데이터 격리는 매 테스트가 새 게스트 생성으로 보장한다.
-class RefreshTokenFamilyInvalidationConcurrencyIntegrationTest : IntegrationTestSupport() {
+//
+// refresh 회전의 동시성 계약: 같은 옛 토큰으로 동시에 들어온 요청은 한쪽만 회전하고 나머지는 grace
+// replay 로 "같은 새 토큰"에 수렴해야 한다. 과거엔 한쪽 401 + family invalidation 으로 로그아웃됐다(#race).
+class RefreshTokenRotationConcurrencyIntegrationTest : IntegrationTestSupport() {
     @Autowired
     private lateinit var webApplicationContext: WebApplicationContext
 
@@ -38,7 +43,7 @@ class RefreshTokenFamilyInvalidationConcurrencyIntegrationTest : IntegrationTest
     private lateinit var jdbcTemplate: JdbcTemplate
 
     @Test
-    fun `같은 refreshToken 으로 두 요청이 동시에 들어오면 한 쪽 200, 다른 쪽 401 로 family invalidation 트리거된다`() {
+    fun `같은 refreshToken 으로 동시 요청이 들어오면 모두 200 + 같은 새 토큰으로 수렴한다`() {
         val mockMvc =
             MockMvcBuilders
                 .webAppContextSetup(webApplicationContext)
@@ -64,27 +69,39 @@ class RefreshTokenFamilyInvalidationConcurrencyIntegrationTest : IntegrationTest
             val start = CountDownLatch(1)
             val futures =
                 (0..1).map {
-                    executor.submit<Int> {
+                    executor.submit<Pair<Int, String>> {
                         workersReady.countDown()
                         start.await()
-                        mockMvc
-                            .perform(
-                                post("/api/v1/auth/token/refresh")
-                                    .contentType(MediaType.APPLICATION_JSON)
-                                    .content(body),
-                            ).andReturn()
-                            .response.status
+                        val response =
+                            mockMvc
+                                .perform(
+                                    post("/api/v1/auth/token/refresh")
+                                        .header("X-Client-Type", "app")
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(body),
+                                ).andReturn()
+                                .response
+                        val refreshed =
+                            response.contentAsString
+                                .takeIf { it.isNotBlank() }
+                                ?.let { objectMapper.readTree(it).at("/data/refreshToken").asText() }
+                                .orEmpty()
+                        response.status to refreshed
                     }
                 }
             workersReady.await()
             start.countDown()
-            val statuses = futures.map { it.get(10, TimeUnit.SECONDS) }.toSet()
+            val results = futures.map { it.get(10, TimeUnit.SECONDS) }
             executor.shutdown()
 
-            // 한 쪽이 R1 매치 통과 + R2 발급 (200), 다른 쪽은 mismatch 로 family invalidation
-            // 트리거 (401). 정상 사용자라면 두 요청이 동시에 가지 않으므로 production 에선
-            // race 영향이 거의 없다.
-            assertEquals(setOf(200, 401), statuses)
+            // 두 요청 모두 200 (401·로그아웃 없음)
+            assertEquals(setOf(200), results.map { it.first }.toSet())
+            // 발급된 refresh 토큰이 동일 토큰으로 수렴 (한쪽 회전, 나머지 grace replay)
+            val refreshed = results.map { it.second }.toSet()
+            assertEquals(1, refreshed.size, "동시 요청이 서로 다른 토큰을 받으면 수렴 실패: $refreshed")
+            // 회전이 실제로 일어나 옛 토큰과는 다르다
+            assertNotEquals(r1, refreshed.first())
+            assertTrue(refreshed.first().isNotBlank())
         } finally {
             refreshTokenStore.delete(userId)
             jdbcTemplate.update("DELETE FROM users WHERE id = ?", uuidToBytes(userId))

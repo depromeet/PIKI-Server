@@ -23,6 +23,11 @@ data class JwtProperties(
     val accessTokenExpiry: Duration,
     @field:DurationMin(seconds = 1, message = "refreshTokenExpiry 는 1초 이상이어야 한다.")
     val refreshTokenExpiry: Duration,
+    // refresh 토큰 회전 직후, 이전 토큰을 이 시간 동안 멱등 유효 처리하는 grace 창 (reuse interval).
+    // Next.js App Router 등에서 한 페이지 진입에 동시 다발 요청이 같은 옛 토큰으로 refresh 를 호출할 때,
+    // 한쪽만 회전 성공하고 나머지가 401 로 튕겨 로그아웃되는 race 를 흡수한다. 창 밖 재사용은 그대로 탐지.
+    @field:DurationMin(seconds = 1, message = "refreshTokenGrace 는 1초 이상이어야 한다.")
+    val refreshTokenGrace: Duration,
 ) {
     companion object {
         // HS256 의 키 최소 길이 (RFC 7518 §3.2: key MUST be at least 256 bits = 32 bytes).

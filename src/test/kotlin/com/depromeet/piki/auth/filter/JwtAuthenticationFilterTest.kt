@@ -24,6 +24,7 @@ class JwtAuthenticationFilterTest {
                 secret = TEST_SECRET,
                 accessTokenExpiry = Duration.ofHours(1),
                 refreshTokenExpiry = Duration.ofDays(14),
+                refreshTokenGrace = Duration.ofSeconds(10),
             ),
         )
     private val withdrawnTokenStore = StubWithdrawnTokenStore()
@@ -118,6 +119,7 @@ class JwtAuthenticationFilterTest {
                     secret = OTHER_SECRET,
                     accessTokenExpiry = Duration.ofHours(1),
                     refreshTokenExpiry = Duration.ofDays(14),
+                refreshTokenGrace = Duration.ofSeconds(10),
                 ),
             )
         val token = otherProvider.generateAccessToken(UUID.randomUUID(), IdentityType.GUEST)
