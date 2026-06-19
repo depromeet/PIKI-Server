@@ -15,6 +15,7 @@ import com.depromeet.piki.wishlist.domain.WishDeleteIds
 import com.depromeet.piki.wishlist.domain.WishException
 import com.depromeet.piki.wishlist.domain.WishlistSize
 import com.depromeet.piki.wishlist.repository.WishRepository
+import com.depromeet.piki.wishlist.service.dto.WishPriceHistory
 import com.depromeet.piki.wishlist.service.dto.WishWithItem
 import com.depromeet.piki.wishlist.service.dto.WishlistPage
 import org.slf4j.LoggerFactory
@@ -145,6 +146,27 @@ class WishlistService(
         val item =
             itemRepository.findById(snapshot.itemId) ?: error("wish ${wish.getId()} 의 item ${snapshot.itemId} 가 없다")
         return WishWithItem(wish = wish, item = item, snapshot = snapshot)
+    }
+
+    // 위시 상품의 가격 히스토리 조회. wish 가 가리키는 활성 snapshot 에서 item 정체성(itemId)에 도달한 뒤,
+    // 그 item 의 추출 완료(READY) 버전 전체를 최신순으로 끌어온다 — 갱신·새로고침마다 쌓인 버전이 가격 이력이다.
+    // 단건 조회(getWish)와 같은 소유권 검증·트랜잭션 경계. wish 는 itemId 를 직접 들지 않으므로 snapshot 을 거쳐 도달한다.
+    @Transactional(readOnly = true)
+    fun getPriceHistory(
+        userId: UUID,
+        wishId: Long,
+    ): WishPriceHistory {
+        val wish = wishRepository.findById(wishId) ?: throw WishException.notFound()
+        wish.verifyOwnedBy(userId)
+        // 활성 snapshot·item 은 영속화 경로상 반드시 존재한다(없으면 코드 버그). item 정체성은 snapshot.itemId 단일 출처다.
+        val activeSnapshot =
+            itemSnapshotRepository.findById(wish.snapshotId)
+                ?: error("wish ${wish.getId()} 의 snapshot ${wish.snapshotId} 가 없다")
+        val item =
+            itemRepository.findById(activeSnapshot.itemId)
+                ?: error("wish ${wish.getId()} 의 item ${activeSnapshot.itemId} 가 없다")
+        val history = itemSnapshotRepository.findReadyHistoryByItemId(activeSnapshot.itemId)
+        return WishPriceHistory(wish = wish, item = item, history = history)
     }
 
     // 추출 실패(FAILED) item 을 사용자가 직접 보정해 READY 로 복구한다. 이미지를 함께 주면 그대로 S3 에 올려
