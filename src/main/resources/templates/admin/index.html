@@ -31,11 +31,7 @@
   </style>
 </head>
 <body>
-  <div class="bar">
-    <span class="brand"><img src="/favicon.ico" alt="PiKi" style="width:19px;height:19px;border-radius:5px;vertical-align:-4px;margin-right:6px">PiKi<span class="dot">.</span> 운영 백오피스</span>
-    <span class="spacer"></span>
-    <span class="who">운영 관리자</span>
-  </div>
+  <div th:replace="~{admin/fragments :: topbar(null, null)}"></div>
 
   <div class="wrap">
     <h1>운영 백오피스</h1>

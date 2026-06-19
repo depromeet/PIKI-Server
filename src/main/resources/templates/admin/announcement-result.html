@@ -33,7 +33,7 @@
   </style>
 </head>
 <body>
-  <div class="bar"><span class="brand"><img src="/favicon.ico" alt="PiKi" style="width:19px;height:19px;border-radius:5px;vertical-align:-4px;margin-right:6px">PiKi<span class="dot">.</span> 백오피스</span><a th:href="@{/admin/announcements}">← 공지 목록</a></div>
+  <div th:replace="~{admin/fragments :: topbar('/admin/announcements', '← 공지 목록')}"></div>
   <div class="wrap" th:attr="data-poll=@{/admin/announcements/{id}/result.json(id=${result.id})}">
     <h1>발송 결과</h1>
     <p class="sub" th:text="${result.title}">제목</p>

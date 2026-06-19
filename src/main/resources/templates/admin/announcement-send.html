@@ -61,7 +61,7 @@
   </style>
 </head>
 <body>
-  <div class="bar"><span class="brand"><img src="/favicon.ico" alt="PiKi" style="width:19px;height:19px;border-radius:5px;vertical-align:-4px;margin-right:6px">PiKi<span class="dot">.</span> 백오피스</span><a th:href="@{/admin/announcements}">← 공지 목록</a></div>
+  <div th:replace="~{admin/fragments :: topbar('/admin/announcements', '← 공지 목록')}"></div>
   <div class="wrap">
     <h1>공지 발송 확인</h1>
     <div th:if="${param.error != null and param.error[0] == 'time'}" class="warn" style="background:#fee2e2;color:#b42318;border-radius:8px;padding:9px 14px;margin-bottom:12px">발송 시각 형식이 올바르지 않습니다. 달력에서 다시 선택하거나 비워서 즉시 발송하세요.</div>

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--
+  admin 공통 헤더. 모든 admin 페이지가 자기 헤더 대신 이 fragment 를 include 한다(헤더 복붙 통합).
+  환경(adminEnv)·접속 IP(adminClientIp)는 AdminHeaderInterceptor 가 /admin/** 모든 뷰 모델에 주입한다.
+  backHref/backLabel 은 페이지별 뒤로가기 링크(홈·공지 목록·템플릿 목록 등). 없으면(홈·목록 루트) 생략한다.
+-->
+<th:block th:fragment="topbar(backHref, backLabel)">
+  <style>
+    .pkbar{display:flex;align-items:center;gap:12px;padding:14px 24px;background:#fff;border-bottom:1px solid #e8edf3;
+      font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;flex-wrap:wrap;}
+    .pkbar .pkbrand{font-weight:800;font-size:17px;letter-spacing:-.03em;color:#0f172a;}
+    .pkbar .pkbrand .pkdot{color:#0EA5E9;}
+    .pkbar .pksp{flex:1;}
+    .pkbar .pkmeta{font-size:12.5px;color:#64748b;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .pkbar .pkmeta b{color:#334155;font-weight:700;font-variant-numeric:tabular-nums;}
+    .pkbar .pkmeta .pksep{color:#cbd5e1;}
+    .pkbar .pkenv{font-size:11px;font-weight:800;letter-spacing:.04em;padding:2px 8px;border-radius:6px;}
+    .pkbar .pkenv.env-PROD{background:#fee2e2;color:#b91c1c;}
+    .pkbar .pkenv.env-STAGING{background:#fef3c7;color:#b45309;}
+    .pkbar .pkenv.env-DEV{background:#dbeafe;color:#1d4ed8;}
+    .pkbar .pkenv.env-LOCAL{background:#e2e8f0;color:#475569;}
+    .pkbar a.pkhome{font-size:13px;color:#64748b;text-decoration:none;font-weight:600;}
+    .pkbar a.pkhome:hover{color:#0f172a;}
+  </style>
+  <div class="pkbar">
+    <span class="pkbrand"><img src="/favicon.ico" alt="PiKi"
+        style="width:19px;height:19px;border-radius:5px;vertical-align:-4px;margin-right:6px">PiKi<span class="pkdot">.</span> 백오피스</span>
+    <span class="pksp"></span>
+    <span class="pkmeta">
+      <span th:if="${adminEnv}">현재 접속하신 환경은
+        <span class="pkenv" th:classappend="'env-'+${adminEnv}" th:text="${adminEnv}">DEV</span> 입니다</span>
+      <span class="pksep" th:if="${adminEnv != null and adminClientIp != null}">·</span>
+      <span th:if="${adminClientIp}">접속 IP <b th:text="${adminClientIp}">-</b></span>
+    </span>
+    <a class="pkhome" th:if="${backHref}" th:href="@{${backHref}}" th:text="${backLabel}">←</a>
+  </div>
+</th:block>
+</body>
+</html>
