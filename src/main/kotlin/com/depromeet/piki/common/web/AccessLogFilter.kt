@@ -22,6 +22,8 @@ import org.springframework.web.filter.OncePerRequestFilter
 // userId: 이 필터 finally 시점엔 JwtAuthenticationFilter(더 안쪽)가 자기 finally 에서 MDC userId 를 이미 지운 뒤다.
 // 그래서 JwtAuthenticationFilter 가 함께 심어둔 request attribute 에서 읽어, 이 로그 한 줄 동안만 MDC 에 얹는다 —
 // 콘솔 패턴 [user=...]·ECS userId 필드가 access log 에도 도메인 로그와 똑같이 찍힌다.
+// adminActor(슬랙명)도 동일 패턴 — AdminAccessFilter(더 안쪽)가 자기 finally 에서 MDC 를 지우므로, 함께 심어둔
+// attribute 에서 읽어 이 access log 한 줄에 재주입한다. /admin 요청은 "누가" 가 access·도메인 로그 양쪽에 찍힌다.
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 3)
 class AccessLogFilter : OncePerRequestFilter() {
@@ -40,11 +42,13 @@ class AccessLogFilter : OncePerRequestFilter() {
         } finally {
             val latencyMs = (System.nanoTime() - startNanos) / 1_000_000
             (request.getAttribute(LoggingKeys.USER_ID) as? String)?.let { MDC.put(LoggingKeys.USER_ID, it) }
+            (request.getAttribute(LoggingKeys.ADMIN_ACTOR) as? String)?.let { MDC.put(LoggingKeys.ADMIN_ACTOR, it) }
             try {
                 log.info("{} {} -> {} ({}ms)", request.method, request.requestURI, response.status, latencyMs)
             } finally {
-                // 미인증 요청이면 위에서 put 을 안 했어도 remove 는 무해(no-op). 이 한 줄 로그 범위로만 MDC 를 빌렸다 돌려준다.
+                // 미인증·비-admin 요청이면 위에서 put 을 안 했어도 remove 는 무해(no-op). 이 한 줄 로그 범위로만 MDC 를 빌렸다 돌려준다.
                 MDC.remove(LoggingKeys.USER_ID)
+                MDC.remove(LoggingKeys.ADMIN_ACTOR)
             }
         }
     }
