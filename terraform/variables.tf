@@ -49,9 +49,20 @@ variable "azs" {
 # ----- EC2 -----
 
 variable "ec2_instance_type" {
-  description = "EC2 인스턴스 타입 (ARM / Graviton)"
+  description = "dev / staging EC2 인스턴스 타입 (ARM / Graviton). prod 는 ec2_instance_type_prod 로 분리."
   type        = string
   default     = "t4g.micro"
+}
+
+variable "ec2_instance_type_prod" {
+  description = <<-EOT
+    운영(prod) EC2 인스턴스 타입 (ARM / Graviton). dev / staging(ec2_instance_type)과
+    분리해 prod 만 독립적으로 사이징한다 — 운영 트래픽/메모리 여유를 위해 small 로 상향.
+    micro(1GiB) → small(2GiB). instance_type 변경은 in-place(stop → 변경 → start)이며
+    AMI 가 고정돼 있어 인스턴스 교체 없이 적용되지만, 적용 중 짧은 다운타임이 발생한다.
+  EOT
+  type        = string
+  default     = "t4g.small"
 }
 
 variable "ec2_ami_id" {

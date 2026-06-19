@@ -38,7 +38,7 @@ data "aws_ami" "ubuntu_2404_arm64" {
 # -----------------------------------------------------------------------------
 resource "aws_instance" "app" {
   ami                    = var.ec2_ami_id != null ? var.ec2_ami_id : data.aws_ami.ubuntu_2404_arm64[0].id
-  instance_type          = var.ec2_instance_type
+  instance_type          = var.ec2_instance_type_prod
   subnet_id              = aws_subnet.public.id
   availability_zone      = var.azs[0]
   vpc_security_group_ids = [aws_security_group.ec2.id]
