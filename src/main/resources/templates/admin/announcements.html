@@ -37,7 +37,7 @@
   </style>
 </head>
 <body>
-  <div class="bar"><span class="brand"><img src="/favicon.ico" alt="PiKi" style="width:19px;height:19px;border-radius:5px;vertical-align:-4px;margin-right:6px">PiKi<span class="dot">.</span> 백오피스</span><a th:href="@{/admin}">← 홈</a></div>
+  <div th:replace="~{admin/fragments :: topbar('/admin', '← 홈')}"></div>
   <div class="wrap">
     <h1>공지</h1>
     <p class="lede">공지를 <b>등록</b>한 뒤, 아래 목록에서 골라 <b>발송</b>합니다. 발송 시 문구를 새로 입력하지 않아 오타가 생기지 않습니다.</p>
