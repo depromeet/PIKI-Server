@@ -1,11 +1,14 @@
 package com.depromeet.piki.metrics.launch
 
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 // 런칭데이 리캡 화면(admin)의 단일 뷰모델. 모든 수치는 LaunchMetricsRepository 의 DB 집계에서 나오고,
 // 비율·평균 등 파생값만 여기서 계산한다(파생값을 한 곳에 모아 템플릿이 계산을 안 하게 한다).
+// from~to 는 조회 구간(KST). signup.before 는 구간 시작 전 누적, 나머지 수치는 구간 내([from, to)).
 data class LaunchRecap(
-    val launchDate: LocalDate,
+    val from: LocalDateTime,
+    val to: LocalDateTime,
     val signup: Signup,
     val wish: Wish,
     val tournament: Tournament,

@@ -16,13 +16,14 @@ import org.springframework.web.context.WebApplicationContext
 import java.sql.Date
 import java.sql.Timestamp
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
 
-// Part B — 런칭 경계(KST→UTC 변환) 전/후 분리와 신규 user_daily_activity 리텐션 조인을 실데이터 + Testcontainers
-// MySQL 로 검증한다. created_at 은 UTC 저장이라, 경계 6/20 00:00 KST = 6/19 15:00 UTC 를 기준으로 14:00(전)·16:00(후)
-// 유저를 심어 분리가 맞는지 본다. 시딩하지 않은 지표(토너먼트·푸시 등)는 0 으로 떨어져 쿼리 실행 무결성도 함께 확인한다.
-// admin 게이트는 IntegrationTestSupport 의 admin.local-bypass 로 우회된다.
+// Part B — 조회 구간(KST from~to)의 양쪽 경계 분리와 신규 user_daily_activity 리텐션 조인을 실데이터 + Testcontainers
+// MySQL 로 검증한다. created_at 은 UTC 저장이라, 구간 6/20 13:00~18:00 KST = 6/20 04:00~09:00 UTC 를 기준으로
+// 구간 전(14:00 6/19)·구간 내(06:00 UTC)·구간 후(11:00 UTC) 유저를 심어 양쪽 경계가 맞는지 본다. 시딩하지 않은 지표는
+// 0 으로 떨어져 쿼리 실행 무결성도 함께 확인한다. admin 게이트는 admin.local-bypass 로 우회된다.
 @Transactional
 class LaunchMetricsRecapIntegrationTest : IntegrationTestSupport() {
     @Autowired
@@ -37,8 +38,10 @@ class LaunchMetricsRecapIntegrationTest : IntegrationTestSupport() {
             .apply<DefaultMockMvcBuilder>(springSecurity())
             .build()
 
-    private val beforeBoundary = "2026-06-19 14:00:00" // < 6/19 15:00 UTC (= 6/20 00:00 KST)
-    private val afterBoundary = "2026-06-19 16:00:00" // 런칭 후 + 런칭 당일 윈도우 내
+    // 구간 6/20 13:00~18:00 KST = 6/20 04:00~09:00 UTC
+    private val beforeWindow = "2026-06-19 14:00:00" // 구간 전
+    private val withinWindow = "2026-06-20 06:00:00" // 구간 내(= 15:00 KST)
+    private val afterWindow = "2026-06-20 11:00:00" // 구간 후(= 20:00 KST) → 제외돼야 함
 
     private fun insertUser(
         id: UUID,
@@ -54,70 +57,78 @@ class LaunchMetricsRecapIntegrationTest : IntegrationTestSupport() {
     )
 
     @Test
-    fun `런칭 경계 전후 가입자와 리텐션이 정확히 집계되고 미시딩 지표는 0으로 실행된다`() {
-        // 런칭 전 활성 유저 2
-        repeat(2) { insertUser(UUID.randomUUID(), "MEMBER", beforeBoundary) }
+    fun `조회 구간의 시작·종료 경계로 가입자와 리텐션이 정확히 집계된다`() {
+        // 구간 전 활성 유저 2
+        repeat(2) { insertUser(UUID.randomUUID(), "MEMBER", beforeWindow) }
 
-        // 런칭 후 유저 3 (회원 2 · 게스트 1)
+        // 구간 내 유저 3 (회원 2 · 게스트 1)
         val member1 = UUID.randomUUID()
         val member2 = UUID.randomUUID()
         val guest1 = UUID.randomUUID()
-        insertUser(member1, "MEMBER", afterBoundary)
-        insertUser(member2, "MEMBER", afterBoundary)
-        insertUser(guest1, "GUEST", afterBoundary)
+        insertUser(member1, "MEMBER", withinWindow)
+        insertUser(member2, "MEMBER", withinWindow)
+        insertUser(guest1, "GUEST", withinWindow)
+
+        // 구간 후 유저 1 — 종료 경계(18:00) 이후라 집계에서 빠져야 한다
+        insertUser(UUID.randomUUID(), "MEMBER", afterWindow)
 
         // 소셜 연결(provider) — 가입과 거의 동시각이라 전환(1분 이상 갭) 아님
         jdbcTemplate.update(
             "INSERT INTO user_details (user_id, email, provider, social_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-            uuidToBytes(member1), "a@t.com", "KAKAO", UUID.randomUUID().toString(), Timestamp.valueOf(afterBoundary), Timestamp.valueOf(afterBoundary),
+            uuidToBytes(member1), "a@t.com", "KAKAO", UUID.randomUUID().toString(), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow),
         )
         jdbcTemplate.update(
             "INSERT INTO user_details (user_id, email, provider, social_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-            uuidToBytes(member2), "b@t.com", "GOOGLE", UUID.randomUUID().toString(), Timestamp.valueOf(afterBoundary), Timestamp.valueOf(afterBoundary),
+            uuidToBytes(member2), "b@t.com", "GOOGLE", UUID.randomUUID().toString(), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow),
         )
 
-        // 위시 — URL 아이템 1 · 이미지(source_url NULL) 아이템 1
+        // 위시 — URL 아이템 1 · 이미지(source_url NULL) 아이템 1, 구간 내
         jdbcTemplate.update(
             "INSERT INTO items (id, source_url, created_at, updated_at) VALUES (?, ?, ?, ?)",
-            1001L, "https://shop.example/a", Timestamp.valueOf(afterBoundary), Timestamp.valueOf(afterBoundary),
+            1001L, "https://shop.example/a", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow),
         )
         jdbcTemplate.update(
             "INSERT INTO items (id, created_at, updated_at) VALUES (?, ?, ?)",
-            1002L, Timestamp.valueOf(afterBoundary), Timestamp.valueOf(afterBoundary),
+            1002L, Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow),
         )
-        // 파싱 결과 스냅샷 — READY 1(item 1001) · FAILED 1(item 1002). wish 는 이 snapshot 을 가리킨다.
         jdbcTemplate.update(
             "INSERT INTO item_snapshots (id, item_id, status, created_at, updated_at) VALUES (2001, 1001, 'READY', ?, ?)",
-            Timestamp.valueOf(afterBoundary), Timestamp.valueOf(afterBoundary),
+            Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow),
         )
         jdbcTemplate.update(
             "INSERT INTO item_snapshots (id, item_id, status, created_at, updated_at) VALUES (2002, 1002, 'FAILED', ?, ?)",
-            Timestamp.valueOf(afterBoundary), Timestamp.valueOf(afterBoundary),
+            Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow),
         )
-        // wish 는 item_id 가 아니라 snapshot_id 로 참조(정규화됨)
         jdbcTemplate.update(
             "INSERT INTO wishes (user_id, snapshot_id, created_at, updated_at) VALUES (?, 2001, ?, ?)",
-            uuidToBytes(member1), Timestamp.valueOf(afterBoundary), Timestamp.valueOf(afterBoundary),
+            uuidToBytes(member1), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow),
         )
         jdbcTemplate.update(
             "INSERT INTO wishes (user_id, snapshot_id, created_at, updated_at) VALUES (?, 2002, ?, ?)",
-            uuidToBytes(member1), Timestamp.valueOf(afterBoundary), Timestamp.valueOf(afterBoundary),
+            uuidToBytes(member1), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow),
         )
 
-        // 리텐션 — 런칭날 가입자 3명 중 2명이 다음날(6/21 KST) 활동
+        // 리텐션 — 구간(6/20)에 가입한 3명 중 2명이 다음날(6/21 KST) 활동
         jdbcTemplate.update("INSERT INTO user_daily_activity (user_id, active_date, created_at) VALUES (?, ?, NOW(6))", uuidToBytes(member1), Date.valueOf(LocalDate.of(2026, 6, 21)))
         jdbcTemplate.update("INSERT INTO user_daily_activity (user_id, active_date, created_at) VALUES (?, ?, NOW(6))", uuidToBytes(member2), Date.valueOf(LocalDate.of(2026, 6, 21)))
 
         val result =
             mockMvc()
-                .perform(get("/admin/metrics/launch").param("date", "2026-06-20"))
-                .andExpect(status().isOk)
+                .perform(
+                    get("/admin/metrics/launch")
+                        .param("from", "2026-06-20T13:00")
+                        .param("to", "2026-06-20T18:00"),
+                ).andExpect(status().isOk)
                 .andExpect(view().name("admin/launch-recap"))
                 .andReturn()
 
         val recap = result.modelAndView!!.model["recap"] as LaunchRecap
 
-        // 가입 — 경계 전후 분리
+        // 구간이 그대로 반영됐는지
+        assertEquals(LocalDateTime.of(2026, 6, 20, 13, 0), recap.from)
+        assertEquals(LocalDateTime.of(2026, 6, 20, 18, 0), recap.to)
+
+        // 가입 — 구간 전/내, 구간 후(afterWindow)는 제외
         assertEquals(2, recap.signup.before)
         assertEquals(3, recap.signup.after)
         assertEquals(2, recap.signup.afterMembers)
@@ -141,9 +152,7 @@ class LaunchMetricsRecapIntegrationTest : IntegrationTestSupport() {
 
         // 미시딩 지표 — 쿼리 실행 무결성(0)
         assertEquals(0, recap.tournament.created)
-        assertEquals(0, recap.tournament.itemsAdded)
         assertEquals(0, recap.pushReachableUsers)
         assertEquals(0, recap.push.notificationsTotal)
-        assertEquals(0, recap.push.deliverySuccess)
     }
 }

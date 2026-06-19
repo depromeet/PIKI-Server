@@ -41,11 +41,14 @@
   <div class="wrap">
     <h1>런칭데이 리캡</h1>
     <p class="lede">
-      <b th:text="${#temporals.format(launchDate, 'yyyy-MM-dd')}">2026-06-20</b> 00:00(KST) 기준 전/후 지표 · 새로고침할수록 최신.
+      조회 구간(KST) <b th:text="${#temporals.format(recap.from, 'yyyy-MM-dd HH:mm')}">2026-06-20 00:00</b> ~ <b th:text="${#temporals.format(recap.to, 'yyyy-MM-dd HH:mm')}">지금</b> · 구간 내([시작, 종료)) 활동을 집계한다.
     </p>
-    <form method="get" th:action="@{/admin/metrics/launch}" style="display:flex;gap:8px;align-items:center;margin-bottom:18px">
-      <input type="date" name="date" th:value="${launchDate}">
-      <button class="btn sm" type="submit">새로고침</button>
+    <form method="get" th:action="@{/admin/metrics/launch}" style="display:flex;gap:8px;align-items:center;margin-bottom:18px;flex-wrap:wrap">
+      <label style="font-size:12px;color:var(--muted);font-weight:700">시작</label>
+      <input type="datetime-local" name="from" th:value="${#temporals.format(recap.from, 'yyyy-MM-dd''T''HH:mm')}">
+      <label style="font-size:12px;color:var(--muted);font-weight:700">종료</label>
+      <input type="datetime-local" name="to" th:value="${#temporals.format(recap.to, 'yyyy-MM-dd''T''HH:mm')}">
+      <button class="btn sm" type="submit">조회</button>
     </form>
 
     <!-- 핵심 숫자 -->
@@ -53,17 +56,17 @@
       <div class="stat">
         <div class="k">누적 가입자</div>
         <div class="v" th:text="${#numbers.formatInteger(recap.signup.before + recap.signup.after, 1, 'COMMA')}">0</div>
-        <div class="sub">런칭 전 <b th:text="${#numbers.formatInteger(recap.signup.before,1,'COMMA')}">0</b> · 후 <b class="pos" th:text="'+' + ${#numbers.formatInteger(recap.signup.after,1,'COMMA')}">+0</b></div>
+        <div class="sub">구간 전 <b th:text="${#numbers.formatInteger(recap.signup.before,1,'COMMA')}">0</b> · 구간 내 <b class="pos" th:text="'+' + ${#numbers.formatInteger(recap.signup.after,1,'COMMA')}">+0</b></div>
       </div>
       <div class="stat">
         <div class="k">토너먼트 이용자</div>
         <div class="v" th:text="${#numbers.formatInteger(recap.tournament.participants,1,'COMMA')}">0</div>
-        <div class="sub">런칭 후 참여한 유저</div>
+        <div class="sub">구간 내 참여한 유저</div>
       </div>
       <div class="stat">
         <div class="k">위시 담기</div>
         <div class="v" th:text="${#numbers.formatInteger(recap.wish.total,1,'COMMA')}">0</div>
-        <div class="sub">런칭 후 담은 아이템</div>
+        <div class="sub">구간 내 담은 아이템</div>
       </div>
       <div class="stat">
         <div class="k">토너먼트 올라간 아이템</div>
@@ -73,7 +76,7 @@
     </div>
 
     <!-- 가입 상세 -->
-    <h2>가입 상세 (런칭 후)</h2>
+    <h2>가입 상세 (구간 내)</h2>
     <div class="card">
       <div class="kv"><span class="lab">provider</span>
         <span>
@@ -112,7 +115,7 @@
     <h2>리텐션 / DAU</h2>
     <div class="card">
       <div class="kv"><span class="lab">D1 재방문</span>
-        <span>런칭날 가입 <b th:text="${recap.retention.launchDaySignups}">0</b> → 다음날 <b class="pos" th:text="${recap.retention.d1Returned}">0</b> (<b th:text="${recap.retention.d1Rate} + '%'">0%</b>)</span>
+        <span>구간 가입 <b th:text="${recap.retention.launchDaySignups}">0</b> → 다음날 <b class="pos" th:text="${recap.retention.d1Returned}">0</b> (<b th:text="${recap.retention.d1Rate} + '%'">0%</b>)</span>
       </div>
       <div style="margin-top:10px">
         <div class="bar-row" th:each="d : ${recap.retention.dau}">
@@ -143,7 +146,7 @@
     </div>
 
     <!-- 시간대별 -->
-    <h2>시간대별 가입 (런칭 당일 · KST)</h2>
+    <h2>시간대별 가입 (구간 · KST)</h2>
     <div class="card">
       <div class="bar-row" th:each="h : ${recap.hourlySignups}">
         <span class="h" th:text="${h.hour} + '시'">0시</span>
