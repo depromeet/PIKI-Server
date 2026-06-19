@@ -4,6 +4,9 @@ name: Promote
 # 코드는 PR 로 dev 에만 들어오고(squash), 이 워크플로가 "이미 CI 통과·배포된 동일 커밋"을 다음 환경으로
 # 앞으로만(fast-forward) 옮긴다. ff 전용이라 세 브랜치 SHA 가 항상 정렬되고, squash·분기 사고를 구조적으로 막는다.
 #
+# prod 승격 시 선택한 단위(patch/minor/major)로 다음 semver 버전을 계산해 deploy 로 넘긴다. 실제 태그·릴리즈는
+# deploy 의 release job 이 "배포 성공 후" 만든다(안 뜬 버전에 태그를 안 박기 위해).
+#
 # staging·main 에는 직접 커밋하지 않는 것이 전제다 (직접 커밋이 들어가면 ff 가 깨져 이 워크플로가 에러로 멈춘다).
 on:
   workflow_dispatch:
@@ -15,6 +18,15 @@ on:
         options:
           - staging
           - prod
+      bump:
+        description: "prod 버전 증가 단위 (staging 은 무시). 최신 vX.Y.Z 에서 bump, 태그 없으면 v1.0.0 baseline."
+        required: false
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 # ref 업데이트(contents) + deploy 워크플로 dispatch(actions) 권한.
 permissions:
@@ -39,6 +51,33 @@ jobs:
             echo "source=staging" >> "$GITHUB_OUTPUT"
             echo "target=main"    >> "$GITHUB_OUTPUT"
           fi
+
+      # prod 승격에만 필요 — 태그를 읽어 다음 버전 계산.
+      - name: Checkout (태그 조회용)
+        if: ${{ inputs.target == 'prod' }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 다음 prod 버전 계산
+        id: ver
+        if: ${{ inputs.target == 'prod' }}
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          # 최신 semver 태그. 없으면 v1.0.0 을 "이미 출시된 baseline" 으로 보고 거기서 bump (첫 릴리즈는 v1.0.1~).
+          LATEST=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1)
+          BASE="${LATEST#v}"
+          [ -z "$BASE" ] && BASE="1.0.0"
+          IFS=. read -r MA MI PA <<< "$BASE"
+          case "$BUMP" in
+            major) MA=$((MA + 1)); MI=0; PA=0 ;;
+            minor) MI=$((MI + 1)); PA=0 ;;
+            *)     PA=$((PA + 1)) ;;
+          esac
+          VER="v${MA}.${MI}.${PA}"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "::notice::다음 prod 버전 $VER (latest=${LATEST:-none}, bump=$BUMP)"
 
       - name: Fast-forward 승격
         id: ff
@@ -71,12 +110,18 @@ jobs:
         if: ${{ steps.ff.outputs.skipped == 'false' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          DST: ${{ steps.plan.outputs.target }}
+          TARGET: ${{ inputs.target }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           # GITHUB_TOKEN 으로 한 ref 업데이트는 CI(on: push)를 자동 트리거하지 않는다(Actions recursion 방지).
           # ff 라 대상 SHA 는 dev 에서 이미 CI 를 통과한 동일 커밋이므로, CI 재실행 없이 배포만 직접 dispatch 한다.
-          gh workflow run deploy.yml --ref "$DST"
-          echo "::notice::deploy.yml dispatch → $DST (배포는 Deploy 워크플로에서 진행)"
+          if [ "$TARGET" = "prod" ]; then
+            gh workflow run deploy.yml --ref main -f version="$VERSION"
+            echo "::notice::deploy.yml dispatch → main (version=$VERSION)"
+          else
+            gh workflow run deploy.yml --ref staging
+            echo "::notice::deploy.yml dispatch → staging"
+          fi
 
       - name: 요약
         if: ${{ always() }}
@@ -86,12 +131,16 @@ jobs:
           DST: ${{ steps.plan.outputs.target }}
           SHA: ${{ steps.ff.outputs.sha }}
           SKIPPED: ${{ steps.ff.outputs.skipped }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           {
             echo "### Promote: $TARGET_INPUT"
             echo ""
             echo "- 경로: \`$SRC\` → \`$DST\`"
             echo "- 커밋: \`$SHA\`"
+            if [ "$TARGET_INPUT" = "prod" ]; then
+              echo "- 버전: \`$VERSION\` (배포 성공 시 deploy 가 태그·릴리즈 생성)"
+            fi
             if [ "$SKIPPED" = "true" ]; then
               echo "- 결과: 변경 없음(이미 동일) — 배포 생략"
             else
