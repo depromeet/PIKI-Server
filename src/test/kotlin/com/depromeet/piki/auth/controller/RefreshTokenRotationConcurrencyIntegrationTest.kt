@@ -65,34 +65,40 @@ class RefreshTokenRotationConcurrencyIntegrationTest : IntegrationTestSupport() 
             // 2 단계 래치로 동시 출발 강제 — 한 단계 래치만 쓰면 worker 가 await 도달 전에
             // main 이 countDown 할 수 있어 사실상 순차 실행이 돼 race 재현 신뢰도가 떨어진다.
             val executor = Executors.newFixedThreadPool(2)
-            val workersReady = CountDownLatch(2)
-            val start = CountDownLatch(1)
-            val futures =
-                (0..1).map {
-                    executor.submit<Pair<Int, String>> {
-                        workersReady.countDown()
-                        start.await()
-                        val response =
-                            mockMvc
-                                .perform(
-                                    post("/api/v1/auth/token/refresh")
-                                        .header("X-Client-Type", "app")
-                                        .contentType(MediaType.APPLICATION_JSON)
-                                        .content(body),
-                                ).andReturn()
-                                .response
-                        val refreshed =
-                            response.contentAsString
-                                .takeIf { it.isNotBlank() }
-                                ?.let { objectMapper.readTree(it).at("/data/refreshToken").asText() }
-                                .orEmpty()
-                        response.status to refreshed
-                    }
+            val results =
+                try {
+                    val workersReady = CountDownLatch(2)
+                    val start = CountDownLatch(1)
+                    val futures =
+                        (0..1).map {
+                            executor.submit<Pair<Int, String>> {
+                                workersReady.countDown()
+                                start.await()
+                                val response =
+                                    mockMvc
+                                        .perform(
+                                            post("/api/v1/auth/token/refresh")
+                                                .header("X-Client-Type", "app")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(body),
+                                        ).andReturn()
+                                        .response
+                                val refreshed =
+                                    response.contentAsString
+                                        .takeIf { it.isNotBlank() }
+                                        ?.let { objectMapper.readTree(it).at("/data/refreshToken").asText() }
+                                        .orEmpty()
+                                response.status to refreshed
+                            }
+                        }
+                    // await 에 타임아웃을 둬 worker 가 안 뜨면 무기한 대기하지 않게 한다.
+                    assertTrue(workersReady.await(5, TimeUnit.SECONDS), "worker 준비 대기 timeout")
+                    start.countDown()
+                    futures.map { it.get(10, TimeUnit.SECONDS) }
+                } finally {
+                    // 예외·타임아웃에도 스레드풀이 반드시 정리되게 한다 (CI hang·스레드 누수 방지).
+                    executor.shutdownNow()
                 }
-            workersReady.await()
-            start.countDown()
-            val results = futures.map { it.get(10, TimeUnit.SECONDS) }
-            executor.shutdown()
 
             // 두 요청 모두 200 (401·로그아웃 없음)
             assertEquals(setOf(200), results.map { it.first }.toSet())

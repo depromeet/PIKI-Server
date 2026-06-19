@@ -122,6 +122,21 @@ class RedisRefreshTokenStoreIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `rotateOrReplay - grace 창 안이어도 current 도 grace 의 옛 토큰도 아닌 토큰은 ReuseDetected 이다`() {
+        val userId = UUID.randomUUID()
+        store.save(userId, "A")
+        store.rotateOrReplay(userId, presented = "A", candidateRefreshToken = "B") // current=B, grace=A|B 살아있음
+
+        // grace 가 살아있어도 A·B 둘 다 아닌 무관 토큰은 replay 가 아니라 재사용 의심으로 처리돼야 한다
+        val outcome = store.rotateOrReplay(userId, presented = "X", candidateRefreshToken = "C")
+
+        assertIs<RefreshOutcome.ReuseDetected>(outcome)
+        assertNull(store.get(userId)) // family invalidation
+
+        store.delete(userId)
+    }
+
+    @Test
     fun `delete 는 grace 키도 함께 지운다`() {
         val userId = UUID.randomUUID()
         store.save(userId, "A")
