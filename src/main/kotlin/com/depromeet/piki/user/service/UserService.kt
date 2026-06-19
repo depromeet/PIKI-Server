@@ -6,6 +6,7 @@ import com.depromeet.piki.user.domain.UserException
 import com.depromeet.piki.user.repository.UserDetailRepository
 import com.depromeet.piki.user.repository.UserRepository
 import com.depromeet.piki.user.service.dto.UserProfile
+import org.slf4j.LoggerFactory
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -17,6 +18,8 @@ class UserService(
     private val userDetailRepository: UserDetailRepository,
     private val defaultProfileImages: DefaultProfileImages,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     companion object {
         // 형용사 32 × 동물 32 = 1024 조합. 모든 조합이 닉네임 10자 제한 이하가 되도록
         // 형용사는 5자 이하, 동물은 3자 이하로 유지한다(최대 5+1+3=9자).
@@ -153,7 +156,7 @@ class UserService(
     }
 
     @Transactional(readOnly = true)
-    fun findById(userId: UUID): User = userRepository.findById(userId) ?: throw UserException.notFound(userId)
+    fun findById(userId: UUID): User = userRepository.findById(userId) ?: throw UserException.notFound()
 
     // 마이페이지(GET /me) 조회 — User(정체성)와 UserDetail 의 email 을 한 트랜잭션에서 모은다.
     // email 은 미수집(게스트)·미동의·backfill 전이면 UserDetail 이 없거나 null 이라 그대로 null 로 내려간다.
@@ -185,20 +188,31 @@ class UserService(
         profileImageUrl: String?,
     ): User {
         val user = findById(userId)
-        user.deletedAt?.let { throw UserException.deletedUser(userId) }
-        nickname?.let {
-            if (userRepository.existsByNicknameAndIdNot(it, userId)) throw UserException.duplicateNickname()
-            user.updateNickname(it)
-        }
-        profileImageUrl?.let { user.updateProfileImage(it) }
+        user.deletedAt?.let { throw UserException.deletedUser() }
+        // 무엇이 바뀌었는지만 남긴다 — 닉네임 원문은 PII 라 값이 아니라 "어떤 필드가 변경됐나"만 로깅한다.
+        val changedFields =
+            buildList {
+                nickname?.let {
+                    if (userRepository.existsByNicknameAndIdNot(it, userId)) throw UserException.duplicateNickname()
+                    user.updateNickname(it)
+                    add("nickname")
+                }
+                profileImageUrl?.let {
+                    user.updateProfileImage(it)
+                    add("profileImage")
+                }
+            }
         // existsByNicknameAndIdNot 체크와 save 사이에 다른 트랜잭션이 같은 nickname 으로 update / insert 하면
         // DB unique constraint (uq_users_nickname) 위반이 떠 race 케이스에서 500 이 새어나갈 수 있다.
         // createMember 와 같은 패턴으로 catch → 409 로 매핑.
-        return try {
-            userRepository.save(user)
-        } catch (e: DataIntegrityViolationException) {
-            throw UserException.duplicateNickname()
-        }
+        val saved =
+            try {
+                userRepository.save(user)
+            } catch (e: DataIntegrityViolationException) {
+                throw UserException.duplicateNickname()
+            }
+        log.info("내 정보 수정 userId={} 변경필드={}", userId, changedFields)
+        return saved
     }
 
     // 소셜 가입/연동 시 provider 가 준 프로필 이미지 URL 영속화만 담당하는 짧은 트랜잭션 (SocialAccountWriter 전용).
@@ -209,7 +223,7 @@ class UserService(
         profileImageUrl: String,
     ): User {
         val user = findById(userId)
-        user.deletedAt?.let { throw UserException.deletedUser(userId) }
+        user.deletedAt?.let { throw UserException.deletedUser() }
         user.updateProfileImage(profileImageUrl)
         return userRepository.save(user)
     }
@@ -217,7 +231,7 @@ class UserService(
     @Transactional
     fun promoteToMember(userId: UUID): User {
         val user = findById(userId)
-        user.deletedAt?.let { throw UserException.deletedUser(userId) }
+        user.deletedAt?.let { throw UserException.deletedUser() }
         user.promoteToMember()
         return userRepository.save(user)
     }

@@ -78,6 +78,8 @@ interface TournamentApi {
             응답의 status 필드에 따라 포함되는 데이터가 달라진다.
             - PENDING: pending 필드 (아이템 목록, 참여자 목록)
               - 각 아이템에 status 포함 (READY / PENDING / PROCESSING / FAILED). PENDING·PROCESSING 이면 name·price·imageUrl 은 null 이라 응답에서 제외됨
+              - 각 아이템에 userId 포함 (해당 아이템을 담은 참여자의 userId)
+              - 각 참여자에 itemCount 포함 (해당 참여자가 이 토너먼트에 담은 아이템 수)
               - pending.ownerStarted = false
             - IN_PROGRESS: 요청자 역할에 따라 두 가지 응답이 있다.
               - 소유자(isOwner=true) 또는 이미 매치를 시작한 멤버: inProgress 필드
@@ -686,7 +688,7 @@ interface TournamentApi {
 
     @Operation(
         summary = "친구 초대 마감 시각 수정",
-        description = "PENDING 상태 토너먼트의 초대 마감 시각을 지금으로부터 N분 후로 재설정한다. 주최자만 가능. 최소 1분, 최대 1440분(24시간).",
+        description = "PENDING 상태 토너먼트의 초대 마감 시각을 재설정한다. 주최자만 가능. 현재 시각 이후, 최대 24시간 이내의 절대 시각을 입력한다.",
     )
     @ApiResponses(
         value = [
@@ -697,7 +699,7 @@ interface TournamentApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (inviteDurationMinutes 1 미만 또는 1440 초과)",
+                description = "잘못된 요청 (newExpiresAt 가 현재 시각 이전 · 24시간 초과)",
                 content = [Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = Schema(implementation = ApiResponseBody::class))],
             ),
             ApiResponse(

@@ -1,8 +1,11 @@
 package com.depromeet.piki.notification.handler
 
+import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.event.ItemParsingCompleted
 import com.depromeet.piki.item.event.ItemParsingFailed
+import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.notification.domain.NotificationRouting
+import com.depromeet.piki.notification.domain.NotificationType
 import com.depromeet.piki.notification.repository.NotificationRepository
 import com.depromeet.piki.notification.service.NotificationDispatcher
 import com.depromeet.piki.support.IntegrationTestSupport
@@ -11,6 +14,7 @@ import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
 import com.depromeet.piki.tournament.event.TournamentCompleted
 import com.depromeet.piki.tournament.event.TournamentItemAdded
+import com.depromeet.piki.tournament.event.TournamentItemDeleted
 import com.depromeet.piki.tournament.event.TournamentJoined
 import com.depromeet.piki.tournament.event.TournamentPlayedFromLink
 import com.depromeet.piki.tournament.event.TournamentResultReady
@@ -37,6 +41,8 @@ import kotlin.test.assertTrue
 class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var itemAddedHandler: TournamentItemAddedHandler
 
+    @Autowired private lateinit var itemDeletedHandler: TournamentItemDeletedHandler
+
     @Autowired private lateinit var joinedHandler: TournamentJoinedHandler
 
     @Autowired private lateinit var startedHandler: TournamentStartedHandler
@@ -59,6 +65,8 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
 
     @Autowired private lateinit var wishRepository: WishRepository
 
+    @Autowired private lateinit var itemSnapshotRepository: ItemSnapshotRepository
+
     @Autowired private lateinit var userRepository: UserRepository
 
     @Autowired private lateinit var notificationDispatcher: NotificationDispatcher
@@ -76,6 +84,61 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val recipients = itemAddedHandler.resolveRecipients(TournamentItemAdded(tournamentId, actor))
 
         assertEquals(setOf(other1, other2), recipients)
+    }
+
+    @Test
+    fun `토너먼트 아이템 삭제 수신자는 참가자에서 삭제한 본인을 뺀 집합이다`() {
+        val tournamentId = 1201L
+        val actor = UUID.randomUUID()
+        val other1 = UUID.randomUUID()
+        val other2 = UUID.randomUUID()
+        // 삭제한 본인(등록자 또는 주최자)은 자기 화면이 이미 알고 있어 제외 — 추가 알림과 동일 규칙.
+        listOf(actor, other1, other2).forEach { tournamentUserRepository.save(TournamentUser(tournamentId, it)) }
+
+        val recipients = itemDeletedHandler.resolveRecipients(TournamentItemDeleted(tournamentId, tournamentItemId = 1L, snapshotId = 1L, actorId = actor))
+
+        assertEquals(setOf(other1, other2), recipients)
+    }
+
+    @Test
+    fun `토너먼트 아이템 삭제 라우팅은 그 토너먼트와 빠진 아이템 좌표다`() {
+        val routing =
+            itemDeletedHandler.resolveRouting(
+                TournamentItemDeleted(tournamentId = 1204L, tournamentItemId = 5555L, snapshotId = 1L, actorId = UUID.randomUUID()),
+            )
+
+        assertEquals(NotificationRouting.Tournament(tournamentId = 1204L, tournamentItemId = 5555L), routing)
+    }
+
+    @Test
+    fun `토너먼트 아이템 삭제 변수는 actorName 과 snapshot 에서 끌어온 itemName 을 함께 담는다`() {
+        val tournamentId = 1202L
+        val actor = UUID.randomUUID()
+        userRepository.save(User(id = actor, nickname = "홍길동", profileImage = "https://x/p.jpg", identityType = IdentityType.GUEST))
+        val snapshotId = itemSnapshotRepository.save(ItemSnapshot(itemId = 7202L, name = "나이키 에어맥스")).getId()
+
+        val variables =
+            itemDeletedHandler.resolveActorContext(
+                TournamentItemDeleted(tournamentId, tournamentItemId = 1L, snapshotId = snapshotId, actorId = actor),
+            ).variables
+
+        assertEquals(
+            mapOf("actorName" to "홍길동", "tournamentId" to "1202", "tournamentName" to "토너먼트", "itemName" to "나이키 에어맥스"),
+            variables,
+        )
+    }
+
+    @Test
+    fun `토너먼트 아이템 삭제 변수 itemName 은 상품명이 아직 없으면 fallback 이다`() {
+        // 파싱 전(PROCESSING) 아이템을 지운 경우 — snapshot.name 이 null 이라 fallback 문구로 채운다.
+        val snapshotId = itemSnapshotRepository.save(ItemSnapshot.processing(7203L)).getId()
+
+        val variables =
+            itemDeletedHandler.resolveActorContext(
+                TournamentItemDeleted(tournamentId = 1203L, tournamentItemId = 1L, snapshotId = snapshotId, actorId = UUID.randomUUID()),
+            ).variables
+
+        assertEquals("상품", variables["itemName"])
     }
 
     @Test
@@ -114,7 +177,8 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
 
         val variables = startedHandler.resolveActorContext(TournamentStarted(tournamentId, owner)).variables
 
-        assertEquals(mapOf("actorName" to "주최자"), variables)
+        // 변수 계약: actorName + tournamentId + tournamentName(토너먼트 미생성이라 fallback). 카탈로그·미리보기와 일치해야 한다.
+        assertEquals(mapOf("actorName" to "주최자", "tournamentId" to "1008", "tournamentName" to "토너먼트"), variables)
     }
 
     @Test
@@ -125,14 +189,14 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
 
         val variables = itemAddedHandler.resolveActorContext(TournamentItemAdded(tournamentId, actor)).variables
 
-        assertEquals(mapOf("actorName" to "홍길동"), variables)
+        assertEquals(mapOf("actorName" to "홍길동", "tournamentId" to "1003", "tournamentName" to "토너먼트"), variables)
     }
 
     @Test
     fun `행위자 유저를 못 찾으면 actorName 은 fallback 으로 채운다`() {
         val variables = itemAddedHandler.resolveActorContext(TournamentItemAdded(1004L, UUID.randomUUID())).variables
 
-        assertEquals(mapOf("actorName" to ActorNameResolver.UNKNOWN_ACTOR), variables)
+        assertEquals(mapOf("actorName" to ActorNameResolver.UNKNOWN_ACTOR, "tournamentId" to "1004", "tournamentName" to "토너먼트"), variables)
     }
 
     @Test
@@ -177,12 +241,38 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
     }
 
     @Test
+    fun `dispatch 가 아이템 삭제 알림을 상품명까지 렌더하고 아이템 좌표를 라우팅에 박는다 - end-to-end`() {
+        val tournamentId = 1205L
+        val tournamentItemId = 6001L
+        val actor = UUID.randomUUID()
+        val recipient = UUID.randomUUID()
+        listOf(actor, recipient).forEach { tournamentUserRepository.save(TournamentUser(tournamentId, it)) }
+        userRepository.save(User(id = actor, nickname = "행위자", profileImage = "https://x/snap.png", identityType = IdentityType.GUEST))
+        val snapshotId = itemSnapshotRepository.save(ItemSnapshot(itemId = 7205L, name = "나이키 에어맥스")).getId()
+
+        // 이벤트 발행 → dispatch → 삭제 핸들러(snapshot 으로 상품명 해석) → 삭제 템플릿 렌더 + 라우팅까지 실제 체인을 탄다.
+        notificationDispatcher.dispatch(
+            TournamentItemDeleted(tournamentId, tournamentItemId = tournamentItemId, snapshotId = snapshotId, actorId = actor),
+        )
+
+        val saved = notificationRepository.findPage(recipient, cursor = null, limit = 10, types = null)
+        assertEquals(1, saved.size)
+        assertEquals(NotificationType.TOURNAMENT_ITEM_DELETED, saved.first().type)
+        assertEquals(tournamentId, saved.first().refId)
+        // 상품명이 템플릿에 렌더돼 제목에 박힌다.
+        assertEquals("행위자님이 '나이키 에어맥스'을(를) 삭제했어요", saved.first().title)
+        assertEquals("https://x/snap.png", saved.first().actorImageUrl)
+        // 어느 토너먼트의 어느 아이템이 빠졌는지 좌표가 payload 로 흐를 라우팅에 박힌다(클라가 그 항목만 제거).
+        assertEquals(NotificationRouting.Tournament(tournamentId, tournamentItemId), saved.first().routing())
+    }
+
+    @Test
     fun `파싱 완료 수신자 - 위시로만 담긴 아이템은 그 위시 주인들이다`() {
         val itemId = 2001L
         val owner1 = UUID.randomUUID()
         val owner2 = UUID.randomUUID()
-        wishRepository.save(Wish(owner1, itemId))
-        wishRepository.save(Wish(owner2, itemId))
+        wishRepository.save(Wish(owner1, snapshotIdFor(itemId)))
+        wishRepository.save(Wish(owner2, snapshotIdFor(itemId)))
 
         val recipients = parsingCompletedHandler.resolveRecipients(ItemParsingCompleted(itemId))
 
@@ -197,7 +287,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val otherParticipant = UUID.randomUUID()
         // otherParticipant 는 추가 시점에 TOURNAMENT_ITEM_ADDED 로 갱신하므로 파싱완료는 안 받는다 — 참가자로 깔아두고 제외를 확인.
         listOf(adder, otherParticipant).forEach { tournamentUserRepository.save(TournamentUser(tournamentId, it)) }
-        tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, itemId, adder)))
+        tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, adder, snapshotIdFor(itemId))))
 
         val recipients = parsingCompletedHandler.resolveRecipients(ItemParsingCompleted(itemId))
 
@@ -211,9 +301,9 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val wishOwner = UUID.randomUUID()
         val adder = UUID.randomUUID()
         val otherParticipant = UUID.randomUUID()
-        wishRepository.save(Wish(wishOwner, itemId))
+        wishRepository.save(Wish(wishOwner, snapshotIdFor(itemId)))
         listOf(adder, otherParticipant).forEach { tournamentUserRepository.save(TournamentUser(tournamentId, it)) }
-        tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, itemId, adder)))
+        tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, adder, snapshotIdFor(itemId))))
 
         val recipients = parsingCompletedHandler.resolveRecipients(ItemParsingCompleted(itemId))
 
@@ -231,7 +321,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
     fun `파싱 실패 핸들러도 완료와 동일한 역조회 규칙을 쓴다`() {
         val itemId = 2004L
         val owner = UUID.randomUUID()
-        wishRepository.save(Wish(owner, itemId))
+        wishRepository.save(Wish(owner, snapshotIdFor(itemId)))
 
         val recipients = parsingFailedHandler.resolveRecipients(ItemParsingFailed(itemId))
 
@@ -241,7 +331,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
     @Test
     fun `파싱 완료 라우팅 - 위시로 담긴 아이템은 WISH 다 (토너먼트 식별자 없음)`() {
         val itemId = 3001L
-        wishRepository.save(Wish(UUID.randomUUID(), itemId))
+        wishRepository.save(Wish(UUID.randomUUID(), snapshotIdFor(itemId)))
 
         val routing = parsingCompletedHandler.resolveRouting(ItemParsingCompleted(itemId))
 
@@ -253,7 +343,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val itemId = 3002L
         val tournamentId = 1100L
         val tournamentItem =
-            tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, itemId, UUID.randomUUID()))).first()
+            tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, UUID.randomUUID(), snapshotIdFor(itemId)))).first()
 
         val routing = parsingCompletedHandler.resolveRouting(ItemParsingCompleted(itemId))
 
@@ -265,7 +355,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         val itemId = 3003L
         val tournamentId = 1101L
         val tournamentItem =
-            tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, itemId, UUID.randomUUID()))).first()
+            tournamentItemRepository.saveAll(listOf(TournamentItem(tournamentId, UUID.randomUUID(), snapshotIdFor(itemId)))).first()
 
         val routing = parsingFailedHandler.resolveRouting(ItemParsingFailed(itemId))
 
@@ -275,7 +365,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
     @Test
     fun `파싱 실패 라우팅 - 위시로 담긴 아이템은 WISH 다`() {
         val itemId = 3004L
-        wishRepository.save(Wish(UUID.randomUUID(), itemId))
+        wishRepository.save(Wish(UUID.randomUUID(), snapshotIdFor(itemId)))
 
         val routing = parsingFailedHandler.resolveRouting(ItemParsingFailed(itemId))
 
@@ -337,7 +427,7 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
 
         val context = completedHandler.resolveActorContext(TournamentCompleted(1234L, actor))
 
-        assertEquals(mapOf("actorName" to "행위자"), context.variables)
+        assertEquals(mapOf("actorName" to "행위자", "tournamentId" to "1234", "tournamentName" to "토너먼트"), context.variables)
         assertEquals("https://x/p.png", context.imageUrl)
     }
 
@@ -371,6 +461,10 @@ class NotificationRecipientResolutionIntegrationTest : IntegrationTestSupport() 
         tournamentRepository.saveTournament(clone)
         return clone.getId()
     }
+
+    // 알림 역조회는 wish/tournament_item→item_snapshots 를 snapshot_id 로 조인해 s.item_id 로 매칭한다.
+    // 따라서 그 itemId 로 시딩한 snapshot 의 id 를 wish/tournament_item 의 snapshotId 로 넘겨야 역조회가 맞아떨어진다.
+    private fun snapshotIdFor(itemId: Long): Long = itemSnapshotRepository.save(ItemSnapshot.processing(itemId)).getId()
 
     private var inviteSeq = 0
 

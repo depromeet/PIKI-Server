@@ -6,6 +6,9 @@ import com.depromeet.piki.product.domain.ProductLink
 // 트랜잭션 밖에서 도는 워커가 detached 엔티티를 다시 만지지 않고 link 만으로 파싱하게 한다.
 data class ClaimedItem(
     val itemId: Long,
+    // 워커가 전이시킬 정확한 snapshot id. 갱신(5단계)으로 한 item 에 여러 버전이 공존하므로, 전이 대상을
+    // findLatestByItemId(최신)로 재해석하지 않고 claim 시점에 고정한 이 id 로 짚는다(stale·좀비 워커의 오전이 방지).
+    val snapshotId: Long,
     val link: ProductLink,
 )
 

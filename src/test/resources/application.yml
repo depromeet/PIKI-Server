@@ -32,6 +32,7 @@ oauth:
     bundle-id: com.test.app
     private-key: test-private-key
     redirect-uri: http://localhost/auth/callback/apple
+    web-callback-url: https://test.piki.day/auth/callback/apple
 
 # 컨텍스트 로딩만 통과시키기 위한 더미 fallback. 실제 Gemini 호출 테스트는 @Disabled 또는
 # @EnabledIfEnvironmentVariable 로 별도 격리되어 있으므로 CI 에서 GEMINI_API_KEY 가 없어도
@@ -48,6 +49,7 @@ jwt:
   secret: ${JWT_SECRET:test-jwt-secret-key-must-be-at-least-32-chars!}
   access-token-expiry: 1h
   refresh-token-expiry: 14d
+  refresh-token-grace: 10s
 
 # S3 업로드는 ImageStorage stub 으로 격리되지만, S3Properties·S3Client 빈 자체는 컨텍스트에 생성되므로
 # 더미 값으로 부팅만 통과시킨다 (S3Properties.init 의 notBlank 검증 충족).
@@ -55,6 +57,16 @@ s3:
   bucket: test-bucket
   region: ap-northeast-2
   public-base-url: https://test-bucket.s3.ap-northeast-2.amazonaws.com
+
+# ImageProxyProperties 바인딩을 통과시키기 위한 테스트 더미 설정.
+# 실제 fetch 는 통합 테스트에서 도메인 차단(blockedDomain) 케이스만 검증하므로 도메인 목록은 운영과 동일하게 둔다.
+image:
+  proxy:
+    allowed-domains:
+      - msscdn.net
+      - pstatic.net
+      - kakaocdn.net
+      - coupangcdn.com
 
 # actuator 노출은 운영과 동일하게 박는다 — test classpath 의 application.yml 이 main 을 대체하므로
 # 여기 없으면 health(기본 노출)만 떠 /actuator/prometheus 통합 테스트가 깨진다.
@@ -66,9 +78,3 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
-
-# admin 백오피스 자격증명 — 통합 테스트 부팅 통과용 더미.
-# @Profile("!prod") 로 게이팅되어 있고 테스트는 prod 프로파일을 쓰지 않으므로 항상 활성.
-admin:
-  username: admin
-  password: admin-test-pw

@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <title>공지 발송 확인 · PiKi 백오피스</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <style>
+    :root{--accent:#0EA5E9;--accent-soft:#E0F2FE;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;}
+    *{box-sizing:border-box;} body{margin:0;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:#f7f8fa;color:var(--ink);}
+    .bar{display:flex;align-items:center;gap:12px;padding:14px 24px;background:#fff;border-bottom:1px solid var(--border);}
+    .brand{font-weight:800;font-size:17px;letter-spacing:-.03em;}.brand .dot{color:var(--accent);}
+    .bar a{font-size:13px;color:var(--muted);text-decoration:none;font-weight:600;}
+    .wrap{max-width:760px;margin:0 auto;padding:26px 24px;}
+    h1{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0 0 18px;}
+    .grid{display:grid;grid-template-columns:1fr 300px;gap:22px;align-items:start;}
+    .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:16px;}
+    .extract{background:var(--accent-soft);border:1px solid #bae6fd;border-radius:14px;padding:18px;margin-bottom:16px;}
+    .extract .lbl{font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px;}
+    .extract .big{font-size:26px;font-weight:800;letter-spacing:-.02em;color:var(--accent);}
+    .extract .big b{font-size:30px;}
+    .extract .sub{font-size:12.5px;color:#4b5563;margin-top:6px;}
+    .lbl{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;}
+    .ttl{font-size:15px;font-weight:700;} .bd{color:var(--muted);font-size:13.5px;margin-top:4px;white-space:pre-wrap;}
+    .actions{display:flex;gap:10px;align-items:center;margin-top:8px;}
+    .btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:13px 26px;font-size:14.5px;font-weight:700;font-family:inherit;cursor:pointer;}
+    .btn.ghost{background:#fff;color:var(--muted);border:1px solid var(--border);text-decoration:none;display:inline-block;padding:12px 22px;}
+    .warn{font-size:12.5px;color:#92400e;margin-top:10px;}
+    /* 발송 시각 선택 */
+    .chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;}
+    .chip{border:1px solid #d9def0;background:#fff;color:#0369a1;border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer;transition:all .15s;}
+    .chip:hover{background:var(--accent-soft);border-color:#bae6fd;}
+    .chip.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+    .timerow{display:flex;align-items:center;gap:8px;border:1.5px solid #e3e6ea;border-radius:12px;padding:2px 12px;background:#fbfcfd;transition:border-color .15s,background .15s;}
+    .timerow:focus-within{border-color:var(--accent);background:#fff;}
+    .timerow .cal{font-size:16px;opacity:.7;}
+    .timerow input{border:none;background:transparent;padding:12px 0;font-size:15px;font-family:inherit;color:var(--ink);width:100%;outline:none;}
+    .summary{font-size:13px;color:#4b5563;margin-top:11px;font-weight:600;}
+    .summary.future b{color:#15803d;} .summary.now b{color:var(--accent);} .summary.past{color:#b42318;}
+    /* flatpickr 달력 — PiKi 하늘 테마 */
+    .flatpickr-calendar{border-radius:14px;box-shadow:0 10px 34px rgba(17,24,39,.14);font-family:inherit;border:1px solid var(--border);}
+    .flatpickr-day.selected,.flatpickr-day.selected:hover,.flatpickr-day.startRange,.flatpickr-day.endRange{background:var(--accent);border-color:var(--accent);}
+    .flatpickr-day:hover{background:var(--accent-soft);}
+    .flatpickr-day.today{border-color:var(--accent);}
+    .flatpickr-day.today:hover{background:var(--accent);color:#fff;}
+    .flatpickr-months .flatpickr-prev-month:hover svg,.flatpickr-months .flatpickr-next-month:hover svg{fill:var(--accent);}
+    .flatpickr-current-month .flatpickr-monthDropdown-months,.numInputWrapper span:hover{color:var(--accent);}
+    .flatpickr-weekday{color:var(--muted);font-weight:700;}
+    .flatpickr-time input:hover,.flatpickr-time .flatpickr-am-pm:hover{background:var(--accent-soft);}
+    span.flatpickr-weekday{font-size:12px;}
+    /* push mockup */
+    .phone{background:linear-gradient(160deg,#3a4a6b,#1f2740);border-radius:26px;padding:22px 12px;min-height:200px;}
+    .clock{text-align:center;color:#fff;} .clock .t{font-size:38px;font-weight:300;} .clock .d{font-size:12px;opacity:.85;}
+    .banner{background:rgba(255,255,255,.95);border-radius:16px;padding:11px 12px;margin-top:16px;display:flex;gap:10px;align-items:flex-start;}
+    .app{width:34px;height:34px;border-radius:8px;background:#cfe6fb;flex:none;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;font-style:italic;color:#1c2330;}
+    .bt{flex:1;min-width:0;} .nm{font-size:10.5px;font-weight:700;color:#6b7280;text-transform:uppercase;}
+    .pt{font-size:13px;font-weight:700;color:#1c1f24;margin-top:1px;word-break:break-all;} .pb{font-size:12px;color:#4b5159;margin-top:1px;word-break:break-all;}
+    .side .lbl2{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;}
+  </style>
+</head>
+<body>
+  <div th:replace="~{admin/fragments :: topbar('/admin/announcements', '← 공지 목록')}"></div>
+  <div class="wrap">
+    <h1>공지 발송 확인</h1>
+    <div th:if="${param.error != null and param.error[0] == 'time'}" class="warn" style="background:#fee2e2;color:#b42318;border-radius:8px;padding:9px 14px;margin-bottom:12px">발송 시각 형식이 올바르지 않습니다. 달력에서 다시 선택하거나 비워서 즉시 발송하세요.</div>
+
+    <div class="grid">
+      <div>
+        <div class="extract">
+          <div class="lbl">대상자 추출</div>
+          <div class="big"><b th:text="${recipientCount}">0</b>명에게 발송됩니다</div>
+          <div class="sub">앱 토큰 보유자 전체 (DISTINCT user_id 기준). 조건별 세그먼트는 후속.</div>
+        </div>
+
+        <div class="card">
+          <div class="lbl">발송할 내용</div>
+          <div class="ttl" th:text="${announcement.title}">제목</div>
+          <div class="bd" th:if="${!#strings.isEmpty(announcement.body)}" th:text="${announcement.body}">본문</div>
+        </div>
+
+        <form th:action="@{/admin/announcements/{id}/send(id=${announcement.id})}" method="post">
+          <div class="card" style="margin-bottom:14px">
+            <div class="lbl">발송 시각</div>
+            <div class="chips">
+              <button type="button" class="chip active" data-when="now">지금 즉시</button>
+              <button type="button" class="chip" data-when="+1h">1시간 뒤</button>
+              <button type="button" class="chip" data-when="today18">오늘 18:00</button>
+              <button type="button" class="chip" data-when="tmr9">내일 09:00</button>
+              <button type="button" class="chip" data-when="tmr18">내일 18:00</button>
+            </div>
+            <div class="timerow">
+              <span class="cal">📅</span>
+              <input type="text" id="schedAt" name="scheduledAt" placeholder="달력에서 시각 선택 (비우면 즉시)" readonly>
+            </div>
+            <div class="summary now" id="schedSummary">비워두면 <b>지금 즉시</b> 발송됩니다.</div>
+          </div>
+          <div class="actions">
+            <button class="btn" type="submit">발송/예약 확정</button>
+            <a class="btn ghost" th:href="@{/admin/announcements}">취소</a>
+          </div>
+          <div class="warn">즉시 발송은 실유저에게 바로 푸시가 나가며 되돌릴 수 없습니다. 예약은 목록에서 취소할 수 있습니다.</div>
+        </form>
+      </div>
+
+      <div class="side">
+        <div class="lbl2">잠금화면 미리보기</div>
+        <div class="phone">
+          <div class="clock"><div class="t">9:41</div><div class="d">오늘</div></div>
+          <div class="banner">
+            <div class="app"><img src="/favicon.ico" alt="PiKi" style="width:100%;height:100%;border-radius:8px;object-fit:cover"></div>
+            <div class="bt"><div class="nm">PiKi</div>
+              <div class="pt" th:text="${announcement.title}">제목</div>
+              <div class="pb" th:if="${!#strings.isEmpty(announcement.body)}" th:text="${announcement.body}">본문</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+  <script>
+    // 발송 시각 — flatpickr 달력(PiKi 하늘 테마, 한국어) + 빠른 선택 칩. 고른 시각을 한국어로 요약한다.
+    // 서버에 보내는 값(name=scheduledAt)은 ISO "Y-m-dTH:i"(LocalDateTime.parse 형식), 화면 표시는 altInput 의 친화적 포맷.
+    (function () {
+      var summary = document.getElementById('schedSummary');
+      var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
+      function pad(n) { return (n < 10 ? '0' : '') + n; }
+      var days = ['일', '월', '화', '수', '목', '금', '토'];
+      function preset(kind) {
+        var d = new Date();
+        if (kind === '+1h') { d.setHours(d.getHours() + 1); return d; }
+        if (kind === 'today18') { d.setHours(18, 0, 0, 0); return d; }
+        if (kind === 'tmr9') { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d; }
+        if (kind === 'tmr18') { d.setDate(d.getDate() + 1); d.setHours(18, 0, 0, 0); return d; }
+        return null; // now
+      }
+      var fp = flatpickr('#schedAt', {
+        enableTime: true, time_24hr: true, minuteIncrement: 5,
+        dateFormat: 'Y-m-d\\TH:i', altInput: true, altFormat: 'Y년 n월 j일 (D) H:i',
+        locale: 'ko', minDate: 'today',
+        onChange: function () { chips.forEach(function (x) { x.classList.remove('active'); }); render(); },
+      });
+      function render() {
+        var d = fp.selectedDates[0];
+        if (!d) { summary.className = 'summary now'; summary.innerHTML = '비워두면 <b>지금 즉시</b> 발송됩니다.'; return; }
+        if (d.getTime() <= Date.now()) { summary.className = 'summary past'; summary.innerHTML = '⚠ 과거 시각입니다. 미래로 골라주세요.'; return; }
+        var ap = d.getHours() < 12 ? '오전' : '오후';
+        var h = d.getHours() % 12; if (h === 0) h = 12;
+        var txt = d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + days[d.getDay()] + ') ' + ap + ' ' + h + ':' + pad(d.getMinutes());
+        summary.className = 'summary future'; summary.innerHTML = '→ <b>' + txt + '</b> 에 자동 발송(예약)';
+      }
+      chips.forEach(function (c) {
+        c.addEventListener('click', function () {
+          chips.forEach(function (x) { x.classList.remove('active'); });
+          c.classList.add('active');
+          var d = preset(c.getAttribute('data-when'));
+          if (d) fp.setDate(d, false); else fp.clear(false); // triggerChange=false 로 onChange 의 칩 해제를 피하고 직접 render
+          render();
+        });
+      });
+      // 과거 시각 제출 차단(서버 require 와 이중 방어) — 비우면 즉시 발송이라 통과시킨다.
+      document.getElementById('schedAt').form.addEventListener('submit', function (e) {
+        var d = fp.selectedDates[0];
+        if (d && d.getTime() <= Date.now()) {
+          e.preventDefault();
+          alert('과거 시각은 예약할 수 없습니다. 미래 시각을 고르거나, 비워서 즉시 발송하세요.');
+        }
+      });
+      render();
+    })();
+  </script>
+</body>
+</html>

@@ -26,37 +26,37 @@ class AsyncImageParsingWorker(
     @Async(AsyncConfig.ITEM_PARSING_EXECUTOR)
     override fun parse(
         itemId: Long,
+        snapshotId: Long,
         image: ProductImage,
     ) {
         runCatching {
             val extraction = productImageExtractor.extract(image)
-            val imageUrl =
+            // bbox 있으면 크롭 이미지를, 없으면 원본 이미지를 S3에 올린다.
+            // 어떤 경우든 이미지 파일로 등록한 이상 imageUrl 이 채워져야 한다(READY 불변식).
+            val bytes =
                 extraction.boundingBox
                     ?.let { imageCropper.crop(image.bytes, it) }
-                    ?.let { cropped ->
-                        runCatching {
-                            imageStorage.upload(cropped, "items/${UUID.randomUUID()}.png", "image/png")
-                        }.getOrElse { e ->
-                            log.warn("item {} 크롭 이미지 S3 업로드 실패, imageUrl 없이 등록: {}", itemId, e.message)
-                            null
-                        }
-                    }
+                    ?: image.bytes
+            val imageUrl = imageStorage.upload(bytes, "items/${UUID.randomUUID()}.png", "image/png")
             extraction.snapshot.copy(imageUrl = imageUrl)
         }.onSuccess { snapshot ->
-            runCatching { itemParsingService.markReady(itemId, snapshot) }
+            runCatching { itemParsingService.markReady(snapshotId, snapshot) }
                 .onSuccess { log.info("item {} 이미지 파싱 완료 → READY", itemId) }
                 .onFailure { e ->
                     log.warn("item {} READY 전이 실패 → FAILED: {}", itemId, e.message)
-                    markFailedQuietly(itemId)
+                    markFailedQuietly(itemId, snapshotId)
                 }
         }.onFailure { e ->
             log.warn("item {} 이미지 파싱 실패: {}", itemId, e.message)
-            markFailedQuietly(itemId)
+            markFailedQuietly(itemId, snapshotId)
         }
     }
 
-    private fun markFailedQuietly(itemId: Long) {
-        runCatching { itemParsingService.markFailed(itemId) }
+    private fun markFailedQuietly(
+        itemId: Long,
+        snapshotId: Long,
+    ) {
+        runCatching { itemParsingService.markFailed(snapshotId) }
             .onFailure { e ->
                 when (e) {
                     is IllegalStateException -> log.info("item {} 는 이미 전이됨, FAILED 처리 생략: {}", itemId, e.message)

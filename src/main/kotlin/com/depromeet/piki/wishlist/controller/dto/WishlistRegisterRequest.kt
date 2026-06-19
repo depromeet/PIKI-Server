@@ -6,8 +6,8 @@ import jakarta.validation.constraints.Size
 
 @Schema(description = "위시리스트 등록 요청")
 data class WishlistRegisterRequest(
-    @field:NotBlank
-    @field:Size(max = 2048)
+    @field:NotBlank(message = "링크를 입력해 주세요.")
+    @field:Size(max = 2048, message = "링크가 너무 길어요.")
     @field:Schema(
         description = "등록할 상품 페이지 URL",
         example = "https://www.example-shop.com/products/12345",

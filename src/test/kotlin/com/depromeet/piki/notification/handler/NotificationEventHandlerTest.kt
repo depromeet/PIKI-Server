@@ -5,6 +5,7 @@ import com.depromeet.piki.item.event.ItemParsingFailed
 import com.depromeet.piki.notification.domain.NotificationType
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.tournament.event.TournamentItemAdded
+import com.depromeet.piki.tournament.event.TournamentItemDeleted
 import com.depromeet.piki.tournament.event.TournamentJoined
 import com.depromeet.piki.tournament.event.TournamentStarted
 import org.junit.jupiter.api.Test
@@ -20,6 +21,8 @@ class NotificationEventHandlerTest : IntegrationTestSupport() {
 
     @Autowired private lateinit var tournamentItemAddedHandler: TournamentItemAddedHandler
 
+    @Autowired private lateinit var tournamentItemDeletedHandler: TournamentItemDeletedHandler
+
     @Autowired private lateinit var tournamentJoinedHandler: TournamentJoinedHandler
 
     @Autowired private lateinit var tournamentStartedHandler: TournamentStartedHandler
@@ -33,6 +36,7 @@ class NotificationEventHandlerTest : IntegrationTestSupport() {
         assertEquals(ItemParsingCompleted::class, itemParsingCompletedHandler.eventType)
         assertEquals(ItemParsingFailed::class, itemParsingFailedHandler.eventType)
         assertEquals(TournamentItemAdded::class, tournamentItemAddedHandler.eventType)
+        assertEquals(TournamentItemDeleted::class, tournamentItemDeletedHandler.eventType)
         assertEquals(TournamentJoined::class, tournamentJoinedHandler.eventType)
         assertEquals(TournamentStarted::class, tournamentStartedHandler.eventType)
     }
@@ -42,6 +46,7 @@ class NotificationEventHandlerTest : IntegrationTestSupport() {
         assertEquals(NotificationType.ITEM_PARSING_COMPLETED, itemParsingCompletedHandler.notificationType)
         assertEquals(NotificationType.ITEM_PARSING_FAILED, itemParsingFailedHandler.notificationType)
         assertEquals(NotificationType.TOURNAMENT_ITEM_ADDED, tournamentItemAddedHandler.notificationType)
+        assertEquals(NotificationType.TOURNAMENT_ITEM_DELETED, tournamentItemDeletedHandler.notificationType)
         assertEquals(NotificationType.TOURNAMENT_JOINED, tournamentJoinedHandler.notificationType)
         assertEquals(NotificationType.TOURNAMENT_STARTED, tournamentStartedHandler.notificationType)
     }

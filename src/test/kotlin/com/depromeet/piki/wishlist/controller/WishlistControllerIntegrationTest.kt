@@ -72,6 +72,19 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
 
     private fun memberToken(userId: UUID): String = jwtProvider.generateAccessToken(userId, IdentityType.MEMBER)
 
+    // 위시리스트는 회원 전용 — 게스트는 인증(authenticated)은 통과하나 WishlistService.requireMember 가 도메인 계약으로 막는다.
+    // 가드가 findById 로 identityType 을 확인하므로 게스트 유저 행이 실제로 존재해야 403(없으면 404)이 나온다.
+    private fun insertGuest(userId: UUID) {
+        jdbcTemplate.update(
+            "INSERT INTO users (id, nickname, identity_type, created_at, updated_at) VALUES (?, ?, ?, NOW(6), NOW(6))",
+            uuidToBytes(userId),
+            userId.toString().take(10),
+            "GUEST",
+        )
+    }
+
+    private fun guestToken(userId: UUID): String = jwtProvider.generateAccessToken(userId, IdentityType.GUEST)
+
     private fun buildMockMvc(): MockMvc =
         MockMvcBuilders
             .webAppContextSetup(webApplicationContext)
@@ -86,14 +99,14 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         userId: UUID,
         url: String,
         name: String,
-        currentPrice: Int? = null,
-        currency: String? = null,
-        imageUrl: String? = null,
+        currentPrice: Int? = 10_000,
+        currency: String? = "KRW",
+        imageUrl: String? = "https://img.example.com/a.png",
     ): Long {
         val result = wishPersistenceService.persist(userId, Item(ProductLink.parse(url)))
         itemParsingService.claimDuePending(100)
         itemParsingService.markReady(
-            result.item.getId(),
+            result.snapshot.getId(),
             ProductSnapshot(
                 link = ProductLink.parse(url),
                 name = name,
@@ -113,7 +126,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
     ): Long {
         val result = wishPersistenceService.persist(userId, Item(ProductLink.parse(url)))
         itemParsingService.claimDuePending(100)
-        itemParsingService.markFailed(result.item.getId())
+        itemParsingService.markFailed(result.snapshot.getId())
         return result.wish.getId()
     }
 
@@ -126,6 +139,55 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val result = wishPersistenceService.persist(userId, Item(ProductLink.parse(url)))
         itemParsingService.claimDuePending(100)
         return result.wish.getId()
+    }
+
+    @Test
+    fun `게스트가 URL 로 위시 등록을 시도하면 403 과 회원 전용 안내가 반환된다`() {
+        // 게스트 토큰은 Security authenticated() 를 통과하지만, WishlistService 가 회원 전용 계약으로 막아
+        // generic 권한없음(detail 없음)이 아니라 "회원만 이용 가능" 이라는 구체 사유를 detail 로 내려준다.
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertGuest(userId)
+        val body = objectMapper.writeValueAsString(mapOf("url" to "https://shop.example.com/products/1"))
+
+        mockMvc
+            .perform(
+                post("/api/v1/wishlists")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${guestToken(userId)}")
+                    .content(body),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value("위시리스트는 회원만 이용할 수 있어요."))
+            .andExpect(jsonPath("$.data").value(nullValue()))
+    }
+
+    @Test
+    fun `게스트가 위시리스트를 조회하면 403 과 회원 전용 안내가 반환된다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertGuest(userId)
+
+        mockMvc
+            .perform(
+                get("/api/v1/wishlists")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${guestToken(userId)}"),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value("위시리스트는 회원만 이용할 수 있어요."))
+    }
+
+    @Test
+    fun `게스트는 멱등 삭제 경로보다 회원 가드가 먼저 걸려 403 이 반환된다`() {
+        // 회원 가드는 소유권·존재 검증(멱등 no-op)보다 먼저 돈다 — 없는 위시 삭제도 게스트면 200 이 아니라 403.
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertGuest(userId)
+
+        mockMvc
+            .perform(
+                delete("/api/v1/wishlists/1")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${guestToken(userId)}"),
+            ).andExpect(status().isForbidden)
+            .andExpect(jsonPath("$.detail").value("위시리스트는 회원만 이용할 수 있어요."))
     }
 
     @Test
@@ -162,7 +224,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}")
                     .content(body),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value("유효한 URL 형식이 아닙니다."))
+            .andExpect(jsonPath("$.detail").value("올바른 링크 형식이 아니에요. 다시 확인해 주세요."))
     }
 
     @Test
@@ -334,7 +396,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isConflict)
-            .andExpect(jsonPath("$.detail").value("이미 등록 완료된 상품은 수정할 수 없습니다."))
+            .andExpect(jsonPath("$.detail").value("이미 등록된 상품은 수정할 수 없어요."))
     }
 
     @Test
@@ -355,7 +417,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isConflict)
-            .andExpect(jsonPath("$.detail").value("아직 처리 중인 상품은 수정할 수 없습니다."))
+            .andExpect(jsonPath("$.detail").value("상품 정보를 가져오는 중이에요. 잠시만 기다려 주세요."))
     }
 
     @Test
@@ -366,9 +428,11 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
         val authHeader = "Bearer ${memberToken(userId)}"
         val wishId = seedFailedWish(userId, "https://shop.example.com/products/1")
 
+        val image = MockMultipartFile("image", "p.png", "image/png", byteArrayOf(1, 2, 3))
         mockMvc
             .perform(
                 multipart("/api/v1/wishlists/$wishId")
+                    .file(image)
                     .param("name", "직접 입력한 이름")
                     .param("currentPrice", "50000")
                     .with {
@@ -400,7 +464,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                         it
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value("상품명을 입력해야 합니다."))
+            .andExpect(jsonPath("$.detail").value("상품 이름을 입력해 주세요."))
     }
 
     @Test
@@ -458,7 +522,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                     }.header(HttpHeaders.AUTHORIZATION, authHeader),
             ).andExpect(status().isBadRequest)
             // 응답 detail 이 OpenAPI example(WishlistApiExamples 가격 음수)과 같은 형식인지 contract 로 고정.
-            .andExpect(jsonPath("$.detail").value("currentPrice: ${WishlistUpdateRequest.PRICE_MIN_MESSAGE}"))
+            .andExpect(jsonPath("$.detail").value(WishlistUpdateRequest.PRICE_MIN_MESSAGE))
     }
 
     @Test
@@ -475,6 +539,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 multipart("/api/v1/wishlists/$wishId")
                     .file(image)
                     .param("name", "직접 입력한 이름")
+                    .param("currentPrice", "50000")
                     .with {
                         it.method = "PATCH"
                         it
@@ -711,7 +776,7 @@ class WishlistControllerIntegrationTest : IntegrationTestSupport() {
                 delete("/api/v1/wishlists")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail").value("삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다."))
+            .andExpect(jsonPath("$.detail").value("한 번에 최대 100개까지 삭제할 수 있어요."))
     }
 
     @Test

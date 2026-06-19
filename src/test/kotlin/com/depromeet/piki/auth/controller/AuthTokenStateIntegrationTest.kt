@@ -3,6 +3,7 @@ package com.depromeet.piki.auth.controller
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
 import com.depromeet.piki.auth.infrastructure.redis.RefreshTokenStore
 import com.depromeet.piki.support.IntegrationTestSupport
+import com.depromeet.piki.support.StubRefreshTokenStore
 import com.depromeet.piki.support.uuidToBytes
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -18,6 +19,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import tools.jackson.databind.ObjectMapper
 import java.util.UUID
+import kotlin.test.assertEquals
 
 class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
     @Autowired
@@ -31,6 +33,10 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
 
     @Autowired
     private lateinit var refreshTokenStore: RefreshTokenStore
+
+    // grace TTL 경과를 시뮬레이션하기 위해 stub 의 expireGrace 를 호출한다 (실제 Redis 는 키 TTL 만료가 함).
+    @Autowired
+    private lateinit var stubRefreshTokenStore: StubRefreshTokenStore
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
@@ -93,10 +99,9 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `POST auth token refresh - 재사용된 옛 refreshToken 으로 시도하면 401 + 살아있던 R2 도 무효화 (family invalidation)`() {
-        // OAuth 2.0 RFC 6819 / 8252 의 family invalidation 패턴 검증:
-        // R1 으로 회전해서 R2 가 살아있는 상태에서 R1 을 다시 쓰면 (= 도난 의심) 양쪽 다 끊는다.
-        // 공격자가 옛 R1 을 들고 와도, 정상 사용자가 옛 R1 을 실수로 재시도해도 동일하게 처리된다.
+    fun `POST auth token refresh - grace 창 안에 옛 refreshToken 을 다시 쓰면 200 + 같은 새 토큰을 멱등 반환한다`() {
+        // 동시 다발 refresh race 의 핵심 계약: R1 회전 직후 grace 창 안에 같은 R1 이 다시 들어오면
+        // 401 로 튕기지 않고(=로그아웃 안 됨) 이미 발급된 R2 를 그대로 멱등 반환한다.
         val mockMvc = mockMvc()
         val (accessToken, r1) = createGuest()
         val userId = jwtProvider.parseAccessToken(accessToken)?.userId ?: error("accessToken 파싱 실패")
@@ -119,41 +124,48 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
                     ).at("/data/refreshToken")
                     .asText()
 
-            // R1 재사용 시도 → 401 + family invalidation 트리거 (살아있던 R2 도 같이 DEL)
-            mockMvc
-                .perform(
-                    post("/api/v1/auth/token/refresh")
-                        .header("X-Client-Type", "app")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(r1Body),
-                ).andExpect(status().isUnauthorized)
+            // grace 창 안 R1 재사용 → 200 + 같은 R2 (멱등 replay). 회전·무효화 없음.
+            val replayedR2 =
+                objectMapper
+                    .readTree(
+                        mockMvc
+                            .perform(
+                                post("/api/v1/auth/token/refresh")
+                                    .header("X-Client-Type", "app")
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(r1Body),
+                            ).andExpect(status().isOk)
+                            .andReturn()
+                            .response
+                            .contentAsString,
+                    ).at("/data/refreshToken")
+                    .asText()
+            assertEquals(r2, replayedR2)
 
-            // R2 도 무효화됐는지 확인 — 정상 흐름이면 200 이어야 하지만 family invalidation 으로 401
+            // R2 는 여전히 살아있어 다음 회전에 쓸 수 있다 (family invalidation 안 됨).
             mockMvc
                 .perform(
                     post("/api/v1/auth/token/refresh")
                         .header("X-Client-Type", "app")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(mapOf("refreshToken" to r2))),
-                ).andExpect(status().isUnauthorized)
+                ).andExpect(status().isOk)
         } finally {
             cleanup(userId)
         }
     }
 
     @Test
-    fun `POST auth token refresh - 공격자가 먼저 R1 으로 R2 를 받은 뒤 정상 사용자가 R1 을 시도해도 양쪽 다 무효화된다`() {
-        // 경우 2 시뮬레이션: 공격자가 R1 으로 R2 를 받아 가버리면 정상 사용자가 R1 을 들고와도
-        // family invalidation 이 트리거돼 공격자가 받아간 R2 까지 함께 죽는다.
+    fun `POST auth token refresh - grace 밖에서 옛 refreshToken 을 재사용하면 401 + 살아있던 토큰도 무효화된다`() {
+        // OAuth 2.0 RFC 6819 / 8252 의 family invalidation: grace 창이 지난 뒤 옛 R1 을 다시 쓰면
+        // (= 도난 의심) 양쪽 다 끊는다. grace TTL 경과는 stub.expireGrace 로 시뮬레이션한다.
         val mockMvc = mockMvc()
         val (accessToken, r1) = createGuest()
         val userId = jwtProvider.parseAccessToken(accessToken)?.userId ?: error("accessToken 파싱 실패")
 
         try {
             val r1Body = objectMapper.writeValueAsString(mapOf("refreshToken" to r1))
-
-            // 공격자: R1 으로 R2 를 받아간다.
-            val attackerR2 =
+            val r2 =
                 objectMapper
                     .readTree(
                         mockMvc
@@ -169,7 +181,10 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
                     ).at("/data/refreshToken")
                     .asText()
 
-            // 정상 사용자: 자기 R1 으로 시도 → 401 + 공격자의 R2 도 무효화
+            // grace 창 만료
+            stubRefreshTokenStore.expireGrace(userId)
+
+            // grace 밖 R1 재사용 → 401 + family invalidation (살아있던 R2 도 같이 DEL)
             mockMvc
                 .perform(
                     post("/api/v1/auth/token/refresh")
@@ -178,13 +193,13 @@ class AuthTokenStateIntegrationTest : IntegrationTestSupport() {
                         .content(r1Body),
                 ).andExpect(status().isUnauthorized)
 
-            // 공격자도 끊긴다
+            // R2 도 무효화됐다 — 정상 흐름이면 200 이어야 하지만 family invalidation 으로 401
             mockMvc
                 .perform(
                     post("/api/v1/auth/token/refresh")
                         .header("X-Client-Type", "app")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(mapOf("refreshToken" to attackerR2))),
+                        .content(objectMapper.writeValueAsString(mapOf("refreshToken" to r2))),
                 ).andExpect(status().isUnauthorized)
         } finally {
             cleanup(userId)

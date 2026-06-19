@@ -60,10 +60,10 @@ else
     redis:7-alpine
 fi
 
-# 3) mysql (dev 전용) — prod 는 RDS 를 쓰므로 ENVIRONMENT=dev 일 때만 기동.
+# 3) mysql (dev·staging 전용) — prod 는 RDS 를 쓰므로 dev/staging 일 때만 로컬 컨테이너로 기동.
 #    redis 와 동일하게 named 볼륨 + 있으면 skip 패턴. 앱의 DB_* 환경변수와 같은 값으로 초기화.
 #    포트는 172.17.0.1:3306 바인딩 — 앱 컨테이너가 docker bridge 를 통해 접근하고 외부엔 노출 안 함.
-if [ "${ENVIRONMENT:-}" = "dev" ]; then
+if [ "${ENVIRONMENT:-}" = "dev" ] || [ "${ENVIRONMENT:-}" = "staging" ]; then
   if docker ps -a --format '{{.Names}}' | grep -qx 'team3-mysql'; then
     echo "[mysql] team3-mysql 이미 존재 — skip"
   else

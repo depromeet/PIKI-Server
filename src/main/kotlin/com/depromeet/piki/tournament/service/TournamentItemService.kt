@@ -32,6 +32,8 @@ class TournamentItemService(
         url: String,
     ): Long {
         val link = ProductLink.parse(url)
+        // fetch 불가 플랫폼(봇 차단)은 담아봐야 파싱이 무의미하게 실패한다 — 등록 시점에 막아 빠르게 안내한다(400).
+        link.verifySupportedPlatform()
         // URL 경로는 PENDING snapshot 을 커밋만 하고(outbox 적재) 즉시 반환한다. 파싱은 디스패처(@Scheduled)가
         // PENDING 을 집어 워커에 넘긴다 — @Async 유실과 무관하게 최소 1회는 claim 된다(at-least-once).
         // 파싱·상태 전이는 item PK 를, 클라이언트 응답은 tournament_item PK 를 쓴다 (PersistedTournamentItem).
@@ -51,11 +53,12 @@ class TournamentItemService(
         val persisted = tournamentItemPersistenceService.persistProcessingItems(userId, tournamentId, productImages.size)
         persisted.zip(productImages).forEach { (persistedItem, productImage) ->
             val itemId = persistedItem.itemId
+            val snapshotId = persistedItem.snapshotId
             try {
-                imageParsingWorker.parse(itemId, productImage)
+                imageParsingWorker.parse(itemId, snapshotId, productImage)
             } catch (e: TaskRejectedException) {
                 log.warn("item {} async 디스패치 거부 → FAILED 처리", itemId, e)
-                runCatching { itemParsingService.markFailed(itemId) }
+                runCatching { itemParsingService.markFailed(snapshotId) }
                     .onFailure { ex -> log.error("item {} FAILED 전이 실패, PROCESSING 방치 위험", itemId, ex) }
             }
         }
@@ -86,9 +89,7 @@ class TournamentItemService(
         if (tournamentItem.userId != userId) throw TournamentException.forbiddenTournament()
         // 출전 시점 고정 snapshot 으로 사전 상태 검증 — FAILED 가 아니면 S3 업로드 전에 막는다(orphan 방지).
         // recover 가 READY/PROCESSING 에 사유별 409 를 던진다(트랜잭션 밖 조회라 던지기 전용, 실제 보정은 recoverItem).
-        val snapshotId =
-            tournamentItem.snapshotId
-                ?: error("snapshot 없음 — tournamentItemId=$tournamentItemId, itemId=${tournamentItem.itemId}")
+        val snapshotId = tournamentItem.snapshotId
         val snapshot =
             itemSnapshotRepository.findById(snapshotId)
                 ?: error("snapshot 없음 — tournamentItemId=$tournamentItemId, snapshotId=$snapshotId")

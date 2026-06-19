@@ -13,12 +13,14 @@ import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.product.service.ProductSnapshotException
 import com.depromeet.piki.product.service.gemini.GeminiApiException
+import com.depromeet.piki.product.service.http.PageFetchException
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubImageStorage
 import com.depromeet.piki.support.StubProductImageExtractor
 import com.depromeet.piki.support.StubProductLinkExtractor
 import com.depromeet.piki.support.uuidToBytes
 import com.depromeet.piki.user.domain.IdentityType
+import io.micrometer.core.instrument.MeterRegistry
 import org.awaitility.Awaitility.await
 import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.Test
@@ -46,6 +48,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import javax.imageio.ImageIO
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 // 등록은 비동기(@Async)다. @Transactional 자동 롤백 패턴으로는 워커(별도 스레드·새 트랜잭션)가
 // 미커밋 데이터를 못 보므로, 여기서는 @Transactional 없이 실제 커밋하고 Awaitility 로 상태 전이를 기다린다.
@@ -77,6 +80,9 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
 
     @Autowired
     private lateinit var jwtProvider: JwtProvider
+
+    @Autowired
+    private lateinit var meterRegistry: MeterRegistry
 
     @Test
     fun `등록하면 추출을 기다리지 않고 PENDING 상태로 201 이 즉시 반환된다`() {
@@ -112,13 +118,16 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
         insertMember(userId)
         try {
             stubProductLinkExtractor.build = {
-                ProductSnapshot(link = it, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW")
+                ProductSnapshot(link = it, name = "나이키 에어포스", currentPrice = 99_000, currency = "KRW", imageUrl = "https://img.example.com/a.png")
             }
+            val readyBefore = parseCount("ready", "none")
             val itemId = registerAndGetItemId(mockMvc, userId, "https://shop.example.com/products/42")
 
             await().atMost(Duration.ofSeconds(5)).until {
                 latestSnapshot(itemId)?.status == ItemStatus.READY
             }
+            // 결과 메트릭(#506): 성공은 result=ready,reason=none 으로 +1 (워커 비동기라 메트릭 증가도 await).
+            await().atMost(Duration.ofSeconds(2)).until { parseCount("ready", "none") - readyBefore >= 1.0 }
 
             // 표시값·상태는 활성 snapshot 이 보유한다(4a) — item 은 정체성(link)만 든다.
             val snapshot = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
@@ -138,11 +147,14 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
         try {
             // 파싱 결과 실패는 동기 400 이 아니라 FAILED 상태로 남는다 (등록 응답은 이미 201 로 끝났으므로).
             stubProductLinkExtractor.build = { throw ProductSnapshotException.notProductPage() }
+            val notProductBefore = parseCount("failed", "not_product")
             val itemId = registerAndGetItemId(mockMvc, userId, "https://shop.example.com/products/not-a-product")
 
             await().atMost(Duration.ofSeconds(5)).until {
                 latestSnapshot(itemId)?.status == ItemStatus.FAILED
             }
+            // 결과 메트릭(#506): 상품 아님 확정 실패는 result=failed,reason=not_product 로 +1.
+            await().atMost(Duration.ofSeconds(2)).until { parseCount("failed", "not_product") - notProductBefore >= 1.0 }
 
             val snapshot = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
             assertEquals(ItemStatus.FAILED, snapshot.status)
@@ -162,11 +174,14 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             // isProductPage=true 라도 이름을 못 뽑으면 name 이 비어 온다. READY 불변식(name 필수)에 걸려
             // markReady 가 거부하고, 워커가 이를 받아 PROCESSING 방치 대신 FAILED 로 떨어뜨린다.
             stubProductLinkExtractor.build = { ProductSnapshot(link = it, currentPrice = 99_000) }
+            val rejectedBefore = parseCount("failed", "ready_rejected")
             val itemId = registerAndGetItemId(mockMvc, userId, "https://shop.example.com/products/no-name")
 
             await().atMost(Duration.ofSeconds(5)).until {
                 latestSnapshot(itemId)?.status == ItemStatus.FAILED
             }
+            // 결과 메트릭(#506): 추출됐으나 READY 부적격(이름 없음)은 result=failed,reason=ready_rejected 로 +1.
+            await().atMost(Duration.ofSeconds(2)).until { parseCount("failed", "ready_rejected") - rejectedBefore >= 1.0 }
 
             val snapshot = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
             assertEquals(ItemStatus.FAILED, snapshot.status)
@@ -345,7 +360,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
         // 디스패처가 claim(attempt 1)한 직후 워커가 크래시해 실행 0회로 PROCESSING 에 갇힌 상황.
         // recover 가 재실행(reclaim)해 완성시킨다 — claim-at-least-once 를 execution at-least-once 로 끌어올리는 핵심(#461).
         stubProductLinkExtractor.build = {
-            ProductSnapshot(link = it, name = "되살아난 상품", currentPrice = 1_000, currency = "KRW")
+            ProductSnapshot(link = it, name = "되살아난 상품", currentPrice = 1_000, currency = "KRW", imageUrl = "https://img.example.com/a.png")
         }
         val item = itemRepository.save(Item(ProductLink.parse("https://shop.example.com/products/revive")))
         val snapshot = itemSnapshotRepository.save(ItemSnapshot.pending(item.getId()).apply { markProcessing() })
@@ -384,9 +399,12 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
                 snapshot.getId(),
             )
 
+            val exhaustedBefore = parseCount("failed", "retry_exhausted")
             itemParsingScheduler.recover() // attempt 2 >= 2 → FAILED (재실행 없음, 동기 종결)
 
             assertEquals(ItemStatus.FAILED, latestSnapshot(itemId)?.status)
+            // 결과 메트릭(#506): recover 가 재시도 상한 소진으로 종결 → result=failed,reason=retry_exhausted +1 (recover 동기라 즉시 단언).
+            assertTrue(parseCount("failed", "retry_exhausted") - exhaustedBefore >= 1.0, "retry_exhausted 메트릭이 증가해야 한다")
         } finally {
             jdbcTemplate.update("DELETE FROM item_snapshots WHERE item_id = ?", itemId)
             jdbcTemplate.update("DELETE FROM items WHERE id = ?", itemId)
@@ -406,9 +424,12 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
                 snapshot.getId(),
             )
 
+            val noSourceBefore = parseCount("failed", "no_source")
             itemParsingScheduler.recover() // link 없음 → FAILED
 
             assertEquals(ItemStatus.FAILED, latestSnapshot(itemId)?.status)
+            // 결과 메트릭(#506): 되살릴 원본 없음(이미지) 종결 → result=failed,reason=no_source +1.
+            assertTrue(parseCount("failed", "no_source") - noSourceBefore >= 1.0, "no_source 메트릭이 증가해야 한다")
         } finally {
             jdbcTemplate.update("DELETE FROM item_snapshots WHERE item_id = ?", itemId)
             jdbcTemplate.update("DELETE FROM items WHERE id = ?", itemId)
@@ -432,6 +453,63 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             await().atMost(Duration.ofSeconds(5)).until { calls.get() >= 1 }
             // 확정 실패가 아니므로 FAILED 로 떨어지지 않고 PROCESSING 으로 남아야 한다 (recover 재시도 대상).
             assertEquals(ItemStatus.PROCESSING, latestSnapshot(itemId)?.status)
+        } finally {
+            cleanup(userId)
+        }
+    }
+
+    @Test
+    fun `URL 파싱이 영구 외부 오류(차단된 호스트·접근 불가)면 즉시 FAILED 로 종결한다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            // 재시도해도 결정론적으로 재실패하는 영구 오류(호스트 차단·4xx 접근 불가 등)는 recover 를 기다리지 않고
+            // (약 150초 헛돔 방지) 워커가 즉시 FAILED 로 종결한다. recover 는 stale(60초) 후에야 돌므로 5초 내 FAILED 면 즉시 종결이다.
+            stubProductLinkExtractor.build = { throw PageFetchException.blockedHost() }
+            val permanentBefore = parseCount("failed", "permanent_error")
+            val itemId = registerAndGetItemId(mockMvc, userId, "https://shop.example.com/products/blocked")
+
+            await().atMost(Duration.ofSeconds(5)).until {
+                latestSnapshot(itemId)?.status == ItemStatus.FAILED
+            }
+            // 결과 메트릭(#506): 재시도 무의미한 영구 외부 오류 확정 실패는 result=failed,reason=permanent_error 로 +1.
+            await().atMost(Duration.ofSeconds(2)).until { parseCount("failed", "permanent_error") - permanentBefore >= 1.0 }
+
+            val snapshot = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
+            assertEquals(ItemStatus.FAILED, snapshot.status)
+            assertNull(snapshot.name)
+        } finally {
+            cleanup(userId)
+        }
+    }
+
+    @Test
+    fun `미지원 플랫폼(KREAM) URL 을 등록하면 등록 시점에 400 으로 거부되고 위시가 생기지 않는다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            // 미지원 플랫폼은 비동기 파싱(FAILED)이 아니라 등록 입력 시점에 동기 400 으로 막는다 — 담기 전에 빠르게 안내한다.
+            val body = objectMapper.writeValueAsString(mapOf("url" to "https://kream.co.kr/products/950123"))
+
+            mockMvc
+                .perform(
+                    post("/api/v1/wishlists")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}")
+                        .content(body),
+                ).andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.detail").value("아직 지원하지 않는 쇼핑몰이에요. 상품 이미지를 직접 등록해 주세요."))
+
+            // 등록 자체가 막혀 위시가 생기지 않는다(파싱 큐 적재 전 차단).
+            val wishCount =
+                jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM wishes WHERE user_id = ?",
+                    Int::class.java,
+                    uuidToBytes(userId),
+                )
+            assertEquals(0, wishCount)
         } finally {
             cleanup(userId)
         }
@@ -506,11 +584,18 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
     // 표시값·상태는 item 의 활성(최신) snapshot 이 보유한다(4a). 폴링·단언이 이 snapshot 을 읽는다.
     private fun latestSnapshot(itemId: Long): ItemSnapshot? = itemSnapshotRepository.findLatestByItemId(itemId)
 
+    // item.parsing 카운터의 현재 값. 공유 컨텍스트라 누적되므로 호출 전후 증가분(delta)으로 단언한다(#468 패턴).
+    private fun parseCount(
+        result: String,
+        reason: String,
+    ): Double = meterRegistry.find("item.parsing").tags("result", result, "reason", reason).counter()?.count() ?: 0.0
+
     // @Transactional 자동 롤백이 없으므로 이 테스트가 만든 user·wish·item·snapshot 을 직접 정리한다.
     private fun cleanup(userId: UUID) {
+        // wishes 는 item_id 를 더 들지 않는다(4b 정규화) — snapshot_id 로 item_snapshots 를 조인해 itemId 에 도달한다.
         val itemIds =
             jdbcTemplate.queryForList(
-                "SELECT item_id FROM wishes WHERE user_id = ?",
+                "SELECT s.item_id FROM wishes w JOIN item_snapshots s ON s.id = w.snapshot_id WHERE w.user_id = ?",
                 Long::class.java,
                 uuidToBytes(userId),
             )

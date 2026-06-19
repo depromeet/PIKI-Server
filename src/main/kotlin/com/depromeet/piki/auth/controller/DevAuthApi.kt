@@ -16,7 +16,7 @@ import java.util.UUID
 interface DevAuthApi {
     @Operation(
         summary = "개발용 MEMBER 생성",
-        description = "OAuth 없이 MEMBER User 를 생성하고 JWT 토큰 쌍을 발급한다. GUEST 토큰으로 호출해야 한다. OAuth 통합 전까지의 임시 endpoint.",
+        description = "OAuth 없이 MEMBER User 를 생성하고 JWT 토큰 쌍을 발급한다. 인증 토큰(GUEST·MEMBER)으로 호출한다. OAuth 통합 전까지의 임시 endpoint.",
     )
     @ApiResponses(
         value = [
@@ -51,16 +51,6 @@ interface DevAuthApi {
                 ],
             ),
             ApiResponse(
-                responseCode = "403",
-                description = "GUEST 권한 없음 (MEMBER 토큰으로 호출 불가 · GUEST 필요)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
                 responseCode = "409",
                 description = "이미 사용 중인 닉네임",
                 content = [
@@ -78,7 +68,7 @@ interface DevAuthApi {
         summary = "기존 user 의 토큰 발급 (임의 user 가장)",
         description = "이미 존재하는 user (GUEST·MEMBER 모두)의 access·refresh 토큰을 발급한다. " +
             "개발·테스트에서 특정 user 시나리오를 재현할 때 사용한다.\n\n" +
-            "- GUEST 토큰으로 호출해야 한다.\n" +
+            "- 인증 토큰(GUEST·MEMBER)으로 호출한다.\n" +
             "- OAuth 통합 전까지의 임시 endpoint 로, 다른 dev API 들과 함께 운영에서 차단 예정.",
     )
     @ApiResponses(
@@ -96,16 +86,6 @@ interface DevAuthApi {
             ApiResponse(
                 responseCode = "401",
                 description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
-                content = [
-                    Content(
-                        mediaType = MediaType.APPLICATION_JSON_VALUE,
-                        schema = Schema(implementation = ApiResponseBody::class),
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "403",
-                description = "GUEST 권한 없음 (MEMBER 토큰으로 호출 불가 · GUEST 필요)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

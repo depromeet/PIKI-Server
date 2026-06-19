@@ -35,6 +35,9 @@ class NotificationDispatcher(
                 ?: error("핸들러 미등록: ${event::class.simpleName}")
 
         val recipients = handler.resolveRecipients(event)
+        // 이벤트 수신 → 수신자 도출(인원). 디스패치는 async 워커라 MDC userId 는 이벤트를 유발한 actor 의 것이고,
+        // 수신자는 actor 와 다른 유저들이라 수신자 userId 는 아래 fan-out 에서 명시적으로 남긴다.
+        log.info("알림 디스패치 type={} event={} 수신자={}명", handler.notificationType, event::class.simpleName, recipients.size)
         if (recipients.isEmpty()) return
 
         val refId = handler.resolveRefId(event)
@@ -48,6 +51,7 @@ class NotificationDispatcher(
         val title = renderer.render(template.title, variables)
         val body = renderer.render(template.body, variables)
 
+        var delivered = 0
         recipients.forEach { userId ->
             // 한 수신자의 저장 실패가 나머지 수신자 fan-out 을 막지 않게 수신자 단위로 격리한다 (외부 전달은 트랜잭션 밖).
             runCatching {
@@ -64,11 +68,15 @@ class NotificationDispatcher(
                         ),
                     )
                 // 한 채널의 실패도 다른 채널 전달을 막지 않게 추가로 격리한다.
+                // 채널 선택(예: FCM 은 push 대상 타입만)은 각 채널이 send 안에서 자기-적용 판단한다.
                 channels.forEach { channel ->
                     runCatching { channel.send(userId, notification) }
                         .onFailure { e -> log.warn("채널 {} 전송 실패 userId={}", channel::class.simpleName, userId, e) }
                 }
             }.onFailure { e -> log.warn("알림 저장 실패로 수신자 건너뜀 userId={}", userId, e) }
+                .onSuccess { delivered++ }
         }
+        // fan-out 결과 요약 — 저장 실패로 누락된 수신자가 있으면 (수신자 인원 > 저장성공)으로 드러난다.
+        log.info("알림 fan-out 완료 type={} 수신자={}명 저장성공={}건", handler.notificationType, recipients.size, delivered)
     }
 }

@@ -30,6 +30,10 @@ interface WishRepository {
     // 삭제되지 않은 단건 조회. 없으면 null.
     fun findById(id: Long): Wish?
 
+    // 수동 새로고침용 — 행 락으로 동시 새로고침을 직렬화한다. 삭제된 행은 제외(없으면 null).
+    // item↔wish 가 등록당 1:1 이라 wish 락이 곧 그 item 의 갱신 직렬화 효과를 낸다(한 item 에 진행 중 snapshot 최대 1개 보장).
+    fun findByIdForUpdate(id: Long): Wish?
+
     // 삭제되지 않은 위시들을 id 목록으로 조회. 존재하는 것만 반환하므로(없는 id 는 빠진다)
     // 호출부가 반환 개수로 누락 여부를 판단한다.
     fun findAllByIds(ids: List<Long>): List<Wish>

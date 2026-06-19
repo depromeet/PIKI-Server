@@ -121,10 +121,12 @@ class ItemSnapshot(
             imageUrl = snapshot.imageUrl,
             currency = snapshot.currency,
         )
-        // 추출이 이름을 못 얻었으면 READY 부적격 — 워커가 이 예외를 받아 FAILED 로 흡수한다(PROCESSING 방치 방지).
+        // 추출 결과와 추출시각을 채운 뒤 불변식을 검사한다 — READY 가 보장하는 네 필드(name·price·imageUrl·extractedAt)를
+        // 한 자리에서 확정하려고 set 을 검사 앞에 둔다. 추출이 이름을 못 얻었으면 READY 부적격 —
+        // 워커가 이 예외를 받아 FAILED 로 흡수한다(PROCESSING 방치 방지).
+        this.extractedAt = LocalDateTime.now()
         requireReadyInvariant()
         status = ItemStatus.READY
-        this.extractedAt = LocalDateTime.now()
     }
 
     // PROCESSING → FAILED. 파싱 실패(상품 아님·신뢰 불가·타임아웃)를 동기 400 대신 상태로 남긴다.
@@ -149,10 +151,14 @@ class ItemSnapshot(
             ItemStatus.PENDING, ItemStatus.PROCESSING -> throw ItemException.stillProcessing()
             ItemStatus.FAILED -> {
                 apply(name = name, currentPrice = currentPrice, imageUrl = imageUrl, currency = currency)
-                // 입력 경계 계약 — 보정 후에도 이름이 없으면 쓸 수 없는 버전이 READY 로 새어 들어간다(409 아닌 400).
+                // 입력 경계 계약 — 보정 후에도 필수 필드가 없으면 쓸 수 없는 버전이 READY 로 새어 들어간다(400).
                 if (this.name.isNullOrBlank()) throw ItemException.nameRequiredForReady()
-                status = ItemStatus.READY
+                this.currentPrice ?: throw ItemException.priceRequiredForReady()
+                this.imageUrl ?: throw ItemException.imageRequiredForReady()
+                // 보정값과 추출시각을 채운 뒤 markReady 와 같은 불변식을 거쳐 READY 로 전이한다(입력 경계 + 엔티티 불변식 다층 방어).
                 this.extractedAt = LocalDateTime.now()
+                requireReadyInvariant()
+                status = ItemStatus.READY
             }
         }
     }
@@ -165,11 +171,20 @@ class ItemSnapshot(
     // 미리 걸러 헛된 비용(orphan 업로드)을 막는 사전 가드용. 도메인 최후 보루는 recover 가 진다.
     fun isFailed(): Boolean = status == ItemStatus.FAILED
 
-    // READY 불변식 — "쓸 수 있는 버전"은 최소한 이름이 있어야 한다. isReady() 게이트(목록 노출·토너먼트 출전)가
-    // 미완성 버전을 정상으로 취급하지 않도록, READY 가 되는 명시 경로(markReady)에서 검사한다. 엔티티 최후의 보루이므로
-    // require(500) — 정상 흐름에선 입력 경계(recover 의 nameRequiredForReady, 추출 워커의 FAILED 흡수)가 먼저 거른다.
+    // 추출 작업이 아직 끝나지 않은(진행 중) 버전인지 — PENDING(claim 대기)·PROCESSING(파싱 중). 수동 새로고침의 멱등
+    // 가드에서 쓴다: 이미 진행 중이면 새 추출 버전을 만들지 않는다. READY/FAILED 만 새로고침으로 새 버전을 띄운다.
+    fun isInProgress(): Boolean = status == ItemStatus.PENDING || status == ItemStatus.PROCESSING
+
+    // READY 불변식 — 유저가 가격·이미지·이름을 보고 아이템을 선택하고, 가격 이력은 추출시각(extractedAt)을 축으로
+    // 보여주므로 이 네 필드가 다 있어야 쓸 수 있는 버전이다. READY 로 전이하는 두 경로(markReady·recover)가
+    // 추출값과 extractedAt 을 채운 뒤 이 검증을 거쳐 "READY ⟹ 네 필드 non-null" 을 엔티티가 보장한다(최후의 보루).
+    // 정상 흐름에선 입력 경계(recover 의 *RequiredForReady, 추출 워커의 FAILED 흡수)가 먼저 거른다.
+    // 메시지에 status 를 넣지 않는다 — 이 검사는 status 를 READY 로 바꾸기 전에 호출돼 전이 직전 상태가 찍히면 오해를 부른다.
     private fun requireReadyInvariant() {
-        require(!name.isNullOrBlank()) { "READY snapshot 은 최소한 name 이 있어야 한다 (status=$status)" }
+        require(!name.isNullOrBlank()) { "READY snapshot 은 name 이 있어야 한다" }
+        requireNotNull(currentPrice) { "READY snapshot 은 price 가 있어야 한다" }
+        requireNotNull(imageUrl) { "READY snapshot 은 imageUrl 이 있어야 한다" }
+        requireNotNull(extractedAt) { "READY snapshot 은 extractedAt 이 있어야 한다" }
     }
 
     private fun validate(

@@ -54,9 +54,9 @@ class CorsIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `dev 프론트 origin 의 preflight 도 허용된다`() {
-        // dev/prod 분리로 dev 프론트(dev.depromeet18team3.cloud)가 dev API 를 호출한다. 화이트리스트
-        // 누락 시 dev 에서 모든 인증/JSON 요청이 CORS 로 막힌다. 회귀 가드.
+    fun `retire 된 옛 depromeet origin 의 preflight 는 거부된다`() {
+        // #488 retire — 옛 dev.depromeet18team3.cloud 도메인 origin 은 화이트리스트에서 제거됐다.
+        // dev 프론트의 정상 경로는 dev.piki.day 로 옮겨갔고(아래 테스트), 옛 origin 은 이제 차단된다. 회귀 가드.
         val mockMvc =
             MockMvcBuilders
                 .webAppContextSetup(webApplicationContext)
@@ -68,9 +68,7 @@ class CorsIntegrationTest : IntegrationTestSupport() {
                 options("/api/v1/dev/users")
                     .header(HttpHeaders.ORIGIN, "https://dev.depromeet18team3.cloud")
                     .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"),
-            ).andExpect(status().isOk)
-            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://dev.depromeet18team3.cloud"))
-            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
+            ).andExpect(status().isForbidden)
     }
 
     @Test
@@ -90,6 +88,46 @@ class CorsIntegrationTest : IntegrationTestSupport() {
                     .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"),
             ).andExpect(status().isOk)
             .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://dev.piki.day"))
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
+    }
+
+    @Test
+    fun `staging 프론트 origin 의 preflight 도 허용된다`() {
+        // staging 환경(#498) — staging.piki.day 프론트가 API 를 호출한다. 화이트리스트 누락 시
+        // staging 에서 모든 인증/JSON 요청이 CORS 로 막힌다. 회귀 가드.
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+
+        mockMvc
+            .perform(
+                options("/api/v1/dev/users")
+                    .header(HttpHeaders.ORIGIN, "https://staging.piki.day")
+                    .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"),
+            ).andExpect(status().isOk)
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "https://staging.piki.day"))
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
+    }
+
+    @Test
+    fun `dev(비-prod)에서는 LAN 사설망 IP origin 의 preflight 도 허용된다`() {
+        // 실기기 dev 테스트(#509) — 폰 브라우저가 LAN IP(192.168.x.y:port)로 프론트에 접속하면 Origin 이 그
+        // 사설망 IP 로 박힌다. 비-prod 프로파일에서 allowedOriginPatterns 로 허용함을 검증한다(통합 컨텍스트는 prod 아님).
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+
+        mockMvc
+            .perform(
+                options("/api/v1/dev/users")
+                    .header(HttpHeaders.ORIGIN, "http://192.168.0.42:5173")
+                    .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"),
+            ).andExpect(status().isOk)
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://192.168.0.42:5173"))
             .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
     }
 

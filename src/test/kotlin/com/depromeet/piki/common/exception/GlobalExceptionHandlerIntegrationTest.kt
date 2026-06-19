@@ -1,7 +1,6 @@
 package com.depromeet.piki.common.exception
 
 import com.depromeet.piki.support.IntegrationTestSupport
-import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
@@ -77,16 +76,16 @@ class GlobalExceptionHandlerIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `검증 실패(@Valid 위반)는 400 으로 매핑되고 detail 에 첫 필드 에러를 노출한다`() {
+    fun `검증 실패(@Valid 위반)는 400 으로 매핑되고 detail 에 위반 필드 메시지를 노출한다`() {
         // refresh 는 @Valid + TokenRefreshRequest(@NotBlank) 라, refreshToken 이 빈 문자열이면
-        // MethodArgumentNotValidException → detailOf 가 "{field}: ..." 를 노출하는 분기를 탄다.
+        // MethodArgumentNotValidException → detailOf 가 위반 필드의 메시지를 노출하는 분기를 탄다(필드명 접두사 없음).
         mockMvc()
             .perform(
                 post("/api/v1/auth/token/refresh")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"refreshToken":""}"""),
             ).andExpect(status().isBadRequest)
-            .andExpect(jsonPath("$.detail", containsString("refreshToken")))
+            .andExpect(jsonPath("$.detail").value("다시 로그인해 주세요."))
     }
 
     @Test

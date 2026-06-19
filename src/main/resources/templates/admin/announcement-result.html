@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <title>발송 결과 · PiKi 백오피스</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <style>
+    :root{--accent:#0EA5E9;--accent-soft:#E0F2FE;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;}
+    *{box-sizing:border-box;} body{margin:0;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:#f7f8fa;color:var(--ink);}
+    .bar{display:flex;align-items:center;gap:12px;padding:14px 24px;background:#fff;border-bottom:1px solid var(--border);}
+    .brand{font-weight:800;font-size:17px;letter-spacing:-.03em;}.brand .dot{color:var(--accent);}
+    .bar a{font-size:13px;color:var(--muted);text-decoration:none;font-weight:600;}
+    .wrap{max-width:720px;margin:0 auto;padding:26px 24px;}
+    h1{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0 0 4px;}
+    .sub{color:var(--muted);font-size:13px;margin:0 0 20px;}
+    .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:16px;}
+    .lbl{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;}
+    .ttl{font-size:15px;font-weight:700;} .bd{color:var(--muted);font-size:13.5px;margin-top:4px;white-space:pre-wrap;}
+    .prog-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;}
+    .pct{font-size:24px;font-weight:800;color:var(--accent);} .pct b{font-size:30px;}
+    .state{font-size:12.5px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);}
+    .track{height:10px;background:#eef0f3;border-radius:999px;overflow:hidden;}
+    .fill{height:100%;background:var(--accent);border-radius:999px;transition:width .4s ease;}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px;}
+    .stat{background:#fafbfc;border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center;}
+    .stat .n{font-size:22px;font-weight:800;} .stat .k{font-size:11.5px;color:var(--muted);margin-top:2px;}
+    .stat.ok .n{color:#15a05a;} .stat.bad .n{color:#b42318;}
+    table{width:100%;border-collapse:collapse;font-size:13px;} td{padding:8px 12px;border-bottom:1px solid #f1f3f5;}
+    td.code{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#384049;} td.cnt{text-align:right;font-weight:700;}
+    .empty{color:var(--muted);font-size:13px;padding:10px 12px;}
+  </style>
+</head>
+<body>
+  <div th:replace="~{admin/fragments :: topbar('/admin/announcements', '← 공지 목록')}"></div>
+  <div class="wrap" th:attr="data-poll=@{/admin/announcements/{id}/result.json(id=${result.id})}">
+    <h1>발송 결과</h1>
+    <p class="sub" th:text="${result.title}">제목</p>
+
+    <div class="card">
+      <div class="prog-head">
+        <div class="pct"><b id="pct" th:text="${result.progressPercent}">0</b>%</div>
+        <span class="state" id="state" th:text="${result.done} ? '발송 완료' : '발송 중...'">발송 중...</span>
+      </div>
+      <div class="track"><div class="fill" id="fill" th:style="'width:' + ${result.progressPercent} + '%'"></div></div>
+      <div class="stats">
+        <div class="stat"><div class="n" id="total" th:text="${result.total}">0</div><div class="k">총 대상</div></div>
+        <div class="stat ok"><div class="n" id="success" th:text="${result.success}">0</div><div class="k">성공</div></div>
+        <div class="stat bad"><div class="n" id="failure" th:text="${result.failure}">0</div><div class="k">실패</div></div>
+        <div class="stat"><div class="n" id="skipped" th:text="${result.skipped}">0</div><div class="k">미도달</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">실패 사유 분포 (FCM 응답 코드별)</div>
+      <table>
+        <tbody id="codes">
+          <tr th:each="c : ${result.failureByCode}"><td class="code" th:text="${c.first}">CODE</td><td class="cnt" th:text="${c.second}">0</td></tr>
+          <tr id="notoken" th:if="${result.noTokenCount > 0}"><td class="code">NO_TOKEN (토큰 없음)</td><td class="cnt" th:text="${result.noTokenCount}">0</td></tr>
+          <tr id="nocodes" th:if="${result.failureByCode.isEmpty() and result.noTokenCount == 0}"><td class="empty" colspan="2">실패 없음</td></tr>
+        </tbody>
+      </table>
+      <div class="lbl" style="margin-top:14px">미도달 = 토큰 없음(앱 미설치·로그아웃) + FCM 미설정 환경(로컬). 클릭/읽음 추적은 알림 테이블(is_read)에 user_id 별로 쌓입니다.</div>
+    </div>
+  </div>
+
+  <script>
+    // SENDING 동안 result.json 을 폴링해 진행률·집계를 갱신한다. done 이면 멈춘다.
+    (function () {
+      var wrap = document.querySelector('[data-poll]');
+      var url = wrap.getAttribute('data-poll');
+      function setNum(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
+      function render(r) {
+        setNum('pct', r.progressPercent); setNum('total', r.total);
+        setNum('success', r.success); setNum('failure', r.failure); setNum('skipped', r.skipped);
+        document.getElementById('fill').style.width = r.progressPercent + '%';
+        document.getElementById('state').textContent = r.done ? '발송 완료' : '발송 중...';
+        // 데이터(코드·카운트)는 textContent 로만 넣는다 — 문자열 결합 + innerHTML 은 저장 데이터 오염 시 관리자 XSS 경로가 된다.
+        function row(code, cnt, cls) {
+          var tr = document.createElement('tr');
+          var tdCode = document.createElement('td'); tdCode.className = cls || 'code'; tdCode.textContent = String(code);
+          var tdCnt = document.createElement('td'); tdCnt.className = 'cnt'; tdCnt.textContent = String(cnt);
+          tr.appendChild(tdCode); tr.appendChild(tdCnt); return tr;
+        }
+        var codesEl = document.getElementById('codes');
+        codesEl.replaceChildren();
+        (r.failureByCode || []).forEach(function (c) { codesEl.appendChild(row(c.first, c.second)); });
+        if (r.noTokenCount > 0) codesEl.appendChild(row('NO_TOKEN (토큰 없음)', r.noTokenCount));
+        if (!codesEl.hasChildNodes()) {
+          var tr = document.createElement('tr');
+          var td = document.createElement('td'); td.className = 'empty'; td.colSpan = 2; td.textContent = '실패 없음';
+          tr.appendChild(td); codesEl.appendChild(tr);
+        }
+      }
+      function poll() {
+        fetch(url, { headers: { 'Accept': 'application/json' } })
+          .then(function (res) { return res.json(); })
+          // 공통 래퍼(ApiResponseBody) 라 실제 결과는 .data 에 있다.
+          .then(function (body) { var r = body.data; render(r); if (!r.done) setTimeout(poll, 1500); })
+          .catch(function () { setTimeout(poll, 3000); });
+      }
+      // 서버 렌더가 이미 done 이면 폴링 불필요.
+      if (document.getElementById('state').textContent.indexOf('완료') === -1) setTimeout(poll, 1500);
+    })();
+  </script>
+</body>
+</html>
