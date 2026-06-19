@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <title>운영 통계 대시보드 · PiKi 백오피스</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <style>
+    :root{
+      --bg:#f5f7fb; --card:#fff; --ink:#0f172a; --muted:#64748b; --line:#e8edf3;
+      --accent:#0EA5E9; --accent-deep:#0284c7; --accent-soft:#e0f2fe;
+      --pos:#16a34a; --neg:#dc2626;
+      --shadow:0 1px 2px rgba(15,23,42,.04), 0 10px 28px -16px rgba(15,23,42,.18);
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",system-ui,sans-serif;
+      background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;}
+    .num{font-variant-numeric:tabular-nums;}
+    .bar{display:flex;align-items:center;gap:12px;padding:14px 24px;background:#fff;border-bottom:1px solid var(--line);}
+    .brand{font-weight:800;font-size:17px;letter-spacing:-.03em;}.brand .dot{color:var(--accent);}
+    .bar a{font-size:13px;color:var(--muted);text-decoration:none;font-weight:600;}
+    .wrap{max-width:1080px;margin:0 auto;padding:28px 24px 56px;}
+    h1{font-size:23px;font-weight:800;letter-spacing:-.03em;margin:0 0 5px;}
+    .lede{color:var(--muted);font-size:13px;margin:0 0 18px;}
+    .lede b{color:var(--ink);font-weight:700;}
+    .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:22px;}
+    .chip{display:inline-block;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);
+      font-size:13px;font-weight:700;text-decoration:none;transition:.12s;}
+    .chip:hover{border-color:#cbd5e1;color:var(--ink);}
+    .chip.on{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 4px 12px -4px rgba(14,165,233,.5);}
+    details.range{margin-left:4px;}
+    details.range>summary{list-style:none;cursor:pointer;padding:8px 14px;border-radius:999px;border:1px dashed #cbd5e1;color:var(--muted);font-size:13px;font-weight:700;}
+    details.range>summary::-webkit-details-marker{display:none;}
+    .range form{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;}
+    .range input{border:1px solid #dbe2ea;border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;background:#fbfcfe;}
+    .btn{background:var(--accent);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:8px;}
+    .kpi{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:17px 18px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
+    .kpi::before{content:"";position:absolute;left:0;top:0;height:3px;width:100%;background:linear-gradient(90deg,var(--accent),#38bdf8);}
+    .kpi .k{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px;}
+    .kpi .v{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1;}
+    .kpi .s{font-size:12px;color:var(--muted);margin-top:7px;}
+    .kpi .s .up{color:var(--pos);font-weight:700;}
+    h2{font-size:13px;font-weight:800;letter-spacing:.02em;color:var(--muted);text-transform:uppercase;margin:30px 0 12px;}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+    @media(max-width:720px){.grid2{grid-template-columns:1fr;}}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:var(--shadow);}
+    .card h3{font-size:14px;font-weight:800;margin:0 0 12px;letter-spacing:-.01em;}
+    .kv{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:9px 0;border-bottom:1px solid #f1f5f9;font-size:13.5px;}
+    .kv:last-of-type{border-bottom:none;} .kv .lab{color:var(--muted);} .kv b{font-weight:800;}
+    .pos{color:var(--pos);} .neg{color:var(--neg);} .muted{color:var(--muted);}
+    .note{font-size:11.5px;color:#94a3b8;margin:10px 0 0;line-height:1.5;}
+    .rows{margin-top:6px;}
+    .row{display:flex;align-items:center;gap:10px;font-size:12px;margin:5px 0;}
+    .row .lbl{width:46px;color:var(--muted);text-align:right;flex-shrink:0;}
+    .row .track{flex:1;height:13px;background:#f1f5f9;border-radius:7px;overflow:hidden;}
+    .row .fill{height:100%;border-radius:7px;background:linear-gradient(90deg,var(--accent-deep),#38bdf8);}
+    .row .cnt{width:46px;color:var(--ink);font-weight:700;}
+    table.cmp{width:100%;border-collapse:collapse;font-size:13.5px;}
+    table.cmp th{text-align:right;color:var(--muted);font-weight:700;font-size:12px;padding:9px 14px;border-bottom:1px solid var(--line);}
+    table.cmp th:first-child{text-align:left;}
+    table.cmp td{padding:11px 14px;border-bottom:1px solid #f1f5f9;text-align:right;}
+    table.cmp td:first-child{text-align:left;color:var(--muted);font-weight:600;}
+    table.cmp tr:last-child td{border-bottom:none;}
+    table.cmp b{font-weight:800;}
+    .delta{font-weight:800;font-size:12.5px;}
+  </style>
+</head>
+<body>
+  <div class="bar"><span class="brand"><img src="/favicon.ico" alt="PiKi" style="width:19px;height:19px;border-radius:5px;vertical-align:-4px;margin-right:6px">PiKi<span class="dot">.</span> 백오피스</span><a th:href="@{/admin}">← 홈</a></div>
+  <div class="wrap">
+
+    <h1>운영 통계 대시보드</h1>
+    <p class="lede">백엔드 관점 지표(가입·위시·토너먼트·리텐션·푸시)를 기간별로. 구간 <b th:text="${#temporals.format(snapshot.from,'yyyy-MM-dd HH:mm')}">-</b> ~ <b th:text="${#temporals.format(snapshot.to,'yyyy-MM-dd HH:mm')}">-</b> (KST)</p>
+
+    <!-- 프리셋 + 직접 지정 -->
+    <div class="controls">
+      <a class="chip" th:classappend="${activePreset=='today'}?'on'" th:href="@{/admin/metrics(preset='today')}">오늘</a>
+      <a class="chip" th:classappend="${activePreset=='yesterday'}?'on'" th:href="@{/admin/metrics(preset='yesterday')}">어제</a>
+      <a class="chip" th:classappend="${activePreset=='7d'}?'on'" th:href="@{/admin/metrics(preset='7d')}">최근 7일</a>
+      <a class="chip" th:classappend="${activePreset=='30d'}?'on'" th:href="@{/admin/metrics(preset='30d')}">최근 30일</a>
+      <details class="range" th:open="${activePreset==null}">
+        <summary>직접 지정</summary>
+        <form method="get" th:action="@{/admin/metrics}">
+          <input type="datetime-local" name="from" th:value="${#temporals.format(snapshot.from,'yyyy-MM-dd''T''HH:mm')}">
+          <span class="muted">~</span>
+          <input type="datetime-local" name="to" th:value="${#temporals.format(snapshot.to,'yyyy-MM-dd''T''HH:mm')}">
+          <button class="btn" type="submit">조회</button>
+        </form>
+      </details>
+    </div>
+
+    <!-- KPI -->
+    <div class="kpis">
+      <div class="kpi">
+        <div class="k">누적 가입자</div>
+        <div class="v num" th:text="${#numbers.formatInteger(snapshot.signup.before + snapshot.signup.within,1,'COMMA')}">0</div>
+        <div class="s">구간 신규 <span class="up" th:text="'+' + ${#numbers.formatInteger(snapshot.signup.within,1,'COMMA')}">+0</span></div>
+      </div>
+      <div class="kpi">
+        <div class="k">토너먼트 이용자</div>
+        <div class="v num" th:text="${#numbers.formatInteger(snapshot.tournament.participants,1,'COMMA')}">0</div>
+        <div class="s">구간 참여 유저</div>
+      </div>
+      <div class="kpi">
+        <div class="k">위시 담기</div>
+        <div class="v num" th:text="${#numbers.formatInteger(snapshot.wish.total,1,'COMMA')}">0</div>
+        <div class="s">파싱 성공률 <b th:text="${snapshot.wish.parseSuccessRate}+'%'">0%</b></div>
+      </div>
+      <div class="kpi">
+        <div class="k">올라간 아이템</div>
+        <div class="v num" th:text="${#numbers.formatInteger(snapshot.tournament.itemsAdded,1,'COMMA')}">0</div>
+        <div class="s">토너먼트 출전 등록</div>
+      </div>
+      <div class="kpi">
+        <div class="k">D1 리텐션</div>
+        <div class="v num" th:text="${snapshot.retention.d1Rate}+'%'">0%</div>
+        <div class="s"><b th:text="${snapshot.retention.d1Returned}">0</b> / <span th:text="${snapshot.retention.cohortSignups}">0</span></div>
+      </div>
+      <div class="kpi">
+        <div class="k">푸시 도달 가능</div>
+        <div class="v num" th:text="${#numbers.formatInteger(snapshot.pushReachableUsers,1,'COMMA')}">0</div>
+        <div class="s">토큰 보유 유저</div>
+      </div>
+    </div>
+
+    <!-- 가입 / 토너먼트 -->
+    <h2>가입 · 토너먼트</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3>가입 상세</h3>
+        <div class="kv"><span class="lab">provider</span><span>
+          <th:block th:each="e,it:${snapshot.signup.byProvider}"><b th:text="${e.key}+' '+${e.value}">-</b><span th:if="${!it.last}"> · </span></th:block>
+          <span th:if="${snapshot.signup.byProvider.isEmpty()}" class="muted">없음</span></span></div>
+        <div class="kv"><span class="lab">유형</span><span>회원 <b th:text="${snapshot.signup.withinMembers}">0</b> · 게스트 <b th:text="${snapshot.signup.withinGuests}">0</b></span></div>
+        <div class="kv"><span class="lab">게스트→회원 전환</span><b th:text="${snapshot.signup.guestToMemberConversions}">0</b></div>
+        <p class="note">전환은 소셜 연결이 가입보다 1분 이상 늦은 경우로 근사.</p>
+      </div>
+      <div class="card">
+        <h3>토너먼트</h3>
+        <div class="kv"><span class="lab">생성 / 완료</span><span><b th:text="${snapshot.tournament.created}">0</b> / <b th:text="${snapshot.tournament.completed}">0</b></span></div>
+        <div class="kv"><span class="lab">플레이 (픽)</span><b class="num" th:text="${#numbers.formatInteger(snapshot.tournament.plays,1,'COMMA')}">0</b></div>
+        <div class="kv"><span class="lab">평균 참가자</span><b th:text="${snapshot.tournament.avgParticipants}+'명'">0명</b></div>
+        <p class="note">완료는 참가자별 완료, 플레이는 라운드 픽 수 기준(시작 시각 컬럼 없음).</p>
+      </div>
+    </div>
+
+    <!-- 위시 / 리텐션 -->
+    <h2>위시 · 리텐션</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3>위시</h3>
+        <div class="kv"><span class="lab">담기 (URL / 이미지)</span><span>URL <b th:text="${snapshot.wish.fromUrl}">0</b> · 이미지 <b th:text="${snapshot.wish.fromImage}">0</b></span></div>
+        <div class="kv"><span class="lab">파싱 성공 / 실패</span><span><b class="pos" th:text="${snapshot.wish.parsedReady}">0</b> / <b class="neg" th:text="${snapshot.wish.parsedFailed}">0</b></span></div>
+        <div class="kv"><span class="lab">파싱 성공률</span><b th:text="${snapshot.wish.parseSuccessRate}+'%'">0%</b></div>
+      </div>
+      <div class="card">
+        <h3>리텐션 / DAU</h3>
+        <div class="kv"><span class="lab">D1 재방문</span><span>가입 <b th:text="${snapshot.retention.cohortSignups}">0</b> → 다음날 <b class="pos" th:text="${snapshot.retention.d1Returned}">0</b> (<b th:text="${snapshot.retention.d1Rate}+'%'">0%</b>)</span></div>
+        <div class="rows">
+          <div class="row" th:each="d:${snapshot.retention.dau}">
+            <span class="lbl" th:text="${#temporals.format(d.date,'MM-dd')}">-</span>
+            <span class="track"><span class="fill" th:style="'width:'+${snapshot.retention.dauMax>0?(d.count*100/snapshot.retention.dauMax):0}+'%'"></span></span>
+            <span class="cnt num" th:text="${d.count}">0</span>
+          </div>
+          <p class="note" th:if="${snapshot.retention.dau.isEmpty()}">아직 활동 기록이 없습니다.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 푸시 / 시간대 -->
+    <h2>푸시 · 시간대별</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3>푸시</h3>
+        <div class="kv"><span class="lab">발송 이력</span><span>
+          <th:block th:each="e,it:${snapshot.push.byType}"><b th:text="${e.key}+' '+${e.value}">-</b><span th:if="${!it.last}"> · </span></th:block>
+          <span th:if="${snapshot.push.byType.isEmpty()}" class="muted">없음</span></span></div>
+        <div class="kv"><span class="lab">공지 도달 (성공/실패/미도달)</span><span><b class="pos" th:text="${snapshot.push.deliverySuccess}">0</b> / <b class="neg" th:text="${snapshot.push.deliveryFailure}">0</b> / <b th:text="${snapshot.push.deliverySkipped}">0</b></span></div>
+        <div class="kv"><span class="lab">클릭률 (근사)</span><b th:text="${snapshot.push.ctrApproxPct}+'%'">0%</b></div>
+        <p class="note">클릭률은 is_read 근사 — 알림센터 열람도 포함돼 과대계상될 수 있다.</p>
+      </div>
+      <div class="card">
+        <h3>시간대별 가입 (KST)</h3>
+        <div class="rows">
+          <div class="row" th:each="h:${snapshot.hourlySignups}">
+            <span class="lbl" th:text="${h.hour}+'시'">-</span>
+            <span class="track"><span class="fill" th:style="'width:'+${snapshot.hourlyMax>0?(h.count*100/snapshot.hourlyMax):0}+'%'"></span></span>
+            <span class="cnt num" th:text="${h.count}">0</span>
+          </div>
+          <p class="note" th:if="${snapshot.hourlySignups.isEmpty()}">구간에 가입이 없습니다.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 직전 동기간 대비 -->
+    <h2>직전 동기간 대비</h2>
+    <div class="card">
+      <p class="note" style="margin:0 0 8px">현재 구간 <b th:text="${#temporals.format(comparison.curFrom,'M/d HH:mm')}+' ~ '+${#temporals.format(comparison.curTo,'M/d HH:mm')}">-</b> vs 직전 동일 길이 <b th:text="${#temporals.format(comparison.prevFrom,'M/d HH:mm')}+' ~ '+${#temporals.format(comparison.prevTo,'M/d HH:mm')}">-</b>. 릴리즈·이벤트 창을 잡으면 직전 동기간이 자동 비교군.</p>
+      <table class="cmp">
+        <thead><tr><th>지표</th><th>직전 구간</th><th>현재 구간</th><th>변화</th></tr></thead>
+        <tbody>
+          <tr th:each="row:${comparison.rows}">
+            <td th:text="${row.label}">-</td>
+            <td class="num" th:text="${#numbers.formatInteger(row.prev,1,'COMMA')}">0</td>
+            <td class="num"><b th:text="${#numbers.formatInteger(row.cur,1,'COMMA')}">0</b></td>
+            <td>
+              <span class="delta pos" th:if="${row.isNew}">신규</span>
+              <span class="delta muted" th:if="${!row.isNew and row.deltaPct==null}">—</span>
+              <span class="delta" th:if="${row.deltaPct!=null}" th:classappend="${row.deltaPct>=0}?'pos':'neg'"
+                    th:text="(${row.deltaPct>=0}?'▲ +':'▼ ')+${row.deltaPct}+'%'">▲ +0%</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</body>
+</html>
