@@ -14,6 +14,7 @@ class JwtProviderTest {
             secret = TEST_SECRET,
             accessTokenExpiry = Duration.ofHours(1),
             refreshTokenExpiry = Duration.ofDays(14),
+            refreshTokenGrace = Duration.ofSeconds(10),
         )
     private val jwtProvider = JwtProvider(properties)
 
@@ -58,6 +59,7 @@ class JwtProviderTest {
                     secret = TEST_SECRET,
                     accessTokenExpiry = Duration.ofSeconds(-1),
                     refreshTokenExpiry = Duration.ofSeconds(-1),
+                    refreshTokenGrace = Duration.ofSeconds(10),
                 ),
             )
         val token = expiredProvider.generateAccessToken(UUID.randomUUID(), IdentityType.GUEST)
@@ -82,6 +84,7 @@ class JwtProviderTest {
                     secret = "other-secret-key-must-be-at-least-32-chars!",
                     accessTokenExpiry = Duration.ofHours(1),
                     refreshTokenExpiry = Duration.ofDays(14),
+            refreshTokenGrace = Duration.ofSeconds(10),
                 ),
             )
         val token = otherProvider.generateAccessToken(UUID.randomUUID(), IdentityType.GUEST)

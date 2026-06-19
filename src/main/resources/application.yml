@@ -71,6 +71,8 @@ jwt:
   # Spring 의 Duration 파싱은 1h / 14d / 30m / PT1H30M 등 다양한 형식 지원.
   access-token-expiry: ${JWT_ACCESS_EXPIRY:15m}
   refresh-token-expiry: ${JWT_REFRESH_EXPIRY:14d}
+  # refresh 회전 후 이전 토큰을 멱등 유효 처리하는 grace 창 (Auth0 reuse_interval 권장치와 동일).
+  refresh-token-grace: ${JWT_REFRESH_GRACE:10s}
 
 auth:
   cookie:
