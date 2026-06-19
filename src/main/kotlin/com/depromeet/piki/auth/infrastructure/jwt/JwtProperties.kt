@@ -2,6 +2,7 @@ package com.depromeet.piki.auth.infrastructure.jwt
 
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
+import org.hibernate.validator.constraints.time.DurationMax
 import org.hibernate.validator.constraints.time.DurationMin
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.validation.annotation.Validated
@@ -23,6 +24,14 @@ data class JwtProperties(
     val accessTokenExpiry: Duration,
     @field:DurationMin(seconds = 1, message = "refreshTokenExpiry 는 1초 이상이어야 한다.")
     val refreshTokenExpiry: Duration,
+    // refresh 토큰 회전 직후, 이전 토큰을 이 시간 동안 멱등 유효 처리하는 grace 창 (reuse interval).
+    // Next.js App Router 등에서 한 페이지 진입에 동시 다발 요청이 같은 옛 토큰으로 refresh 를 호출할 때,
+    // 한쪽만 회전 성공하고 나머지가 401 로 튕겨 로그아웃되는 race 를 흡수한다. 창 밖 재사용은 그대로 탐지.
+    // 상·하한을 모두 강제한다. grace 는 재사용 탐지를 일시 완화하는 보안 동작이라, env 오설정으로 수분·수시간이
+    // 들어오면 탈취 토큰 재사용 허용 구간이 비정상적으로 길어진다. 동시 요청 버스트 흡수엔 수초면 충분하므로 60초 상한.
+    @field:DurationMin(seconds = 1, message = "refreshTokenGrace 는 1초 이상이어야 한다.")
+    @field:DurationMax(seconds = 60, message = "refreshTokenGrace 는 60초 이하여야 한다 (재사용 허용 구간 과다 방지).")
+    val refreshTokenGrace: Duration,
 ) {
     companion object {
         // HS256 의 키 최소 길이 (RFC 7518 §3.2: key MUST be at least 256 bits = 32 bytes).
