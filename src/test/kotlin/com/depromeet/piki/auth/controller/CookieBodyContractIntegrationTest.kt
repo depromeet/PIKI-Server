@@ -66,17 +66,27 @@ class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
                 .andExpect(cookie().path("access_token", "/"))
                 .andExpect(cookie().exists("refresh_token"))
                 .andExpect(cookie().httpOnly("refresh_token", true))
-                .andExpect(cookie().path("refresh_token", "/api/v1/auth"))
                 .andExpect(jsonPath("$.data.accessToken").value(nullValue()))
                 .andExpect(jsonPath("$.data.refreshToken").value(nullValue()))
                 .andExpect(jsonPath("$.data.user.identityType").value("GUEST"))
                 .andReturn()
 
-        // SameSite 는 jakarta Cookie 에 없어 Set-Cookie 헤더 문자열로 확인한다.
+        // SameSite·정확한 Path 는 jakarta Cookie / cookie() 매처로 단언하기 모호하므로(refresh_token 이
+        // 새 쿠키 + 전환기 cleanup 쿠키로 2개 내려간다) Set-Cookie 헤더 문자열로 확인한다.
         val setCookies = result.response.getHeaders(HttpHeaders.SET_COOKIE)
         assertTrue(
-            setCookies.any { it.startsWith("access_token=") && it.contains("SameSite=Strict") },
-            "access_token 쿠키에 SameSite=Strict 가 있어야 한다",
+            setCookies.any { it.startsWith("access_token=") && it.contains("SameSite=Lax") },
+            "access_token 쿠키에 SameSite=Lax 가 있어야 한다",
+        )
+        // #512: refresh_token 은 Path=/ 로 넓혀 내려간다 — 엣지 proxy 가 페이지 네비게이션에서 읽도록.
+        assertTrue(
+            setCookies.any { it.startsWith("refresh_token=") && !it.startsWith("refresh_token=;") && it.contains("Path=/;") },
+            "값이 있는 refresh_token 은 Path=/ 로 내려가야 한다",
+        )
+        // 전환기 cleanup: 옛 Path=/api/v1/auth refresh_token 쿠키를 빈 값·Max-Age=0 으로 함께 만료시킨다.
+        assertTrue(
+            setCookies.any { it.startsWith("refresh_token=;") && it.contains("Path=/api/v1/auth") && it.contains("Max-Age=0") },
+            "옛 Path=/api/v1/auth refresh_token 쿠키가 Max-Age=0 으로 만료돼야 한다",
         )
     }
 
@@ -167,15 +177,27 @@ class CookieBodyContractIntegrationTest : IntegrationTestSupport() {
         // 쿠키 만료는 fail-safe 로 ClientType 무관하게 내려가야 한다. 살아있는 access 쿠키가 확실히 삭제되도록.
         val accessCookie = createGuestWeb().response.getCookie("access_token")!!
 
-        mockMvc()
-            .perform(
-                post("/api/v1/auth/logout").cookie(accessCookie),
-            ).andExpect(status().isOk)
-            .andExpect(cookie().maxAge("access_token", 0))
-            // path 까지 set 시점과 동일해야 브라우저가 실제로 삭제한다. path 가 틀려도 Max-Age=0 만 보면 통과하므로 함께 고정.
-            .andExpect(cookie().path("access_token", "/"))
-            .andExpect(cookie().maxAge("refresh_token", 0))
-            .andExpect(cookie().path("refresh_token", "/api/v1/auth"))
-            .andExpect(jsonPath("$.data.loggedOut").value(true))
+        val result =
+            mockMvc()
+                .perform(
+                    post("/api/v1/auth/logout").cookie(accessCookie),
+                ).andExpect(status().isOk)
+                .andExpect(cookie().maxAge("access_token", 0))
+                // path 까지 set 시점과 동일해야 브라우저가 실제로 삭제한다. path 가 틀려도 Max-Age=0 만 보면 통과하므로 함께 고정.
+                .andExpect(cookie().path("access_token", "/"))
+                .andExpect(jsonPath("$.data.loggedOut").value(true))
+                .andReturn()
+
+        // #512: refresh_token 만료는 새 Path=/ 와 옛 Path=/api/v1/auth 를 둘 다 내려야 브라우저가 실제로 지운다.
+        // (옛 경로 쿠키를 안 지우면 만료까지 잔존해 갱신 경로에서 회전 토큰 불일치를 일으킨다.)
+        val setCookies = result.response.getHeaders(HttpHeaders.SET_COOKIE)
+        assertTrue(
+            setCookies.any { it.startsWith("refresh_token=;") && it.contains("Path=/;") && it.contains("Max-Age=0") },
+            "새 Path=/ refresh_token 이 Max-Age=0 으로 만료돼야 한다",
+        )
+        assertTrue(
+            setCookies.any { it.startsWith("refresh_token=;") && it.contains("Path=/api/v1/auth") && it.contains("Max-Age=0") },
+            "옛 Path=/api/v1/auth refresh_token 이 Max-Age=0 으로 만료돼야 한다",
+        )
     }
 }

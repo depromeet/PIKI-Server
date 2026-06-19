@@ -112,6 +112,26 @@ class CorsIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `dev(비-prod)에서는 LAN 사설망 IP origin 의 preflight 도 허용된다`() {
+        // 실기기 dev 테스트(#509) — 폰 브라우저가 LAN IP(192.168.x.y:port)로 프론트에 접속하면 Origin 이 그
+        // 사설망 IP 로 박힌다. 비-prod 프로파일에서 allowedOriginPatterns 로 허용함을 검증한다(통합 컨텍스트는 prod 아님).
+        val mockMvc =
+            MockMvcBuilders
+                .webAppContextSetup(webApplicationContext)
+                .apply<DefaultMockMvcBuilder>(springSecurity())
+                .build()
+
+        mockMvc
+            .perform(
+                options("/api/v1/dev/users")
+                    .header(HttpHeaders.ORIGIN, "http://192.168.0.42:5173")
+                    .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"),
+            ).andExpect(status().isOk)
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://192.168.0.42:5173"))
+            .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
+    }
+
+    @Test
     fun `화이트리스트에 없는 origin 의 preflight 는 403 으로 거부된다`() {
         // 허용 목록 검증이 실제로 동작함을 함께 단언해 테스트가 vacuous 하지 않도록 한다.
         val mockMvc =

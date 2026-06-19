@@ -44,7 +44,7 @@ class ItemParsingScheduler(
     // recover 가 stale 로 잡아 재실행한다(execution at-least-once). "claim 됐는데 실행 0회" 도 되살릴 대상이라 종결하지 않는다.
     // (#411 까지는 거부 시 즉시 FAILED 였으나, 실패·재시도 판정을 recover 한 곳으로 모으면서 여기선 종결하지 않는다.)
     private fun dispatchToWorker(claimed: ClaimedItem) {
-        runCatching { itemParsingWorker.parse(claimed.itemId, claimed.link) }
+        runCatching { itemParsingWorker.parse(claimed.itemId, claimed.snapshotId, claimed.link) }
             .onFailure { e -> log.warn("item {} 워커 디스패치 거부 → PROCESSING 유지, recover 가 재실행: {}", claimed.itemId, e.message) }
     }
 

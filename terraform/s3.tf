@@ -144,3 +144,55 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "staging_images" {
     }
   }
 }
+
+# -----------------------------------------------------------------------------
+# CORS (#영수증 캡처) — html-to-image 가 이미지를 canvas 에 그린 뒤 export 하려면, 브라우저가
+# cross-origin 이미지의 픽셀을 읽도록 S3 가 Access-Control-Allow-Origin 헤더를 내려줘야 한다.
+# CORS 는 접근 제어가 아니다(버킷은 이미 public-read) — 브라우저 JS 의 read 허용 헤더일 뿐이라
+# 노출 표면이 늘지 않는다. GET/HEAD 만(읽기 전용, 업로드는 instance role 유지), origin 은
+# piki.day + 로컬 개발로 한정한다.
+# 외부 쇼핑몰 CDN 이미지(msscdn·pstatic·kakaocdn 등)는 우리 버킷이 아니라 여기서 못 푼다 —
+# 그건 별도 이미지 프록시 API 로 처리한다.
+# -----------------------------------------------------------------------------
+locals {
+  image_cors_origins = [
+    "https://piki.day",
+    "https://www.piki.day",
+    "https://*.piki.day",
+    "http://localhost:3000",
+    "http://localhost:3001",
+  ]
+}
+
+resource "aws_s3_bucket_cors_configuration" "images" {
+  bucket = aws_s3_bucket.images.id
+
+  cors_rule {
+    allowed_methods = ["GET", "HEAD"]
+    allowed_origins = local.image_cors_origins
+    allowed_headers = ["*"]
+    max_age_seconds = 3600
+  }
+}
+
+resource "aws_s3_bucket_cors_configuration" "dev_images" {
+  bucket = aws_s3_bucket.dev_images.id
+
+  cors_rule {
+    allowed_methods = ["GET", "HEAD"]
+    allowed_origins = local.image_cors_origins
+    allowed_headers = ["*"]
+    max_age_seconds = 3600
+  }
+}
+
+resource "aws_s3_bucket_cors_configuration" "staging_images" {
+  bucket = aws_s3_bucket.staging_images.id
+
+  cors_rule {
+    allowed_methods = ["GET", "HEAD"]
+    allowed_origins = local.image_cors_origins
+    allowed_headers = ["*"]
+    max_age_seconds = 3600
+  }
+}

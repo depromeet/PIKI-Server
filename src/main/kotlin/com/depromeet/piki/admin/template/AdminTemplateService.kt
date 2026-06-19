@@ -1,0 +1,134 @@
+package com.depromeet.piki.admin.template
+
+import com.depromeet.piki.admin.audit.AdminAuditAction
+import com.depromeet.piki.admin.audit.AdminAuditService
+import com.depromeet.piki.admin.config.ConditionalOnAdminEnabled
+import com.depromeet.piki.notification.domain.NotificationCategory
+import com.depromeet.piki.notification.domain.NotificationType
+import com.depromeet.piki.notification.repository.NotificationTemplateJpaRepository
+import com.depromeet.piki.notification.service.DbNotificationTemplateProvider
+import com.depromeet.piki.notification.service.NotificationTemplateRenderer
+import com.depromeet.piki.notification.service.NotificationTemplateVariables
+import com.depromeet.piki.notification.service.TemplateVariable
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
+
+// 백오피스 템플릿 관리(#250). 편집은 미래 발송에만 적용(렌더 결과는 발송 시점 freeze) — 여기선 템플릿 문자열만 바꾼다.
+// 수정 시: 변수 검증(선언 안 된 변수 차단) → 저장 → provider 캐시 reload → 감사 기록.
+@Service
+@ConditionalOnAdminEnabled
+class AdminTemplateService(
+    private val templateRepository: NotificationTemplateJpaRepository,
+    private val renderer: NotificationTemplateRenderer,
+    private val templateProvider: DbNotificationTemplateProvider,
+    private val auditService: AdminAuditService,
+) {
+    fun list(): List<TemplateView> =
+        templateRepository
+            .findAll()
+            // ANNOUNCEMENT 는 재사용 "템플릿"이 아니라 매번 등록하는 공지 내용이다 — /admin/announcements 에서 관리하므로
+            // 편집기 목록에서 제외한다(이벤트 알림 8종만 노출). DB 의 ${title}/${body} 행은 dispatch passthrough 로 남는다.
+            .filter { it.type != NotificationType.ANNOUNCEMENT }
+            .sortedBy { it.type.ordinal }
+            .map { entity ->
+            TemplateView(
+                type = entity.type,
+                category = NotificationCategory.of(entity.type),
+                title = entity.titleTemplate,
+                body = entity.bodyTemplate,
+                variables = NotificationTemplateVariables.availableFor(entity.type),
+            )
+        }
+
+    fun get(type: NotificationType): TemplateView {
+        val entity = templateRepository.findById(type).orElseThrow { IllegalStateException("템플릿 없음: $type") }
+        return TemplateView(
+            type = entity.type,
+            category = NotificationCategory.of(entity.type),
+            title = entity.titleTemplate,
+            body = entity.bodyTemplate,
+            variables = NotificationTemplateVariables.availableFor(entity.type),
+        )
+    }
+
+    @Transactional
+    fun update(
+        type: NotificationType,
+        title: String,
+        body: String,
+        actor: String,
+        clientIp: String?,
+    ) {
+        require(type != NotificationType.ANNOUNCEMENT) { "ANNOUNCEMENT 는 템플릿으로 수정할 수 없습니다." }
+        validateLengths(title, body)
+        validateVariables(type, title, body)
+        val entity = templateRepository.findById(type).orElseThrow { IllegalStateException("템플릿 없음: $type") }
+        entity.update(title, body)
+        templateRepository.save(entity)
+        auditService.record(actor, AdminAuditAction.TEMPLATE_UPDATE, "$type 템플릿 수정", clientIp)
+        // 캐시 갱신은 커밋 후로 미룬다 — 커밋 전 reload 면 이후 단계(감사 저장 등) 롤백 시 캐시만 새 문구로 남아 DB 와 어긋난다.
+        TransactionSynchronizationManager.registerSynchronization(
+            object : TransactionSynchronization {
+                override fun afterCommit() = templateProvider.reload()
+            },
+        )
+    }
+
+    // 실시간 미리보기 — 샘플값으로 렌더한 결과 + 선언 안 된 변수(있으면 경고).
+    fun preview(
+        type: NotificationType,
+        title: String,
+        body: String,
+    ): TemplatePreview {
+        require(type != NotificationType.ANNOUNCEMENT) { "ANNOUNCEMENT 는 미리보기 대상이 아닙니다." }
+        val samples = NotificationTemplateVariables.sampleValues(type)
+        val unknown = NotificationTemplateVariables.usedIn(title, body) - NotificationTemplateVariables.names(type)
+        return TemplatePreview(
+            title = renderer.render(title, samples),
+            body = renderer.render(body, samples),
+            category = NotificationCategory.of(type),
+            unknownVariables = unknown.toList(),
+        )
+    }
+
+    private fun validateVariables(
+        type: NotificationType,
+        title: String,
+        body: String,
+    ) {
+        val unknown = NotificationTemplateVariables.usedIn(title, body) - NotificationTemplateVariables.names(type)
+        require(unknown.isEmpty()) { "이 타입에 없는 변수: ${unknown.joinToString(", ") { "\${$it}" }}" }
+    }
+
+    // DB 컬럼 한계(title 255 · body 500)를 서비스에서 먼저 막아 운영자 입력 실수를 400(사용자 오류)으로 처리한다.
+    // 안 막으면 커밋 시점 DB 제약 위반으로 500 이 난다. 컨트롤러가 IllegalArgumentException 을 잡아 편집 화면에 에러를 보인다.
+    private fun validateLengths(
+        title: String,
+        body: String,
+    ) {
+        require(title.length <= TITLE_MAX_LENGTH) { "제목은 ${TITLE_MAX_LENGTH}자를 초과할 수 없습니다." }
+        require(body.length <= BODY_MAX_LENGTH) { "본문은 ${BODY_MAX_LENGTH}자를 초과할 수 없습니다." }
+    }
+
+    companion object {
+        private const val TITLE_MAX_LENGTH = 255
+        private const val BODY_MAX_LENGTH = 500
+    }
+}
+
+data class TemplateView(
+    val type: NotificationType,
+    val category: NotificationCategory,
+    val title: String,
+    val body: String,
+    val variables: List<TemplateVariable>,
+)
+
+data class TemplatePreview(
+    val title: String,
+    val body: String,
+    val category: NotificationCategory,
+    val unknownVariables: List<String>,
+)

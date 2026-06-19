@@ -1,17 +1,15 @@
 package com.depromeet.piki.tournament.controller.dto
 
 import io.swagger.v3.oas.annotations.media.Schema
-import jakarta.validation.constraints.Max
-import jakarta.validation.constraints.Min
+import jakarta.validation.constraints.Future
+import java.time.LocalDateTime
 
 data class UpdateInviteDurationRequest(
-    @field:Schema(description = "새 초대 마감까지 남은 시간 (분 단위, 1-1440)", example = "60")
-    @field:Min(value = 1, message = INVITE_DURATION_MIN_MESSAGE)
-    @field:Max(value = 1440, message = INVITE_DURATION_MAX_MESSAGE)
-    val inviteDurationMinutes: Long,
+    @field:Schema(description = "새 초대 마감 시각 (현재 시각 이후, 최대 24시간 이내)", example = "2026-06-18T15:30:00")
+    @field:Future(message = INVITE_EXPIRY_PAST_MESSAGE)
+    val newExpiresAt: LocalDateTime,
 ) {
     companion object {
-        const val INVITE_DURATION_MIN_MESSAGE = "초대 유효 시간은 1분 이상이어야 합니다."
-        const val INVITE_DURATION_MAX_MESSAGE = "초대 유효 시간은 1440분(24시간) 이하이어야 합니다."
+        const val INVITE_EXPIRY_PAST_MESSAGE = "초대 마감 시각은 현재 시각 이후로 입력해 주세요."
     }
 }

@@ -14,6 +14,13 @@ interface ItemSnapshotJpaRepository : JpaRepository<ItemSnapshot, Long> {
     // 한 item 의 살아있는(soft-delete 안 된) 최신 snapshot 1개 — id 역순 첫 행.
     fun findFirstByItemIdAndDeletedAtIsNullOrderByIdDesc(itemId: Long): ItemSnapshot?
 
+    // 한 item 의 특정 상태 snapshot 전체를 id 역순(최신 버전 먼저)으로 — 가격 히스토리(READY 버전 이력) 조회용.
+    // idx_item_snapshots_item_id 로 커버되고, id 정렬은 PK 라 secondary index 리프에 포함돼 추가 인덱스가 필요 없다.
+    fun findByItemIdAndStatusAndDeletedAtIsNullOrderByIdDesc(
+        itemId: Long,
+        status: ItemStatus,
+    ): List<ItemSnapshot>
+
     // 살아있는 단건 조회. JpaRepository.findById(Optional) 와 충돌하지 않도록 deletedAt 조건을 붙여 이름을 구분한다.
     fun findByIdAndDeletedAtIsNull(id: Long): ItemSnapshot?
 

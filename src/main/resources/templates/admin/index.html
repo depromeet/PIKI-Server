@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <title>PiKi 운영 백오피스</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <style>
+    :root { --accent:#0EA5E9; --accent-soft:#E0F2FE; --ink:#111827; --muted:#6b7280; --border:#e5e7eb; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif; background:#f7f8fa; color:var(--ink); }
+    .bar { display:flex; align-items:center; gap:12px; padding:14px 24px; background:#fff; border-bottom:1px solid var(--border); }
+    .brand { font-weight:800; font-size:17px; letter-spacing:-.03em; }
+    .brand .dot { color:var(--accent); }
+    .spacer { flex:1; }
+    .who { font-size:13px; color:var(--muted); }
+    .who b { color:var(--ink); }
+    .logout { font-size:13px; color:var(--muted); text-decoration:none; font-weight:600; border:1px solid var(--border);
+              border-radius:8px; padding:6px 12px; background:none; cursor:pointer; font-family:inherit; }
+    .wrap { max-width:880px; margin:0 auto; padding:32px 24px; }
+    h1 { font-size:22px; font-weight:800; letter-spacing:-.02em; margin:0 0 6px; }
+    .lede { color:var(--muted); font-size:14px; margin:0 0 26px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .card { background:#fff; border:1px solid var(--border); border-radius:14px; padding:18px 18px 16px; }
+    .card.soon { opacity:.6; }
+    .card .t { font-weight:800; font-size:15px; margin-bottom:4px; }
+    .card .d { font-size:13px; color:var(--muted); }
+    .tag { display:inline-block; font-size:11px; font-weight:700; color:var(--accent); background:var(--accent-soft);
+           padding:2px 8px; border-radius:999px; margin-left:6px; }
+  </style>
+</head>
+<body>
+  <div th:replace="~{admin/fragments :: topbar(null, null)}"></div>
+
+  <div class="wrap">
+    <h1>운영 백오피스</h1>
+    <p class="lede">배포 없이 알림 문구를 수정하고 공지를 관리합니다.</p>
+
+    <div class="grid">
+      <a class="card" th:href="@{/admin/templates}" style="text-decoration:none;color:inherit">
+        <div class="t">알림 템플릿 관리 →</div>
+        <div class="d">타입별 title/body 수정 · 변수 라이브 미리보기 · 푸시 미리보기</div>
+      </a>
+      <a class="card" th:href="@{/admin/announcements}" style="text-decoration:none;color:inherit">
+        <div class="t">공지 발송 →</div>
+        <div class="d">전체 공지 작성 · 발송 · 발송 내역</div>
+      </a>
+      <a class="card" th:href="@{/admin/metrics}" style="text-decoration:none;color:inherit">
+        <div class="t">운영 통계 대시보드 →</div>
+        <div class="d">가입·위시·토너먼트·리텐션·푸시 지표를 기간별로 · 직전 동기간 대비</div>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

@@ -13,8 +13,9 @@ class StubItemParsingWorker(private val delegate: ItemParsingWorker) : ItemParsi
 
     override fun parse(
         itemId: Long,
+        snapshotId: Long,
         link: ProductLink,
     ) {
-        if (enabled) delegate.parse(itemId, link)
+        if (enabled) delegate.parse(itemId, snapshotId, link)
     }
 }

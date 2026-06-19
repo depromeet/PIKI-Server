@@ -53,8 +53,8 @@ class OAuthApiExamples(
                         payload =
                             ApiResponseBody.fail<Unit>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                // @AssertTrue(validFlow) 위반은 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
-                                detail = "validFlow: ${OAuthLoginRequest.VALID_FLOW_MESSAGE}",
+                                // @AssertTrue 위반은 GlobalExceptionHandler.detailOf 가 위반 필드의 메시지를 그대로 detail 로 내린다.
+                                detail = OAuthLoginRequest.VALID_FLOW_MESSAGE,
                             ),
                     )
                     add(OAuthException.invalidRequest(), name = "자격증명 누락 (code+redirectUri·accessToken 모두 공백)")

@@ -9,7 +9,7 @@ data class ApiResponseBody<T>(
     val pageResponse: PageResponse = PageResponse.EMPTY,
 ) {
     companion object {
-        private const val SUCCESS_DETAIL = "정상적으로 처리되었습니다."
+        private const val SUCCESS_DETAIL = "완료했어요."
 
         fun <T> ok(
             data: T? = null,

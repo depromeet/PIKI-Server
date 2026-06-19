@@ -68,6 +68,7 @@ class NotificationDispatcher(
                         ),
                     )
                 // 한 채널의 실패도 다른 채널 전달을 막지 않게 추가로 격리한다.
+                // 채널 선택(예: FCM 은 push 대상 타입만)은 각 채널이 send 안에서 자기-적용 판단한다.
                 channels.forEach { channel ->
                     runCatching { channel.send(userId, notification) }
                         .onFailure { e -> log.warn("채널 {} 전송 실패 userId={}", channel::class.simpleName, userId, e) }

@@ -12,8 +12,9 @@ class StubImageParsingWorker(
 
     override fun parse(
         itemId: Long,
+        snapshotId: Long,
         image: ProductImage,
     ) {
-        if (enabled) delegate.parse(itemId, image)
+        if (enabled) delegate.parse(itemId, snapshotId, image)
     }
 }

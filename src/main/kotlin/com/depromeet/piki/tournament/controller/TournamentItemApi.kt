@@ -27,7 +27,7 @@ interface TournamentItemApi {
         description = """
             토너먼트 아이템의 상세 정보와 파싱 상태를 조회한다.
             링크·이미지로 아이템을 추가하면 비동기 파싱이 진행되므로,
-            클라이언트가 status 필드를 폴링해 PENDING → PROCESSING → READY/FAILED 전환을 감지할 수 있다.
+            클라이언트는 SSE(`/api/v1/notifications/subscribe`)로 PENDING → PROCESSING → READY/FAILED 전환(완료·실패 알림)을 통보받고, 이 조회로 최신 status 와 값을 확인한다.
             - PENDING: URL 등록 접수 후 파싱 대기 (디스패처가 집기 전, name·price·imageUrl 은 null). 이미지 등록은 PROCESSING 으로 시작.
             - PROCESSING: 파싱 진행 중 (name·price·imageUrl 은 null)
             - READY: 파싱 완료 (모든 필드 채워짐)
@@ -172,7 +172,7 @@ interface TournamentItemApi {
             플레이 링크로 생성된 복제 토너먼트에는 추가 불가. 토너먼트 참여자만 추가할 수 있다.
             아이템이 PENDING 상태로 즉시 생성되어 tournamentItemId 가 반환된다.
             파싱은 비동기로 진행되며, 디스패처가 PENDING 을 집어 PROCESSING 으로 전이한 뒤 READY 또는 FAILED 상태로 전환된다.
-            클라이언트는 tournamentItemId 로 GET /tournaments/{id}/items/{tournamentItemId} 를 폴링한다.
+            클라이언트는 SSE(`/api/v1/notifications/subscribe`)로 파싱 완료·실패를 통보받고, tournamentItemId 로 GET /tournaments/{id}/items/{tournamentItemId} 를 조회해 결과를 확인한다.
         """,
     )
     @ApiResponses(
@@ -189,7 +189,7 @@ interface TournamentItemApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (URL 미입력 · URL 형식 오류(비어 있음/유효하지 않음/https 외 스킴) · URL 2048자 초과 · 아이템 최대 32개 초과)",
+                description = "잘못된 요청 (URL 미입력 · URL 형식 오류(비어 있음/유효하지 않음/https 외 스킴) · URL 2048자 초과 · 지원하지 않는 쇼핑몰 · 아이템 최대 32개 초과)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -252,7 +252,7 @@ interface TournamentItemApi {
             플레이 링크로 생성된 복제 토너먼트에는 추가 불가. 토너먼트 참여자만 추가할 수 있다.
             이미지 1~5장을 전달하면 아이템이 PROCESSING 상태로 즉시 생성되어 tournamentItemIds 가 반환된다.
             이미지 파싱은 비동기로 진행되며 완료 시 READY 또는 FAILED 상태로 전환된다.
-            클라이언트는 tournamentItemId 로 GET /tournaments/{id}/items/{tournamentItemId} 를 폴링한다.
+            클라이언트는 SSE(`/api/v1/notifications/subscribe`)로 파싱 완료·실패를 통보받고, tournamentItemId 로 GET /tournaments/{id}/items/{tournamentItemId} 를 조회해 결과를 확인한다.
         """,
     )
     @ApiResponses(

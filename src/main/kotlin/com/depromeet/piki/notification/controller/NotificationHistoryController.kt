@@ -6,6 +6,7 @@ import com.depromeet.piki.notification.controller.dto.NotificationHistoryRespons
 import com.depromeet.piki.notification.controller.dto.NotificationReadRequest
 import com.depromeet.piki.notification.controller.dto.NotificationReadResponse
 import com.depromeet.piki.notification.domain.NotificationCategory
+import com.depromeet.piki.notification.service.NotificationReadOrchestrator
 import com.depromeet.piki.notification.service.NotificationService
 import jakarta.validation.Valid
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -21,6 +22,7 @@ import java.util.UUID
 @RequestMapping("/api/v1/notifications")
 class NotificationHistoryController(
     private val notificationService: NotificationService,
+    private val notificationReadOrchestrator: NotificationReadOrchestrator,
 ) : NotificationHistoryApi {
     @GetMapping
     override fun getHistory(
@@ -41,7 +43,7 @@ class NotificationHistoryController(
         @AuthenticationPrincipal userId: UUID,
         @Valid @RequestBody request: NotificationReadRequest,
     ): ApiResponseBody<NotificationReadResponse> {
-        val unreadByCategory = notificationService.read(userId = userId, command = request.toCommand())
+        val unreadByCategory = notificationReadOrchestrator.readAndSyncBadge(userId = userId, command = request.toCommand())
         return ApiResponseBody.ok(data = NotificationReadResponse.of(unreadByCategory))
     }
 }
