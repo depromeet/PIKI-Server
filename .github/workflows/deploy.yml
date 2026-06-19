@@ -6,6 +6,11 @@ on:
     branches: [dev, staging, main]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "prod 릴리즈 semver 태그 (예: v1.0.1). 비우면 release-<sha7> 로 폴백. Promote 워크플로가 채운다."
+        required: false
+        type: string
 
 jobs:
   # 트리거 브랜치 → 배포 환경(dev/prod)·도메인·nginx conf 를 한 곳에서 결정한다.
@@ -709,8 +714,14 @@ jobs:
       - name: Create GitHub Release (auto notes)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Promote 워크플로가 prod 승격 시 채우는 semver 태그. 직접 dispatch·push 경로엔 비어 있어 SHA 로 폴백.
+          VERSION: ${{ inputs.version }}
         run: |
-          TAG="release-$(echo '${{ needs.resolve.outputs.ref }}' | cut -c1-7)"
+          if [ -n "$VERSION" ]; then
+            TAG="$VERSION"
+          else
+            TAG="release-$(echo '${{ needs.resolve.outputs.ref }}' | cut -c1-7)"
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "release $TAG 이미 존재 — skip"
           else
