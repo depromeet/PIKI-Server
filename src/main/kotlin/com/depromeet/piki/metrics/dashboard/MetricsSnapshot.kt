@@ -1,12 +1,11 @@
-package com.depromeet.piki.metrics.launch
+package com.depromeet.piki.metrics.dashboard
 
 import java.time.LocalDate
 import java.time.LocalDateTime
 
-// 런칭데이 리캡 화면(admin)의 단일 뷰모델. 모든 수치는 LaunchMetricsRepository 의 DB 집계에서 나오고,
-// 비율·평균 등 파생값만 여기서 계산한다(파생값을 한 곳에 모아 템플릿이 계산을 안 하게 한다).
-// from~to 는 조회 구간(KST). signup.before 는 구간 시작 전 누적, 나머지 수치는 구간 내([from, to)).
-data class LaunchRecap(
+// 운영 통계 대시보드의 한 구간([from, to)) 스냅샷. 모든 수치는 MetricsRepository 의 DB 집계에서 나오고,
+// 비율·평균 등 파생값만 여기서 계산한다. signup.before 는 구간 시작 전 누적, 나머지는 구간 내 값이다.
+data class MetricsSnapshot(
     val from: LocalDateTime,
     val to: LocalDateTime,
     val signup: Signup,
@@ -17,11 +16,14 @@ data class LaunchRecap(
     val push: Push,
     val hourlySignups: List<HourCount>,
 ) {
+    // 차트 막대 스케일(0~100%)용 최댓값.
+    val hourlyMax: Long get() = hourlySignups.maxOfOrNull { it.count } ?: 0L
+
     data class Signup(
         val before: Long,
-        val after: Long,
-        val afterMembers: Long,
-        val afterGuests: Long,
+        val within: Long,
+        val withinMembers: Long,
+        val withinGuests: Long,
         val byProvider: Map<String, Long>,
         val guestToMemberConversions: Long,
     )
@@ -48,14 +50,16 @@ data class LaunchRecap(
     }
 
     data class Retention(
-        val launchDaySignups: Long,
+        val cohortSignups: Long,
         val d1Returned: Long,
         val dau: List<DateCount>,
     ) {
-        val d1Rate: Int get() = pct(d1Returned, launchDaySignups)
+        val d1Rate: Int get() = pct(d1Returned, cohortSignups)
+
+        val dauMax: Long get() = dau.maxOfOrNull { it.count } ?: 0L
     }
 
-    // 푸시 히스토리·도달률·근사 클릭률. ctrApprox 는 is_read 기반 근사다(푸시 탭 ∪ 알림센터 열람이 섞임) — UI 에 "근사" 명시.
+    // 푸시 히스토리·도달률·근사 클릭률. ctrApprox 는 is_read 기반 근사다(푸시 탭과 알림센터 열람이 섞임).
     data class Push(
         val byType: Map<String, Long>,
         val deliverySuccess: Long,
@@ -73,5 +77,25 @@ data class LaunchRecap(
 
     companion object {
         fun pct(numerator: Long, denominator: Long): Int = if (denominator == 0L) 0 else ((numerator * 100) / denominator).toInt()
+    }
+}
+
+// 두 구간 비교(현재 구간 vs 직전 동일 길이 구간). 릴리즈·이벤트 전후 변화를 본다.
+data class PeriodComparison(
+    val prevFrom: LocalDateTime,
+    val prevTo: LocalDateTime,
+    val curFrom: LocalDateTime,
+    val curTo: LocalDateTime,
+    val rows: List<Row>,
+) {
+    data class Row(
+        val label: String,
+        val prev: Long,
+        val cur: Long,
+    ) {
+        // 변화율(%). 직전이 0이면 비율이 정의되지 않아 null(템플릿이 "신규"/"—"로 표기).
+        val deltaPct: Int? get() = if (prev == 0L) null else (((cur - prev) * 100) / prev).toInt()
+
+        val isNew: Boolean get() = prev == 0L && cur > 0L
     }
 }

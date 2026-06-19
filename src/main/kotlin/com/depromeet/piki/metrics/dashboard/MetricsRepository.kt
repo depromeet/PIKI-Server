@@ -1,4 +1,4 @@
-package com.depromeet.piki.metrics.launch
+package com.depromeet.piki.metrics.dashboard
 
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
@@ -6,11 +6,11 @@ import java.sql.Timestamp
 import java.time.LocalDate
 import java.time.LocalDateTime
 
-// 런칭데이 리캡 집계 전용 읽기 저장소. 모든 시각 컬럼(created_at 등)은 JVM 기본 TZ(UTC)로 저장되므로,
-// 서비스가 조회 구간(KST)을 UTC LocalDateTime(from·to)으로 변환해 넘긴다. "구간 내"는 [from, to), "구간 전"은 < from.
-// KST 시간대별 집계는 created_at 에 +9h 를 더해 버킷팅한다. user_daily_activity.active_date 만은 이미 KST 날짜로 적재돼 그대로 쓴다.
+// 운영 통계 집계 전용 읽기 저장소. 모든 시각 컬럼(created_at 등)은 JVM 기본 TZ(UTC)로 저장되므로, 서비스가 조회 구간(KST)을
+// UTC LocalDateTime(from·to)으로 변환해 넘긴다. "구간 내"는 [from, to), "구간 전"은 < from. KST 시간대별 집계는 created_at 에
+// +9h 를 더해 버킷팅한다. user_daily_activity.active_date 만은 이미 KST 날짜로 적재돼 그대로 쓴다.
 @Repository
-class LaunchMetricsRepository(
+class MetricsRepository(
     private val jdbcTemplate: JdbcTemplate,
 ) {
     // ---- 가입자 ----
@@ -155,10 +155,10 @@ class LaunchMetricsRepository(
             ts(to),
         )
 
-    fun dailyActiveUsers(): List<LaunchRecap.DateCount> =
+    fun dailyActiveUsers(): List<MetricsSnapshot.DateCount> =
         jdbcTemplate.query(
             "SELECT active_date, COUNT(*) FROM user_daily_activity GROUP BY active_date ORDER BY active_date",
-        ) { rs, _ -> LaunchRecap.DateCount(rs.getDate(1).toLocalDate(), rs.getLong(2)) }
+        ) { rs, _ -> MetricsSnapshot.DateCount(rs.getDate(1).toLocalDate(), rs.getLong(2)) }
 
     // ---- 푸시 히스토리 / CTR 근사 ----
     fun notificationsByType(
