@@ -587,7 +587,10 @@ jobs:
           SHORT_SHA="${{ needs.resolve.outputs.ref }}"
           SHORT_SHA="${SHORT_SHA:0:7}"
           COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ needs.resolve.outputs.ref }}"
-          COMMIT_MSG=$(jq -r '(.workflow_run.head_commit.message // .head_commit.message // "")' "$GITHUB_EVENT_PATH" | head -n 1)
+          # jq 안에서 첫 줄을 뽑는다 — `jq | head` 는 head 가 파이프를 닫을 때 jq 가 SIGPIPE(broken pipe)로 죽고,
+          # 이 step 쉘의 pipefail+set -e 가 그걸 실패로 잡아 step 이 exit 2 로 중단된다(슬랙 전송 누락). promotion 머지
+          # (dev→staging·dev→main)처럼 커밋 메시지가 거대하면 jq 출력 도중 head 가 닫혀 재현됐다(#586).
+          COMMIT_MSG=$(jq -r '((.workflow_run.head_commit.message // .head_commit.message // "") | split("\n")[0])' "$GITHUB_EVENT_PATH")
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
           # 배포 대상을 PiKi-Dev / PiKi-Staging / PiKi-Prod 로 브랜딩 + 도메인까지 보여 "어디에 배포됐는지" 명확히.
@@ -619,7 +622,10 @@ jobs:
           SHORT_SHA="${{ needs.resolve.outputs.ref }}"
           SHORT_SHA="${SHORT_SHA:0:7}"
           COMMIT_URL="https://github.com/${{ github.repository }}/commit/${{ needs.resolve.outputs.ref }}"
-          COMMIT_MSG=$(jq -r '(.workflow_run.head_commit.message // .head_commit.message // "")' "$GITHUB_EVENT_PATH" | head -n 1)
+          # jq 안에서 첫 줄을 뽑는다 — `jq | head` 는 head 가 파이프를 닫을 때 jq 가 SIGPIPE(broken pipe)로 죽고,
+          # 이 step 쉘의 pipefail+set -e 가 그걸 실패로 잡아 step 이 exit 2 로 중단된다(슬랙 전송 누락). promotion 머지
+          # (dev→staging·dev→main)처럼 커밋 메시지가 거대하면 jq 출력 도중 head 가 닫혀 재현됐다(#586).
+          COMMIT_MSG=$(jq -r '((.workflow_run.head_commit.message // .head_commit.message // "") | split("\n")[0])' "$GITHUB_EVENT_PATH")
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
           if [ "${{ steps.guard.outcome }}" = "failure" ]; then

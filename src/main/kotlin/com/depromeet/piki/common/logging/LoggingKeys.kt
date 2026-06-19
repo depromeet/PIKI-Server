@@ -10,4 +10,11 @@ package com.depromeet.piki.common.logging
 // 식별자라 마스킹 없이 그대로 싣는다(역추적은 DB join 이라는 별도 권한 경계를 거친다).
 object LoggingKeys {
     const val USER_ID = "userId"
+
+    // /admin 백오피스 요청의 슬랙 actor(표시명). AdminAccessFilter 가 세션 신원에서 꺼내 요청 내내 MDC 에 얹어
+    // 도메인 로그에 찍히게 하고, request attribute 로도 심어 AccessLogFilter 가 access log 한 줄에 재주입한다
+    // (userId 와 같은 흐름 — JwtAuthenticationFilter↔AccessLogFilter). userId(UUID 가명 식별자)와 의미가 달라
+    // 슬롯을 재사용하지 않고 별도 키로 둔다. prod ECS JSON 은 MDC 를 필드로 자동 출력하므로 별도 설정 없이
+    // adminActor 필드로 뜬다(평문 콘솔 패턴엔 명시 안 함 — 비-admin 요청까지 빈 슬롯이 붙는 노이즈를 피한다).
+    const val ADMIN_ACTOR = "adminActor"
 }
