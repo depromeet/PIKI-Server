@@ -1,6 +1,7 @@
 package com.depromeet.piki.metrics.activity
 
 import org.slf4j.LoggerFactory
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.time.LocalDate
 import java.time.ZoneId
@@ -27,6 +28,15 @@ class DailyActivityRecorder(
             repository.recordActive(userId, today)
             recordedToday[userId] = today
         }.onFailure { log.warn("일별 활동 기록 실패 — best-effort 라 요청에는 영향 없음", it) }
+    }
+
+    // 쓰로틀 맵은 "오늘 기록한 유저"만 의미가 있으므로 KST 자정에 통째로 비운다. 안 비우면 한 번이라도 활동한
+    // 모든 유저 UUID 가 영구히 쌓여(유저 수만큼 무한 증가) 장기 운영 시 메모리가 샌다. 비운 직후엔 각 유저의
+    // 그날 첫 요청이 다시 1회 기록하면 되므로(멱등) 손실 없다.
+    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
+    fun clearThrottle() {
+        recordedToday.clear()
+        log.info("일별 활동 쓰로틀 맵 초기화 (KST 자정)")
     }
 
     companion object {

@@ -138,27 +138,37 @@ class MetricsRepository(
         to: LocalDateTime,
     ): Long = count("SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ?", ts(from), ts(to))
 
-    // 구간에 가입한 유저 중 다음날(KST)에 활동 기록이 있는 수 = D1 재방문.
+    // 구간에 가입한 유저 중, 각자의 "가입 다음날(KST)"에 활동 기록이 있는 수 = D1 재방문. active_date 를 구간시작+1 로
+    // 고정하면 다일자 구간에서 중·후반 가입자의 D1 이 통째로 누락돼 비율이 과소집계된다 → 가입자별 다음날로 조인한다.
+    // created_at(UTC)+9h 의 날짜 = 가입 KST 날짜, +1일 = 그 다음날. active_date 는 이미 KST 날짜로 적재돼 직접 비교된다.
     fun countD1Returned(
         from: LocalDateTime,
         to: LocalDateTime,
-        nextDayKst: LocalDate,
     ): Long =
         count(
             """
-            SELECT COUNT(*) FROM user_daily_activity uda
-            WHERE uda.active_date = ?
-              AND uda.user_id IN (SELECT id FROM users WHERE created_at >= ? AND created_at < ?)
+            SELECT COUNT(DISTINCT u.id)
+            FROM users u
+            JOIN user_daily_activity uda
+              ON uda.user_id = u.id
+             AND uda.active_date = DATE(u.created_at + INTERVAL 9 HOUR) + INTERVAL 1 DAY
+            WHERE u.created_at >= ? AND u.created_at < ?
             """.trimIndent(),
-            java.sql.Date.valueOf(nextDayKst),
             ts(from),
             ts(to),
         )
 
-    fun dailyActiveUsers(): List<MetricsSnapshot.DateCount> =
+    // 구간이 덮는 KST 날짜들의 DAU 만(전체 기간이 아니라 선택 구간으로 한정).
+    fun dailyActiveUsers(
+        fromDate: LocalDate,
+        toDate: LocalDate,
+    ): List<MetricsSnapshot.DateCount> =
         jdbcTemplate.query(
-            "SELECT active_date, COUNT(*) FROM user_daily_activity GROUP BY active_date ORDER BY active_date",
-        ) { rs, _ -> MetricsSnapshot.DateCount(rs.getDate(1).toLocalDate(), rs.getLong(2)) }
+            "SELECT active_date, COUNT(*) FROM user_daily_activity WHERE active_date BETWEEN ? AND ? GROUP BY active_date ORDER BY active_date",
+            { rs, _ -> MetricsSnapshot.DateCount(rs.getDate(1).toLocalDate(), rs.getLong(2)) },
+            java.sql.Date.valueOf(fromDate),
+            java.sql.Date.valueOf(toDate),
+        )
 
     // ---- 푸시 히스토리 / CTR 근사 ----
     fun notificationsByType(

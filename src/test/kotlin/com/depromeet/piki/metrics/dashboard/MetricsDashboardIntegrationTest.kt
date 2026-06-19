@@ -135,4 +135,28 @@ class MetricsDashboardIntegrationTest : IntegrationTestSupport() {
         assertEquals(0, snapshot.pushReachableUsers)
         assertEquals(0, snapshot.push.notificationsTotal)
     }
+
+    @Test
+    fun `다일자 구간에서도 가입자별 가입 다음날 기준으로 D1 이 집계된다`() {
+        // 6/20 가입 → 6/21 활동, 6/21 가입 → 6/22 활동 (각자 가입 다음날). active_date 를 구간시작+1 로 고정하면
+        // 6/21 가입자의 D1(6/22)이 누락돼 과소집계되는데, 가입자별 다음날 조인이면 둘 다 잡힌다.
+        val day20 = UUID.randomUUID()
+        val day21 = UUID.randomUUID()
+        insertUser(day20, "MEMBER", "2026-06-19 16:00:00") // KST 6/20 01:00
+        insertUser(day21, "MEMBER", "2026-06-20 16:00:00") // KST 6/21 01:00
+        jdbcTemplate.update("INSERT INTO user_daily_activity (user_id, active_date, created_at) VALUES (?, ?, NOW(6))", uuidToBytes(day20), Date.valueOf(LocalDate.of(2026, 6, 21)))
+        jdbcTemplate.update("INSERT INTO user_daily_activity (user_id, active_date, created_at) VALUES (?, ?, NOW(6))", uuidToBytes(day21), Date.valueOf(LocalDate.of(2026, 6, 22)))
+
+        val snapshot =
+            mockMvc()
+                .perform(get("/admin/metrics").param("from", "2026-06-20T00:00").param("to", "2026-06-22T00:00"))
+                .andExpect(status().isOk)
+                .andReturn()
+                .modelAndView!!
+                .model["snapshot"] as MetricsSnapshot
+
+        assertEquals(2, snapshot.retention.cohortSignups)
+        assertEquals(2, snapshot.retention.d1Returned)
+        assertEquals(100, snapshot.retention.d1Rate)
+    }
 }

@@ -45,7 +45,6 @@ class MetricsService(
     ): MetricsSnapshot {
         val fromUtc = from.atZone(KST).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime()
         val toUtc = to.atZone(KST).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime()
-        val nextDayKst = from.toLocalDate().plusDays(1)
 
         val identityCounts = repository.countWithinByIdentityType(fromUtc, toUtc)
         val (wishUrl, wishImage) = repository.countWishesBySource(fromUtc, toUtc)
@@ -86,8 +85,8 @@ class MetricsService(
             retention =
                 MetricsSnapshot.Retention(
                     cohortSignups = repository.countSignupsInWindow(fromUtc, toUtc),
-                    d1Returned = repository.countD1Returned(fromUtc, toUtc, nextDayKst),
-                    dau = repository.dailyActiveUsers(),
+                    d1Returned = repository.countD1Returned(fromUtc, toUtc),
+                    dau = repository.dailyActiveUsers(from.toLocalDate(), to.minusSeconds(1).toLocalDate()),
                 ),
             push =
                 MetricsSnapshot.Push(
