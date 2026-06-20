@@ -7,6 +7,7 @@ import com.depromeet.piki.notification.service.DefaultPushImage
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import java.io.IOException
 import java.util.UUID
 
 // SSE 의 "로컬 write" 지점 — 레지스트리에 든 emitter 들에 실제로 이벤트를 흘려보내고, write 가 실패하는
@@ -76,7 +77,14 @@ class LocalSseDelivery(
     ) {
         runCatching { emitter.send(event) }
             .onFailure { e ->
-                log.warn("SSE write 실패로 emitter 정리 userId={}", userId, e)
+                // 클라이언트가 연결을 끊은 정상 종료는 SSE 의 일상적 라이프사이클이라 DEBUG 로 둔다.
+                // Broken pipe·ClientAbortException·AsyncRequestNotUsableException 은 모두 IOException 하위이므로
+                // is IOException 한 분기로 묶인다. 그 외(예: 이미 complete 된 emitter 에 write 한 IllegalStateException)만
+                // 진짜 이상 신호로 WARN 한다. (정리 동작 자체는 두 경우 모두 동일하다.)
+                when (e) {
+                    is IOException -> log.debug("SSE write 실패(연결 끊김)로 emitter 정리 userId={}", userId, e)
+                    else -> log.warn("SSE write 실패로 emitter 정리 userId={}", userId, e)
+                }
                 registry.unregister(userId, emitter)
                 runCatching { emitter.completeWithError(e) }
             }
