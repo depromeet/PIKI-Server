@@ -73,7 +73,7 @@ class FcmTokenControllerIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(FcmTokenRegisterRequest(token = "token-1", deviceId = "device-1"))),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.detail").value("정상적으로 처리되었습니다."))
+            .andExpect(jsonPath("$.detail").value("완료했어요."))
             .andExpect(jsonPath("$.data").value(nullValue()))
 
         val saved = userDeviceRepository.findByUserIdAndDeviceId(userId, "device-1")
@@ -148,7 +148,7 @@ class FcmTokenControllerIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(FcmDeviceUnregisterRequest(deviceId = "device-1"))),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.detail").value("정상적으로 처리되었습니다."))
+            .andExpect(jsonPath("$.detail").value("완료했어요."))
 
         assertTrue(userDeviceRepository.findAllByUserId(userId).isEmpty())
     }

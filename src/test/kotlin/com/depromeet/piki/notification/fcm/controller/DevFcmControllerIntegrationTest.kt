@@ -46,7 +46,7 @@ class DevFcmControllerIntegrationTest : IntegrationTestSupport() {
     fun `GUEST 가 토큰을 지정해 발송하면 200 과 함께 그 토큰으로 발송된다`() {
         val userId = UUID.randomUUID()
         var captured: List<String>? = null
-        stubFcmMessageSender.onSend = { tokens, _ ->
+        stubFcmMessageSender.onSend = { tokens, _, _ ->
             captured = tokens
             emptyList()
         }
@@ -72,5 +72,19 @@ class DevFcmControllerIntegrationTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(DevPushRequest(token = "t"))),
             ).andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `badge 가 음수면 400 이 ApiResponseBody contract 로 내려간다`() {
+        val userId = UUID.randomUUID()
+
+        buildMockMvc()
+            .perform(
+                post("/api/v1/dev/fcm/push")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer ${guestToken(userId)}")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(DevPushRequest(token = "live-token", badge = -1))),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.detail").value(DevPushRequest.BADGE_NON_NEGATIVE_MESSAGE))
     }
 }

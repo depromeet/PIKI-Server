@@ -23,7 +23,7 @@ data class ProductSnapshot(
         // currency 는 ISO 4217 로 정규화한다. 추출값이 DB 컬럼 제약·상식을 벗어나면(가격 음수·길이 초과)
         // 추출 실패로 보고 untrustworthyValue 를 던진다 — 입력 경계의 계약 검증.
         //
-        // 실패 처리는 호출부가 고른다: 구조화 경로는 이 예외를 runCatching 으로 흡수해 null(→LLM fallback)로,
+        // 실패 처리는 호출부가 고른다: 구조화 경로는 이 예외를 runCatching 으로 흡수해 Miss.INVALID_VALUE(→LLM fallback)로,
         // LLM 경로는 그대로 흘려 FAILED 로 떨어뜨린다. 같은 검증, 실패 표현만 다르다.
         fun fromExtracted(
             link: ProductLink?,

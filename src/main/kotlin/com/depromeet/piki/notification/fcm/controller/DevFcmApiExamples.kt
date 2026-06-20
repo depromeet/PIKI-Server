@@ -5,6 +5,7 @@ import com.depromeet.piki.common.openapi.OpenApiObjectMapper
 import com.depromeet.piki.common.openapi.binds
 import com.depromeet.piki.common.openapi.examples
 import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.notification.fcm.controller.dto.DevPushRequest
 import com.depromeet.piki.notification.fcm.controller.dto.DevPushResponse
 import org.springdoc.core.customizers.OperationCustomizer
 import org.springframework.context.annotation.Bean
@@ -38,11 +39,19 @@ class DevFcmApiExamples(
                         payload =
                             ApiResponseBody.fail<DevPushResponse>(
                                 category = ErrorCategory.INVALID_INPUT,
-                                detail = "FCM 토큰은 비어 있을 수 없습니다.",
+                                detail = DevPushRequest.TOKEN_BLANK_MESSAGE,
+                            ),
+                    )
+                    add(
+                        status = HttpStatus.BAD_REQUEST,
+                        name = "badge 음수",
+                        payload =
+                            ApiResponseBody.fail<DevPushResponse>(
+                                category = ErrorCategory.INVALID_INPUT,
+                                detail = DevPushRequest.BADGE_NON_NEGATIVE_MESSAGE,
                             ),
                     )
                     unauthorized()
-                    forbidden(name = "GUEST 권한 없음")
                 }
             }
             operation

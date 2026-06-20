@@ -1,10 +1,14 @@
 package com.depromeet.piki.notification.service
 
+import com.depromeet.piki.common.config.AsyncConfig
 import com.depromeet.piki.notification.domain.Notification
+import com.depromeet.piki.notification.domain.NotificationChannelPolicy
 import com.depromeet.piki.notification.fcm.service.FcmMessageSender
 import com.depromeet.piki.notification.fcm.service.UserDeviceService
+import com.depromeet.piki.notification.repository.NotificationRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.ObjectProvider
+import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
@@ -22,6 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class PushNotificationChannel(
     private val senderProvider: ObjectProvider<FcmMessageSender>,
     private val userDeviceService: UserDeviceService,
+    private val notificationRepository: NotificationRepository,
 ) : NotificationChannel {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -33,16 +38,47 @@ class PushNotificationChannel(
         userId: UUID,
         notification: Notification,
     ) {
-        val sender =
-            senderProvider.getIfAvailable() ?: run {
-                if (senderMissingWarned.compareAndSet(false, true)) {
-                    log.warn("FCM sender 미주입 — 푸시 발송 건너뜀 (FIREBASE_SERVICE_ACCOUNT 미설정?). 이후 동일 상황은 로그 생략")
-                }
-                return
-            }
+        // sync 성 알림(인앱 SSE 로 충분)은 OS 트레이 푸시를 보내지 않는다 — 토큰 게이트와 같은 자리의 자기-적용 판단.
+        if (!NotificationChannelPolicy.pushable(notification.type)) return
+        val sender = sender() ?: return
         val tokens = userDeviceService.findTokens(userId)
         if (tokens.isEmpty()) return
-        val staleTokens = sender.send(tokens, notification)
-        userDeviceService.removeStaleTokens(staleTokens)
+        // 안읽음 수(OS 아이콘 badge)는 persistence.save 커밋 이후·트랜잭션 밖(dispatcher 호출 시점)에 세어 방금 도착한 알림을 포함한다.
+        // REST unreadCount 와 동일 소스(카테고리 합)라 앱 내부 badge 와 OS 아이콘 badge 가 같은 수를 가리킨다(#487).
+        val badge = notificationRepository.countUnreadByCategory(userId).toBadgeCount()
+        val result = sender.send(tokens, notification, badge)
+        userDeviceService.removeStaleTokens(result.staleTokens)
     }
+
+    // 읽음 처리 후 갱신된 안읽음 수만 silent 푸시로 보내 OS 아이콘 badge 를 내린다(#487, 멀티 디바이스 동기화).
+    // 읽은 기기는 응답 body 로 이미 badge 를 받으므로 이 푸시의 목적은 같은 유저의 다른 기기 동기화다.
+    // badge 산정은 호출자(NotificationReadOrchestrator)가 책임진다 — 여기선 갱신 값을 받아 전달만 한다.
+    //
+    // @Async — 읽음 응답(POST /read)이 외부 FCM latency 에 묶이지 않게 응답 경로에서 떼어 notificationExecutor 로 돌린다
+    // (발송 send 가 디스패처의 @Async AFTER_COMMIT 워커에서 도는 것과 대칭). 비동기라 예외가 호출 스레드로 전파되지 않으므로
+    // best-effort 흡수도 여기서 한다 — 읽음은 이미 커밋됐고 못 받은 기기는 재진입 시 GET /notifications 로 보정되므로
+    // 푸시 실패가 읽음을 깨면 안 된다.
+    @Async(AsyncConfig.NOTIFICATION_EXECUTOR)
+    fun syncBadge(
+        userId: UUID,
+        badge: Int,
+    ) {
+        try {
+            val sender = sender() ?: return
+            val tokens = userDeviceService.findTokens(userId)
+            if (tokens.isEmpty()) return
+            val result = sender.sendBadgeSync(tokens, badge)
+            userDeviceService.removeStaleTokens(result.staleTokens)
+        } catch (e: Exception) {
+            log.warn("읽음 후 badge 동기화 푸시 실패 userId={}", userId, e)
+        }
+    }
+
+    private fun sender(): FcmMessageSender? =
+        senderProvider.getIfAvailable() ?: run {
+            if (senderMissingWarned.compareAndSet(false, true)) {
+                log.warn("FCM sender 미주입 — 푸시 발송 건너뜀 (FIREBASE_SERVICE_ACCOUNT 미설정?). 이후 동일 상황은 로그 생략")
+            }
+            null
+        }
 }

@@ -7,6 +7,12 @@ import java.util.UUID
 interface UserDeviceRepository {
     fun save(userDevice: UserDevice): UserDevice
 
+    // 토큰 보유자(앱 푸시 수신 가능 유저) 수 — 공지 발송 대상 인원 표시·fan-out 규모 산정.
+    fun countTokenHolders(): Long
+
+    // 토큰 보유 유저 전체의 식별자(#489) — 공지 브로드캐스트가 이 id 들을 돌며 유저별 알림 생성·발송한다.
+    fun findAllTokenHolderIds(): List<UUID>
+
     // upsert(#244) — 토큰은 전역 유일이라 토큰으로 기존 기기 row 를 찾아 현재 사용자로 재배정한다.
     fun findByFcmToken(fcmToken: String): UserDevice?
 

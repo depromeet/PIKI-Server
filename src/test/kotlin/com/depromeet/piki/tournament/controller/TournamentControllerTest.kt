@@ -319,8 +319,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `POST tournaments-id-items 에서 존재하지 않는 아이템 ID 이면 404 를 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        // 위시에는 등록되어 있지만 item 테이블에는 없는 ID — wish 확인 통과 후 item 존재 확인에서 404
-        wishJpaRepository.save(Wish(userId = userId, itemId = 999999L))
+        // 위시에는 등록되어 있지만 item 테이블에는 없는 ID — wish 확인 통과 후 item 존재 확인에서 404.
+        // itemId 단일 출처는 snapshot 이므로, item 행 없이 itemId=999999 를 가리키는 snapshot 만 시딩해 wish 가 가리키게 한다(FK 없음).
+        val danglingSnapshotId = itemSnapshotJpaRepository.save(ItemSnapshot.processing(999999L)).getId()
+        wishJpaRepository.save(Wish(userId = userId, snapshotId = danglingSnapshotId))
 
         mockMvc
             .perform(
@@ -340,7 +342,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val processingSnapshotId =
             itemSnapshotJpaRepository.save(ItemSnapshot.processing(processingItemId)).getId()
         // 위시에도 등록 — wish 확인 통과 후 READY 상태 확인에서 409
-        wishJpaRepository.save(Wish(userId = userId, itemId = processingItemId, snapshotId = processingSnapshotId))
+        wishJpaRepository.save(Wish(userId = userId, snapshotId = processingSnapshotId))
 
         mockMvc
             .perform(
@@ -632,6 +634,28 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `GET tournaments 에서 status=IN_PROGRESS 로 조회하면 COMPLETED 토너먼트는 포함되지 않는다`() {
+        val mockMvc = buildMockMvc()
+        val (completedId, _, _) = completeTournamentWith2Items(mockMvc)
+        val inProgressId = createTournament(mockMvc, "진행중")
+        addItemsToTournament(mockMvc, inProgressId, userId, saveWishItem(), saveWishItem())
+        mockMvc.perform(
+            post("/api/v1/tournaments/$inProgressId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .param("status", "IN_PROGRESS"),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.length()").value(1))
+            .andExpect(jsonPath("$.data[0].tournamentId").value(inProgressId))
+            .andExpect(jsonPath("$.data[?(@.tournamentId == $completedId)]").doesNotExist())
+    }
+
+    @Test
     fun `GET tournaments 에서 토너먼트가 없으면 빈 배열을 반환한다`() {
         val mockMvc = buildMockMvc()
 
@@ -888,6 +912,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
             .andExpect(jsonPath("$.data.pending.items[0].price").value(99_000))
             .andExpect(jsonPath("$.data.pending.items[0].tournamentItemId").isNumber)
             .andExpect(jsonPath("$.data.pending.items[0].itemId").value(itemId))
+            .andExpect(jsonPath("$.data.pending.items[0].userId").value(userId.toString()))
     }
 
     @Test
@@ -1137,8 +1162,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val tournamentId = createTournament(mockMvc)
         val otherItem = saveWishItem(otherUserId)
         tournamentUserJpaRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
-        // 위시 추가는 소유자 전용이므로 DB에 직접 삽입해 다른 유저가 추가한 상황을 구성
-        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = otherItem, userId = otherUserId))
+        // 위시 추가는 소유자 전용이므로 DB에 직접 삽입해 다른 유저가 추가한 상황을 구성. 출전 시점 고정 snapshot 을 함께 시딩한다(NOT NULL).
+        val otherSnapshot = saveSnapshot(otherItem, status = ItemStatus.READY)
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, userId = otherUserId, snapshotId = otherSnapshot.getId()))
         val itemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc
@@ -1169,10 +1195,12 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId1 = createTournament(mockMvc, "토너먼트1")
         val tournamentId2 = createTournament(mockMvc, "토너먼트2")
+        // 토너먼트 소속만 검증하는 시나리오라 표시값은 무관하다. 출전 시점 고정 snapshot 만 시딩해 연결한다(NOT NULL).
+        val snapshotOfTournament2 = saveSnapshot(999L, status = ItemStatus.READY)
         val itemOfTournament2 =
             tournamentItemJpaRepository
                 .save(
-                    TournamentItem(tournamentId = tournamentId2, itemId = 999L, userId = userId),
+                    TournamentItem(tournamentId = tournamentId2, userId = userId, snapshotId = snapshotOfTournament2.getId()),
                 ).getId()
 
         mockMvc
@@ -1187,9 +1215,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         val failedItem = itemJpaRepository.save(Item())
-        val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED)
+        // imageUrl 있는 FAILED — recover 시 imageUrl 파라미터를 보내지 않아도 apply 가 기존 값을 유지해 READY 불변식 통과
+        val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED, imageUrl = "https://img.example.com/a.png")
         tournamentItemJpaRepository.save(
-            TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId, snapshotId = snapshot.getId()),
+            TournamentItem(tournamentId = tournamentId, userId = userId, snapshotId = snapshot.getId()),
         )
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
@@ -1233,7 +1262,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val processingItem = itemJpaRepository.save(Item())
         val snapshot = saveSnapshot(processingItem.getId(), status = ItemStatus.PROCESSING)
         tournamentItemJpaRepository.save(
-            TournamentItem(tournamentId = tournamentId, itemId = processingItem.getId(), userId = userId, snapshotId = snapshot.getId()),
+            TournamentItem(tournamentId = tournamentId, userId = userId, snapshotId = snapshot.getId()),
         )
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
@@ -1249,9 +1278,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `PATCH tournaments-id-items-itemId 에서 IN_PROGRESS 토너먼트이면 409 를 반환한다`() {
         val mockMvc = buildMockMvc()
         val (tournamentId, item1Id) = startTournamentWith2Items(mockMvc)
-        // 토너먼트가 IN_PROGRESS 라 snapshot 검증 전 notPending(409)에서 막힌다 — item 정체성만 있으면 된다.
+        // 토너먼트가 IN_PROGRESS 라 snapshot 검증 전 notPending(409)에서 막힌다 — 고정 snapshot 만 시딩해 연결하면 된다(NOT NULL).
         val failedItem = itemJpaRepository.save(Item())
-        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId))
+        val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED)
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, userId = userId, snapshotId = snapshot.getId()))
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).last().getId()
 
         mockMvc
@@ -1269,9 +1299,10 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         tournamentUserJpaRepository.save(TournamentUser(tournamentId = tournamentId, userId = otherUserId))
-        // 등록자(otherUserId)가 아닌 userId 의 PATCH 라 snapshot 검증 전 forbidden(403)에서 막힌다 — item 정체성만 있으면 된다.
+        // 등록자(otherUserId)가 아닌 userId 의 PATCH 라 snapshot 검증 전 forbidden(403)에서 막힌다 — 고정 snapshot 만 시딩해 연결하면 된다(NOT NULL).
         val failedItem = itemJpaRepository.save(Item())
-        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = otherUserId))
+        val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED)
+        tournamentItemJpaRepository.save(TournamentItem(tournamentId = tournamentId, userId = otherUserId, snapshotId = snapshot.getId()))
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
         mockMvc
@@ -1286,11 +1317,11 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `PATCH tournaments-id-items-itemId 는 이름이 있는 FAILED 아이템에 가격만 보내면 이름을 유지하며 200 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        // 이름이 이미 있는 FAILED snapshot — 가격만 보정해도 이름이 유지되는지 검증한다(표시값은 snapshot 소관).
+        // 이름과 imageUrl 이 이미 있는 FAILED snapshot — 가격만 보정해도 이름과 이미지가 유지되는지 검증한다(apply 가 기존 값 보존).
         val failedItem = itemJpaRepository.save(Item())
-        val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED, name = "기존 이름")
+        val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED, name = "기존 이름", imageUrl = "https://img.example.com/a.png")
         tournamentItemJpaRepository.save(
-            TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId, snapshotId = snapshot.getId()),
+            TournamentItem(tournamentId = tournamentId, userId = userId, snapshotId = snapshot.getId()),
         )
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
@@ -1315,7 +1346,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
         val failedItem = itemJpaRepository.save(Item())
         val snapshot = saveSnapshot(failedItem.getId(), status = ItemStatus.FAILED)
         tournamentItemJpaRepository.save(
-            TournamentItem(tournamentId = tournamentId, itemId = failedItem.getId(), userId = userId, snapshotId = snapshot.getId()),
+            TournamentItem(tournamentId = tournamentId, userId = userId, snapshotId = snapshot.getId()),
         )
         val tournamentItemId = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).first().getId()
 
@@ -1352,7 +1383,9 @@ class TournamentControllerTest : IntegrationTestSupport() {
             assertEquals(tournamentItemId, tournamentItem.getId())
             // 상태는 활성 snapshot 이 보유한다(4a) — 링크 등록 직후라 PENDING(outbox 적재)으로 시작한다.
             // @Transactional 테스트라 등록이 커밋되지 않아 디스패처(별도 트랜잭션)가 이 PENDING 을 집지 못한다 → PENDING 고정.
-            val snapshot = itemSnapshotJpaRepository.findFirstByItemIdAndDeletedAtIsNullOrderByIdDesc(tournamentItem.itemId)
+            // item 정체성은 snapshot 단일 출처이므로 tournament_item 의 고정 snapshot 으로 itemId 에 도달해 최신 snapshot 을 조회한다.
+            val fixedSnapshot = itemSnapshotJpaRepository.findById(tournamentItem.snapshotId).get()
+            val snapshot = itemSnapshotJpaRepository.findFirstByItemIdAndDeletedAtIsNullOrderByIdDesc(fixedSnapshot.itemId)
             assertEquals(ItemStatus.PENDING, snapshot?.status)
         } finally {
             stubItemParsingWorker.enabled = true
@@ -1371,6 +1404,28 @@ class TournamentControllerTest : IntegrationTestSupport() {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"url":""}"""),
             ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `POST tournaments-id-items-link 에서 미지원 플랫폼(KREAM) URL 이면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        // 미지원 플랫폼(봇 차단으로 fetch 불가)은 등록 입력 시점에 동기 400 으로 막는다 — 위시 등록과 같은 메커니즘.
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/items/link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"url":"https://kream.co.kr/products/950123"}"""),
+            ).andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.detail").value("아직 지원하지 않는 쇼핑몰이에요. 상품 이미지를 직접 등록해 주세요."))
+
+        // 등록 입력 경계에서 차단되므로 tournament item 이 생성되면 안 된다(검증 위치가 뒤로 밀려 일부라도 영속화되는 회귀 방지).
+        assertTrue(
+            tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(tournamentId).isEmpty(),
+            "미지원 플랫폼은 등록 입력 경계에서 차단되어 tournament item 이 생성되면 안 됩니다.",
+        )
     }
 
     @Test
@@ -1732,7 +1787,6 @@ class TournamentControllerTest : IntegrationTestSupport() {
         return tournamentItemJpaRepository.save(
             TournamentItem(
                 tournamentId = tournamentId,
-                itemId = item.getId(),
                 userId = owner,
                 snapshotId = snapshot.getId(),
             ),
@@ -1767,8 +1821,8 @@ class TournamentControllerTest : IntegrationTestSupport() {
     private fun saveWishItem(owner: UUID = userId, name: String = "테스트 아이템", price: Int = 10_000): Long {
         val result = wishPersistenceService.persistProcessingImages(owner, 1).first()
         itemParsingService.markReady(
-            result.item.getId(),
-            ProductSnapshot(name = name, currentPrice = price, currency = "KRW"),
+            result.snapshot.getId(),
+            ProductSnapshot(name = name, currentPrice = price, currency = "KRW", imageUrl = "https://img.example.com/a.png"),
         )
         return result.item.getId()
     }
@@ -1956,40 +2010,32 @@ class TournamentControllerTest : IntegrationTestSupport() {
     fun `PATCH tournaments-id-invite 는 주최자가 200 과 함께 새 inviteExpiresAt 을 반환하고 DB 에도 반영된다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
-        val before = LocalDateTime.now()
-
-        val result = mockMvc
-            .perform(
-                patch("/api/v1/tournaments/$tournamentId/invite")
-                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":60}"""),
-            ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.data").isString)
-            .andReturn()
-
-        val expiresAtStr = objectMapper.readTree(result.response.contentAsString)["data"].asText()
-        val expiresAt = java.time.OffsetDateTime.parse(expiresAtStr, DateTimeFormatter.ISO_OFFSET_DATE_TIME).toLocalDateTime()
-        val expectedMin = before.plusMinutes(60)
-        val expectedMax = LocalDateTime.now().plusMinutes(60)
-        assertTrue(expiresAt >= expectedMin && expiresAt <= expectedMax)
-
-        // 응답뿐 아니라 엔티티에 실제로 반영됐는지 확인 — backing field dirty-check가 깨져도 응답은 통과하므로
-        val saved = tournamentJpaRepository.findByIdAndDeletedAtIsNull(tournamentId)!!
-        assertTrue(saved.inviteExpiresAt >= expectedMin && saved.inviteExpiresAt <= expectedMax)
-    }
-
-    @Test
-    fun `PATCH tournaments-id-invite 에서 inviteDurationMinutes 가 0 이면 400 을 반환한다`() {
-        val mockMvc = buildMockMvc()
-        val tournamentId = createTournament(mockMvc)
+        val newExpiresAt = LocalDateTime.now().plusMinutes(60).withNano(0)
 
         mockMvc
             .perform(
                 patch("/api/v1/tournaments/$tournamentId/invite")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":0}"""),
+                    .content("""{"newExpiresAt":"$newExpiresAt"}"""),
+            ).andExpect(status().isOk)
+
+        val saved = tournamentJpaRepository.findByIdAndDeletedAtIsNull(tournamentId)!!
+        assertEquals(newExpiresAt, saved.inviteExpiresAt)
+    }
+
+    @Test
+    fun `PATCH tournaments-id-invite 에서 newExpiresAt 이 과거 시각이면 400 을 반환한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        val pastTime = LocalDateTime.now().minusMinutes(1).withNano(0)
+
+        mockMvc
+            .perform(
+                patch("/api/v1/tournaments/$tournamentId/invite")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"newExpiresAt":"$pastTime"}"""),
             ).andExpect(status().isBadRequest)
     }
 
@@ -2004,7 +2050,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 patch("/api/v1/tournaments/$tournamentId/invite")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":60}"""),
+                    .content("""{"newExpiresAt":"${LocalDateTime.now().plusMinutes(60).withNano(0)}"}"""),
             ).andExpect(status().isForbidden)
     }
 
@@ -2017,7 +2063,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 patch("/api/v1/tournaments/999999/invite")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":60}"""),
+                    .content("""{"newExpiresAt":"${LocalDateTime.now().plusMinutes(60).withNano(0)}"}"""),
             ).andExpect(status().isNotFound)
     }
 
@@ -2031,7 +2077,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 patch("/api/v1/tournaments/$tournamentId/invite")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("""{"inviteDurationMinutes":60}"""),
+                    .content("""{"newExpiresAt":"${LocalDateTime.now().plusMinutes(60).withNano(0)}"}"""),
             ).andExpect(status().isConflict)
     }
 

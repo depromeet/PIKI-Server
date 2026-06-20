@@ -8,6 +8,7 @@ import com.depromeet.piki.product.service.http.HttpPageFetcher
 import com.depromeet.piki.product.service.http.PageFetchHttpClientConfig
 import com.depromeet.piki.product.service.http.RequestScopedDnsResolver
 import com.depromeet.piki.product.service.structured.StructuredDataExtractor
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.micrometer.observation.ObservationRegistry
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
@@ -43,6 +44,7 @@ class ProductLinkExtractE2ETest {
             pageFetcher = pageFetcher,
             structuredDataExtractor = StructuredDataExtractor(objectMapper),
             geminiHtmlExtractor = GeminiHtmlExtractor(httpClient),
+            meterRegistry = SimpleMeterRegistry(),
         )
 
     @Test

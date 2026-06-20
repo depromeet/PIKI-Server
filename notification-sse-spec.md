@@ -46,9 +46,9 @@
 
 ---
 
-## 4. 스트림에 흐르는 이벤트 3종
+## 4. 스트림에 흐르는 이벤트 4종
 
-SSE 한 연결 위로 아래 세 가지가 흐른다. 클라이언트는 **이벤트 `name`** 으로 구분한다.
+SSE 한 연결 위로 아래 네 가지가 흐른다. 클라이언트는 **이벤트 `name`** 으로 구분한다.
 
 ### (1) `connect` — 연결 성립 신호
 
@@ -68,7 +68,22 @@ event: notification
 data: {"id":123,"type":"TOURNAMENT_JOINED","category":"ACTIVITY","title":"홍길동님이 참가했어요","body":"","imageUrl":"https://.../profiles/{uid}.png","refId":45,"isRead":false,"createdAt":"2026-06-06T14:32:10"}
 ```
 
-### (3) 하트비트 (주석 ping)
+### (3) `tournament-item-parsed` — 출전 아이템 파싱 완료/실패 (라이브 동기화)
+
+토너먼트에 링크/이미지로 추가된 아이템의 파싱이 끝나면(`READY`/`FAILED`) 전송. `data` 는 아래 [5-1. payload](#5-1-tournament-item-parsed-payload-스키마) JSON.
+
+**이건 "알림"이 아니라 화면 갱신 신호다.** 알림센터에 쌓이지 않고 FCM 푸시도 가지 않으며, 오직 열려 있는 SSE 연결로만 흐른다. 목적은 단 하나 — 주최자가 아이템을 추가해 참여자 화면에 뜬 **PENDING 로딩 카드를 갱신**하는 것이다(`notification` 의 `TOURNAMENT_ITEM_ADDED` 로 카드가 뜬 뒤, 파싱이 끝나면 이 이벤트로 그 카드를 마무리한다).
+
+```text
+event: tournament-item-parsed
+data: {"tournamentId":99,"tournamentItemId":555,"status":"READY"}
+```
+
+- **수신자**: 그 토너먼트 참여자 **전원**(아이템을 올린 주최자 포함). 한 아이템이 여러 토너먼트에 출전 중이면 각 토너먼트 참여자가 **각자 그 토너먼트의 좌표**로 받는다.
+- **클라 동작**: `(tournamentId, tournamentItemId)` 로 그 출전 카드를 찾아 `status` 로 갱신 — `READY` 면 상품 정보 표시, `FAILED` 면 에러/재시도 UI. (또는 그 토너먼트 아이템 목록을 재조회.)
+- 위시로만 담긴(어느 토너먼트에도 없는) 아이템의 파싱 완료/실패는 이 이벤트로 오지 않는다 — 위시 주인은 `notification`(`ITEM_PARSING_*`)으로 받는다.
+
+### (4) 하트비트 (주석 ping)
 
 약 **30초 간격**. 연결 유지(프록시 read timeout 회피)용이며 **`data` 이벤트가 아니다.** SSE 주석 라인(`:` 으로 시작)이라 `EventSource` 의 `onmessage`/리스너에 잡히지 않는다. **클라이언트는 무시하면 된다.**
 
@@ -98,6 +113,20 @@ data: {"id":123,"type":"TOURNAMENT_JOINED","category":"ACTIVITY","title":"홍길
 | `tournamentItemId` | number (long) \| 생략 | **`kind=TOURNAMENT` 일 때만.** 입장한 토너먼트 안에서 지목할 출전 아이템. |
 
 > **라우팅 컨텍스트(`kind`·`tournamentId`·`tournamentItemId`)는 파싱 알림에만, 그것도 조건부로 실린다.** 같은 `type`(`ITEM_PARSING_*`)이 위시·토너먼트 두 출처에서 발행돼 `refId`(=itemId)만으론 출처를 구분할 수 없어 추가한다. 값이 없는 키는 **JSON 에서 아예 생략**된다(NON_NULL). 서버는 완성 URL 을 박지 않고 도메인 식별자만 내려보내며, URL 조립은 클라이언트가 한다.
+
+---
+
+## 5-1. `tournament-item-parsed` payload 스키마
+
+`tournament-item-parsed` 이벤트의 `data` 로 직렬화되는 JSON. `notification` payload 와 **별개 셰입**이며, 알림 식별자(`id`)·제목·읽음 같은 알림 필드가 없다 — 알림이 아니라 화면 갱신 신호이기 때문.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `tournamentId` | number (long) | 갱신 대상 출전 카드가 속한 토너먼트. |
+| `tournamentItemId` | number (long) | 그 토너먼트 안에서 갱신할 출전 아이템(카드). 추가 시점에 받은 목록의 그 항목과 같은 id. |
+| `status` | string (enum) | 파싱 결과. **`READY`(완료) \| `FAILED`(실패)** 둘 중 하나만 실린다. 토너먼트 아이템 목록 응답의 `status` 와 같은 값 체계. |
+
+> 같은 아이템이 여러 토너먼트에 출전 중이면, 각 토너먼트 참여자는 **그 토너먼트의 `(tournamentId, tournamentItemId)`** 좌표로 각자 한 건씩 받는다. (`notification` 파싱 알림이 단일 출처 좌표만 싣는 것과 달리, 이 동기화는 모든 출전 토너먼트로 fan-out 한다.)
 
 ---
 
@@ -159,6 +188,7 @@ data: {"id":123,"type":"TOURNAMENT_JOINED","category":"ACTIVITY","title":"홍길
 
 - 현재 SSE 는 **연결 중에 발생한 알림만** 실시간 전달한다. **연결이 끊겨 있던 동안 쌓인 알림은 재연결해도 스트림으로 다시 오지 않는다.**
 - 단, 모든 알림은 DB(`notifications`)에 영속되므로, **목록/배지 조회 API** 로 놓친 알림을 따라잡는 설계가 정석이다. (해당 조회 API 는 후속 작업)
+- `tournament-item-parsed`(라이브 동기화)는 **영속되지 않는다** — 끊겨 있던 동안의 파싱 완료/실패는 재전송되지 않는다. 하지만 재연결·앱 진입 시 토너먼트 아이템 목록을 재조회하면 그 시점의 최신 `status`(READY/FAILED)가 그대로 내려오므로 자연히 따라잡힌다.
 - 따라서 권장 클라이언트 패턴: **앱 진입/재연결 시 목록 API 로 동기화 + SSE 로 실시간 갱신.**
 
 ---
@@ -202,6 +232,13 @@ es.addEventListener("notification", (e) => {
   showToast(n.title);
 });
 
+// 라이브 동기화 — 토너먼트 출전 카드 갱신(알림 아님, 토스트도 없음).
+es.addEventListener("tournament-item-parsed", (e) => {
+  const s = JSON.parse(e.data);
+  // (tournamentId, tournamentItemId)로 그 카드를 찾아 status 로 갱신 (또는 그 토너먼트 아이템 목록 재조회).
+  updateTournamentItemCard(s.tournamentId, s.tournamentItemId, s.status); // status: "READY" | "FAILED"
+});
+
 es.onerror = () => {
   // EventSource 가 자동 재연결을 시도한다. 필요 시 추가 처리.
 };
@@ -231,6 +268,10 @@ fun openSse() {
                     //   kind == "WISH"       -> /archive
                     //   TOURNAMENT_*         -> refId(= tournamentId) 로 토너먼트
                 }
+                "tournament-item-parsed" -> {
+                    // 라이브 동기화(알림 아님) — (tournamentId, tournamentItemId)로 그 출전 카드를 status 로 갱신.
+                    val s = json.decode<TournamentItemParsedPayload>(data)  // {tournamentId, tournamentItemId, status: READY|FAILED}
+                }
                 // 그 외(주석 ping 등)는 무시
             }
         }
@@ -251,6 +292,7 @@ fun openSse() {
 - [ ] `type` 으로 분기, **문구로 분기하지 않기**
 - [ ] `refId` 의미가 `type` 마다 다름 (tournamentId vs itemId)
 - [ ] 파싱 알림(`ITEM_PARSING_*`)은 `kind` 로 출처 분기 (WISH → `/archive`, TOURNAMENT → `tournamentId`·`tournamentItemId`)
+- [ ] `tournament-item-parsed` 는 알림이 아닌 **카드 갱신 신호** — `(tournamentId, tournamentItemId)` 로 카드를 찾아 `status`(READY/FAILED) 반영 (토스트·알림센터 아님)
 - [ ] 주석 `: ping` 은 무시 (data 이벤트 아님)
 - [ ] 재연결 시 목록 API 로 놓친 알림 동기화
 - [ ] WEB 은 쿠키 인증(`withCredentials`), APP 은 `Authorization` 헤더

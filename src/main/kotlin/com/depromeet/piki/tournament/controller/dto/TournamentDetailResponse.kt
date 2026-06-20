@@ -27,6 +27,7 @@ data class TournamentDetailResponse(
     data class ItemDetailResponse(
         val tournamentItemId: Long,
         val itemId: Long,
+        val userId: UUID,
         val name: String?,
         val price: Int?,
         val currency: String?,
@@ -35,7 +36,7 @@ data class TournamentDetailResponse(
     ) {
         companion object {
             fun from(d: TournamentDetail.ItemDetail): ItemDetailResponse =
-                ItemDetailResponse(d.tournamentItemId, d.itemId, d.name, d.price, d.currency, d.imageUrl, d.status)
+                ItemDetailResponse(d.tournamentItemId, d.itemId, d.userId, d.name, d.price, d.currency, d.imageUrl, d.status)
         }
     }
 
@@ -59,10 +60,11 @@ data class TournamentDetailResponse(
         val profileImage: String,
         // 탈퇴 유저면 true. 닉네임·프로필이 익명값이라 FE 가 이 플래그로 "유저 알수없음" 을 렌더한다.
         val isWithdrawn: Boolean,
+        val itemCount: Int,
     ) {
         companion object {
             fun from(p: TournamentDetail.ParticipantDetail): ParticipantResponse =
-                ParticipantResponse(p.userId, p.nickname, p.profileImage, p.isWithdrawn)
+                ParticipantResponse(p.userId, p.nickname, p.profileImage, p.isWithdrawn, p.itemCount)
         }
     }
 

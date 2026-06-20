@@ -15,39 +15,63 @@ class WishException private constructor(
 ) : BaseException(message),
     HttpMappable {
     companion object {
+        // 위시리스트는 회원 전용 — 게스트(인증은 됐으나 회원 아님)가 정상 요청으로 닿을 수 있는 계약 응답이라 커스텀 예외(403).
+        // Security 에서 MEMBER 만 허용하면 detail 없는 권한 없음 403 으로 떨어져 "회원 전용" 사유를 못 전달하므로,
+        // authenticated() 로 통과시킨 뒤 서비스가 이 예외로 막는다(UserException.guestCannotWithdraw 와 같은 패턴).
+        fun guestCannotUseWishlist(): WishException =
+            WishException(
+                "위시리스트는 회원만 이용할 수 있어요.",
+                ErrorCategory.FORBIDDEN,
+                HttpStatus.FORBIDDEN,
+            )
+
         fun forbiddenWishItems(): WishException =
             WishException(
-                "해당 위시 아이템에 접근할 권한이 없습니다.",
+                "내 위시 아이템만 볼 수 있어요.",
                 ErrorCategory.FORBIDDEN,
                 HttpStatus.FORBIDDEN,
             )
 
         fun invalidCursor(): WishException =
             WishException(
-                "유효하지 않은 cursor 입니다.",
+                "페이지를 불러오지 못했어요. 새로고침 해주세요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
 
         fun notFound(): WishException =
             WishException(
-                "존재하지 않는 위시리스트 항목입니다.",
+                "이미 삭제된 아이템이에요.",
                 ErrorCategory.NOT_FOUND,
                 HttpStatus.NOT_FOUND,
             )
 
         fun invalidImageCount(): WishException =
             WishException(
-                "이미지는 최소 1개, 최대 5개까지 전송할 수 있습니다.",
+                "이미지는 1~5장만 올릴 수 있어요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
             )
 
         fun invalidIdCount(): WishException =
             WishException(
-                "삭제할 위시 ID 는 1개 이상 100개 이하여야 합니다.",
+                "한 번에 최대 100개까지 삭제할 수 있어요.",
                 ErrorCategory.INVALID_INPUT,
                 HttpStatus.BAD_REQUEST,
+            )
+
+        fun notRefreshable(): WishException =
+            WishException(
+                "링크가 없는 항목은 새로고침할 수 없습니다.",
+                ErrorCategory.INVALID_INPUT,
+                HttpStatus.BAD_REQUEST,
+            )
+
+        fun failedNotRefreshable(): WishException =
+            WishException(
+                "추출에 실패한 항목은 새로고침 대신 정보를 직접 입력해 복구해 주세요.",
+                ErrorCategory.CONFLICT,
+                HttpStatus.CONFLICT,
             )
     }
 }

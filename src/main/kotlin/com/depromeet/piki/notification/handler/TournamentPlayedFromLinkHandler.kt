@@ -10,15 +10,13 @@ import java.util.UUID
 @Component
 class TournamentPlayedFromLinkHandler(
     private val recipientResolver: TournamentNotificationRecipientResolver,
-    private val actorNameResolver: ActorNameResolver,
+    private val tournamentVariables: TournamentNotificationVariables,
 ) : NotificationEventHandler<TournamentPlayedFromLink>(NotificationType.TOURNAMENT_PLAYED_FROM_LINK) {
     override fun resolveRefId(event: TournamentPlayedFromLink): Long = event.rootTournamentId
 
     override fun resolveRecipients(event: TournamentPlayedFromLink): Set<UUID> =
         recipientResolver.rootOwner(event.rootTournamentId) - event.actorId
 
-    override fun resolveActorContext(event: TournamentPlayedFromLink): ActorContext {
-        val actor = actorNameResolver.resolveAttributes(event.actorId)
-        return ActorContext(variables = mapOf("actorName" to actor.name), imageUrl = actor.profileImage)
-    }
+    override fun resolveActorContext(event: TournamentPlayedFromLink): ActorContext =
+        tournamentVariables.context(event.rootTournamentId, event.actorId)
 }

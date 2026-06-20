@@ -3,6 +3,7 @@ package com.depromeet.piki.wishlist.controller
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.common.response.PageResponse
 import com.depromeet.piki.wishlist.controller.dto.WishItemResponse
+import com.depromeet.piki.wishlist.controller.dto.WishPriceHistoryResponse
 import com.depromeet.piki.wishlist.controller.dto.WishlistRegisterRequest
 import com.depromeet.piki.wishlist.controller.dto.WishlistUpdateRequest
 import com.depromeet.piki.wishlist.domain.WishDeleteIds
@@ -76,6 +77,15 @@ class WishlistController(
         return ApiResponseBody.ok(WishItemResponse.from(result.wish, result.item, result.snapshot))
     }
 
+    @GetMapping("/{wishId}/history")
+    override fun getPriceHistory(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable wishId: Long,
+    ): ApiResponseBody<WishPriceHistoryResponse> {
+        val result = wishlistService.getPriceHistory(userId = userId, wishId = wishId)
+        return ApiResponseBody.ok(WishPriceHistoryResponse.from(result.wish, result.item, result.history))
+    }
+
     @PatchMapping("/{wishId}", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     override fun recoverWishItem(
         @AuthenticationPrincipal userId: UUID,
@@ -92,6 +102,15 @@ class WishlistController(
                 currency = request.currency,
                 image = image,
             )
+        return ApiResponseBody.ok(WishItemResponse.from(result.wish, result.item, result.snapshot))
+    }
+
+    @PostMapping("/{wishId}/refresh")
+    override fun refreshWishItem(
+        @AuthenticationPrincipal userId: UUID,
+        @PathVariable wishId: Long,
+    ): ApiResponseBody<WishItemResponse> {
+        val result = wishlistService.refreshWishItem(userId = userId, wishId = wishId)
         return ApiResponseBody.ok(WishItemResponse.from(result.wish, result.item, result.snapshot))
     }
 

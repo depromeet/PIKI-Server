@@ -44,8 +44,8 @@ class TournamentItemApiExamples(
                             payload =
                                 ApiResponseBody.fail<Unit>(
                                     category = ErrorCategory.INVALID_INPUT,
-                                    // @RequestBody Bean Validation 위반은 GlobalExceptionHandler.detailOf 가 "필드명: 메시지" 로 만든다.
-                                    detail = "itemIds: ${AddTournamentItemsRequest.ITEM_IDS_SIZE_MESSAGE}",
+                                    // Bean Validation 위반은 GlobalExceptionHandler.detailOf 가 위반 필드의 메시지를 그대로 detail 로 내린다.
+                                    detail = AddTournamentItemsRequest.ITEM_IDS_SIZE_MESSAGE,
                                 ),
                         )
                         add(TournamentException.tooManyTournamentItems(), name = "아이템 최대 32개 초과")
@@ -69,6 +69,7 @@ class TournamentItemApiExamples(
                         )
                         add(ProductLinkException.invalidFormat(urlFormatCause), name = "유효하지 않은 URL 형식")
                         add(ProductLinkException.unsupportedScheme(), name = "https 외 스킴")
+                        add(ProductLinkException.unsupportedPlatform(), name = "지원하지 않는 쇼핑몰 (KREAM·쿠팡·네이버·올리브영·에이블리)")
                         add(TournamentException.tooManyTournamentItems(), name = "아이템 최대 32개 초과")
                         unauthorized()
                         add(TournamentException.forbiddenTournament(), name = "토너먼트 권한 없음")

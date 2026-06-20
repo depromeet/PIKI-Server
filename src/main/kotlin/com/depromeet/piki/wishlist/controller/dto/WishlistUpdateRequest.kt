@@ -19,8 +19,8 @@ data class WishlistUpdateRequest(
     // Bean Validation 위반 메시지의 single source. OpenAPI example(WishlistApiExamples)이 같은 상수를 참조해
     // "필드 검증 문구가 @field 와 example 두 곳에서 따로 노는" 어긋남을 컴파일 타임에 막는다.
     companion object {
-        const val NAME_MAX_MESSAGE = "상품명은 512자를 초과할 수 없습니다."
-        const val PRICE_MIN_MESSAGE = "가격은 0 이상이어야 합니다."
-        const val CURRENCY_MAX_MESSAGE = "통화 코드는 8자를 초과할 수 없습니다."
+        const val NAME_MAX_MESSAGE = "상품명은 512자까지 입력할 수 있어요."
+        const val PRICE_MIN_MESSAGE = "가격은 0원 이상으로 입력해 주세요."
+        const val CURRENCY_MAX_MESSAGE = "통화 코드는 8자까지 입력할 수 있어요."
     }
 }

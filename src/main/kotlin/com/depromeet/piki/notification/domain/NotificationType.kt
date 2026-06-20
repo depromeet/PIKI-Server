@@ -5,6 +5,7 @@ package com.depromeet.piki.notification.domain
 enum class NotificationType {
     TOURNAMENT_JOINED,
     TOURNAMENT_ITEM_ADDED,
+    TOURNAMENT_ITEM_DELETED,
     TOURNAMENT_STARTED,
     // 플레이링크로 내 토너먼트를 누군가 플레이/완료한 사실 — ROOT 주최자에게 간다(actor=플레이/완료한 사람).
     TOURNAMENT_PLAYED_FROM_LINK,
@@ -13,6 +14,6 @@ enum class NotificationType {
     TOURNAMENT_RESULT_READY,
     ITEM_PARSING_COMPLETED,
     ITEM_PARSING_FAILED,
-    // 전체 공지(#391/#250). 트리거(admin 백오피스)·발행은 후속 — 지금은 분류/필터용 enum 만 선반영한다.
+    // 전체 공지(#391/#250). 트리거·발행은 후속 — 지금은 분류/필터용 enum 만 선반영한다.
     ANNOUNCEMENT,
 }

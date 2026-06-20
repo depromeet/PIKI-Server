@@ -5,6 +5,7 @@ import com.depromeet.piki.item.event.ItemParsingFailed
 import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.item.repository.ItemSnapshotRepository
 import com.depromeet.piki.product.service.ProductSnapshot
+import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
@@ -21,30 +22,33 @@ class ItemParsingService(
     private val itemRepository: ItemRepository,
     private val itemSnapshotRepository: ItemSnapshotRepository,
     private val eventPublisher: ApplicationEventPublisher,
+    private val meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     @Transactional
     fun markReady(
-        itemId: Long,
+        snapshotId: Long,
         snapshot: ProductSnapshot,
     ) {
-        // 워커가 방금 저장한 PROCESSING 버전을 전이시킨다. 없으면 영속화 경로가 깨진 코드 버그다.
+        // 워커가 claim 한 그 snapshot 을 id 로 직접 전이한다 — findLatestByItemId(최신)가 아니다.
+        // 갱신(5단계)으로 한 item 에 여러 버전이 공존하면 "최신"이 이 워커가 추출한 행과 다를 수 있어(stale/좀비 워커가
+        // 다른 버전을 오전이), claim 시점에 고정한 snapshotId 로 정확히 짚는다. 없으면 영속화 경로가 깨진 코드 버그다.
         val target =
-            itemSnapshotRepository.findLatestByItemId(itemId)
-                ?: error("파싱 대상 snapshot (item $itemId) 이 없다")
+            itemSnapshotRepository.findById(snapshotId)
+                ?: error("파싱 대상 snapshot $snapshotId 이 없다")
         target.markReady(snapshot)
-        // 트랜잭션 안에서 발행 → AFTER_COMMIT 리스너가 커밋 성공 후에만 알림을 보낸다 (롤백 시 발송 안 됨).
-        eventPublisher.publishEvent(ItemParsingCompleted(itemId))
+        // 트랜잭션 안에서 발행 → AFTER_COMMIT 리스너가 커밋 성공 후에만 알림을 보낸다 (롤백 시 발송 안 됨). itemId 는 snapshot 단일 출처.
+        eventPublisher.publishEvent(ItemParsingCompleted(target.itemId))
     }
 
     @Transactional
-    fun markFailed(itemId: Long) {
+    fun markFailed(snapshotId: Long) {
         val target =
-            itemSnapshotRepository.findLatestByItemId(itemId)
-                ?: error("파싱 대상 snapshot (item $itemId) 이 없다")
+            itemSnapshotRepository.findById(snapshotId)
+                ?: error("파싱 대상 snapshot $snapshotId 이 없다")
         target.markFailed()
-        eventPublisher.publishEvent(ItemParsingFailed(itemId))
+        eventPublisher.publishEvent(ItemParsingFailed(target.itemId))
     }
 
     // 디스패처가 PENDING 작업을 집어 PROCESSING 으로 claim 한다 (짧은 트랜잭션 + FOR UPDATE 락).
@@ -72,7 +76,7 @@ class ItemParsingService(
                     )
                     return@mapNotNull null
                 }
-            ClaimedItem(itemId = snapshot.itemId, link = link)
+            ClaimedItem(itemId = snapshot.itemId, snapshotId = snapshot.getId(), link = link)
         }
     }
 
@@ -104,6 +108,7 @@ class ItemParsingService(
                 linkByItemId[snapshot.itemId] ?: run {
                     snapshot.markFailed()
                     eventPublisher.publishEvent(ItemParsingFailed(snapshot.itemId))
+                    ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, ItemParsingMetrics.REASON_NO_SOURCE)
                     failedCount++
                     return@forEach
                 }
@@ -111,12 +116,13 @@ class ItemParsingService(
             if (snapshot.attemptCount >= maxAttempts) {
                 snapshot.markFailed()
                 eventPublisher.publishEvent(ItemParsingFailed(snapshot.itemId))
+                ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, ItemParsingMetrics.REASON_RETRY_EXHAUSTED)
                 failedCount++
                 return@forEach
             }
             // 재실행: PROCESSING 유지 + attempt++ (updated_at 갱신으로 stale 시계 리셋). 디스패치는 스케줄러가.
             snapshot.reclaim()
-            toRetry.add(ClaimedItem(itemId = snapshot.itemId, link = link))
+            toRetry.add(ClaimedItem(itemId = snapshot.itemId, snapshotId = snapshot.getId(), link = link))
         }
         return StaleProcessingOutcome(toRetry, failedCount)
     }

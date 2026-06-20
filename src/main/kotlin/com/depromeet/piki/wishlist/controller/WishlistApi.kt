@@ -2,6 +2,7 @@ package com.depromeet.piki.wishlist.controller
 
 import com.depromeet.piki.common.response.ApiResponseBody
 import com.depromeet.piki.wishlist.controller.dto.WishItemResponse
+import com.depromeet.piki.wishlist.controller.dto.WishPriceHistoryResponse
 import com.depromeet.piki.wishlist.controller.dto.WishlistRegisterRequest
 import com.depromeet.piki.wishlist.controller.dto.WishlistUpdateRequest
 import io.swagger.v3.oas.annotations.Operation
@@ -23,7 +24,7 @@ interface WishlistApi {
             상품 페이지 URL 을 받아 위시리스트에 등록한다. 메타데이터(이름/가격/이미지) 추출은 외부 LLM 호출이라
             오래 걸리므로 동기로 기다리지 않는다. 등록 즉시 item.status=PENDING 인 항목을 201 로 반환하고,
             실제 파싱은 백그라운드 디스패처가 PENDING 을 집어 PROCESSING 으로 전이한 뒤 READY(완료) 또는 FAILED(파싱 실패) 로 전이한다.
-            클라이언트는 위시리스트 조회를 폴링해 status 변화(PENDING→PROCESSING→READY/FAILED)를 확인한다. URL 형식 오류는 등록 전에 400 으로 거른다.
+            클라이언트는 SSE(`/api/v1/notifications/subscribe`)로 status 변화(PENDING→PROCESSING→READY/FAILED, 완료·실패 알림)를 통보받고 위시리스트를 재조회해 확인한다. URL 형식 오류는 등록 전에 400 으로 거른다.
         """,
     )
     @ApiResponses(
@@ -40,7 +41,7 @@ interface WishlistApi {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "잘못된 요청 (URL 이 비어 있음 · 유효한 URL 형식이 아님 · https 외 스킴)",
+                description = "잘못된 요청 (URL 이 비어 있음 · 유효한 URL 형식이 아님 · https 외 스킴 · 지원하지 않는 쇼핑몰)",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,
@@ -83,7 +84,7 @@ interface WishlistApi {
             마지막 페이지면 nextCursor 는 null, hasNext 는 false.
             size 는 미지정 시 20, 1~50 범위를 벗어나면 양 끝으로 보정된다.
             각 항목의 item.status 로 파싱 상태(PENDING/PROCESSING/READY/FAILED)를 구분한다 —
-            등록 직후 PENDING·PROCESSING 인 항목은 이 조회를 폴링해 READY/FAILED 로 전이되는지 확인한다.
+            등록 직후 PENDING·PROCESSING 인 항목은 SSE(`/api/v1/notifications/subscribe`)로 READY/FAILED 전이를 통보받고 이 조회로 확인한다.
         """,
     )
     @ApiResponses(
@@ -143,7 +144,7 @@ interface WishlistApi {
         description = """
             wishId 로 위시 항목 하나를 조회한다. 응답 모양은 목록 조회 항목과 같은 WishItemResponse(wish + item).
             본인 위시만 조회 가능하며, item 을 직접 노출하지 않고 위시 소유 단위로 권한을 검증한다.
-            item.status 로 파싱 상태(PENDING/PROCESSING/READY/FAILED)를 구분한다 — 상세 화면 진입 시 단건 폴링에 쓸 수 있다.
+            item.status 로 파싱 상태(PENDING/PROCESSING/READY/FAILED)를 구분한다. 상세 화면 진입 시 현재 status 확인에 쓰고, 전이 통보는 SSE(`/api/v1/notifications/subscribe`)로 받는다.
         """,
     )
     @ApiResponses(
@@ -194,6 +195,66 @@ interface WishlistApi {
         @Parameter(hidden = true) userId: UUID,
         @Parameter(description = "위시 항목 ID", example = "1024") wishId: Long,
     ): ApiResponseBody<WishItemResponse>
+
+    @Operation(
+        summary = "위시 상품 가격 히스토리 조회",
+        description = """
+            wishId 로 그 위시가 가리키는 상품의 가격 히스토리를 조회한다. 갱신·새로고침마다 새 추출 버전이 쌓여
+            가격·이름·이미지 이력이 보존되며, 이 API 는 그중 추출 완료(READY)된 버전을 최신순(snapshotId desc)으로 내려준다.
+            가격이 없는 PENDING·PROCESSING·FAILED 버전은 entries 에서 제외된다 — 비어 있으면 아직 한 번도 추출에 성공하지 않은 상품이다.
+            entries 각 항목은 그 버전 시점의 가격·이름·이미지·추출시각을 담고, isActive 로 현재 활성(위시가 가리키는) 버전을 표시한다.
+            응답의 activeSnapshotId 는 현재 활성 버전 식별자다 — 활성 버전이 추출 중이거나 실패면 entries 에 없을 수 있다.
+            본인 위시만 조회 가능하며, item 을 직접 노출하지 않고 위시 소유 단위로 권한을 검증한다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "가격 히스토리 조회 성공 (READY 버전 최신순, 없으면 빈 entries)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "권한 없음 (GUEST 권한으로 접근 불가 · MEMBER 필요, 또는 본인 위시가 아님)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "존재하지 않는 위시 항목 (삭제된 항목 포함)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun getPriceHistory(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "위시 항목 ID", example = "1024") wishId: Long,
+    ): ApiResponseBody<WishPriceHistoryResponse>
 
     @Operation(
         summary = "위시 항목 복구 (추출 실패 보정)",
@@ -287,6 +348,87 @@ interface WishlistApi {
         @Parameter(description = "위시 항목 ID", example = "1024") wishId: Long,
         request: WishlistUpdateRequest,
         image: MultipartFile?,
+    ): ApiResponseBody<WishItemResponse>
+
+    @Operation(
+        summary = "위시 항목 새로고침 (링크 재추출)",
+        description = """
+            위시 항목의 상품 정보를 원본 링크로 다시 추출해 최신(가격·이미지 등)으로 새로고침한다. 추출은 외부 LLM 호출이라
+            동기로 기다리지 않는다 — 새 추출 버전(item.status=PENDING)을 즉시 활성으로 띄워 200 으로 반환하고, 백그라운드 디스패처가
+            집어 PROCESSING→READY(완료)/FAILED(실패) 로 전이한다. 클라이언트는 등록과 동일하게 SSE(`/api/v1/notifications/subscribe`)로 status 변화(완료·실패 알림)를 통보받는다.
+            이미 새로고침이 진행 중(PENDING·PROCESSING)이면 새 추출을 만들지 않고 현재 진행 상태를 그대로 반환한다(멱등).
+            새로고침은 성공(READY) 항목의 재추출 전용이다. 추출에 실패(FAILED)한 항목은 새로고침 대신 보정으로 복구한다(409).
+            링크가 없는 항목(이미지로 등록한 위시)은 재추출 입력이 없어 새로고침할 수 없다(400). 본인 위시만 가능하다.
+            옛 추출 버전은 보존돼, 이 위시를 토너먼트에 출전시켜 둔 경우 출전 시점 정보가 새로고침에 영향받지 않는다.
+        """,
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "새로고침 접수 (새 추출 버전 item.status=PENDING, 파싱은 백그라운드) — 이미 진행 중이면 현재 진행 상태를 그대로 반환(멱등)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "400",
+                description = "링크가 없는 항목(이미지로 등록한 위시)은 재추출 입력이 없어 새로고침할 수 없음",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "미인증 (JWT 토큰 없음 또는 유효하지 않음)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "권한 없음 (GUEST 권한으로 접근 불가 · MEMBER 필요, 또는 본인 위시가 아님)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "존재하지 않는 위시 항목 (삭제된 항목 포함)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "추출 실패(FAILED) 항목은 새로고침 대상이 아님 (보정으로 복구) · 새로고침은 성공(READY) 항목 전용",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun refreshWishItem(
+        @Parameter(hidden = true) userId: UUID,
+        @Parameter(description = "위시 항목 ID", example = "1024") wishId: Long,
     ): ApiResponseBody<WishItemResponse>
 
     @Operation(
@@ -402,7 +544,7 @@ interface WishlistApi {
             상품 페이지를 캡처한 이미지 1~5장을 받아, 각 이미지를 PROCESSING 상태의 위시 항목으로 즉시 등록하고 목록을 반환한다.
             실제 상품 정보 추출(Gemini Vision)은 백그라운드에서 비동기로 진행되어 각 항목을 READY 또는 FAILED 로 전이시킨다.
             URL 등록과 결과 모양(WishItemResponse)이 같다. 이미지 등록 항목은 URL 이 없어 sourceUrl 이 null 이며,
-            추출 결과는 조회로 폴링하며, 추출 실패(FAILED) 항목은 보정 API(PATCH)로 직접 채워 복구한다.
+            추출 결과는 SSE(`/api/v1/notifications/subscribe`)로 완료·실패를 통보받아 재조회하며, 추출 실패(FAILED) 항목은 보정 API(PATCH)로 직접 채워 복구한다.
         """,
     )
     @ApiResponses(

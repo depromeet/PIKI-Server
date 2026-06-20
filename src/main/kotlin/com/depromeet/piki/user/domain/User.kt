@@ -41,7 +41,7 @@ class User(
         protected set
 
     fun promoteToMember() {
-        if (identityType != IdentityType.GUEST) throw UserException.alreadyMember(id)
+        if (identityType != IdentityType.GUEST) throw UserException.alreadyMember()
         identityType = IdentityType.MEMBER
     }
 
@@ -88,13 +88,13 @@ class User(
             WITHDRAWN_NICKNAME_PREFIX + id.toString().replace("-", "").take(8)
 
         private fun validateNickname(nickname: String) {
-            if (nickname.isBlank()) throw UserException.invalidNickname("닉네임은 공백일 수 없습니다.")
+            if (nickname.isBlank()) throw UserException.invalidNickname("닉네임을 입력해 주세요.")
             if (nickname.length > NICKNAME_MAX_LENGTH) {
-                throw UserException.invalidNickname("닉네임은 $NICKNAME_MAX_LENGTH 자 이하여야 합니다.")
+                throw UserException.invalidNickname("닉네임은 ${NICKNAME_MAX_LENGTH}자까지 입력할 수 있어요.")
             }
             // 탈퇴 tombstone 예약 prefix 선점 방지 — 활성 유저가 "탈퇴..." 를 쓰면 탈퇴 시 UNIQUE 충돌이 날 수 있다.
             if (nickname.startsWith(WITHDRAWN_NICKNAME_PREFIX)) {
-                throw UserException.invalidNickname("'$WITHDRAWN_NICKNAME_PREFIX' 로 시작하는 닉네임은 사용할 수 없습니다.")
+                throw UserException.invalidNickname("사용할 수 없는 닉네임이에요.")
             }
         }
     }

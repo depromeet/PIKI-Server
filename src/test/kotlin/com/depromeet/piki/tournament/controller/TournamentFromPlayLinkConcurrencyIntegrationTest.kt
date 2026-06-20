@@ -101,10 +101,10 @@ class TournamentFromPlayLinkConcurrencyIntegrationTest : IntegrationTestSupport(
                     ),
                 )
             tournamentItemJpaRepository.save(
-                TournamentItem(tournamentId = tId, itemId = item1.getId(), userId = ownerId, snapshotId = snapshot1.getId()),
+                TournamentItem(tournamentId = tId, userId = ownerId, snapshotId = snapshot1.getId()),
             )
             tournamentItemJpaRepository.save(
-                TournamentItem(tournamentId = tId, itemId = item2.getId(), userId = ownerId, snapshotId = snapshot2.getId()),
+                TournamentItem(tournamentId = tId, userId = ownerId, snapshotId = snapshot2.getId()),
             )
 
             mockMvc.perform(

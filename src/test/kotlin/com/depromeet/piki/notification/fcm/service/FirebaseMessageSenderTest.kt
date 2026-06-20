@@ -92,6 +92,23 @@ class FirebaseMessageSenderTest {
         )
     }
 
+    // silent badge 동기화(#487) data — 표시 알림이 아니라 badge 갱신 신호임을 type=badge_sync 로 구분하고 unreadCount 만 싣는다.
+    // type=badge_sync 는 NotificationType 의 어떤 값과도 겹치지 않는 예약 디스크리미네이터다(클라가 표시 알림과 구분하는 키).
+    @Test
+    fun `badge 동기화 data 는 type=badge_sync 와 unreadCount 만 싣는다`() {
+        val data = FirebaseMessageSender.buildBadgeSyncData(3)
+
+        assertEquals(mapOf("type" to "badge_sync", "unreadCount" to "3"), data)
+    }
+
+    @Test
+    fun `badge 동기화 data 의 unreadCount 0 도 문자열로 실린다`() {
+        // 전부 읽어 0 이 된 경우 — 0 을 실어야 클라가 badge 를 0 으로 내린다(누락 시 안 내려감).
+        val data = FirebaseMessageSender.buildBadgeSyncData(0)
+
+        assertEquals(mapOf("type" to "badge_sync", "unreadCount" to "0"), data)
+    }
+
     @Test
     fun `토너먼트 파싱 알림은 kind·tournamentId·tournamentItemId 를 모두 싣는다`() {
         val notification =
