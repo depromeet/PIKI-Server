@@ -3,9 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/x-icon" href="/favicon.ico">
-  <title>운영 통계 대시보드 · PiKi 백오피스</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <title>운영 통계 리포트 · PiKi</title>
+  <!--
+    팀 공유용 자체완결 export. 외부 CSS·JS·폰트 링크를 두지 않는다 — 파일 하나만 열어도 동일하게 보이게.
+    폰트는 시스템 한글 폰트로 폴백한다(Pretendard CDN 미사용). 받는 사람이 브라우저에서 그대로 인쇄(⌘P)하면 PDF.
+  -->
   <style>
     :root{
       --bg:#f5f7fb; --card:#fff; --ink:#0f172a; --muted:#64748b; --line:#e8edf3;
@@ -14,27 +16,16 @@
       --shadow:0 1px 2px rgba(15,23,42,.04), 0 10px 28px -16px rgba(15,23,42,.18);
     }
     *{box-sizing:border-box;}
-    body{margin:0;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",system-ui,sans-serif;
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
       background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;}
     .num{font-variant-numeric:tabular-nums;}
-    .bar{display:flex;align-items:center;gap:12px;padding:14px 24px;background:#fff;border-bottom:1px solid var(--line);}
-    .brand{font-weight:800;font-size:17px;letter-spacing:-.03em;}.brand .dot{color:var(--accent);}
-    .bar a{font-size:13px;color:var(--muted);text-decoration:none;font-weight:600;}
     .wrap{max-width:1080px;margin:0 auto;padding:28px 24px 56px;}
-    h1{font-size:23px;font-weight:800;letter-spacing:-.03em;margin:0 0 5px;}
-    .lede{color:var(--muted);font-size:13px;margin:0 0 18px;}
+    .report-head{border-bottom:2px solid var(--line);padding-bottom:14px;margin-bottom:22px;}
+    .report-head .brand{font-weight:800;font-size:15px;letter-spacing:-.03em;color:var(--accent-deep);margin-bottom:6px;}
+    h1{font-size:23px;font-weight:800;letter-spacing:-.03em;margin:0 0 6px;}
+    .lede{color:var(--muted);font-size:13px;margin:0;}
     .lede b{color:var(--ink);font-weight:700;}
-    .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:22px;}
-    .chip{display:inline-block;padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);
-      font-size:13px;font-weight:700;text-decoration:none;transition:.12s;}
-    .chip:hover{border-color:#cbd5e1;color:var(--ink);}
-    .chip.on{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 4px 12px -4px rgba(14,165,233,.5);}
-    details.range{margin-left:4px;}
-    details.range>summary{list-style:none;cursor:pointer;padding:8px 14px;border-radius:999px;border:1px dashed #cbd5e1;color:var(--muted);font-size:13px;font-weight:700;}
-    details.range>summary::-webkit-details-marker{display:none;}
-    .range form{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;}
-    .range input{border:1px solid #dbe2ea;border-radius:9px;padding:8px 10px;font-size:13px;font-family:inherit;background:#fbfcfe;}
-    .btn{background:var(--accent);color:#fff;border:none;border-radius:9px;padding:9px 16px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;}
+    h2{font-size:13px;font-weight:800;letter-spacing:.02em;color:var(--muted);text-transform:uppercase;margin:30px 0 12px;}
     .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:8px;}
     .kpi{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:17px 18px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
     .kpi::before{content:"";position:absolute;left:0;top:0;height:3px;width:100%;background:linear-gradient(90deg,var(--accent),#38bdf8);}
@@ -42,7 +33,6 @@
     .kpi .v{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1;}
     .kpi .s{font-size:12px;color:var(--muted);margin-top:7px;}
     .kpi .s .up{color:var(--pos);font-weight:700;}
-    h2{font-size:13px;font-weight:800;letter-spacing:.02em;color:var(--muted);text-transform:uppercase;margin:30px 0 12px;}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
     @media(max-width:720px){.grid2{grid-template-columns:1fr;}}
     .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:var(--shadow);}
@@ -70,33 +60,28 @@
     table.cmp tr:last-child td{border-bottom:none;}
     table.cmp b{font-weight:800;}
     .delta{font-weight:800;font-size:12.5px;}
+
+    /* 인쇄(⌘P → PDF) 최적화: 배경 잉크 절감, 카드가 페이지 경계에서 잘리지 않게, 색 보존 */
+    @media print{
+      body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      .wrap{max-width:none;padding:0 6mm;}
+      .kpi,.card{box-shadow:none;break-inside:avoid;}
+      .grid2{break-inside:avoid;}
+      h2{break-after:avoid;}
+      .report-head{break-after:avoid;}
+    }
   </style>
 </head>
 <body>
-  <div th:replace="~{admin/fragments :: topbar('/admin', '← 홈')}"></div>
   <div class="wrap">
 
-    <h1>운영 통계 대시보드</h1>
-    <p class="lede">백엔드 관점 지표(가입·위시·토너먼트·리텐션·푸시)를 기간별로. 구간 <b th:text="${#temporals.format(snapshot.from,'yyyy-MM-dd HH:mm')}">-</b> ~ <b th:text="${#temporals.format(snapshot.to,'yyyy-MM-dd HH:mm')}">-</b> (KST)</p>
-
-    <!-- 프리셋 + 직접 지정 -->
-    <div class="controls">
-      <a class="chip" th:classappend="${activePreset=='today'}?'on'" th:href="@{/admin/metrics(preset='today')}">오늘</a>
-      <a class="chip" th:classappend="${activePreset=='yesterday'}?'on'" th:href="@{/admin/metrics(preset='yesterday')}">어제</a>
-      <a class="chip" th:classappend="${activePreset=='7d'}?'on'" th:href="@{/admin/metrics(preset='7d')}">최근 7일</a>
-      <a class="chip" th:classappend="${activePreset=='30d'}?'on'" th:href="@{/admin/metrics(preset='30d')}">최근 30일</a>
-      <details class="range" th:open="${activePreset==null}">
-        <summary>직접 지정</summary>
-        <form method="get" th:action="@{/admin/metrics}">
-          <input type="datetime-local" name="from" th:value="${#temporals.format(snapshot.from,'yyyy-MM-dd''T''HH:mm')}">
-          <span class="muted">~</span>
-          <input type="datetime-local" name="to" th:value="${#temporals.format(snapshot.to,'yyyy-MM-dd''T''HH:mm')}">
-          <button class="btn" type="submit">조회</button>
-        </form>
-      </details>
-      <!-- 지금 보는 구간을 자체완결 HTML 로 내려받아 팀 공유(브라우저에서 ⌘P → PDF). 구간은 snapshot.from/to 그대로 전달. -->
-      <a class="chip" style="margin-left:auto"
-         th:href="@{/admin/metrics/export(from=${#temporals.format(snapshot.from,'yyyy-MM-dd''T''HH:mm')},to=${#temporals.format(snapshot.to,'yyyy-MM-dd''T''HH:mm')})}">⬇ 리포트 다운로드</a>
+    <div class="report-head">
+      <div class="brand">PiKi · 운영 통계 리포트</div>
+      <h1>운영 통계 대시보드</h1>
+      <p class="lede">
+        구간 <b th:text="${#temporals.format(snapshot.from,'yyyy-MM-dd HH:mm')}">-</b> ~ <b th:text="${#temporals.format(snapshot.to,'yyyy-MM-dd HH:mm')}">-</b> (KST)
+        · 생성 <span th:text="${#temporals.format(generatedAt,'yyyy-MM-dd HH:mm')}">-</span>
+      </p>
     </div>
 
     <!-- KPI -->
@@ -177,7 +162,7 @@
             <span class="cnt num" th:text="${d.count}">0</span>
           </div>
           <p class="note" th:if="${snapshot.retention.dau.isEmpty()}">이 구간엔 수집된 활동이 없습니다 (캡처 배포 전이거나 인증 트래픽 없음).</p>
-          <p class="note">리텐션·DAU 는 활동 캡처(`user_daily_activity`)가 배포된 이후부터 집계됩니다 — 그 전 구간은 가입 수가 있어도 활동 기록이 없어 0 으로 표시됩니다. 가입·위시·토너먼트 같은 지표는 `created_at` 기반이라 과거까지 보입니다.</p>
+          <p class="note">리텐션·DAU 는 활동 캡처(user_daily_activity)가 배포된 이후부터 집계됩니다.</p>
         </div>
       </div>
     </div>
@@ -214,7 +199,7 @@
     <!-- 직전 동기간 대비 -->
     <h2>직전 동기간 대비</h2>
     <div class="card">
-      <p class="note" style="margin:0 0 8px">현재 구간 <b th:text="${#temporals.format(comparison.curFrom,'M/d HH:mm')}+' ~ '+${#temporals.format(comparison.curTo,'M/d HH:mm')}">-</b> vs 직전 동일 길이 <b th:text="${#temporals.format(comparison.prevFrom,'M/d HH:mm')}+' ~ '+${#temporals.format(comparison.prevTo,'M/d HH:mm')}">-</b>. 릴리즈·이벤트 창을 잡으면 직전 동기간이 자동 비교군.</p>
+      <p class="note" style="margin:0 0 8px">현재 구간 <b th:text="${#temporals.format(comparison.curFrom,'M/d HH:mm')}+' ~ '+${#temporals.format(comparison.curTo,'M/d HH:mm')}">-</b> vs 직전 동일 길이 <b th:text="${#temporals.format(comparison.prevFrom,'M/d HH:mm')}+' ~ '+${#temporals.format(comparison.prevTo,'M/d HH:mm')}">-</b>.</p>
       <table class="cmp">
         <thead><tr><th>지표</th><th>직전 구간</th><th>현재 구간</th><th>변화</th></tr></thead>
         <tbody>
