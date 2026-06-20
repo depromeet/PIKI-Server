@@ -22,6 +22,9 @@ jobs:
       domain: ${{ steps.r.outputs.domain }}
       nginx_conf: ${{ steps.r.outputs.nginx_conf }}
       branch: ${{ steps.r.outputs.branch }}
+      mem_limit: ${{ steps.r.outputs.mem_limit }}
+      mem_swap: ${{ steps.r.outputs.mem_swap }}
+      jvm_opts: ${{ steps.r.outputs.jvm_opts }}
     steps:
       - id: r
         run: |
@@ -39,6 +42,20 @@ jobs:
             echo "environment=dev" >> "$GITHUB_OUTPUT"
             echo "domain=dev.api.piki.day" >> "$GITHUB_OUTPUT"
             echo "nginx_conf=dev.api.piki.day.conf" >> "$GITHUB_OUTPUT"
+          fi
+          # 컨테이너 메모리(cgroup)·JVM 힙 한도는 박스 크기별로 다르다 — prod 만 t4g.small(1.8G)로 스케일업(#596)했고
+          # dev/staging 은 906M 박스라 현행을 유지한다. blue-green overlap(전환 중 잠깐 2개 동시) 기준:
+          #   prod 2×768=1536 < 1.8G RAM, dev/staging 2×400=800 < 906M RAM 안에 들어가 swap thrash 를 막는다.
+          # 힙(-Xmx)은 컨테이너 RAM 안에 비힙(metaspace·thread stack·code cache·direct buffer) 여유를 남겨 잡는다.
+          # 값은 시작점 — 검증 배포에서 부팅 피크·overlap RAM 을 실측해 확정한다.
+          if [ "$BRANCH" = "main" ]; then
+            echo "mem_limit=768m" >> "$GITHUB_OUTPUT"
+            echo "mem_swap=1536m" >> "$GITHUB_OUTPUT"
+            echo "jvm_opts=-Xmx512m -Xms64m -XX:+ExitOnOutOfMemoryError" >> "$GITHUB_OUTPUT"
+          else
+            echo "mem_limit=400m" >> "$GITHUB_OUTPUT"
+            echo "mem_swap=800m" >> "$GITHUB_OUTPUT"
+            echo "jvm_opts=-Xmx256m -Xms64m -XX:+ExitOnOutOfMemoryError" >> "$GITHUB_OUTPUT"
           fi
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
@@ -416,18 +433,19 @@ jobs:
             # 컨테이너는 멀쩡. blue-green overlap 중 사고의 폭발 반경을 앱 한 개로 가둔다.
             # --restart unless-stopped: redis/mysql/alloy 와 동일 정책. cgroup-OOM·박스 재부팅 후 자가 복구.
             #   (teardown 은 docker stop + rm -f 라 정책과 충돌하지 않는다.)
-            # RAM 한도 400m: blue+green 이 동시에 떠도(overlap) 2×400=800 으로 RAM(906) 안에 들어가
-            #   swap 으로 안 넘치게 한다. 앱 hot working set 이 ~339 라 400 밑이라 라이브는 RAM 에서 빠르고,
-            #   식은 페이지만 swap 에 남는다. memory-swap 800m(= swap 400m 쿠션): 부팅 스파이크가 400 RAM 을
-            #   잠깐 넘어도 cgroup-OOM 대신 swap 으로 흘러 배포가 안 깨지게 하면서, 컨테이너 총량은 800 으로 묶는다.
-            #   값은 시작점 — 검증 배포에서 부팅 피크·overlap RAM 을 실측해 확정. ExitOnOutOfMemoryError: 힙 OOM 시 즉시 종료→재시작.
+            # RAM·힙 한도는 resolve job 이 박스 크기별로 정한다(environment 분기) — dev/staging 906M 는 400m/800m·힙256m,
+            #   prod t4g.small(1.8G, #596)은 768m/1536m·힙512m. blue+green overlap(전환 중 잠깐 2개 동시)이 RAM 안에 들어가
+            #   swap thrash 를 막는다(dev 2×400=800<906, prod 2×768=1536<1.8G). 앱 hot working set 만 RAM 에서 빠르게 돌고
+            #   식은 페이지는 swap 에 남는다. memory-swap 은 부팅 스파이크가 RAM 을 잠깐 넘어도 cgroup-OOM 대신 swap 으로
+            #   흘려 배포가 안 깨지게 하는 쿠션이다. 값은 시작점 — 검증 배포에서 부팅 피크·overlap RAM 을 실측해 확정.
+            #   ExitOnOutOfMemoryError: 힙 OOM 시 즉시 종료→재시작.
             docker run -d \
               --name "team3-$INACTIVE" \
               --restart unless-stopped \
               -p "127.0.0.1:$INACTIVE_PORT:8080" \
               --add-host=host.docker.internal:host-gateway \
-              --memory=400m --memory-swap=800m \
-              -e JAVA_TOOL_OPTIONS="-Xmx256m -Xms64m -XX:+ExitOnOutOfMemoryError" \
+              --memory=${{ needs.resolve.outputs.mem_limit }} --memory-swap=${{ needs.resolve.outputs.mem_swap }} \
+              -e JAVA_TOOL_OPTIONS="${{ needs.resolve.outputs.jvm_opts }}" \
               -e LOG_STRUCTURED="ecs" \
               -e TRACING_OTLP_ENABLED="true" \
               -e SPRING_PROFILES_ACTIVE="$SPRING_PROFILES_ACTIVE" \
