@@ -52,6 +52,10 @@ jobs:
             echo "target=main"    >> "$GITHUB_OUTPUT"
           fi
 
+      # ff-push 는 기본 GITHUB_TOKEN(contents: write)으로 한다. staging·main 은 ruleset
+      # protectReleaseBranches 가 deletion·non_fast_forward 만 강제하고 PR 규칙이 없어, ff 업데이트가
+      # 그대로 통과한다(별도 App·PAT bypass 불필요). dev 만 protectImportantBranch 로 PR 필수를 유지한다.
+
       # prod 승격에만 필요 — 태그를 읽어 다음 버전 계산.
       - name: Checkout (태그 조회용)
         if: ${{ inputs.target == 'prod' }}
