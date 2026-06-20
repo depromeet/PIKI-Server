@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpHeaders
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
@@ -78,6 +79,33 @@ class NotificationSseIntegrationTest : IntegrationTestSupport() {
             .andExpect(status().isUnauthorized)
             .andExpect(content().contentTypeCompatibleWith("application/json"))
             .andExpect(jsonPath("$.detail", notNullValue()))
+    }
+
+    @Test
+    fun `SSE 구독이 끝나며 일어나는 async 재디스패치는 인가에서 거부되지 않는다`() {
+        val userId = UUID.randomUUID()
+        val mockMvc = buildMockMvc()
+        try {
+            val result =
+                mockMvc
+                    .perform(
+                        get("/api/v1/notifications/subscribe")
+                            .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+                    ).andExpect(request().asyncStarted())
+                    .andReturn()
+
+            // emitter 를 complete 시켜 async 처리를 끝낸다 → 컨테이너로 ASYNC 재디스패치가 트리거된다.
+            registry.emittersOf(userId).toList().forEach { it.complete() }
+
+            // ASYNC 디스패치가 보안 필터를 다시 타도 AuthorizationFilter 에서 Access Denied 로 떨어지지 않고
+            // 정상 종료돼야 한다(SecurityConfig 의 dispatcherTypeMatchers(ASYNC).permitAll()). 이게 빠지면
+            // "response is already committed" DispatcherServlet ERROR 로그가 폭증한다.
+            mockMvc
+                .perform(asyncDispatch(result))
+                .andExpect(status().isOk)
+        } finally {
+            registry.emittersOf(userId).toList().forEach { registry.unregister(userId, it) }
+        }
     }
 
     @Test
