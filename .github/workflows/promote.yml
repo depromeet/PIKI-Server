@@ -114,6 +114,9 @@ jobs:
         if: ${{ steps.ff.outputs.skipped == 'false' }}
         env:
           GH_TOKEN: ${{ github.token }}
+          # gh workflow run 은 repo 를 로컬 .git 에서 추론하려 한다. 이 job 은 (staging 경로에선) checkout 을 안 해
+          # .git 이 없어 "not a git repository" 로 실패한다(#실측). GH_REPO 로 대상 repo 를 명시해 git 의존을 끊는다.
+          GH_REPO: ${{ github.repository }}
           TARGET: ${{ inputs.target }}
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
@@ -151,3 +154,63 @@ jobs:
               echo "- 결과: fast-forward 승격 + 배포 dispatch"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # 승격 자체의 알림(배포 성공/실패 알림은 deploy.yml 이 따로 보낸다). deploy.yml 의 Slack 패턴과 동일하게
+      # SLACK_BOT_TOKEN·SLACK_CHANNEL_ID·actor 멘션 맵을 쓴다. 전송 실패가 워크플로를 깨지 않게 continue-on-error.
+      - name: Notify Slack on success
+        if: success()
+        continue-on-error: true
+        shell: bash
+        env:
+          SRC: ${{ steps.plan.outputs.source }}
+          DST: ${{ steps.plan.outputs.target }}
+          SHA: ${{ steps.ff.outputs.sha }}
+          SKIPPED: ${{ steps.ff.outputs.skipped }}
+          TARGET_INPUT: ${{ inputs.target }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          SLACK_USER_MAP='{"m-a-king":"U0AKAEF2K9U","1o18z":"U0AKQ6G8BT3","sevineleven":"U0AK6U2J62F"}'
+          ACTOR="${{ github.actor }}"
+          SLACK_ID=$(echo "$SLACK_USER_MAP" | jq -r --arg login "$ACTOR" '.[$login] // empty')
+          ACTOR_MENTION="${SLACK_ID:+<@$SLACK_ID>}"; ACTOR_MENTION="${ACTOR_MENTION:-$ACTOR}"
+          SHORT_SHA="${SHA:0:7}"
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/$SHA"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          VER_LINE=""
+          [ "$TARGET_INPUT" = "prod" ] && VER_LINE=$(printf '\n• 버전: `%s` (배포 성공 시 릴리즈 생성)' "$VERSION")
+
+          if [ "$SKIPPED" = "true" ]; then
+            TEXT=$(printf '🔁 Promote: `%s` → `%s` — 변경 없음(이미 동일), 배포 생략\n• 실행: %s\n• <%s|워크플로우 로그>' \
+              "$SRC" "$DST" "$ACTOR_MENTION" "$RUN_URL")
+          else
+            TEXT=$(printf '🚀 Promote 성공: `%s` → `%s`\n• 커밋: <%s|%s>%s\n• 실행: %s\n• 배포는 deploy 워크플로에서 진행\n• <%s|워크플로우 로그>' \
+              "$SRC" "$DST" "$COMMIT_URL" "$SHORT_SHA" "$VER_LINE" "$ACTOR_MENTION" "$RUN_URL")
+          fi
+          curl -s -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            --data "$(jq -n --arg channel "${{ secrets.SLACK_CHANNEL_ID }}" --arg text "$TEXT" \
+              '{channel:$channel,text:$text,unfurl_links:false,unfurl_media:false}')"
+
+      - name: Notify Slack on failure
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        env:
+          SRC: ${{ steps.plan.outputs.source }}
+          DST: ${{ steps.plan.outputs.target }}
+          TARGET_INPUT: ${{ inputs.target }}
+        run: |
+          SLACK_USER_MAP='{"m-a-king":"U0AKAEF2K9U","1o18z":"U0AKQ6G8BT3","sevineleven":"U0AK6U2J62F"}'
+          ACTOR="${{ github.actor }}"
+          SLACK_ID=$(echo "$SLACK_USER_MAP" | jq -r --arg login "$ACTOR" '.[$login] // empty')
+          ACTOR_MENTION="${SLACK_ID:+<@$SLACK_ID>}"; ACTOR_MENTION="${ACTOR_MENTION:-$ACTOR}"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          # 분기(non-ff)·dispatch 실패 등. 경로는 입력 기준으로만 표기(ff 실패 시 plan 출력이 비어있을 수 있음).
+          TEXT=$(printf '❌ Promote 실패: target=`%s` (`%s` → `%s`)\n• 실행: %s\n• <%s|워크플로우 로그에서 원인 확인>' \
+            "$TARGET_INPUT" "${SRC:-?}" "${DST:-?}" "$ACTOR_MENTION" "$RUN_URL")
+          curl -s -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            --data "$(jq -n --arg channel "${{ secrets.SLACK_CHANNEL_ID }}" --arg text "$TEXT" \
+              '{channel:$channel,text:$text,unfurl_links:false,unfurl_media:false}')"
