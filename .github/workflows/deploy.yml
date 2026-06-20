@@ -712,6 +712,7 @@ jobs:
           ref: ${{ needs.resolve.outputs.ref }}
           fetch-depth: 0
       - name: Create GitHub Release (auto notes)
+        id: release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Promote 워크플로가 prod 승격 시 채우는 semver 태그. 직접 dispatch·push 경로엔 비어 있어 SHA 로 폴백.
@@ -722,6 +723,7 @@ jobs:
           else
             TAG="release-$(echo '${{ needs.resolve.outputs.ref }}' | cut -c1-7)"
           fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "release $TAG 이미 존재 — skip"
           else
@@ -730,3 +732,26 @@ jobs:
               --title "Production $TAG" \
               --generate-notes
           fi
+          echo "url=https://github.com/${{ github.repository }}/releases/tag/$TAG" >> "$GITHUB_OUTPUT"
+
+      # prod 릴리즈가 실제로 만들어진 시점의 "버전이 몇이 됐는지" 알림 — 승격·배포 알림과 별개로 버전·릴리즈 노트를
+      # 권위 있게 announce 한다. deploy.yml 의 다른 Slack 과 동일 패턴(SLACK_BOT_TOKEN·SLACK_CHANNEL_ID, continue-on-error).
+      - name: Notify Slack on release
+        if: success()
+        continue-on-error: true
+        shell: bash
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_URL: ${{ steps.release.outputs.url }}
+        run: |
+          SLACK_USER_MAP='{"m-a-king":"U0AKAEF2K9U","1o18z":"U0AKQ6G8BT3","sevineleven":"U0AK6U2J62F"}'
+          ACTOR="${{ github.actor }}"
+          SLACK_ID=$(echo "$SLACK_USER_MAP" | jq -r --arg login "$ACTOR" '.[$login] // empty')
+          ACTOR_MENTION="${SLACK_ID:+<@$SLACK_ID>}"; ACTOR_MENTION="${ACTOR_MENTION:-$ACTOR}"
+          TEXT=$(printf '🏷️ Production 릴리즈 `%s` 배포 완료!\n• 도메인: %s\n• 릴리즈: <%s|%s 릴리즈 노트>\n• 배포자: %s' \
+            "$TAG" "${{ needs.resolve.outputs.domain }}" "$RELEASE_URL" "$TAG" "$ACTOR_MENTION")
+          curl -s -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            --data "$(jq -n --arg channel "${{ secrets.SLACK_CHANNEL_ID }}" --arg text "$TEXT" \
+              '{channel:$channel,text:$text,unfurl_links:false,unfurl_media:false}')"
