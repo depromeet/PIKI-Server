@@ -8,14 +8,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class NotificationChannelPolicyTest {
-    // sync 성 알림(출전 목록 라이브 갱신)은 SSE 로 충분하므로 OS 푸시 대상이 아니다.
+    // 아이템 추가·삭제 알림은 인앱 SSE 로 즉시 반영되므로 OS(FCM) 푸시 대상이 아니다.
     @ParameterizedTest
     @CsvSource("TOURNAMENT_ITEM_ADDED", "TOURNAMENT_ITEM_DELETED")
-    fun `sync 성 알림은 푸시 대상이 아니다`(type: NotificationType) {
+    fun `아이템 추가·삭제 알림은 FCM 푸시 대상이 아니다`(type: NotificationType) {
         assertFalse(NotificationChannelPolicy.pushable(type))
     }
 
-    // alert 성 알림(남의 행동·내 작업 결과·공지)은 앱이 닫혀 있어도 알려야 하므로 푸시 대상이다.
+    // 그 외 알림(남의 행동·내 작업 결과·공지)은 앱이 닫혀 있어도 알려야 하므로 FCM 푸시 대상이다.
     @ParameterizedTest
     @CsvSource(
         "TOURNAMENT_JOINED",
@@ -27,7 +27,7 @@ class NotificationChannelPolicyTest {
         "ITEM_PARSING_FAILED",
         "ANNOUNCEMENT",
     )
-    fun `alert 성 알림은 푸시 대상이다`(type: NotificationType) {
+    fun `그 외 알림은 모두 FCM 푸시 대상이다`(type: NotificationType) {
         assertTrue(NotificationChannelPolicy.pushable(type))
     }
 

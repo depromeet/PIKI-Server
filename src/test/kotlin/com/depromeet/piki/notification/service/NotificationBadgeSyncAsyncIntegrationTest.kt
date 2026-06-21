@@ -1,11 +1,13 @@
 package com.depromeet.piki.notification.service
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.piki.notification.controller.dto.UnreadBadgeChanged
 import com.depromeet.piki.notification.domain.Notification
 import com.depromeet.piki.notification.domain.NotificationType
 import com.depromeet.piki.notification.fcm.domain.UserDevice
 import com.depromeet.piki.notification.fcm.repository.UserDeviceRepository
 import com.depromeet.piki.notification.repository.NotificationRepository
+import com.depromeet.piki.notification.sse.SseEmitterRegistry
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubFcmMessageSender
 import com.depromeet.piki.support.uuidToBytes
@@ -24,8 +26,10 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.time.Duration
 import java.util.UUID
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.assertEquals
@@ -37,6 +41,8 @@ import kotlin.test.assertEquals
 // 캡처 변수는 워커 스레드가 쓰고 테스트 스레드가 읽으므로 가시성 보장을 위해 Atomic 으로 둔다.
 class NotificationBadgeSyncAsyncIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var pushNotificationChannel: PushNotificationChannel
+
+    @Autowired private lateinit var registry: SseEmitterRegistry
 
     @Autowired private lateinit var userDeviceRepository: UserDeviceRepository
 
@@ -150,4 +156,42 @@ class NotificationBadgeSyncAsyncIntegrationTest : IntegrationTestSupport() {
             cleanup(userId)
         }
     }
+
+    @Test
+    fun `read 처리 후 온라인(SSE) 기기에 silent-sync(UNREAD_BADGE)로 갱신 안읽음 수를 보낸다`() {
+        val userId = UUID.randomUUID()
+        try {
+            val target = saveNotification(userId)
+            saveNotification(userId) // 안 읽을 1건 → 읽음 후 안읽음 = 1
+            val emitter = BadgeRecordingEmitter().also { registry.register(userId, it) }
+            try {
+                buildMockMvc()
+                    .perform(
+                        post("/api/v1/notifications/read")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""{"ids":[$target]}""")
+                            .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+                    ).andExpect(status().isOk)
+
+                // badge SSE 는 readAndSyncBadge 에서 동기 발행이라(FCM silent push 의 @Async 와 달리) 응답 직후 도착해 있다.
+                val payload = emitter.payloads().single()
+                assertEquals(1, payload.unreadCount)
+            } finally {
+                registry.unregister(userId, emitter)
+            }
+        } finally {
+            cleanup(userId)
+        }
+    }
+}
+
+// send 를 가로채 실제 IO 없이 전송된 silent-sync payload 를 기록한다(TournamentItemParsedSseIntegrationTest 와 동일 패턴).
+private class BadgeRecordingEmitter : SseEmitter() {
+    val sentData = CopyOnWriteArrayList<Any>()
+
+    override fun send(builder: SseEmitter.SseEventBuilder) {
+        builder.build().forEach { sentData.add(it.data) }
+    }
+
+    fun payloads(): List<UnreadBadgeChanged> = sentData.filterIsInstance<UnreadBadgeChanged>()
 }
