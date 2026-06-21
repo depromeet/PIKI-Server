@@ -1,6 +1,7 @@
 package com.depromeet.piki.auth.config
 
 import com.depromeet.piki.auth.filter.JwtAuthenticationFilter
+import jakarta.servlet.DispatcherType
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.annotation.Order
@@ -35,6 +36,16 @@ class SecurityConfig(
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { auth ->
                 auth
+                    // SSE(text/event-stream) 같은 async 요청은 완료·타임아웃·에러로 끝날 때 컨테이너로 ASYNC 디스패치되어
+                    // 보안 필터 체인을 한 번 더 탄다. 이 재진입 시점엔 SecurityContext 가 복원되지 않아 AuthorizationFilter 가
+                    // Access Denied 를 던지는데, async 응답은 헤더가 이미 flush 되어 committed 라 ExceptionTranslationFilter 가
+                    // 403 본문을 쓰지 못하고 "response is already committed" DispatcherServlet ERROR 로그만 남는다(무해하나 폭증).
+                    // ASYNC 디스패치는 원 REQUEST 가 이미 인가를 통과한 요청의 후속이라(막혔으면 async 가 시작조차 안 됨)
+                    // permitAll 이 새 보안 구멍을 만들지 않는다. 반대로 Spring Security 6 이 기본 활성화한 전 디스패치 인가 중
+                    // FORWARD/ERROR(forward/include 우회 방어)는 그대로 두고, ASYNC 만 골라 연다.
+                    // (전역 shouldFilterAllDispatcherTypes(false) 대신 ASYNC 한정 — 최소 권한.)
+                    .dispatcherTypeMatchers(DispatcherType.ASYNC)
+                    .permitAll()
                     // 배포 워크플로우의 health check (`curl http://localhost:$PORT/health`) 가 인증 없이
                     // 통과해야 한다. anyRequest().authenticated() 에 잡히면 401 응답 → 워크플로우 실패 →
                     // 신규 컨테이너 롤백 → 배포 차단으로 이어진다.
