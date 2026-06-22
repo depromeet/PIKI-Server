@@ -1,3 +1,6 @@
 /gradlew text eol=lf
+# terraform user_data(cloud-init) 가 Windows 체크아웃에서 CRLF 로 갈려 state 와 drift 나는 것 방지 (#597).
+# OS 무관하게 항상 LF 로 둬 terraform 이 일관된 user_data 를 읽게 한다.
+*.tf text eol=lf
 *.bat text eol=crlf
 *.jar binary
