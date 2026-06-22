@@ -370,8 +370,10 @@ jobs:
           SENTRY_DSN: ${{ (needs.resolve.outputs.environment == 'prod' || needs.resolve.outputs.environment == 'staging') && secrets.SENTRY_DSN || '' }}
           # staging·prod 가 같은 prod 프로파일을 공유하므로 environment 는 resolve 환경명으로 가른다(Sentry UI 필터·알림).
           SENTRY_ENVIRONMENT: ${{ needs.resolve.outputs.environment }}
-          # 배포 커밋 sha — suspect commit·regression 추적 키(GitHub 연동 승인 후 활성).
-          SENTRY_RELEASE: ${{ github.sha }}
+          # 배포된 이미지와 동일한 커밋(resolve.ref = workflow_run.head_sha, IMAGE_TAG 와 같은 출처)으로 둔다 —
+          # suspect commit·regression 추적 키. github.sha 는 deploy.yml 브랜치 HEAD 라 workflow_run 트리거 시
+          # 배포 대상과 어긋나 엉뚱한 커밋을 가리킬 수 있다(GitHub 연동 승인 후 활성).
+          SENTRY_RELEASE: ${{ needs.resolve.outputs.ref }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}

@@ -201,8 +201,8 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS, Asia/Seoul} %-5level [%thread] [%X{traceId:-},%X{spanId:-}] [user=%X{userId:-}] %logger{36} : %msg%n%wEx"
 
 # 에러 트래킹(#608). prod·staging 에만 DSN 을 주입해 켠다 — 빈 DSN 이면 SDK 가 no-op 이라 dev/로컬은 자동 off 다(코드 분기 0).
-# warn+error 로그를 sentry-logback appender 가 Sentry 이슈로 그룹핑한다(우리 예외는 GlobalExceptionHandler 가 잡아
-# log.error/warn(.., e) 로 남기므로 MVC 미처리예외 통합이 아니라 로그 캡처가 주 경로). 트레이싱은 Sentry 가 아니라
+# error 로그를 sentry-logback appender 가 Sentry 이슈로 그룹핑한다(우리 예외는 GlobalExceptionHandler 가 잡아
+# log.error(.., e) 로 남기므로 MVC 미처리예외 통합이 아니라 로그 캡처가 주 경로). 트레이싱은 Sentry 가 아니라
 # 기존 OTel→Tempo 가 담당하므로 traces-sample-rate=0. PII(헤더·쿠키·바디)는 자동 수집하지 않고, 안전 컨텍스트만
 # SentryContextEventProcessor 가 명시 부착한다(traceId·userId·adminActor·endpoint·provider 태그 + URL 쿼리스트링 마스킹).
 sentry:
@@ -216,6 +216,9 @@ sentry:
   # 헤더·쿠키·바디 자동 수집 off. 안전 컨텍스트만 EventProcessor 가 명시 부착한다(CLAUDE.md PII 정책).
   send-default-pii: false
   logging:
-    # appender 가 이벤트화할 최소 레벨 — warn+error 만 Sentry 이슈로(4xx info 는 제외). breadcrumb 은 info 부터 쌓는다.
-    minimum-event-level: warn
+    # appender 가 이벤트화할 최소 레벨 — error(예상 못한 서버 버그·SERVER_ERROR 5xx)만 Sentry 이슈로 올린다.
+    # sentry-logback 은 warn 을 예외 유무와 무관하게 전부 이벤트화해(노이즈·쿼터), warn 까지 올리면 진짜 장애(error)가
+    # 묻힌다 → error 로 둔다(CodeRabbit #609 리뷰 반영). warn 레벨 외부 일시실패(Gemini retryable 등)는 이벤트가 아니라
+    # breadcrumb(아래 info+)으로 남아 error 이벤트의 맥락으로 따라붙고, 추세는 Loki·Prometheus 로 본다.
+    minimum-event-level: error
     minimum-breadcrumb-level: info
