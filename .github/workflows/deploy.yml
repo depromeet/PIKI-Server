@@ -370,10 +370,12 @@ jobs:
           SENTRY_DSN: ${{ (needs.resolve.outputs.environment == 'prod' || needs.resolve.outputs.environment == 'staging') && secrets.SENTRY_DSN || '' }}
           # staging·prod 가 같은 prod 프로파일을 공유하므로 environment 는 resolve 환경명으로 가른다(Sentry UI 필터·알림).
           SENTRY_ENVIRONMENT: ${{ needs.resolve.outputs.environment }}
-          # 배포된 이미지와 동일한 커밋(resolve.ref = workflow_run.head_sha, IMAGE_TAG 와 같은 출처)으로 둔다 —
-          # suspect commit·regression 추적 키. github.sha 는 deploy.yml 브랜치 HEAD 라 workflow_run 트리거 시
-          # 배포 대상과 어긋나 엉뚱한 커밋을 가리킬 수 있다(GitHub 연동 승인 후 활성).
-          SENTRY_RELEASE: ${{ needs.resolve.outputs.ref }}
+          # Sentry release — prod(environment=prod) 이고 version 입력이 있을 때만 semver(inputs.version, 예: v1.0.1).
+          # 그 외(dev/staging·직접 push·version 없는 prod)는 배포 커밋 sha(resolve.ref = workflow_run.head_sha)로 폴백한다.
+          # environment=='prod' 를 함께 거는 이유: version 을 넣은 dev/staging 수동 dispatch 까지 semver 로 섞여 환경 추적성이
+          # 흐려지는 걸 막는다. release 잡의 GitHub Release 도 prod 한정이라, prod 에선 Sentry release == GitHub Release(v1.0.1)로
+          # 맞고 suspect commit·regression 이 그 태그 커밋으로 이어진다(GitHub 연동 승인 후). github.sha(deploy.yml HEAD)는 안 쓴다.
+          SENTRY_RELEASE: ${{ (needs.resolve.outputs.environment == 'prod' && inputs.version != '') && inputs.version || needs.resolve.outputs.ref }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}

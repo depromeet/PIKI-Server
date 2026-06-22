@@ -209,7 +209,8 @@ sentry:
   dsn: ${SENTRY_DSN:}
   # staging·prod 가 같은 prod 프로파일을 공유하므로(deploy.yml) environment 는 별도 env 로 가른다(ENV_ACCESS_GATE 와 동일 패턴).
   environment: ${SENTRY_ENVIRONMENT:local}
-  # 배포 커밋(git sha). suspect commit·regression 탐지에 쓰인다(GitHub 연동 승인 후 활성).
+  # 릴리즈 식별자 — prod promote 는 semver(v1.0.1), 그 외는 배포 커밋 sha (deploy.yml 이 주입). suspect commit·
+  # regression 탐지에 쓰인다(GitHub 연동 승인 후 활성). Sentry UI 에 prod 는 v1.0.1 로, dev/staging 은 sha 로 보인다.
   release: ${SENTRY_RELEASE:}
   # Sentry 트레이싱 미사용(Tempo 와 중복·비용 방지). 에러 캡처만 한다.
   traces-sample-rate: 0
