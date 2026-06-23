@@ -14,17 +14,37 @@ class Announcement(
     title: String,
     body: String,
     target: String,
+    pushEnabled: Boolean = true,
+    pushTitle: String = "",
+    pushBody: String = "",
 ) : LongBaseEntity() {
     @Column(name = "title", nullable = false, length = 255)
     var title: String = title
         protected set
 
-    @Column(name = "body", nullable = false, length = 1000)
+    // 공지 페이지 본문 — 마크다운 장문(#561). 알림(notifications.body=VARCHAR(255))엔 들어가지 않고, 푸시·알림센터는
+    // 아래 pushTitle·pushBody 를 쓴다. TEXT 라 컬럼 길이 대신 MAX_BODY_LENGTH(sane cap)로 생성 시점에 막는다.
+    @Column(name = "body", nullable = false, columnDefinition = "TEXT")
     var body: String = body
         protected set
 
     @Column(name = "target", nullable = false, length = 50)
     var target: String = target
+        protected set
+
+    // FCM 인터럽트 여부 토글(#561). 공지는 페이지·알림센터엔 항상 보이고, 이 값이 true 일 때만 FCM 푸시를 보낸다.
+    @Column(name = "push_enabled", nullable = false)
+    var pushEnabled: Boolean = pushEnabled
+        protected set
+
+    // 푸시·알림센터 전용 문구 — 마크다운 body 와 분리해 알림의 VARCHAR(255) 한도를 지킨다.
+    // pushTitle 은 보통 공지 title 을 그대로 쓰되(admin 이 기본 채움) 푸시 톤으로 따로 쓸 수 있다. pushBody 는 빈값 허용.
+    @Column(name = "push_title", nullable = false, length = 255)
+    var pushTitle: String = pushTitle
+        protected set
+
+    @Column(name = "push_body", nullable = false, length = 255)
+    var pushBody: String = pushBody
         protected set
 
     // 엔티티 불변식 — 최후의 보루(입력 경계가 먼저 거른다). 누가 어떤 경로로 만들든 컬럼 길이를 넘으면
@@ -33,6 +53,8 @@ class Announcement(
         require(title.isNotBlank()) { "공지 제목이 비어 있습니다." }
         require(title.length <= MAX_TITLE_LENGTH) { "공지 제목 길이가 ${MAX_TITLE_LENGTH}자를 초과했습니다." }
         require(body.length <= MAX_BODY_LENGTH) { "공지 본문 길이가 ${MAX_BODY_LENGTH}자를 초과했습니다." }
+        require(pushTitle.length <= MAX_PUSH_TEXT_LENGTH) { "푸시 제목 길이가 ${MAX_PUSH_TEXT_LENGTH}자를 초과했습니다." }
+        require(pushBody.length <= MAX_PUSH_TEXT_LENGTH) { "푸시 본문 길이가 ${MAX_PUSH_TEXT_LENGTH}자를 초과했습니다." }
     }
 
     @Column(name = "recipient_count", nullable = false)
@@ -158,9 +180,11 @@ class Announcement(
         const val STATUS_SENT = "SENT"
         const val STATUS_MISSED = "MISSED"
 
-        // 컬럼 길이와 공유하는 입력 상한(title 255 / body 1000).
+        // 입력 상한. title 255(컬럼 길이). body 는 TEXT(마크다운 패치노트)라 컬럼 길이 대신 sane cap 으로 둔다
+        // (TEXT 최대 65535 bytes 의 한참 안쪽). push_title·push_body 는 알림(notifications, VARCHAR(255))으로 들어가 255.
         const val MAX_TITLE_LENGTH = 255
-        const val MAX_BODY_LENGTH = 1000
+        const val MAX_BODY_LENGTH = 10000
+        const val MAX_PUSH_TEXT_LENGTH = 255
 
         // 공지 예약·발송 시각은 전부 KST 로 다룬다 — JVM 기본 TZ 는 UTC 라(application.yml 173) now() 를 그대로 쓰면
         // 운영자가 입력한 KST wall-clock(예약 12:00)과 9시간 어긋나 오발송한다. scheduledAt 은 KST wall-clock 으로 저장하고
