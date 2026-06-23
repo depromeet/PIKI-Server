@@ -1122,7 +1122,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 get("/api/v1/tournaments/$tournamentId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.completed.canWish").value(true))
+            .andExpect(jsonPath("$.data.completed.canAddItem").value(true))
     }
 
     @Test
@@ -1157,7 +1157,7 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 get("/api/v1/tournaments/$cloneId")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
             ).andExpect(status().isOk)
-            .andExpect(jsonPath("$.data.completed.canWish").value(false))
+            .andExpect(jsonPath("$.data.completed.canAddItem").value(false))
     }
 
     @Test
