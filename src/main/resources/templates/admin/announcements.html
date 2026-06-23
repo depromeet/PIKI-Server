@@ -55,6 +55,7 @@
     <div class="ok" th:if="${param.canceled}">예약을 취소했습니다.</div>
     <div class="ok" th:if="${param.deleted}">공지를 삭제했습니다.</div>
     <div class="ok" th:if="${param.error == 'length'}" style="background:#fee2e2;color:#b42318">제목은 255자, 본문은 10000자, 푸시 문구는 255자를 넘을 수 없습니다.</div>
+    <div class="ok" th:if="${param.error == 'image'}" style="background:#fee2e2;color:#b42318">본문 이미지를 가져오지 못했습니다. 이미지 주소(https)를 확인하거나 다른 이미지를 사용해주세요.</div>
 
     <h2>공지 등록</h2>
     <form class="card" th:action="@{/admin/announcements}" method="post" id="registerForm">

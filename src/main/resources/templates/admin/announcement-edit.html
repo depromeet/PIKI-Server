@@ -34,6 +34,7 @@
     <h1>공지 수정</h1>
     <p class="lede">발송 전 초안을 다듬습니다. 발송·예약된 공지는 수정할 수 없습니다.</p>
     <div class="err" th:if="${param.error == 'length'}">제목은 255자, 본문은 10000자, 푸시 문구는 255자를 넘을 수 없습니다.</div>
+    <div class="err" th:if="${param.error == 'image'}">본문 이미지를 가져오지 못했습니다. 이미지 주소(https)를 확인하거나 다른 이미지를 사용해주세요.</div>
 
     <form class="card" th:action="@{/admin/announcements/{id}/edit(id=${announcement.id})}" method="post" id="editForm">
       <div class="row"><label for="title">제목 <span class="hint">공지 페이지·딥링크 제목</span></label><input id="title" name="title" type="text" required maxlength="255" th:value="${announcement.title}"></div>

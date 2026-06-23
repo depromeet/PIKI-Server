@@ -1,6 +1,7 @@
 package com.depromeet.piki.admin.announcement
 import io.swagger.v3.oas.annotations.Hidden
 import com.depromeet.piki.announcement.domain.Announcement
+import com.depromeet.piki.announcement.domain.AnnouncementImageException
 
 import com.depromeet.piki.admin.access.AdminSession
 import com.depromeet.piki.admin.config.ClientIp
@@ -59,8 +60,13 @@ class AdminAnnouncementController(
         if (!validLengths(title, safeBody, safePushTitle, safePushBody)) {
             return "redirect:/admin/announcements?error=length"
         }
-        adminAnnouncementService.register(title, safeBody, pushEnabled, safePushTitle, safePushBody, actor(request), clientIp(request))
-        return "redirect:/admin/announcements?registered"
+        // 본문 외부 이미지 rehost(#561) 실패는 운영자가 붙여넣은 주소 문제이므로, 500 대신 폼으로 친화적 리다이렉트한다.
+        return try {
+            adminAnnouncementService.register(title, safeBody, pushEnabled, safePushTitle, safePushBody, actor(request), clientIp(request))
+            "redirect:/admin/announcements?registered"
+        } catch (e: AnnouncementImageException) {
+            "redirect:/admin/announcements?error=image"
+        }
     }
 
     // 초안 수정 페이지(#561) — DRAFT 만. 기존 내용·푸시 설정을 에디터·필드에 채워 보여준다. 발송·예약 건은 목록으로 되돌린다.
@@ -92,8 +98,12 @@ class AdminAnnouncementController(
         if (!validLengths(title, safeBody, safePushTitle, safePushBody)) {
             return "redirect:/admin/announcements/$id/edit?error=length"
         }
-        adminAnnouncementService.update(id, title, safeBody, pushEnabled, safePushTitle, safePushBody, actor(request), clientIp(request))
-        return "redirect:/admin/announcements/$id/send"
+        return try {
+            adminAnnouncementService.update(id, title, safeBody, pushEnabled, safePushTitle, safePushBody, actor(request), clientIp(request))
+            "redirect:/admin/announcements/$id/send"
+        } catch (e: AnnouncementImageException) {
+            "redirect:/admin/announcements/$id/edit?error=image"
+        }
     }
 
     // 입력 경계 길이 검증 — 등록·수정 공용. 초과는 친화적으로 막는다(엔티티 검증이 최후의 보루).
