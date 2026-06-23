@@ -47,6 +47,12 @@ class Announcement(
     var pushBody: String = pushBody
         protected set
 
+    // 푸시·알림센터에 실제로 들어가는 문구. pushTitle 이 비면 공지 title 로 폴백한다 — admin 이 기본 채우지만,
+    // 미설정·기존 데이터(마이그레이션 default '')를 방어해 빈 알림 title 이 나가지 않게 한다. pushBody 는 빈값 허용(푸시 title 만 표시).
+    // 둘 다 ≤255(notifications 한도)는 생성 시 require 로 보장된다.
+    val effectivePushTitle: String get() = pushTitle.ifBlank { title }
+    val effectivePushBody: String get() = pushBody
+
     // 엔티티 불변식 — 최후의 보루(입력 경계가 먼저 거른다). 누가 어떤 경로로 만들든 컬럼 길이를 넘으면
     // DB 저장 시점이 아니라 생성 시점에 깨지게 한다(데이터 truncation 방지).
     init {
