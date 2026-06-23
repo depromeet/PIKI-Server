@@ -39,11 +39,44 @@ class AdminAnnouncementService(
     fun register(
         title: String,
         body: String,
+        pushEnabled: Boolean,
+        pushTitle: String,
+        pushBody: String,
         actor: String,
         clientIp: String?,
     ): Announcement {
-        val announcement = announcementRepository.save(Announcement(title = title, body = body, target = TARGET_ALL))
+        val announcement =
+            announcementRepository.save(
+                Announcement(
+                    title = title,
+                    body = body,
+                    target = TARGET_ALL,
+                    pushEnabled = pushEnabled,
+                    pushTitle = pushTitle,
+                    pushBody = pushBody,
+                ),
+            )
         auditService.record(actor, AdminAuditAction.ANNOUNCEMENT_REGISTER, "공지 초안 등록 id=${announcement.getId()}", clientIp)
+        return announcement
+    }
+
+    // 초안 수정 — DRAFT 만(엔티티 edit 가 강제). 발송 전 오타 교정·다듬기(#561). 비관적 락으로 조회해 발송 claim 과의 경합을 직렬화한다.
+    @Transactional
+    fun update(
+        id: Long,
+        title: String,
+        body: String,
+        pushEnabled: Boolean,
+        pushTitle: String,
+        pushBody: String,
+        actor: String,
+        clientIp: String?,
+    ): Announcement {
+        val announcement =
+            announcementRepository.findByIdForUpdate(id) ?: throw IllegalArgumentException("공지를 찾을 수 없습니다.")
+        announcement.edit(title, body, pushEnabled, pushTitle, pushBody)
+        announcementRepository.save(announcement)
+        auditService.record(actor, AdminAuditAction.ANNOUNCEMENT_EDIT, "공지 초안 수정 id=$id", clientIp)
         return announcement
     }
 

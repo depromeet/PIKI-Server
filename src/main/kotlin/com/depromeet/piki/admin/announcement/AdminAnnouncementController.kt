@@ -41,21 +41,60 @@ class AdminAnnouncementController(
         return "admin/announcements"
     }
 
-    // 공지 초안 등록(DRAFT). 발송/예약은 아래 send 로만.
+    // 공지 초안 등록(DRAFT). 발송/예약은 아래 send 로만. body 는 마크다운, push_* 는 알림 전용 문구(#561).
+    // pushEnabled 는 FCM 인터럽트 토글 — 폼에서 체크박스가 명시값을 보내며, 누락 시 기본 발송(true).
     @PostMapping
     fun register(
         @RequestParam title: String,
         @RequestParam(required = false) body: String?,
+        @RequestParam(defaultValue = "true") pushEnabled: Boolean,
+        @RequestParam(required = false) pushTitle: String?,
+        @RequestParam(required = false) pushBody: String?,
         request: HttpServletRequest,
     ): String {
-        // 입력 경계 검증 — 길이 초과는 등록 전에 친화적으로 막는다(엔티티 init 불변식이 최후의 보루).
         val safeBody = body ?: ""
-        if (title.isBlank() || title.length > Announcement.MAX_TITLE_LENGTH || safeBody.length > Announcement.MAX_BODY_LENGTH) {
+        val safePushTitle = pushTitle ?: ""
+        val safePushBody = pushBody ?: ""
+        if (!validLengths(title, safeBody, safePushTitle, safePushBody)) {
             return "redirect:/admin/announcements?error=length"
         }
-        adminAnnouncementService.register(title, safeBody, actor(request), clientIp(request))
+        adminAnnouncementService.register(title, safeBody, pushEnabled, safePushTitle, safePushBody, actor(request), clientIp(request))
         return "redirect:/admin/announcements?registered"
     }
+
+    // 초안 수정(DRAFT 만, 발송 전 오타 교정 #561). 발송된·예약된 공지는 서비스·엔티티가 거부한다.
+    @PostMapping("/{id}/edit")
+    fun update(
+        @PathVariable id: Long,
+        @RequestParam title: String,
+        @RequestParam(required = false) body: String?,
+        @RequestParam(defaultValue = "true") pushEnabled: Boolean,
+        @RequestParam(required = false) pushTitle: String?,
+        @RequestParam(required = false) pushBody: String?,
+        request: HttpServletRequest,
+    ): String {
+        val safeBody = body ?: ""
+        val safePushTitle = pushTitle ?: ""
+        val safePushBody = pushBody ?: ""
+        if (!validLengths(title, safeBody, safePushTitle, safePushBody)) {
+            return "redirect:/admin/announcements/$id/edit?error=length"
+        }
+        adminAnnouncementService.update(id, title, safeBody, pushEnabled, safePushTitle, safePushBody, actor(request), clientIp(request))
+        return "redirect:/admin/announcements/$id/send"
+    }
+
+    // 입력 경계 길이 검증 — 등록·수정 공용. 초과는 친화적으로 막는다(엔티티 검증이 최후의 보루).
+    private fun validLengths(
+        title: String,
+        body: String,
+        pushTitle: String,
+        pushBody: String,
+    ): Boolean =
+        title.isNotBlank() &&
+            title.length <= Announcement.MAX_TITLE_LENGTH &&
+            body.length <= Announcement.MAX_BODY_LENGTH &&
+            pushTitle.length <= Announcement.MAX_PUSH_TEXT_LENGTH &&
+            pushBody.length <= Announcement.MAX_PUSH_TEXT_LENGTH
 
     // 발송/예약 설정 페이지 — 발송 전 "대상자 추출"(토큰 보유자 수)·내용·푸시 미리보기 + 발송 시각 선택. 실제 발송은 아래 POST.
     @GetMapping("/{id}/send")

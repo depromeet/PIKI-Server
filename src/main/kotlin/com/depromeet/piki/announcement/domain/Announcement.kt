@@ -53,14 +53,28 @@ class Announcement(
     val effectivePushTitle: String get() = pushTitle.ifBlank { title }
     val effectivePushBody: String get() = pushBody
 
-    // 엔티티 불변식 — 최후의 보루(입력 경계가 먼저 거른다). 누가 어떤 경로로 만들든 컬럼 길이를 넘으면
-    // DB 저장 시점이 아니라 생성 시점에 깨지게 한다(데이터 truncation 방지).
+    // 엔티티 불변식 — 최후의 보루(입력 경계가 먼저 거른다). 누가 어떤 경로(생성·수정)로 만들든 길이를 넘으면
+    // DB 저장 시점이 아니라 그 시점에 깨지게 한다(데이터 truncation 방지). 생성(init)·수정(edit)이 같은 검증을 공유한다.
     init {
-        require(title.isNotBlank()) { "공지 제목이 비어 있습니다." }
-        require(title.length <= MAX_TITLE_LENGTH) { "공지 제목 길이가 ${MAX_TITLE_LENGTH}자를 초과했습니다." }
-        require(body.length <= MAX_BODY_LENGTH) { "공지 본문 길이가 ${MAX_BODY_LENGTH}자를 초과했습니다." }
-        require(pushTitle.length <= MAX_PUSH_TEXT_LENGTH) { "푸시 제목 길이가 ${MAX_PUSH_TEXT_LENGTH}자를 초과했습니다." }
-        require(pushBody.length <= MAX_PUSH_TEXT_LENGTH) { "푸시 본문 길이가 ${MAX_PUSH_TEXT_LENGTH}자를 초과했습니다." }
+        validateFields(title, body, pushTitle, pushBody)
+    }
+
+    // 초안 수정 — DRAFT 에서만(발송된·예약된 공지는 내용 변경 불가, 발송 전 오타 교정·다듬기용 #561).
+    // SCHEDULED 는 cancelSchedule 로 DRAFT 로 되돌린 뒤 수정한다. 검증은 생성과 동일(validateFields).
+    fun edit(
+        title: String,
+        body: String,
+        pushEnabled: Boolean,
+        pushTitle: String,
+        pushBody: String,
+    ) {
+        check(isDraft) { "공지 수정은 DRAFT 상태에서만 가능하다. status=$status" }
+        validateFields(title, body, pushTitle, pushBody)
+        this.title = title
+        this.body = body
+        this.pushEnabled = pushEnabled
+        this.pushTitle = pushTitle
+        this.pushBody = pushBody
     }
 
     @Column(name = "recipient_count", nullable = false)
@@ -196,5 +210,19 @@ class Announcement(
         // 운영자가 입력한 KST wall-clock(예약 12:00)과 9시간 어긋나 오발송한다. scheduledAt 은 KST wall-clock 으로 저장하고
         // 스케줄러·미래검증·완료시각도 now(KST)로 비교해, 입력·저장·표시·발송을 모두 KST 로 자기일관하게 둔다(전역 TZ 미변경).
         val KST: ZoneId = ZoneId.of("Asia/Seoul")
+
+        // 생성(init)·수정(edit) 공용 검증 — 길이/공백 불변식의 단일 출처.
+        private fun validateFields(
+            title: String,
+            body: String,
+            pushTitle: String,
+            pushBody: String,
+        ) {
+            require(title.isNotBlank()) { "공지 제목이 비어 있습니다." }
+            require(title.length <= MAX_TITLE_LENGTH) { "공지 제목 길이가 ${MAX_TITLE_LENGTH}자를 초과했습니다." }
+            require(body.length <= MAX_BODY_LENGTH) { "공지 본문 길이가 ${MAX_BODY_LENGTH}자를 초과했습니다." }
+            require(pushTitle.length <= MAX_PUSH_TEXT_LENGTH) { "푸시 제목 길이가 ${MAX_PUSH_TEXT_LENGTH}자를 초과했습니다." }
+            require(pushBody.length <= MAX_PUSH_TEXT_LENGTH) { "푸시 본문 길이가 ${MAX_PUSH_TEXT_LENGTH}자를 초과했습니다." }
+        }
     }
 }
