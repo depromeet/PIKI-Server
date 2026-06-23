@@ -63,6 +63,18 @@ class AdminAnnouncementController(
         return "redirect:/admin/announcements?registered"
     }
 
+    // 초안 수정 페이지(#561) — DRAFT 만. 기존 내용·푸시 설정을 에디터·필드에 채워 보여준다. 발송·예약 건은 목록으로 되돌린다.
+    @GetMapping("/{id}/edit")
+    fun editPage(
+        @PathVariable id: Long,
+        model: Model,
+    ): String {
+        val announcement = adminAnnouncementService.get(id)
+        if (!announcement.isDraft) return "redirect:/admin/announcements" // 발송·예약된 건 내용 수정 불가
+        model.addAttribute("announcement", announcement)
+        return "admin/announcement-edit"
+    }
+
     // 초안 수정(DRAFT 만, 발송 전 오타 교정 #561). 발송된·예약된 공지는 서비스·엔티티가 거부한다.
     @PostMapping("/{id}/edit")
     fun update(

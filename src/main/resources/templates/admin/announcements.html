@@ -108,6 +108,7 @@
             </td>
             <td>
               <div style="display:flex;gap:6px;align-items:center">
+                <a th:if="${a.draft}" class="btn sm alt" style="display:inline-block;text-decoration:none" th:href="@{/admin/announcements/{id}/edit(id=${a.id})}">수정</a>
                 <a th:if="${a.draft}" class="btn sm" style="display:inline-block;text-decoration:none" th:href="@{/admin/announcements/{id}/send(id=${a.id})}">발송/예약</a>
                 <form th:if="${a.draft or a.missed}" th:action="@{/admin/announcements/{id}/delete(id=${a.id})}" method="post" style="margin:0"
                       onsubmit="return confirm('삭제할까요?');">
