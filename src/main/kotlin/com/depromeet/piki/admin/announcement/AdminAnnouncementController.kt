@@ -42,12 +42,13 @@ class AdminAnnouncementController(
     }
 
     // 공지 초안 등록(DRAFT). 발송/예약은 아래 send 로만. body 는 마크다운, push_* 는 알림 전용 문구(#561).
-    // pushEnabled 는 FCM 인터럽트 토글 — 폼에서 체크박스가 명시값을 보내며, 누락 시 기본 발송(true).
+    // pushEnabled 는 FCM 인터럽트 토글 — 폼 체크박스(value=true, 기본 checked)가 켜질 때만 전송한다. 해제·누락 시
+    // 누락(absent) → defaultValue false(미발송). 즉 안전 기본은 미발송, 폼이 기본 체크라 일반 흐름은 발송이다.
     @PostMapping
     fun register(
         @RequestParam title: String,
         @RequestParam(required = false) body: String?,
-        @RequestParam(defaultValue = "true") pushEnabled: Boolean,
+        @RequestParam(defaultValue = "false") pushEnabled: Boolean,
         @RequestParam(required = false) pushTitle: String?,
         @RequestParam(required = false) pushBody: String?,
         request: HttpServletRequest,
@@ -68,7 +69,7 @@ class AdminAnnouncementController(
         @PathVariable id: Long,
         @RequestParam title: String,
         @RequestParam(required = false) body: String?,
-        @RequestParam(defaultValue = "true") pushEnabled: Boolean,
+        @RequestParam(defaultValue = "false") pushEnabled: Boolean,
         @RequestParam(required = false) pushTitle: String?,
         @RequestParam(required = false) pushBody: String?,
         request: HttpServletRequest,
