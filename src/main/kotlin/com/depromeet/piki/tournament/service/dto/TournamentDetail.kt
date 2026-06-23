@@ -38,6 +38,9 @@ sealed class TournamentDetail {
         val hasGroupResult: Boolean,
         val isOwner: Boolean,
         val isRoot: Boolean,
+        // true: ROOT 소유자 또는 소셜 초대로 참여한 CLONE 소유자 — 결과 화면에서 위시리스트 담기 허용.
+        // false: 플레이링크 CLONE 소유자 — 소셜 초대 없이 진입한 사용자로, 위시리스트 담기 불가.
+        val canWish: Boolean,
         val playLinkExpiresAt: java.time.LocalDateTime?,
         val sourceTournamentId: Long? = null,
     ) : TournamentDetail()
