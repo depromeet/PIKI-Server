@@ -59,6 +59,29 @@ class AdminAnnouncementPageRenderIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `발송 확인 페이지는 공지 페이지 렌더 미리보기와 푸시 미리보기를 포함해 렌더된다`() {
+        // pushTitle 을 비워 effectivePushTitle 이 공지 title 로 폴백되는지도 함께 확인
+        val a = announcementRepository.save(Announcement("출시 안내", "## 새 기능\n반가워요", "토큰 보유자 전체", true, "", ""))
+
+        mockMvc()
+            .perform(get("/admin/announcements/${a.getId()}/send"))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("id=\"bodyViewer\""))) // 공지 페이지 마크다운 렌더 미리보기
+            .andExpect(content().string(containsString("푸시 / 알림센터 미리보기")))
+            .andExpect(content().string(containsString("출시 안내"))) // pushTitle 빈값 → 공지 title 로 폴백
+    }
+
+    @Test
+    fun `푸시 비활성 공지의 발송 확인 페이지는 푸시 미발송 안내를 표시한다`() {
+        val a = announcementRepository.save(Announcement("점검 공지", "본문", "토큰 보유자 전체", false, "", ""))
+
+        mockMvc()
+            .perform(get("/admin/announcements/${a.getId()}/send"))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("푸시 미발송")))
+    }
+
+    @Test
     fun `DRAFT 공지를 수정하면 제목·본문·푸시필드가 갱신된다`() {
         val a = announcementRepository.save(Announcement("원래", "원래본문", "토큰 보유자 전체"))
         val id = a.getId()
