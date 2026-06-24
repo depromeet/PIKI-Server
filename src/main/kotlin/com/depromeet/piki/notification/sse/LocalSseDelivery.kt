@@ -38,6 +38,8 @@ class LocalSseDelivery(
     // 조용한(silent) 화면 갱신 신호를 대상 유저들 연결에 실시간 흘려보낸다(알림 아님 — 토스트·알림센터·FCM 표시 푸시 없이 SSE 로만).
     // notification 전달과 같은 emitter write 경로(sendOrEvict)를 공유하되 이벤트 name 만 다르다(클라가 name 으로 구분).
     // 한 payload 이벤트를 만들어 대상 유저 전원의 emitter 에 재사용한다 — 같은 갱신을 보는 화면이 모두 동일하게 반영된다.
+    // 동기 로컬 write 다. broadcaster 는 이미 @Async 워커에서 호출하므로 직접 부르고, 읽음 응답 경로(badge)는
+    // SilentSyncDispatcher 가 @Async 로 감싸 요청 스레드(emitter write·throw)가 읽음 응답을 막지 않게 한다.
     fun deliverSilentSync(
         userIds: Collection<UUID>,
         payload: SilentSyncPayload,

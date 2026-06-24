@@ -27,12 +27,14 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import tools.jackson.databind.ObjectMapper
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 // 읽음 후 silent badge 동기화(#487)는 PushNotificationChannel.syncBadge(@Async notificationExecutor)로 응답 경로에서
 // 분리돼 별도 워커 스레드·새 트랜잭션에서 돈다. 그래서 @Transactional 자동 롤백 패턴으로는 워커가 미커밋 데이터를
@@ -49,6 +51,8 @@ class NotificationBadgeSyncAsyncIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var notificationRepository: NotificationRepository
 
     @Autowired private lateinit var stubFcmMessageSender: StubFcmMessageSender
+
+    @Autowired private lateinit var objectMapper: ObjectMapper
 
     @Autowired private lateinit var webApplicationContext: WebApplicationContext
 
@@ -173,9 +177,16 @@ class NotificationBadgeSyncAsyncIntegrationTest : IntegrationTestSupport() {
                             .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
                     ).andExpect(status().isOk)
 
-                // badge SSE 는 readAndSyncBadge 에서 동기 발행이라(FCM silent push 의 @Async 와 달리) 응답 직후 도착해 있다.
-                val payload = emitter.payloads().single()
-                assertEquals(1, payload.unreadCount)
+                // badge SSE 는 SilentSyncDispatcher.dispatch(@Async)로 응답 경로 밖에서 발행된다. Awaitility 로 도착을 기다린다.
+                await().atMost(Duration.ofSeconds(5)).untilAsserted {
+                    val payload = emitter.payloads().single()
+                    assertEquals(1, payload.unreadCount)
+                    // wire 직렬화 contract — type 판별자 + 카테고리 맵이 실제 JSON 에 실리는지(클라가 type 으로 분기).
+                    val node = objectMapper.readTree(objectMapper.writeValueAsString(payload))
+                    assertEquals("UNREAD_BADGE", node.get("type").asString())
+                    assertEquals(1L, node.get("unreadCount").asLong())
+                    assertTrue(node.has("unreadCountByCategory"))
+                }
             } finally {
                 registry.unregister(userId, emitter)
             }
