@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseBody
 import org.springframework.web.multipart.MultipartFile
+import org.springframework.web.servlet.mvc.support.RedirectAttributes
 import java.time.LocalDateTime
 
 // 공지 등록·예약/발송·결과 화면(#391/#489). 등록(초안)과 발송(목록에서 선택)을 분리해 발송 시 자유입력이 없어 오타가 안 생긴다.
@@ -82,20 +83,40 @@ class AdminAnnouncementController(
         @RequestParam(defaultValue = "false") pushEnabled: Boolean,
         @RequestParam(required = false) pushTitle: String?,
         @RequestParam(required = false) pushBody: String?,
+        redirectAttributes: RedirectAttributes,
         request: HttpServletRequest,
     ): String {
         val safeBody = body ?: ""
         val safePushTitle = pushTitle ?: ""
         val safePushBody = pushBody ?: ""
+        // 검증·rehost 실패로 edit 로 되돌릴 땐 방금 입력한 값을 flash 로 보존해 재주입한다 — 긴 패치노트를 다시 쓰게 하지 않는다.
         if (!validLengths(title, safeBody, safePushTitle, safePushBody)) {
+            preserveDraftInput(redirectAttributes, title, safeBody, pushEnabled, safePushTitle, safePushBody)
             return "redirect:/admin/announcements/$id/edit?error=length"
         }
         return try {
             adminAnnouncementService.update(id, title, safeBody, pushEnabled, safePushTitle, safePushBody, actor(request), clientIp(request))
             "redirect:/admin/announcements/$id/send"
         } catch (e: AnnouncementImageException) {
+            preserveDraftInput(redirectAttributes, title, safeBody, pushEnabled, safePushTitle, safePushBody)
             "redirect:/admin/announcements/$id/edit?error=image"
         }
+    }
+
+    // edit 로 되돌릴 때 입력값을 flash 로 보존한다 — editPage 의 다음 렌더에서 draft* 모델 속성으로 폼에 재주입된다(없으면 DRAFT 값).
+    private fun preserveDraftInput(
+        ra: RedirectAttributes,
+        title: String,
+        body: String,
+        pushEnabled: Boolean,
+        pushTitle: String,
+        pushBody: String,
+    ) {
+        ra.addFlashAttribute("draftTitle", title)
+        ra.addFlashAttribute("draftBody", body)
+        ra.addFlashAttribute("draftPushEnabled", pushEnabled)
+        ra.addFlashAttribute("draftPushTitle", pushTitle)
+        ra.addFlashAttribute("draftPushBody", pushBody)
     }
 
     // 입력 경계 길이 검증 — 등록·수정 공용. 초과는 친화적으로 막는다(엔티티 검증이 최후의 보루).
