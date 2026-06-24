@@ -38,7 +38,7 @@ class PushNotificationChannel(
         userId: UUID,
         notification: Notification,
     ) {
-        // sync 성 알림(인앱 SSE 로 충분)은 OS 트레이 푸시를 보내지 않는다 — 토큰 게이트와 같은 자리의 자기-적용 판단.
+        // 푸시 비대상 알림(아이템 추가/삭제 — 인앱 SSE 로 충분)은 OS 트레이 푸시를 보내지 않는다 — 토큰 게이트와 같은 자리의 자기-적용 판단.
         if (!NotificationChannelPolicy.pushable(notification.type)) return
         val sender = sender() ?: return
         val tokens = userDeviceService.findTokens(userId)
