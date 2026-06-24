@@ -1,6 +1,6 @@
 package com.depromeet.piki.notification.service
 
-import com.depromeet.piki.notification.controller.dto.UnreadBadgeChanged
+import com.depromeet.piki.notification.controller.dto.UnreadCountChanged
 import com.depromeet.piki.notification.domain.NotificationCategory
 import com.depromeet.piki.notification.service.dto.NotificationReadCommand
 import com.depromeet.piki.notification.sse.SilentSyncDispatcher
@@ -18,7 +18,7 @@ class NotificationReadOrchestrator(
     private val silentSyncDispatcher: SilentSyncDispatcher,
 ) {
     // 읽음 처리 후 갱신 안읽음 수를 반환하고(읽은 기기는 응답 body 로 즉시 badge 미러링), 같은 유저의 다른 기기엔
-    // 두 경로로 badge 를 맞춘다: 온라인(열린 SSE) 기기는 silent-sync(UNREAD_BADGE)로 인앱 배지를, 오프라인 기기는
+    // 두 경로로 badge 를 맞춘다: 온라인(열린 SSE) 기기는 silent-sync(UNREAD_COUNT_CHANGED)로 인앱 배지를, 오프라인 기기는
     // FCM silent 푸시로 OS 아이콘 badge 를. SSE 가 인앱 진실이고 FCM 은 앱이 꺼진 기기의 OS 트레이 보조라, 둘을
     // 함께 보내야 온라인·오프라인 기기가 모두 같은 수로 수렴한다(FCM-only 면 앱 열어둔 기기의 인앱 숫자가 안 바뀜).
     // 둘 다 @Async(SilentSyncDispatcher.dispatch·syncBadge) 라 읽음 응답이 SSE write·FCM latency 에 묶이지 않고, 한쪽
@@ -28,7 +28,7 @@ class NotificationReadOrchestrator(
         command: NotificationReadCommand,
     ): Map<NotificationCategory, Long> {
         val unread = notificationService.read(userId, command)
-        silentSyncDispatcher.dispatch(listOf(userId), UnreadBadgeChanged.of(unread))
+        silentSyncDispatcher.dispatch(listOf(userId), UnreadCountChanged.of(unread))
         pushNotificationChannel.syncBadge(userId, unread.toBadgeCount())
         return unread
     }

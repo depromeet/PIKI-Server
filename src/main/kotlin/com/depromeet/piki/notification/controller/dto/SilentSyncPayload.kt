@@ -17,7 +17,7 @@ sealed interface SilentSyncPayload {
 // silent-sync 갱신 사건의 종류. 클라가 화면 갱신 동작을 분기하는 키.
 enum class SilentSyncType {
     TOURNAMENT_ITEM_PARSED,
-    UNREAD_BADGE,
+    UNREAD_COUNT_CHANGED,
 }
 
 // 토너먼트 출전 아이템의 파싱이 끝났음을 그 토너먼트 참여자 화면에 반영하는 갱신 신호.
@@ -35,16 +35,16 @@ data class TournamentItemParsed(
 // FCM silent push 가 오프라인 기기의 OS 아이콘 badge 를 맞추는 것과 짝 — 온라인 인앱 배지는 이 SSE 로 맞춘다(FCM-only 면
 // 앱을 열어둔 기기의 인앱 숫자가 갱신되지 않는다). REST 읽음 응답(NotificationReadResponse)과 같은 셰입이라 클라가
 // +1/-1 산수 없이 전체 badge·탭별 badge 를 그대로 미러링한다.
-data class UnreadBadgeChanged(
+data class UnreadCountChanged(
     val unreadCount: Long,
     val unreadCountByCategory: Map<NotificationCategory, Long>,
 ) : SilentSyncPayload {
-    override val type: SilentSyncType = SilentSyncType.UNREAD_BADGE
+    override val type: SilentSyncType = SilentSyncType.UNREAD_COUNT_CHANGED
 
     companion object {
         // total 은 카테고리 합으로 도출 — toUnreadTotal 단일 소스를 거쳐 REST 읽음 응답·OS 배지와 같은 수를 보장한다.
-        fun of(unreadCountByCategory: Map<NotificationCategory, Long>): UnreadBadgeChanged =
-            UnreadBadgeChanged(
+        fun of(unreadCountByCategory: Map<NotificationCategory, Long>): UnreadCountChanged =
+            UnreadCountChanged(
                 unreadCount = unreadCountByCategory.toUnreadTotal(),
                 unreadCountByCategory = unreadCountByCategory,
             )

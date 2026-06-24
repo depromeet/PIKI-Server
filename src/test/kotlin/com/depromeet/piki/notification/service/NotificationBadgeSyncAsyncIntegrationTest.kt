@@ -1,7 +1,7 @@
 package com.depromeet.piki.notification.service
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
-import com.depromeet.piki.notification.controller.dto.UnreadBadgeChanged
+import com.depromeet.piki.notification.controller.dto.UnreadCountChanged
 import com.depromeet.piki.notification.domain.Notification
 import com.depromeet.piki.notification.domain.NotificationType
 import com.depromeet.piki.notification.fcm.domain.UserDevice
@@ -162,7 +162,7 @@ class NotificationBadgeSyncAsyncIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `read 처리 후 온라인(SSE) 기기에 silent-sync(UNREAD_BADGE)로 갱신 안읽음 수를 보낸다`() {
+    fun `read 처리 후 온라인(SSE) 기기에 silent-sync(UNREAD_COUNT_CHANGED)로 갱신 안읽음 수를 보낸다`() {
         val userId = UUID.randomUUID()
         try {
             val target = saveNotification(userId)
@@ -183,7 +183,7 @@ class NotificationBadgeSyncAsyncIntegrationTest : IntegrationTestSupport() {
                     assertEquals(1, payload.unreadCount)
                     // wire 직렬화 contract — type 판별자 + 카테고리 맵이 실제 JSON 에 실리는지(클라가 type 으로 분기).
                     val node = objectMapper.readTree(objectMapper.writeValueAsString(payload))
-                    assertEquals("UNREAD_BADGE", node.get("type").asString())
+                    assertEquals("UNREAD_COUNT_CHANGED", node.get("type").asString())
                     assertEquals(1L, node.get("unreadCount").asLong())
                     assertTrue(node.has("unreadCountByCategory"))
                 }
@@ -204,5 +204,5 @@ private class BadgeRecordingEmitter : SseEmitter() {
         builder.build().forEach { sentData.add(it.data) }
     }
 
-    fun payloads(): List<UnreadBadgeChanged> = sentData.filterIsInstance<UnreadBadgeChanged>()
+    fun payloads(): List<UnreadCountChanged> = sentData.filterIsInstance<UnreadCountChanged>()
 }
