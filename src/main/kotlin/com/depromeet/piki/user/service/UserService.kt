@@ -162,62 +162,51 @@ class UserService(
         }
     }
 
+    // 신규 user 영속화 공통 경로 — 닉네임 unique 충돌(uq_users_nickname)은 duplicateNickname 으로 매핑한다.
+    // 존재 검사와 save 사이의 race 로 DB 제약 위반이 떠도 500 이 새지 않게 한다.
+    private fun saveNewUser(
+        nickname: String,
+        profileImage: String,
+        identityType: IdentityType,
+    ): User =
+        try {
+            userRepository.save(
+                User(id = UUID.randomUUID(), nickname = nickname, profileImage = profileImage, identityType = identityType),
+            )
+        } catch (e: DataIntegrityViolationException) {
+            throw UserException.duplicateNickname()
+        }
+
+    // 게스트는 닉네임을 자동 생성하므로 '닉네임 중복'이라는 의미가 없다 — 자동 생성 닉네임의 동시성 충돌(uq_users_nickname)을
+    // duplicateNickname 으로 잡지 않고 그대로 둔다(그래서 saveNewUser 를 쓰지 않는다). 그 race 는 별개 이슈로 다룬다.
     @Transactional
     fun createGuest(): User {
-        val id = UUID.randomUUID()
         val nickname = generateUniqueGuestNickname()
-        val profileImage = defaultProfileImages.random()
         return userRepository.save(
-            User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.GUEST),
+            User(
+                id = UUID.randomUUID(),
+                nickname = nickname,
+                profileImage = defaultProfileImages.random(),
+                identityType = IdentityType.GUEST,
+            ),
         )
     }
 
     @Transactional
-    fun createGuestWithNickname(nickname: String): User {
-        val id = UUID.randomUUID()
-        val profileImage = defaultProfileImages.random()
-        return try {
-            userRepository.save(
-                User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.GUEST),
-            )
-        } catch (e: org.springframework.dao.DataIntegrityViolationException) {
-            throw UserException.duplicateNickname()
-        }
-    }
+    fun createGuestWithNickname(nickname: String): User =
+        saveNewUser(nickname, defaultProfileImages.random(), IdentityType.GUEST)
 
     @Transactional
     fun createMember(nickname: String): User {
         if (userRepository.existsByNickname(nickname)) throw UserException.duplicateNickname()
-        val id = UUID.randomUUID()
-        val profileImage = defaultProfileImages.random()
-        return try {
-            userRepository.save(
-                User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.MEMBER),
-            )
-        } catch (e: DataIntegrityViolationException) {
-            throw UserException.duplicateNickname()
-        }
+        return saveNewUser(nickname, defaultProfileImages.random(), IdentityType.MEMBER)
     }
 
-    // 소셜 신규 가입용 MEMBER 생성. 닉네임은 게스트와 동일하게 자동 생성(fill)하고 사용자가 나중에 수정한다.
-    // 프로필 이미지는 provider 가 준 게 있으면 쓰고, 없으면(동의 거부 등) 기본 아바타 4종 중 랜덤.
+    // 소셜 신규 가입용 MEMBER 생성. 닉네임은 게스트와 동일하게 자동 생성하고 사용자가 나중에 수정한다.
+    // 프로필 이미지는 provider 가 준 게 있으면 쓰고, 없으면(동의 거부 등) 기본 아바타 중 랜덤.
     @Transactional
-    fun createSocialUser(profileImage: String?): User {
-        val id = UUID.randomUUID()
-        val nickname = generateUniqueGuestNickname()
-        return try {
-            userRepository.save(
-                User(
-                    id = id,
-                    nickname = nickname,
-                    profileImage = profileImage ?: defaultProfileImages.random(),
-                    identityType = IdentityType.MEMBER,
-                ),
-            )
-        } catch (e: DataIntegrityViolationException) {
-            throw UserException.duplicateNickname()
-        }
-    }
+    fun createSocialUser(profileImage: String?): User =
+        saveNewUser(generateUniqueGuestNickname(), profileImage ?: defaultProfileImages.random(), IdentityType.MEMBER)
 
     @Transactional(readOnly = true)
     fun findById(userId: UUID): User = userRepository.findById(userId) ?: throw UserException.notFound()
