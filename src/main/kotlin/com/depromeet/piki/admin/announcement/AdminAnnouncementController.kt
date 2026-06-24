@@ -76,6 +76,7 @@ class AdminAnnouncementController(
         val announcement = adminAnnouncementService.get(id)
         if (!announcement.isDraft) return "redirect:/admin/announcements" // 발송·예약된 건 내용 수정 불가
         model.addAttribute("announcement", announcement)
+        model.addAttribute("pushIconUrl", defaultPushImage.url) // 푸시 미리보기 아이콘 — 실제 FCM 이 쓰는 S3 기본 아이콘
         return "admin/announcement-edit"
     }
 
