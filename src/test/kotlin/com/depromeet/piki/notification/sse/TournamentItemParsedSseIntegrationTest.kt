@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import tools.jackson.databind.ObjectMapper
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.assertEquals
@@ -33,6 +34,8 @@ class TournamentItemParsedSseIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var tournamentUserRepository: TournamentUserRepository
 
     @Autowired private lateinit var itemSnapshotRepository: ItemSnapshotRepository
+
+    @Autowired private lateinit var objectMapper: ObjectMapper
 
     @Test
     fun `파싱 완료 시 그 토너먼트 참여자 전원이 출전 좌표와 status=READY 를 받고 비참여자는 못 받는다`() {
@@ -59,6 +62,10 @@ class TournamentItemParsedSseIntegrationTest : IntegrationTestSupport() {
                 assertEquals(tournamentItemId, payload.tournamentItemId)
                 assertEquals(ItemStatus.READY, payload.status)
                 assertTrue(emitter.sentData.any { it is String && it.contains("event:silent-sync") })
+                // wire 직렬화 contract — type 판별자가 실제 JSON 에 실리는지(클라가 type 으로 분기하므로 누락되면 무라우팅).
+                val node = objectMapper.readTree(objectMapper.writeValueAsString(payload))
+                assertEquals("TOURNAMENT_ITEM_PARSED", node.get("type").asString())
+                assertEquals(ItemStatus.READY.name, node.get("status").asString())
             }
             // 그 토너먼트 비참여자에겐 가지 않는다.
             assertTrue(outsiderEmitter.payloads().isEmpty())
