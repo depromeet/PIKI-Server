@@ -113,21 +113,23 @@ class TestConventionTest {
     }
 
     @Test
-    fun `E2E 테스트는 @Disabled 또는 @EnabledIf 로 CI 에서 격리한다`() {
+    fun `E2E 테스트는 @Disabled 또는 @EnabledIf 어노테이션으로 CI 에서 격리한다`() {
         // 무방비 E2E 는 CI 에서 실제 외부 호출(외부 쇼핑몰·Gemini)이 돌아 flaky·비용·차단을 유발한다.
-        val isolation =
-            listOf(
-                "org.junit.jupiter.api.Disabled",
-                "org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable",
-            )
+        // import 존재가 아니라 클래스에 어노테이션이 실제로 붙었는지 본다 — import 만 하고 안 달면 무방비다.
+        val isolationAnnotations = listOf("@Disabled", "@EnabledIfEnvironmentVariable")
         val offenders =
             testSources
                 .filter { it.name.endsWith("E2ETest.kt") }
-                .filter { !it.hasAnyImportUnder(isolation) }
+                .filter { src ->
+                    src.lines.none { line ->
+                        val trimmed = line.trim()
+                        isolationAnnotations.any { trimmed.startsWith(it) }
+                    }
+                }
                 .map { it.name }
         if (offenders.isNotEmpty()) {
             fail(
-                "*E2ETest 는 @Disabled(\"이유\") 또는 @EnabledIfEnvironmentVariable 로 CI 기본 실행에서 격리해야 한다. 무방비 위반: " +
+                "*E2ETest 는 클래스에 @Disabled(\"이유\") 또는 @EnabledIfEnvironmentVariable 를 실제로 달아 CI 기본 실행에서 격리해야 한다 (import 만으로는 부족). 무방비 위반: " +
                     offenders.joinToString(", "),
             )
         }
