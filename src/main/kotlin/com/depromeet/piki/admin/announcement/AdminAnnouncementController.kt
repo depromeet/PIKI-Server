@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseBody
+import org.springframework.web.multipart.MultipartFile
 import java.time.LocalDateTime
 
 // 공지 등록·예약/발송·결과 화면(#391/#489). 등록(초안)과 발송(목록에서 선택)을 분리해 발송 시 자유입력이 없어 오타가 안 생긴다.
@@ -42,32 +43,23 @@ class AdminAnnouncementController(
         return "admin/announcements"
     }
 
-    // 공지 초안 등록(DRAFT). 발송/예약은 아래 send 로만. body 는 마크다운, push_* 는 알림 전용 문구(#561).
-    // pushEnabled 는 FCM 인터럽트 토글 — 폼 체크박스(value=true, 기본 checked)가 켜질 때만 전송한다. 해제·누락 시
-    // 누락(absent) → defaultValue false(미발송). 즉 안전 기본은 미발송, 폼이 기본 체크라 일반 흐름은 발송이다.
+    // 새 공지 작성 — 빈 초안(stub-create)을 만들고 곧장 작성 화면으로 보낸다(#561). 제목·본문·이미지·푸시는 거기서 채운다.
+    // 이미지 즉시 업로드가 announcement/{id}/ 키를 쓰려면 작성 시점에 id 가 있어야 해서, 빈 초안으로 id 를 먼저 확보한다.
     @PostMapping
-    fun register(
-        @RequestParam title: String,
-        @RequestParam(required = false) body: String?,
-        @RequestParam(defaultValue = "false") pushEnabled: Boolean,
-        @RequestParam(required = false) pushTitle: String?,
-        @RequestParam(required = false) pushBody: String?,
-        request: HttpServletRequest,
-    ): String {
-        val safeBody = body ?: ""
-        val safePushTitle = pushTitle ?: ""
-        val safePushBody = pushBody ?: ""
-        if (!validLengths(title, safeBody, safePushTitle, safePushBody)) {
-            return "redirect:/admin/announcements?error=length"
-        }
-        // 본문 외부 이미지 rehost(#561) 실패는 운영자가 붙여넣은 주소 문제이므로, 500 대신 폼으로 친화적 리다이렉트한다.
-        return try {
-            adminAnnouncementService.register(title, safeBody, pushEnabled, safePushTitle, safePushBody, actor(request), clientIp(request))
-            "redirect:/admin/announcements?registered"
-        } catch (e: AnnouncementImageException) {
-            "redirect:/admin/announcements?error=image"
-        }
+    fun register(request: HttpServletRequest): String {
+        val announcement = adminAnnouncementService.register(actor(request), clientIp(request))
+        return "redirect:/admin/announcements/${announcement.getId()}/edit"
     }
+
+    // 본문 이미지 즉시 업로드(#561) — 수정 화면 에디터(addImageBlobHook)가 로컬 파일을 보내면 S3 에 올리고 공개 URL 을 돌려준다.
+    // 검증 실패(형식·매직바이트)·비-DRAFT 는 예외 → GlobalExceptionHandler 가 ApiResponseBody.fail 로 매핑(에디터 hook 이 처리).
+    @PostMapping("/{id}/images")
+    @ResponseBody
+    fun uploadImage(
+        @PathVariable id: Long,
+        @RequestParam("image") image: MultipartFile,
+    ): ApiResponseBody<AnnouncementImageUploadResponse> =
+        ApiResponseBody.ok(AnnouncementImageUploadResponse(adminAnnouncementService.uploadImage(id, image.bytes, image.contentType)))
 
     // 초안 수정 페이지(#561) — DRAFT 만. 기존 내용·푸시 설정을 에디터·필드에 채워 보여준다. 발송·예약 건은 목록으로 되돌린다.
     @GetMapping("/{id}/edit")
@@ -192,3 +184,8 @@ class AdminAnnouncementController(
     // 게이트와 동일한 안전 추출(X-Real-IP, 위조 불가)을 audit 에도 쓴다 — XFF 첫 hop 은 스푸핑 가능.
     private fun clientIp(request: HttpServletRequest): String = ClientIp.of(request)
 }
+
+// 본문 이미지 업로드 응답(#561) — 에디터 addImageBlobHook 이 data.url 을 본문에 삽입한다.
+data class AnnouncementImageUploadResponse(
+    val url: String,
+)

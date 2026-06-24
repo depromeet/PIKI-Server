@@ -68,12 +68,30 @@
   <script th:inline="javascript">
     // 기존 본문(마크다운)을 에디터에 채운다. th:inline 이 따옴표·개행을 JS 문자열로 안전 이스케이프한다.
     var initialBody = /*[[${announcement.body}]]*/ '';
+    var announcementId = /*[[${announcement.id}]]*/ 0;
+    // 어드민은 CSRF 활성(_csrf) — 이미지 업로드 AJAX 가 토큰을 헤더로 실어 보낸다.
+    var csrfHeader = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+    var csrfToken = /*[[${_csrf.token}]]*/ '';
     var editor = new toastui.Editor({
       el: document.getElementById('editor'),
       height: '340px',
       initialEditType: 'wysiwyg',
       previewStyle: 'vertical',
-      initialValue: initialBody
+      initialValue: initialBody,
+      hooks: {
+        // 로컬 파일 드래그·붙여넣기·선택 시 즉시 업로드(stub-create 로 id 가 이미 있음) — base64 인라인 대신 우리 S3 URL 을 본문에 삽입한다.
+        addImageBlobHook: function (blob, callback) {
+          var form = new FormData();
+          form.append('image', blob);
+          var headers = {};
+          headers[csrfHeader] = csrfToken;
+          fetch('/admin/announcements/' + announcementId + '/images', { method: 'POST', body: form, headers: headers })
+            .then(function (res) { if (!res.ok) throw new Error('upload failed'); return res.json(); })
+            .then(function (json) { callback(json.data.url, blob.name || '이미지'); })
+            .catch(function () { window.alert('이미지 업로드에 실패했어요. 형식(png·jpg·gif·webp)·용량을 확인해주세요.'); });
+          return false; // 기본 base64 인라인 차단
+        }
+      }
     });
     document.getElementById('editForm').addEventListener('submit', function () {
       document.getElementById('bodyField').value = editor.getMarkdown();

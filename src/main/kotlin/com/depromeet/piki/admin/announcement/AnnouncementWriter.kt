@@ -43,18 +43,6 @@ class AnnouncementWriter(
         return announcement
     }
 
-    // rehost 결과(이미지 URL 이 우리 S3 로 치환된 body)만 반영한다. 등록 직후 호출되며 다른 필드는 그대로 두고 body 만 갱신.
-    // edit() 를 재사용해 DRAFT 검증·길이 검증을 그대로 통과시킨다(치환된 body 가 상한을 넘으면 여기서 막힌다).
-    @Transactional
-    fun updateBody(
-        id: Long,
-        body: String,
-    ) {
-        val announcement = announcementRepository.findByIdForUpdate(id) ?: throw IllegalArgumentException("공지를 찾을 수 없습니다.")
-        announcement.edit(announcement.title, body, announcement.pushEnabled, announcement.pushTitle, announcement.pushBody)
-        announcementRepository.save(announcement)
-    }
-
     // 초안 수정(DRAFT 만, 엔티티 edit 가 강제). 비관적 락으로 조회해 발송 claim 과의 경합을 직렬화한다.
     @Transactional
     fun applyEdit(

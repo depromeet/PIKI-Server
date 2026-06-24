@@ -6,7 +6,6 @@
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <title>공지 발송 · PiKi 백오피스</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css">
   <style>
     :root{--accent:#0EA5E9;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;}
     *{box-sizing:border-box;} body{margin:0;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:#f7f8fa;color:var(--ink);}
@@ -49,7 +48,7 @@
   <div th:replace="~{admin/fragments :: topbar('/admin', '← 홈')}"></div>
   <div class="wrap">
     <h1>공지</h1>
-    <p class="lede">공지를 <b>등록</b>한 뒤, 아래 목록에서 골라 <b>발송</b>합니다. 발송 시 문구를 새로 입력하지 않아 오타가 생기지 않습니다.</p>
+    <p class="lede"><b>새 공지 작성</b>으로 빈 공지를 만들고, 작성 화면에서 제목·본문·이미지·푸시 문구를 채웁니다. 그 뒤 목록에서 골라 <b>발송</b>합니다(발송 시 문구를 새로 입력하지 않아 오타가 안 생깁니다).</p>
     <div class="ok" th:if="${param.registered}">공지가 등록됐습니다. 아래 목록에서 발송하거나 예약하세요.</div>
     <div class="ok" th:if="${param.scheduled}">공지가 예약됐습니다. 예약 시각에 자동 발송됩니다.</div>
     <div class="ok" th:if="${param.canceled}">예약을 취소했습니다.</div>
@@ -57,29 +56,9 @@
     <div class="ok" th:if="${param.error == 'length'}" style="background:#fee2e2;color:#b42318">제목은 255자, 본문은 10000자, 푸시 문구는 255자를 넘을 수 없습니다.</div>
     <div class="ok" th:if="${param.error == 'image'}" style="background:#fee2e2;color:#b42318">본문 이미지를 가져오지 못했습니다. 이미지 주소(https)를 확인하거나 다른 이미지를 사용해주세요.</div>
 
-    <h2>공지 등록</h2>
-    <form class="card" th:action="@{/admin/announcements}" method="post" id="registerForm">
-      <div class="row"><label for="title">제목 <span class="hint">공지 페이지·딥링크 제목</span></label><input id="title" name="title" type="text" required maxlength="255" placeholder="피키 v1.0.1이 출시됐어요"></div>
-      <div class="row">
-        <label>본문 (마크다운) <span class="hint">공지 페이지에 표시 · 좌측 입력, 우측 미리보기. 마크다운을 몰라도 'WYSIWYG' 탭으로 작성 가능</span></label>
-        <div id="editor"></div>
-        <input type="hidden" name="body" id="bodyField">
-      </div>
-
-      <label style="margin-top:4px">푸시 알림</label>
-      <div class="row" style="margin-bottom:8px">
-        <label style="font-weight:600;color:var(--ink);font-size:13px"><input class="chk" type="checkbox" name="pushEnabled" value="true" id="pushEnabled" checked>푸시 알림 보내기 <span class="hint">끄면 공지 페이지·알림센터에는 남지만, 휴대폰 푸시(배너) 알림은 가지 않아요</span></label>
-      </div>
-      <div class="row"><label for="pushTitle">푸시 제목 <span class="hint">비우면 공지 제목을 사용</span></label><input id="pushTitle" name="pushTitle" type="text" maxlength="255" placeholder="(비우면 위 제목)"></div>
-      <div class="row"><label for="pushBody">푸시 본문 <span class="hint">선택 · 비우면 제목만 표시</span></label><input id="pushBody" name="pushBody" type="text" maxlength="255" placeholder="(선택)"></div>
-      <div class="row">
-        <label>푸시 미리보기 <span class="hint">실제 알림이 이렇게 뜹니다</span></label>
-        <div class="push-preview" id="pushPreview">
-          <div class="ic"></div>
-          <div><div class="pt" id="ppTitle">피키 v1.0.1이 출시됐어요</div><div class="pb" id="ppBody"></div></div>
-        </div>
-      </div>
-      <button class="btn" type="submit">등록</button>
+    <form th:action="@{/admin/announcements}" method="post" style="margin-bottom:22px">
+      <button class="btn" type="submit">+ 새 공지 작성</button>
+      <span class="hint" style="margin-left:10px">빈 공지를 만들고 작성 화면으로 이동합니다.</span>
     </form>
 
     <h2>등록된 공지 <span style="font-weight:500;font-size:12.5px;color:var(--muted)">— 현재 발송 대상 <b th:text="${recipientCount}">0</b>명 (토큰 보유자)</span></h2>
@@ -123,7 +102,7 @@
               </div>
             </td>
           </tr>
-          <tr th:if="${announcements.isEmpty()}"><td colspan="4" class="empty">등록된 공지가 없습니다. 위에서 등록하세요.</td></tr>
+          <tr th:if="${announcements.isEmpty()}"><td colspan="4" class="empty">등록된 공지가 없습니다. 위 '새 공지 작성'으로 시작하세요.</td></tr>
         </tbody>
       </table>
     </div>
@@ -135,37 +114,5 @@
     </div>
   </div>
 
-  <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
-  <script>
-    // 본문 마크다운 에디터 — WYSIWYG/마크다운 토글 + 우측 라이브 프리뷰(공지 페이지 렌더 근사).
-    var editor = new toastui.Editor({
-      el: document.getElementById('editor'),
-      height: '340px',
-      initialEditType: 'wysiwyg',
-      previewStyle: 'vertical',
-      placeholder: '새로운 토너먼트 기능을 확인해보세요. ## 제목, **굵게**, - 목록, ![](이미지URL) 등 마크다운 지원.'
-    });
-    // 제출 시 에디터의 마크다운을 hidden body 필드로 옮긴다(서버는 body=마크다운 원본 저장).
-    document.getElementById('registerForm').addEventListener('submit', function () {
-      document.getElementById('bodyField').value = editor.getMarkdown();
-    });
-
-    // 푸시 미리보기 — 실제 알림(title+body)이 어떻게 뜰지 라이브로. pushTitle 비면 공지 제목 폴백(서버 effectivePushTitle 과 일치).
-    var $title = document.getElementById('title');
-    var $pTitle = document.getElementById('pushTitle');
-    var $pBody = document.getElementById('pushBody');
-    var $enabled = document.getElementById('pushEnabled');
-    var $ppTitle = document.getElementById('ppTitle');
-    var $ppBody = document.getElementById('ppBody');
-    var $pp = document.getElementById('pushPreview');
-    function renderPush() {
-      $ppTitle.textContent = ($pTitle.value || $title.value || '(제목)');
-      $ppBody.textContent = $pBody.value || '';
-      $pp.classList.toggle('push-off', !$enabled.checked);
-    }
-    [$title, $pTitle, $pBody].forEach(function (el) { el.addEventListener('input', renderPush); });
-    $enabled.addEventListener('change', renderPush);
-    renderPush();
-  </script>
 </body>
 </html>

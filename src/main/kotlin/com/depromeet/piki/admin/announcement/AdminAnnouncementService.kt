@@ -5,6 +5,7 @@ import com.depromeet.piki.announcement.repository.AnnouncementRepository
 import com.depromeet.piki.admin.audit.AdminAuditAction
 import com.depromeet.piki.admin.audit.AdminAuditService
 import com.depromeet.piki.admin.config.ConditionalOnAdminEnabled
+import com.depromeet.piki.announcement.domain.AnnouncementImageFile
 import com.depromeet.piki.common.storage.ImageStorage
 import com.depromeet.piki.notification.fcm.service.UserDeviceService
 import com.depromeet.piki.notification.service.DeliveryStatus
@@ -14,6 +15,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
+import java.util.UUID
 
 // 공지 등록·예약·발송·결과(#391/#489). 발송 시 자연어를 새로 입력받지 않는다 — 미리 "등록"한 공지만 골라
 // 즉시/예약 발송한다(오타·실수 방지). 실제 fan-out·진행률·집계는 AnnouncementSendService(async)·Broadcaster 가 맡는다.
@@ -41,22 +43,25 @@ class AdminAnnouncementService(
     // 발송 대상자 추출 — 토큰 보유자 수. 예약/발송 확인 페이지가 발송 전에 미리 보여준다(대상자 추출 단계).
     fun recipientCount(): Long = userDeviceService.countTokenHolders()
 
-    // 공지 초안 등록 — 발송 전 상태(DRAFT). 발송/예약은 schedule() 로만. 누가 등록했는지(#558)는 writer 가 audit 으로 남긴다.
-    // 본문 외부 이미지 rehost(#561): id 확보를 위해 원본 body 로 먼저 저장(tx) → 트랜잭션 밖에서 이미지 rehost →
-    // 치환된 body 가 있으면 다시 저장(tx). rehost(외부 fetch·S3 업로드)를 등록 트랜잭션에 넣지 않기 위한 2단계.
+    // 빈 초안 생성(stub-create #561) — "새 공지 작성" 이 부른다. 제목·본문·이미지·푸시는 수정 화면(update)에서 채운다.
+    // 이미지 즉시 업로드(addImageBlobHook)가 announcement/{id}/ 키를 쓰려면 작성 시점에 id 가 있어야 하므로,
+    // 빈 초안을 먼저 만들어 id 를 확보한 뒤 수정 화면으로 보낸다(WordPress auto-draft 방식). 발송 전 단계도 audit 대상이라 writer 가 남긴다.
     fun register(
-        title: String,
-        body: String,
-        pushEnabled: Boolean,
-        pushTitle: String,
-        pushBody: String,
         actor: String,
         clientIp: String?,
-    ): Announcement {
-        val announcement = writer.createDraft(title, body, pushEnabled, pushTitle, pushBody, actor, clientIp)
-        val rehostedBody = imageRehoster.rehost(announcement.getId(), body) // 트랜잭션 밖 (외부 호출)
-        if (rehostedBody != body) writer.updateBody(announcement.getId(), rehostedBody)
-        return announcement
+    ): Announcement = writer.createDraft(PLACEHOLDER_TITLE, "", pushEnabled = true, pushTitle = "", pushBody = "", actor = actor, clientIp = clientIp)
+
+    // 본문 이미지 즉시 업로드(#561) — 수정 화면 에디터가 로컬 파일을 드롭하면 호출한다. DRAFT 만(발송된 공지 본문은 고정).
+    // DB 쓰기가 없어(본문 반영은 저장 시점) 트랜잭션을 두지 않는다 — 형식 검증 후 S3 업로드(외부 호출)만 하고 URL 을 돌려준다.
+    fun uploadImage(
+        id: Long,
+        bytes: ByteArray,
+        contentType: String?,
+    ): String {
+        require(get(id).isDraft) { "발송됐거나 예약된 공지에는 이미지를 추가할 수 없습니다." }
+        val image = AnnouncementImageFile.of(bytes, contentType)
+        val key = "announcement/$id/${UUID.randomUUID()}.${image.extension}"
+        return imageStorage.upload(image.bytes, key, image.mimeType)
     }
 
     // 초안 수정 — DRAFT 만(엔티티 edit 가 강제). 발송 전 오타 교정·다듬기(#561).
@@ -153,6 +158,9 @@ class AdminAnnouncementService(
 
     companion object {
         private const val PAGE_SIZE = 20
+
+        // 빈 초안(stub-create)의 임시 제목 — 엔티티가 title 비어있음을 막으므로 placeholder 를 둔다. 운영자가 수정 화면에서 바꾼다.
+        private const val PLACEHOLDER_TITLE = "(제목 없는 공지)"
     }
 }
 
