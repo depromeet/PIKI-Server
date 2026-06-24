@@ -7,6 +7,7 @@ import com.depromeet.piki.admin.access.AdminSession
 import com.depromeet.piki.admin.config.ClientIp
 import com.depromeet.piki.admin.config.ConditionalOnAdminEnabled
 import com.depromeet.piki.common.response.ApiResponseBody
+import com.depromeet.piki.notification.service.DefaultPushImage
 import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Controller
@@ -29,6 +30,7 @@ import java.time.LocalDateTime
 @RequestMapping("/admin/announcements")
 class AdminAnnouncementController(
     private val adminAnnouncementService: AdminAnnouncementService,
+    private val defaultPushImage: DefaultPushImage,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -148,6 +150,8 @@ class AdminAnnouncementController(
         if (!announcement.isDraft) return "redirect:/admin/announcements" // 발송됐거나 예약된 건 재설정 불가
         model.addAttribute("announcement", announcement)
         model.addAttribute("recipientCount", adminAnnouncementService.recipientCount())
+        // 푸시 미리보기 아이콘 — 실제 FCM 푸시(시스템 알림)가 쓰는 S3 기본 아이콘(defaults/push-icon.svg)을 그대로 보여준다.
+        model.addAttribute("pushIconUrl", defaultPushImage.url)
         return "admin/announcement-send"
     }
 

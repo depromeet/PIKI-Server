@@ -57,7 +57,7 @@
     .banner{background:rgba(255,255,255,.95);border-radius:16px;padding:11px 12px;margin-top:16px;display:flex;gap:10px;align-items:flex-start;}
     .app{width:34px;height:34px;border-radius:8px;background:#cfe6fb;flex:none;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;font-style:italic;color:#1c2330;}
     .bt{flex:1;min-width:0;} .nm{font-size:10.5px;font-weight:700;color:#6b7280;text-transform:uppercase;}
-    .pt{font-size:13px;font-weight:700;color:#1c1f24;margin-top:1px;word-break:break-all;} .pb{font-size:12px;color:#4b5159;margin-top:1px;word-break:break-all;}
+    .pt{font-size:13px;font-weight:700;color:#1c1f24;margin-top:1px;word-break:keep-all;overflow-wrap:anywhere;} .pb{font-size:12px;color:#4b5159;margin-top:1px;word-break:keep-all;overflow-wrap:anywhere;}
     .side .lbl2{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;}
     .side .lbl2 .hint{font-weight:500;color:#9ca3af;font-size:11px;}
     /* 공지 페이지 렌더 미리보기 (마크다운 → HTML) */
@@ -80,7 +80,7 @@
         <div class="extract">
           <div class="lbl">대상자 추출</div>
           <div class="big"><b th:text="${recipientCount}">0</b>명에게 발송됩니다</div>
-          <div class="sub">앱 토큰 보유자 전체 (DISTINCT user_id 기준). 조건별 세그먼트는 후속.</div>
+          <div class="sub">앱 토큰 보유자 전체 (DISTINCT user_id 기준).<br>조건별 세그먼트는 후속.</div>
         </div>
 
         <div class="card">
@@ -109,7 +109,7 @@
             <button class="btn" type="submit">발송/예약 확정</button>
             <a class="btn ghost" th:href="@{/admin/announcements}">취소</a>
           </div>
-          <div class="warn">즉시 발송은 실유저에게 바로 푸시가 나가며 되돌릴 수 없습니다. 예약은 목록에서 취소할 수 있습니다.</div>
+          <div class="warn">즉시 발송은 실유저에게 바로 푸시가 나가며 되돌릴 수 없습니다.<br>예약은 목록에서 취소할 수 있습니다.</div>
         </form>
       </div>
 
@@ -118,7 +118,7 @@
         <div class="phone" th:classappend="${!announcement.pushEnabled} ? ' push-off' : ''">
           <div class="clock"><div class="t">9:41</div><div class="d">오늘</div></div>
           <div class="banner">
-            <div class="app"><img src="/favicon.ico" alt="PiKi" style="width:100%;height:100%;border-radius:8px;object-fit:cover"></div>
+            <div class="app"><img th:src="${pushIconUrl}" alt="PiKi" style="width:100%;height:100%;border-radius:8px;object-fit:cover"></div>
             <div class="bt"><div class="nm">PiKi</div>
               <div class="pt" th:text="${announcement.effectivePushTitle}">제목</div>
               <div class="pb" th:if="${!#strings.isEmpty(announcement.effectivePushBody)}" th:text="${announcement.effectivePushBody}">본문</div>
