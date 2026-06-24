@@ -35,20 +35,16 @@ class AdminAnnouncementPageRenderIntegrationTest : IntegrationTestSupport() {
             .build()
 
     @Test
-    fun `공지 등록 페이지는 마크다운 에디터·푸시 필드·미리보기를 포함해 렌더된다`() {
+    fun `공지 목록 페이지는 새 공지 작성 버튼을 렌더한다 - 작성은 수정 화면으로 일원화`() {
+        // stub-create: 목록 페이지엔 인라인 에디터가 없고 '새 공지 작성' 버튼만 있다(에디터는 수정 화면).
         mockMvc()
             .perform(get("/admin/announcements"))
             .andExpect(status().isOk)
-            .andExpect(content().string(containsString("id=\"editor\"")))
-            .andExpect(content().string(containsString("id=\"bodyField\"")))
-            .andExpect(content().string(containsString("name=\"pushEnabled\"")))
-            .andExpect(content().string(containsString("name=\"pushTitle\"")))
-            .andExpect(content().string(containsString("name=\"pushBody\"")))
-            .andExpect(content().string(containsString("id=\"pushPreview\"")))
+            .andExpect(content().string(containsString("새 공지 작성")))
     }
 
     @Test
-    fun `공지 수정 페이지는 에디터와 DRAFT 의 기존 제목을 채워 렌더된다`() {
+    fun `공지 수정 페이지는 에디터·기존 제목·이미지 업로드 hook 을 채워 렌더된다`() {
         val a = announcementRepository.save(Announcement("원래 제목", "원래 본문", "토큰 보유자 전체"))
 
         mockMvc()
@@ -56,6 +52,19 @@ class AdminAnnouncementPageRenderIntegrationTest : IntegrationTestSupport() {
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("id=\"editor\"")))
             .andExpect(content().string(containsString("원래 제목"))) // title 이 th:value 로 채워짐
+            .andExpect(content().string(containsString("addImageBlobHook"))) // 로컬 파일 즉시 업로드 hook
+            .andExpect(content().string(containsString("/images"))) // 업로드 엔드포인트
+    }
+
+    @Test
+    fun `새 공지 작성은 빈 초안을 만들고 수정 화면으로 리다이렉트한다`() {
+        mockMvc()
+            .perform(post("/admin/announcements").with(csrf()))
+            .andExpect(status().is3xxRedirection)
+
+        val draft = announcementRepository.findAll().single()
+        assertEquals(true, draft.isDraft)
+        assertEquals("(제목 없는 공지)", draft.title)
     }
 
     @Test
