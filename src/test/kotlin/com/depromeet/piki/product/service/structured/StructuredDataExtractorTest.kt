@@ -496,6 +496,56 @@ class StructuredDataExtractorTest {
         assertEquals(StructuredExtraction.Miss.MISSING_FIELD, extractor.extract(pageOf(html)))
     }
 
+    @Test
+    fun `OG 에 가격이 없으면 window __PRELOADED_STATE__ 의 prices base value 로 보강하고 국가코드 사이트명 꼬리표를 제거한다`() {
+        // 유니클로: og 가 이름·이미지는 주지만 가격은 JS state 에만 있다. embedded state 의 prices.base.value 로 가격을
+        // 보강하고, og:title 의 "| UNIQLO KR"(site_name "UNIQLO" 뒤 국가코드) 꼬리표를 떼낸다.
+        val html =
+            """
+            <html><head>
+            <meta property="og:title" content="여성 리넨블라우스 | UNIQLO KR"/>
+            <meta property="og:site_name" content="UNIQLO"/>
+            <meta property="og:image" content="https://img.example.com/a.jpg"/>
+            <script>window.__PRELOADED_STATE__ = {"product":{"size":{"code":"002"},"prices":{"base":{"currency":{"code":"KRW"},"value":29900},"promo":{"value":29900}}}};</script>
+            </head><body></body></html>
+            """.trimIndent()
+        val snapshot = extractor.extract(pageOf(html)).snapshotOrNull()
+        assertEquals("여성 리넨블라우스", snapshot?.name)
+        assertEquals(29900, snapshot?.currentPrice)
+        assertEquals("KRW", snapshot?.currency)
+    }
+
+    @Test
+    fun `OG 에 가격이 없으면 __NEXT_DATA__ application_json 의 prices base value 로도 보강한다`() {
+        val html =
+            """
+            <html><head>
+            <meta property="og:title" content="상품X"/>
+            <meta property="og:image" content="https://img.example.com/b.jpg"/>
+            <script id="__NEXT_DATA__" type="application/json">{"props":{"prices":{"base":{"currency":{"code":"KRW"},"value":15000}}}}</script>
+            </head><body></body></html>
+            """.trimIndent()
+        val snapshot = extractor.extract(pageOf(html)).snapshotOrNull()
+        assertEquals(15000, snapshot?.currentPrice)
+        assertEquals("KRW", snapshot?.currency)
+    }
+
+    @Test
+    fun `og_title 끝의 사이트명 꼬리표는 정확히 일치할 때도 제거한다`() {
+        // 회귀: 기존 동작(정확 일치 "상품명 | 무신사") 유지. product:price:amount 로 가격이 있어 Extracted.
+        val html =
+            """
+            <html><head>
+            <meta property="og:title" content="멋진 셔츠 | 무신사"/>
+            <meta property="og:site_name" content="무신사"/>
+            <meta property="product:price:amount" content="29000"/>
+            </head><body></body></html>
+            """.trimIndent()
+        val snapshot = extractor.extract(pageOf(html)).snapshotOrNull()
+        assertEquals("멋진 셔츠", snapshot?.name)
+        assertEquals(29000, snapshot?.currentPrice)
+    }
+
     private fun StructuredExtraction.snapshotOrNull(): ProductSnapshot? = (this as? StructuredExtraction.Extracted)?.snapshot
 
     private fun jsonLd(body: String): String =
