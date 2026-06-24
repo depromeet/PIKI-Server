@@ -6,7 +6,7 @@
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <title>공지 수정 · PiKi 백오피스</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="https://uicdn.toast.com/editor/3.2.2/toastui-editor.min.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://uicdn.toast.com/editor/3.2.2/toastui-editor.min.css">
   <style>
     :root{--accent:#0EA5E9;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;}
     *{box-sizing:border-box;} body{margin:0;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:#f7f8fa;color:var(--ink);}
@@ -37,7 +37,7 @@
     <div class="err" th:if="${param.error == 'image'}">본문 이미지를 가져오지 못했습니다. 이미지 주소(https)를 확인하거나 다른 이미지를 사용해주세요.</div>
 
     <form class="card" th:action="@{/admin/announcements/{id}/edit(id=${announcement.id})}" method="post" id="editForm">
-      <div class="row"><label for="title">제목 <span class="hint">공지 페이지·딥링크 제목</span></label><input id="title" name="title" type="text" required maxlength="255" th:value="${draftTitle != null ? draftTitle : announcement.title}"></div>
+      <div class="row"><label for="title">제목 <span class="hint">공지 목록·상세에 보이는 제목 (예: PiKi 6월 업데이트 안내)</span></label><input id="title" name="title" type="text" required maxlength="255" th:value="${draftTitle != null ? draftTitle : announcement.title}"></div>
       <div class="row">
         <label>본문 (마크다운) <span class="hint">공지 페이지에 표시 · 좌측 입력, 우측 미리보기</span></label>
         <div id="editor"></div>
@@ -64,7 +64,7 @@
     </form>
   </div>
 
-  <script src="https://uicdn.toast.com/editor/3.2.2/toastui-editor-all.min.js" crossorigin="anonymous"></script>
+  <script src="https://uicdn.toast.com/editor/3.2.2/toastui-editor-all.min.js"></script>
   <script th:inline="javascript">
     // 기존 본문(마크다운)을 에디터에 채운다. th:inline 이 따옴표·개행을 JS 문자열로 안전 이스케이프한다.
     var initialBody = /*[[${draftBody != null ? draftBody : announcement.body}]]*/ '';
