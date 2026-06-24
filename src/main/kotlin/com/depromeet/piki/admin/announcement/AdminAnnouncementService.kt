@@ -61,7 +61,9 @@ class AdminAnnouncementService(
         require(get(id).isDraft) { "발송됐거나 예약된 공지에는 이미지를 추가할 수 없습니다." }
         val image = AnnouncementImageFile.of(bytes, contentType)
         val key = "announcement/$id/${UUID.randomUUID()}.${image.extension}"
-        return imageStorage.upload(image.bytes, key, image.mimeType)
+        val url = imageStorage.upload(image.bytes, key, image.mimeType)
+        log.info("공지 이미지 업로드 완료: announcementId={}, key={}", id, key) // 아바타 업로드와 동일한 결의 업로드 성공 로그
+        return url
     }
 
     // 초안 수정 — DRAFT 만(엔티티 edit 가 강제). 발송 전 오타 교정·다듬기(#561).
