@@ -24,8 +24,9 @@ interface NotificationSseApi {
                 "| `connect` | 구독 직후 1회 | `data=\"connected\"`. 연결 성립 신호 |\n" +
                 "| `notification` | 알림 1건마다 | `type` 으로 화면을, 파싱 알림은 `kind` 로 출처(위시/토너먼트)를 분기. " +
                 "출처별 payload 셰입과 라우팅 필드(`kind`·`tournamentId`·`tournamentItemId`)는 `notification-sse-spec.md` 참조 |\n" +
-                "| `tournament-item-parsed` | 출전 아이템 파싱 완료/실패 시 | 토너먼트 참여자 화면 라이브 갱신용 신호(알림 아님). " +
-                "payload `{tournamentId, tournamentItemId, status}`(status=`READY`\\|`FAILED`). 알림센터·푸시 없이 SSE 로만 흐른다. `notification-sse-spec.md` 참조 |\n" +
+                "| `silent-sync` | 화면 갱신 사건마다 | 조용한 화면 갱신 신호(알림 아님). payload 의 `type` 으로 사건을 분기한다: " +
+                "`TOURNAMENT_ITEM_PARSED`(`{type, tournamentId, tournamentItemId, status}`, status=`READY`\\|`FAILED`) · " +
+                "`UNREAD_COUNT_CHANGED`(`{type, unreadCount, unreadCountByCategory}`, 읽음 후 멀티 디바이스 인앱 배지 동기화). 알림센터·푸시 없이 SSE 로만 흐른다. `notification-sse-spec.md` 참조 |\n" +
                 "| `(주석 ping)` | 약 30초 간격 | 하트비트. 연결 유지용이며 data 이벤트가 아니다 |\n\n" +
                 "- 토너먼트 알림은 해당 토너먼트 참여자에게만 fan-out 되므로, **자기 스트림 1개만 구독**하면 토너먼트·개인 알림이 모두 도착한다.\n" +
                 "- 연결은 **30분 후 타임아웃**되며, 클라이언트는 끊기면 재연결한다.",

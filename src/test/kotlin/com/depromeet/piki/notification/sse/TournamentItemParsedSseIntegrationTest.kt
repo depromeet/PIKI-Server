@@ -3,7 +3,7 @@ package com.depromeet.piki.notification.sse
 import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.repository.ItemSnapshotRepository
-import com.depromeet.piki.notification.controller.dto.TournamentItemParsedPayload
+import com.depromeet.piki.notification.controller.dto.TournamentItemParsed
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
@@ -13,12 +13,13 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import tools.jackson.databind.ObjectMapper
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-// 토너먼트 출전 아이템의 파싱 완료/실패 → 참여자 SSE 라이브 동기화(tournament-item-parsed)를 실제 빈으로 검증한다.
+// 토너먼트 출전 아이템의 파싱 완료/실패 → 참여자 SSE 조용한 갱신(silent-sync, type=TOURNAMENT_ITEM_PARSED)을 실제 빈으로 검증한다.
 // 브로드캐스터의 수신자·좌표 도출은 DB 역조회(tournament_item⋈item_snapshot, tournament_user)에 의존하므로 통합으로 검증한다.
 // 영속 fixture 는 @Transactional 자동 롤백. SseEmitterRegistry 는 인메모리 싱글톤이라 롤백 대상이 아니므로,
 // 각 테스트가 랜덤 userId 로 등록하고 finally 에서 자기 emitter 를 정리한다(NotificationSseIntegrationTest 와 동일 규약).
@@ -33,6 +34,8 @@ class TournamentItemParsedSseIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var tournamentUserRepository: TournamentUserRepository
 
     @Autowired private lateinit var itemSnapshotRepository: ItemSnapshotRepository
+
+    @Autowired private lateinit var objectMapper: ObjectMapper
 
     @Test
     fun `파싱 완료 시 그 토너먼트 참여자 전원이 출전 좌표와 status=READY 를 받고 비참여자는 못 받는다`() {
@@ -58,7 +61,11 @@ class TournamentItemParsedSseIntegrationTest : IntegrationTestSupport() {
                 assertEquals(tournamentId, payload.tournamentId)
                 assertEquals(tournamentItemId, payload.tournamentItemId)
                 assertEquals(ItemStatus.READY, payload.status)
-                assertTrue(emitter.sentData.any { it is String && it.contains("event:tournament-item-parsed") })
+                assertTrue(emitter.sentData.any { it is String && it.contains("event:silent-sync") })
+                // wire 직렬화 contract — type 판별자가 실제 JSON 에 실리는지(클라가 type 으로 분기하므로 누락되면 무라우팅).
+                val node = objectMapper.readTree(objectMapper.writeValueAsString(payload))
+                assertEquals("TOURNAMENT_ITEM_PARSED", node.get("type").asString())
+                assertEquals(ItemStatus.READY.name, node.get("status").asString())
             }
             // 그 토너먼트 비참여자에겐 가지 않는다.
             assertTrue(outsiderEmitter.payloads().isEmpty())
@@ -149,5 +156,5 @@ private class ItemParsedRecordingEmitter : SseEmitter() {
         builder.build().forEach { sentData.add(it.data) }
     }
 
-    fun payloads(): List<TournamentItemParsedPayload> = sentData.filterIsInstance<TournamentItemParsedPayload>()
+    fun payloads(): List<TournamentItemParsed> = sentData.filterIsInstance<TournamentItemParsed>()
 }
