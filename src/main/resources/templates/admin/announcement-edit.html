@@ -22,7 +22,7 @@
     .chk{width:auto !important;margin-right:7px;vertical-align:middle;}
     .err{background:#fee2e2;color:#b42318;border-radius:8px;padding:9px 14px;font-size:13px;margin-bottom:16px;}
     .push-preview{display:flex;gap:11px;align-items:flex-start;background:#fff;border:1px solid var(--border);border-radius:12px;padding:11px 13px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
-    .push-preview .ic{width:34px;height:34px;border-radius:8px;background:var(--accent);flex:none;}
+    .push-preview .ic{width:34px;height:34px;border-radius:8px;background:var(--accent);flex:none;object-fit:cover;}
     .push-preview .pt{font-weight:700;font-size:13.5px;line-height:1.3;word-break:break-word;}
     .push-preview .pb{color:var(--muted);font-size:12.5px;margin-top:2px;line-height:1.35;word-break:break-word;}
     .push-off{opacity:.45;}
@@ -53,7 +53,7 @@
       <div class="row">
         <label>푸시 미리보기 <span class="hint">실제 알림이 이렇게 뜹니다</span></label>
         <div class="push-preview" id="pushPreview">
-          <div class="ic"></div>
+          <img class="ic" th:src="${pushIconUrl}" alt="PiKi">
           <div><div class="pt" id="ppTitle"></div><div class="pb" id="ppBody"></div></div>
         </div>
       </div>
