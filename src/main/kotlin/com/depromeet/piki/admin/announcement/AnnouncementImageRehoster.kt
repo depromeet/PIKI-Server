@@ -26,8 +26,10 @@ class AnnouncementImageRehoster(
         body: String,
     ): String {
         val ourPrefix = s3Properties.publicBaseUrl.trimEnd('/') + "/"
+        // 같은 외부 URL 이 본문에 여러 번 등장해도(패치노트에서 같은 이미지 재사용) 한 번만 fetch·업로드하고 같은 S3 URL 로 치환한다.
+        val rehosted = HashMap<String, String>()
         return AnnouncementBodyImages.rewrite(body) { url ->
-            if (url.startsWith(ourPrefix)) null else rehostOne(announcementId, url)
+            if (url.startsWith(ourPrefix)) null else rehosted.getOrPut(url) { rehostOne(announcementId, url) }
         }
     }
 
