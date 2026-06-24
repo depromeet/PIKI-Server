@@ -63,9 +63,11 @@ class AnnouncementWriter(
     }
 
     // 초안 삭제 — DRAFT/MISSED 만(미발송 정리 대상). 발송·예약 건은 삭제 불가.
+    // 비관적 락으로 조회한다 — findById 로 상태 확인 후 삭제하면, 그 사이 스케줄러 claim 이 SCHEDULED→SENDING 으로
+    // 바꿔 "삭제 불가" 건이 삭제되는 race 가 난다. 상태 검사+삭제를 락 구간 안에서 원자적으로 처리한다(applyEdit 와 동일).
     @Transactional
     fun deleteDraft(id: Long) {
-        val announcement = announcementRepository.findById(id).orElseThrow { IllegalArgumentException("공지를 찾을 수 없습니다.") }
+        val announcement = announcementRepository.findByIdForUpdate(id) ?: throw IllegalArgumentException("공지를 찾을 수 없습니다.")
         require(announcement.isDraft || announcement.isMissed) { "발송됐거나 예약된 공지는 삭제할 수 없습니다(예약은 먼저 취소)." }
         announcementRepository.delete(announcement)
     }
