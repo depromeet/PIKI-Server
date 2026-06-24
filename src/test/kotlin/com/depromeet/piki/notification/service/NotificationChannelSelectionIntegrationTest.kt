@@ -17,7 +17,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 
 // 디스패처의 타입별 채널 선택(NotificationChannelPolicy)을 실제 빈으로 검증한다.
-// 같은 수신자(FCM 토큰 보유)에 대해 sync 타입은 FCM 을 안 타고 alert 타입은 FCM 을 타는지로 채널 선택을 가른다.
+// 같은 수신자(FCM 토큰 보유)에 대해 푸시 비대상(아이템 추가)은 FCM 을 안 타고 푸시 대상(참여)은 타는지로 채널 선택을 가른다.
 // 외부 FCM 만 StubFcmMessageSender 로 격리하고, 수신자·토큰·알림 영속은 실제 DB(Testcontainers)다.
 @Transactional
 class NotificationChannelSelectionIntegrationTest : IntegrationTestSupport() {
@@ -32,7 +32,7 @@ class NotificationChannelSelectionIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var stubFcmMessageSender: StubFcmMessageSender
 
     @Test
-    fun `sync 타입(아이템 추가)은 FCM 토큰이 있어도 푸시를 보내지 않는다`() {
+    fun `푸시 비대상 알림(아이템 추가)은 FCM 토큰이 있어도 푸시를 보내지 않는다`() {
         val tournamentId = 4001L
         val actor = UUID.randomUUID()
         val recipient = UUID.randomUUID()
@@ -52,7 +52,7 @@ class NotificationChannelSelectionIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `alert 타입(토너먼트 참여)은 FCM 토큰이 있으면 푸시를 보낸다`() {
+    fun `푸시 대상 알림(토너먼트 참여)은 FCM 토큰이 있으면 푸시를 보낸다`() {
         val tournamentId = 4002L
         val actor = UUID.randomUUID()
         val recipient = UUID.randomUUID()

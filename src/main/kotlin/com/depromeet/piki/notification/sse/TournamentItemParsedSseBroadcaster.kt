@@ -4,7 +4,7 @@ import com.depromeet.piki.common.config.AsyncConfig
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.item.event.ItemParsingCompleted
 import com.depromeet.piki.item.event.ItemParsingFailed
-import com.depromeet.piki.notification.controller.dto.TournamentItemParsedPayload
+import com.depromeet.piki.notification.controller.dto.TournamentItemParsed
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentUserRepository
 import org.slf4j.LoggerFactory
@@ -19,9 +19,9 @@ import org.springframework.transaction.event.TransactionalEventListener
 // 파싱이 끝나도 별도 신호가 없어 새로고침 전까지 로딩이 멈추지 않았다. 파싱 완료/실패 알림(ITEM_PARSING_*)은
 // 올린 본인(adder)·위시 주인에게만 가고(노이즈 방지, ItemParsingRecipientResolver) 다른 참여자에겐 가지 않기 때문.
 //
-// 해결: 파싱이 끝나면(READY/FAILED) 그 아이템이 출전한 모든 토너먼트의 참여자 전원에게 SSE 라이브 동기화 이벤트
-// (tournament-item-parsed)를 보내 카드를 갱신하게 한다. 이건 "알림"이 아니라 화면 갱신 신호라 알림센터·FCM 을
-// 거치지 않고 SSE 로만 흐른다(NotificationDispatcher 경로와 별개 — 추가 알림 노이즈를 만들지 않는다).
+// 해결: 파싱이 끝나면(READY/FAILED) 그 아이템이 출전한 모든 토너먼트의 참여자 전원에게 SSE 조용한 갱신 이벤트
+// (silent-sync, type=TOURNAMENT_ITEM_PARSED)를 보내 카드를 갱신하게 한다. 이건 "알림"이 아니라 화면 갱신 신호라
+// 알림센터·FCM 을 거치지 않고 SSE 로만 흐른다(NotificationDispatcher 경로와 별개 — 추가 알림 노이즈를 만들지 않는다).
 //
 // 결합 방향: 알림 -> 도메인 (단방향). item·tournament 도메인은 이 클래스를 모른다(자기 이벤트만 발행).
 // AFTER_COMMIT + @Async: 파싱 상태 전이가 커밋된 뒤에만(롤백 시 미발송) 워커 스레드와 분리해 전달한다
@@ -72,9 +72,9 @@ class TournamentItemParsedSseBroadcaster(
                         .groupBy({ it.tournamentId }, { it.userId })
                 routings.forEach { routing ->
                     val participants = participantsByTournament[routing.tournamentId].orEmpty()
-                    localDelivery.deliverTournamentItemParsed(
+                    localDelivery.deliverSilentSync(
                         participants,
-                        TournamentItemParsedPayload(
+                        TournamentItemParsed(
                             tournamentId = routing.tournamentId,
                             tournamentItemId = routing.tournamentItemId,
                             status = status,

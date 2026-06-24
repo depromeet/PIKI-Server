@@ -1,11 +1,13 @@
 package com.depromeet.piki.notification.service
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.piki.notification.controller.dto.UnreadCountChanged
 import com.depromeet.piki.notification.domain.Notification
 import com.depromeet.piki.notification.domain.NotificationType
 import com.depromeet.piki.notification.fcm.domain.UserDevice
 import com.depromeet.piki.notification.fcm.repository.UserDeviceRepository
 import com.depromeet.piki.notification.repository.NotificationRepository
+import com.depromeet.piki.notification.sse.SseEmitterRegistry
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubFcmMessageSender
 import com.depromeet.piki.support.uuidToBytes
@@ -24,11 +26,15 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import tools.jackson.databind.ObjectMapper
 import java.time.Duration
 import java.util.UUID
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 // 읽음 후 silent badge 동기화(#487)는 PushNotificationChannel.syncBadge(@Async notificationExecutor)로 응답 경로에서
 // 분리돼 별도 워커 스레드·새 트랜잭션에서 돈다. 그래서 @Transactional 자동 롤백 패턴으로는 워커가 미커밋 데이터를
@@ -38,11 +44,15 @@ import kotlin.test.assertEquals
 class NotificationBadgeSyncAsyncIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var pushNotificationChannel: PushNotificationChannel
 
+    @Autowired private lateinit var registry: SseEmitterRegistry
+
     @Autowired private lateinit var userDeviceRepository: UserDeviceRepository
 
     @Autowired private lateinit var notificationRepository: NotificationRepository
 
     @Autowired private lateinit var stubFcmMessageSender: StubFcmMessageSender
+
+    @Autowired private lateinit var objectMapper: ObjectMapper
 
     @Autowired private lateinit var webApplicationContext: WebApplicationContext
 
@@ -150,4 +160,49 @@ class NotificationBadgeSyncAsyncIntegrationTest : IntegrationTestSupport() {
             cleanup(userId)
         }
     }
+
+    @Test
+    fun `read 처리 후 온라인(SSE) 기기에 silent-sync(UNREAD_COUNT_CHANGED)로 갱신 안읽음 수를 보낸다`() {
+        val userId = UUID.randomUUID()
+        try {
+            val target = saveNotification(userId)
+            saveNotification(userId) // 안 읽을 1건 → 읽음 후 안읽음 = 1
+            val emitter = BadgeRecordingEmitter().also { registry.register(userId, it) }
+            try {
+                buildMockMvc()
+                    .perform(
+                        post("/api/v1/notifications/read")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""{"ids":[$target]}""")
+                            .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+                    ).andExpect(status().isOk)
+
+                // badge SSE 는 SilentSyncDispatcher.dispatch(@Async)로 응답 경로 밖에서 발행된다. Awaitility 로 도착을 기다린다.
+                await().atMost(Duration.ofSeconds(5)).untilAsserted {
+                    val payload = emitter.payloads().single()
+                    assertEquals(1, payload.unreadCount)
+                    // wire 직렬화 contract — type 판별자 + 카테고리 맵이 실제 JSON 에 실리는지(클라가 type 으로 분기).
+                    val node = objectMapper.readTree(objectMapper.writeValueAsString(payload))
+                    assertEquals("UNREAD_COUNT_CHANGED", node.get("type").asString())
+                    assertEquals(1L, node.get("unreadCount").asLong())
+                    assertTrue(node.has("unreadCountByCategory"))
+                }
+            } finally {
+                registry.unregister(userId, emitter)
+            }
+        } finally {
+            cleanup(userId)
+        }
+    }
+}
+
+// send 를 가로채 실제 IO 없이 전송된 silent-sync payload 를 기록한다(TournamentItemParsedSseIntegrationTest 와 동일 패턴).
+private class BadgeRecordingEmitter : SseEmitter() {
+    val sentData = CopyOnWriteArrayList<Any>()
+
+    override fun send(builder: SseEmitter.SseEventBuilder) {
+        builder.build().forEach { sentData.add(it.data) }
+    }
+
+    fun payloads(): List<UnreadCountChanged> = sentData.filterIsInstance<UnreadCountChanged>()
 }
