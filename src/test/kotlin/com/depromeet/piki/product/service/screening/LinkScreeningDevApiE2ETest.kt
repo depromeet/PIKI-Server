@@ -6,7 +6,9 @@ import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
+import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.web.client.RestClient
+import org.springframework.web.client.RestClientException
 import org.springframework.web.client.RestClientResponseException
 import tools.jackson.databind.JsonNode
 import tools.jackson.module.kotlin.jacksonObjectMapper
@@ -21,8 +23,10 @@ import java.util.concurrent.TimeUnit
  * dev.api.piki.day 실제 등록 API 로 전체 파이프라인(fetch + 구조화/Gemini + DB)을 통과시켜, URL 하나를
  * 다음으로 가른다:
  *   REGISTER-4xx          등록 동기 실패(400 미지원 쇼핑몰·형식오류 등). 응답 detail 을 그대로 보여준다.
+ *   REGISTER-ERROR        등록 POST 의 연결·timeout 등 transport 오류 (한 URL 실패가 전체 스캔을 막지 않게 기록만)
  *   READY                 추출 성공 — name·price·currency 확정
  *   FAILED                fetch/추출이 끝내 실패(봇 차단·상품 아님 등)
+ *   POLL-ERROR            폴링 중 5xx·연결·파싱 등 transport 오류 (TIMEOUT 과 구분)
  *   TIMEOUT(추출미완)      제한 시간 내 status 가 READY/FAILED 로 전이하지 않음
  *
  * 1단계 로컬이 'Gemini필요'로 미룬 URL 이 실제로 추출되는지, 로컬 fetch 차단이 AWS DC IP 에서도 같은지는
@@ -47,7 +51,13 @@ class LinkScreeningDevApiE2ETest {
             .baseUrl(baseUrl)
             // X-Client-Type: APP 가 없으면 토큰이 쿠키로 내려가고 body 의 accessToken 이 null 로 비워진다.
             .defaultHeader(CLIENT_TYPE_HEADER, "APP")
-            .build()
+            // dev 서버·네트워크가 느릴 때 각 호출이 무기한 붙잡혀 전체 검수가 @Timeout 까지 끌리지 않게 per-request timeout 으로 fail-fast.
+            .requestFactory(
+                SimpleClientHttpRequestFactory().apply {
+                    setConnectTimeout(Duration.ofSeconds(CONNECT_TIMEOUT_SEC))
+                    setReadTimeout(Duration.ofSeconds(READ_TIMEOUT_SEC))
+                },
+            ).build()
 
     @Test
     @Timeout(value = 30, unit = TimeUnit.MINUTES)
@@ -89,6 +99,9 @@ class LinkScreeningDevApiE2ETest {
             } catch (e: RestClientResponseException) {
                 // 등록 동기 실패(400 미지원·형식오류 등). 응답 detail 을 그대로 보여준다.
                 return "REGISTER-${e.statusCode.value()}        ${tail(url)}  ${detailOf(e)}"
+            } catch (e: RestClientException) {
+                // 연결·timeout 등 transport 오류. 한 URL 실패가 전체 스캔을 막지 않게 결과로 남기고 다음 입력으로 계속한다.
+                return "REGISTER-ERROR        ${tail(url)}  ${e.javaClass.simpleName}: ${e.message?.take(80)}"
             }
         val wishId = created.requireText("/data/wish/id").toLong()
         return poll(wishId, token, url)
@@ -99,23 +112,36 @@ class LinkScreeningDevApiE2ETest {
         token: String,
         url: String,
     ): String {
-        lateinit var item: JsonNode
+        var item: JsonNode? = null
+        // transport·5xx 오류는 await 가 timeout 까지 재시도해 TIMEOUT 으로 뭉개므로, 즉시 폴링을 끝내고 별도 결과로 가른다.
+        var transportError: RestClientException? = null
         val reachedTerminal =
             runCatching {
                 await()
                     .atMost(Duration.ofSeconds(POLL_TIMEOUT_SEC))
                     .pollInterval(Duration.ofSeconds(POLL_INTERVAL_SEC))
                     .until {
-                        item = get("/api/v1/wishlists/$wishId", token).at("/data/item")
-                        item.at("/status").asString() in TERMINAL_STATUSES
+                        val data =
+                            try {
+                                get("/api/v1/wishlists/$wishId", token).at("/data/item")
+                            } catch (e: RestClientException) {
+                                transportError = e
+                                return@until true // 재시도해도 같은 결과 — 폴링을 끝내고 아래에서 별도 결과로 처리
+                            }
+                        item = data
+                        data.at("/status").asString() in TERMINAL_STATUSES
                     }
                 true
             }.getOrDefault(false)
+        transportError?.let {
+            return "POLL-ERROR            ${tail(url)}  ${it.javaClass.simpleName}: ${it.message?.take(80)}"
+        }
         if (!reachedTerminal) return "TIMEOUT(추출미완)       ${tail(url)}"
-        return when (item.at("/status").asString()) {
+        val node = item ?: return "POLL-ERROR            ${tail(url)}  응답에 item 이 없음"
+        return when (node.at("/status").asString()) {
             "READY" ->
-                "READY                 ${tail(url)}  name=${item.at("/name").asString()}  " +
-                    "price=${item.at("/currentPrice").asString()}  currency=${item.at("/currency").asString()}"
+                "READY                 ${tail(url)}  name=${node.at("/name").asString()}  " +
+                    "price=${node.at("/currentPrice").asString()}  currency=${node.at("/currency").asString()}"
             else -> "FAILED                ${tail(url)}"
         }
     }
@@ -178,5 +204,9 @@ class LinkScreeningDevApiE2ETest {
         private const val POLL_TIMEOUT_SEC = 40L
         private const val POLL_INTERVAL_SEC = 1L
         private val TERMINAL_STATUSES = setOf("READY", "FAILED")
+
+        // dev API per-request timeout. 한 URL 이 무기한 붙잡혀 전체 검수가 끌리지 않게 fail-fast 로 끊는다.
+        private const val CONNECT_TIMEOUT_SEC = 3L
+        private const val READ_TIMEOUT_SEC = 10L
     }
 }
