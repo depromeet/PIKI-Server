@@ -449,7 +449,7 @@ race · 동시성 · timeout 처럼 일반 통합 테스트 패턴(`@Transaction
 
 ## 테스트 컨벤션 기계 강제 — `TestConventionTest`
 
-위 테스트 규칙 중 **오탐 없이 기계로 PASS/FAIL 을 가를 수 있는 불변식**은 `support/TestConventionTest` 가 src/test 소스를 import 라인 기준으로 스캔해 강제한다. 이 메타 테스트는 `./gradlew test` 에 포함되어 PR CI 에서 돌므로, 위반은 머지 전에 빨간불로 드러난다. Spring 컨텍스트를 띄우지 않아 Docker 없이 단독 실행도 가능하다 — `./gradlew test --tests "com.depromeet.piki.support.TestConventionTest"`.
+위 테스트 규칙 중 **오탐 없이 기계로 PASS/FAIL 을 가를 수 있는 불변식**은 `support/TestConventionTest` 가 src/test 소스를 스캔해 강제한다 (모킹·셋업 hook 등 금지 규칙은 import 라인, E2E 격리는 어노테이션이 실제로 붙었는지). 이 메타 테스트는 `./gradlew test` 에 포함되어 PR CI 에서 돌므로, 위반은 머지 전에 빨간불로 드러난다. Spring 컨텍스트를 띄우지 않아 Docker 없이 단독 실행도 가능하다 — `./gradlew test --tests "com.depromeet.piki.support.TestConventionTest"`.
 
 현재 강제하는 불변식:
 - 모킹 라이브러리(mockk · Mockito · springmockk) import 금지
