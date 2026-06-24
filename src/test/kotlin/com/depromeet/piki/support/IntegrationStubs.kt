@@ -92,4 +92,9 @@ class IntegrationStubs {
     @Bean
     @Primary
     fun imageProxyFetcher(): StubImageProxyFetcher = StubImageProxyFetcher()
+
+    // 공지 본문 외부 이미지 fetch 외부 경계(#561 rehost). 실제 외부 URL 호출을 막고 시나리오별 응답을 주입한다.
+    @Bean
+    @Primary
+    fun announcementImageFetcher(): StubAnnouncementImageFetcher = StubAnnouncementImageFetcher()
 }

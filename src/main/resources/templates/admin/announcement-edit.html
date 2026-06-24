@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <title>공지 수정 · PiKi 백오피스</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="https://uicdn.toast.com/editor/3.2.2/toastui-editor.min.css" crossorigin="anonymous">
+  <style>
+    :root{--accent:#0EA5E9;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;}
+    *{box-sizing:border-box;} body{margin:0;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:#f7f8fa;color:var(--ink);}
+    .wrap{max-width:880px;margin:0 auto;padding:26px 24px;}
+    h1{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0 0 6px;} .lede{color:var(--muted);font-size:13.5px;margin:0 0 20px;}
+    .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px;}
+    label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin:0 0 6px;}
+    input{width:100%;border:1px solid #e3e6ea;border-radius:10px;padding:11px 13px;font-size:14px;font-family:inherit;background:#fbfcfd;}
+    .row{margin-bottom:14px;}
+    .btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px 18px;font-size:13.5px;font-weight:700;font-family:inherit;cursor:pointer;}
+    .btn.alt{background:#fff;color:var(--accent);border:1px solid #bae6fd;text-decoration:none;display:inline-block;}
+    .hint{font-weight:500;color:var(--muted);font-size:11.5px;}
+    .chk{width:auto !important;margin-right:7px;vertical-align:middle;}
+    .err{background:#fee2e2;color:#b42318;border-radius:8px;padding:9px 14px;font-size:13px;margin-bottom:16px;}
+    .push-preview{display:flex;gap:11px;align-items:flex-start;background:#fff;border:1px solid var(--border);border-radius:12px;padding:11px 13px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+    .push-preview .ic{width:34px;height:34px;border-radius:8px;background:var(--accent);flex:none;}
+    .push-preview .pt{font-weight:700;font-size:13.5px;line-height:1.3;word-break:break-word;}
+    .push-preview .pb{color:var(--muted);font-size:12.5px;margin-top:2px;line-height:1.35;word-break:break-word;}
+    .push-off{opacity:.45;}
+  </style>
+</head>
+<body>
+  <div th:replace="~{admin/fragments :: topbar('/admin/announcements', '← 공지 목록')}"></div>
+  <div class="wrap">
+    <h1>공지 수정</h1>
+    <p class="lede">발송 전 초안을 다듬습니다. 발송·예약된 공지는 수정할 수 없습니다.</p>
+    <div class="err" th:if="${param.error == 'length'}">제목은 255자, 본문은 10000자, 푸시 문구는 255자를 넘을 수 없습니다.</div>
+    <div class="err" th:if="${param.error == 'image'}">본문 이미지를 가져오지 못했습니다. 이미지 주소(https)를 확인하거나 다른 이미지를 사용해주세요.</div>
+
+    <form class="card" th:action="@{/admin/announcements/{id}/edit(id=${announcement.id})}" method="post" id="editForm">
+      <div class="row"><label for="title">제목 <span class="hint">공지 페이지·딥링크 제목</span></label><input id="title" name="title" type="text" required maxlength="255" th:value="${draftTitle != null ? draftTitle : announcement.title}"></div>
+      <div class="row">
+        <label>본문 (마크다운) <span class="hint">공지 페이지에 표시 · 좌측 입력, 우측 미리보기</span></label>
+        <div id="editor"></div>
+        <input type="hidden" name="body" id="bodyField">
+      </div>
+
+      <label style="margin-top:4px">푸시 알림</label>
+      <div class="row" style="margin-bottom:8px">
+        <label style="font-weight:600;color:var(--ink);font-size:13px"><input class="chk" type="checkbox" name="pushEnabled" value="true" id="pushEnabled" th:checked="${draftPushEnabled != null ? draftPushEnabled : announcement.pushEnabled}">푸시 알림 보내기 <span class="hint">끄면 공지 페이지·알림센터에는 남지만, 휴대폰 푸시(배너) 알림은 가지 않아요</span></label>
+      </div>
+      <div class="row"><label for="pushTitle">푸시 제목 <span class="hint">비우면 공지 제목을 사용</span></label><input id="pushTitle" name="pushTitle" type="text" maxlength="255" th:value="${draftPushTitle != null ? draftPushTitle : announcement.pushTitle}" placeholder="(비우면 위 제목)"></div>
+      <div class="row"><label for="pushBody">푸시 본문 <span class="hint">선택 · 비우면 제목만 표시</span></label><input id="pushBody" name="pushBody" type="text" maxlength="255" th:value="${draftPushBody != null ? draftPushBody : announcement.pushBody}" placeholder="(선택)"></div>
+      <div class="row">
+        <label>푸시 미리보기 <span class="hint">실제 알림이 이렇게 뜹니다</span></label>
+        <div class="push-preview" id="pushPreview">
+          <div class="ic"></div>
+          <div><div class="pt" id="ppTitle"></div><div class="pb" id="ppBody"></div></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" type="submit">저장</button>
+        <a class="btn alt" th:href="@{/admin/announcements}">취소</a>
+      </div>
+    </form>
+  </div>
+
+  <script src="https://uicdn.toast.com/editor/3.2.2/toastui-editor-all.min.js" crossorigin="anonymous"></script>
+  <script th:inline="javascript">
+    // 기존 본문(마크다운)을 에디터에 채운다. th:inline 이 따옴표·개행을 JS 문자열로 안전 이스케이프한다.
+    var initialBody = /*[[${draftBody != null ? draftBody : announcement.body}]]*/ '';
+    var announcementId = /*[[${announcement.id}]]*/ 0;
+    // 어드민은 CSRF 활성(_csrf) — 이미지 업로드 AJAX 가 토큰을 헤더로 실어 보낸다.
+    var csrfHeader = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+    var csrfToken = /*[[${_csrf.token}]]*/ '';
+    var editor = new toastui.Editor({
+      el: document.getElementById('editor'),
+      height: '340px',
+      initialEditType: 'wysiwyg',
+      previewStyle: 'vertical',
+      initialValue: initialBody,
+      hooks: {
+        // 로컬 파일 드래그·붙여넣기·선택 시 즉시 업로드(stub-create 로 id 가 이미 있음) — base64 인라인 대신 우리 S3 URL 을 본문에 삽입한다.
+        addImageBlobHook: function (blob, callback) {
+          var form = new FormData();
+          form.append('image', blob);
+          var headers = {};
+          headers[csrfHeader] = csrfToken;
+          fetch('/admin/announcements/' + announcementId + '/images', { method: 'POST', body: form, headers: headers })
+            .then(function (res) { if (!res.ok) throw new Error('upload failed'); return res.json(); })
+            .then(function (json) { callback(json.data.url, blob.name || '이미지'); })
+            .catch(function () { window.alert('이미지 업로드에 실패했어요. 형식(png·jpg·gif·webp)·용량을 확인해주세요.'); });
+          return false; // 기본 base64 인라인 차단
+        }
+      }
+    });
+    document.getElementById('editForm').addEventListener('submit', function () {
+      document.getElementById('bodyField').value = editor.getMarkdown();
+    });
+
+    var $title = document.getElementById('title');
+    var $pTitle = document.getElementById('pushTitle');
+    var $pBody = document.getElementById('pushBody');
+    var $enabled = document.getElementById('pushEnabled');
+    var $ppTitle = document.getElementById('ppTitle');
+    var $ppBody = document.getElementById('ppBody');
+    var $pp = document.getElementById('pushPreview');
+    function renderPush() {
+      $ppTitle.textContent = ($pTitle.value || $title.value || '(제목)');
+      $ppBody.textContent = $pBody.value || '';
+      $pp.classList.toggle('push-off', !$enabled.checked);
+    }
+    [$title, $pTitle, $pBody].forEach(function (el) { el.addEventListener('input', renderPush); });
+    $enabled.addEventListener('change', renderPush);
+    renderPush();
+  </script>
+</body>
+</html>
