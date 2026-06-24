@@ -2,6 +2,7 @@ package com.depromeet.piki.notification.controller.dto
 
 import com.depromeet.piki.item.domain.ItemStatus
 import com.depromeet.piki.notification.domain.NotificationCategory
+import com.depromeet.piki.notification.service.toUnreadTotal
 
 // SSE "silent-sync" 이벤트(event name = "silent-sync")의 data 로 직렬화되는 payload 봉투.
 // silent-sync 는 "알림"(notification)이 아니라 조용한(silent) 화면 갱신 신호다 — 토스트·알림센터·FCM 표시 푸시를
@@ -41,10 +42,10 @@ data class UnreadBadgeChanged(
     override val type: SilentSyncType = SilentSyncType.UNREAD_BADGE
 
     companion object {
-        // total 은 카테고리 합으로 도출 — 전체·탭별 두 수치가 어긋날 여지를 없앤다(NotificationReadResponse 와 동일 규칙).
+        // total 은 카테고리 합으로 도출 — toUnreadTotal 단일 소스를 거쳐 REST 읽음 응답·OS 배지와 같은 수를 보장한다.
         fun of(unreadCountByCategory: Map<NotificationCategory, Long>): UnreadBadgeChanged =
             UnreadBadgeChanged(
-                unreadCount = unreadCountByCategory.values.sum(),
+                unreadCount = unreadCountByCategory.toUnreadTotal(),
                 unreadCountByCategory = unreadCountByCategory,
             )
     }
