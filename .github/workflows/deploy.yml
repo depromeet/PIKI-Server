@@ -518,9 +518,11 @@ jobs:
               ACTIVE="green" INACTIVE="blue" INACTIVE_PORT=8080
             fi
 
-            # 새로 뜬 컨테이너(INACTIVE) 헬스체크 — 첫 배포(콜드 JVM + 빈 DB Flyway)는 60초가 빠듯해
-            # 120초(24×5s)로 둔다. 200 받으면 즉시 빠져나가므로 정상 배포 속도엔 영향 없다.
-            for i in $(seq 1 24); do
+            # 새로 뜬 컨테이너(INACTIVE) 헬스체크. 콜드 JVM + 빈 DB Flyway 에 더해, blue+green 공존 시
+            # swap 압박으로 부팅이 76초에서 120초+ 까지 늘어 기존 120초(24×5s)를 간헐 초과해 롤백됐다(이슈 #628).
+            # 300초(60×5s)로 늘려 swap 쓰는 느린 부팅도 끝까지 기다린다. ssh-action command_timeout(기본 10m)
+            # 안에서 이후 switch·docker stop 여유까지 포함해 안전하다. 200 받으면 즉시 빠져나가므로 정상 배포 속도엔 영향 없다.
+            for i in $(seq 1 60); do
               STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$INACTIVE_PORT/health || echo "000")
               if [ "$STATUS" = "200" ]; then
                 echo "================================================"
