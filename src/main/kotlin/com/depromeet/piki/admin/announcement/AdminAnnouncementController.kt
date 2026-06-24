@@ -8,6 +8,7 @@ import com.depromeet.piki.admin.config.ClientIp
 import com.depromeet.piki.admin.config.ConditionalOnAdminEnabled
 import com.depromeet.piki.common.response.ApiResponseBody
 import jakarta.servlet.http.HttpServletRequest
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.GetMapping
@@ -29,6 +30,8 @@ import java.time.LocalDateTime
 class AdminAnnouncementController(
     private val adminAnnouncementService: AdminAnnouncementService,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     @GetMapping
     fun page(
         @RequestParam(defaultValue = "0") page: Int,
@@ -98,6 +101,9 @@ class AdminAnnouncementController(
             adminAnnouncementService.update(id, title, safeBody, pushEnabled, safePushTitle, safePushBody, actor(request), clientIp(request))
             "redirect:/admin/announcements/$id/send"
         } catch (e: AnnouncementImageException) {
+            // 클라 계약 위반(운영자가 넣은 이미지/주소 문제)이라 info — id 로 운영자 제보와 상관시키고, 사유(어떤 실패 팩토리)를 남긴다.
+            // 차단 host·status 같은 근본 원인은 fetcher 가 이미 warn 으로 남기므로(상관용), 여기선 스택을 남기지 않는다(스택은 error/서버버그용).
+            log.info("공지 이미지 처리 실패로 수정 폼 복귀: announcementId={}, reason={}", id, e.message)
             preserveDraftInput(redirectAttributes, title, safeBody, pushEnabled, safePushTitle, safePushBody)
             "redirect:/admin/announcements/$id/edit?error=image"
         }
