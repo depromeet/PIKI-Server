@@ -17,6 +17,7 @@ import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfig
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
@@ -24,6 +25,7 @@ import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.context.WebApplicationContext
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -143,6 +145,14 @@ class AnnouncementImageRehostIntegrationTest : IntegrationTestSupport() {
                     .with(csrf()),
             ).andExpect(status().is3xxRedirection)
             .andExpect(redirectedUrl("/admin/announcements/$id/edit?error=image"))
+            // 방금 입력한 제목·본문을 flash 로 보존해 edit 폼에 재주입한다(긴 패치노트 재작성 방지).
+            .andExpect(flash().attribute("draftTitle", "깨진 이미지 공지"))
+            .andExpect(flash().attribute("draftBody", "![배너](https://ext.example.com/dead.png)"))
+
+        // rehost 실패 시 부분 저장이 없어야 한다 — 초안은 생성 당시(title="제목", body="") 그대로여야 한다.
+        val saved = announcementRepository.findById(id).get()
+        assertEquals("제목", saved.title)
+        assertEquals("", saved.body)
     }
 
     @Test
