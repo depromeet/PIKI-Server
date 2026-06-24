@@ -39,7 +39,7 @@ import java.util.UUID
 // 등록(비동기) 경로를 거치지 않고 seedReadyWish 로 READY 상태를 시딩한다.
 // 등록 PROCESSING 응답·파싱 전이는 WishlistRegisterAsyncIntegrationTest 가 검증한다.
 @Transactional
-class WishlistControllerIntegrationTest : IntegrationTestSupport() {
+class WishlistCrudIntegrationTest : IntegrationTestSupport() {
     @Autowired
     private lateinit var webApplicationContext: WebApplicationContext
 

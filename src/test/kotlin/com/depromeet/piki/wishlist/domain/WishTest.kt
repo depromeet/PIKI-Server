@@ -33,4 +33,11 @@ class WishTest {
         val wish = Wish(userId = owner, snapshotId = 10L)
         assertFailsWith<WishException> { wish.verifyOwnedBy(UUID.randomUUID()) }
     }
+
+    @Test
+    fun `verifyOwnedBy 는 소유자가 호출하면 예외 없이 통과한다`() {
+        val owner = UUID.randomUUID()
+        val wish = Wish(userId = owner, snapshotId = 10L)
+        wish.verifyOwnedBy(owner) // 소유자면 예외 없이 반환된다
+    }
 }

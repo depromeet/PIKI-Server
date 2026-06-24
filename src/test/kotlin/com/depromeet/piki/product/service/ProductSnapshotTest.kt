@@ -49,21 +49,21 @@ class ProductSnapshotTest {
     }
 
     @Test
-    fun `가격이 음수면 untrustworthyValue 를 던진다`() {
+    fun `가격이 음수면 ProductSnapshotException 을 던진다`() {
         assertFailsWith<ProductSnapshotException> {
             ProductSnapshot.fromExtracted(link, "상품", null, -1, "KRW")
         }
     }
 
     @Test
-    fun `name 이 512자를 초과하면 untrustworthyValue 를 던진다`() {
+    fun `name 이 512자를 초과하면 ProductSnapshotException 을 던진다`() {
         assertFailsWith<ProductSnapshotException> {
             ProductSnapshot.fromExtracted(link, "가".repeat(513), null, 1_000, "KRW")
         }
     }
 
     @Test
-    fun `imageUrl 이 2048자를 초과하면 untrustworthyValue 를 던진다`() {
+    fun `imageUrl 이 2048자를 초과하면 ProductSnapshotException 을 던진다`() {
         assertFailsWith<ProductSnapshotException> {
             ProductSnapshot.fromExtracted(link, "상품", "https://cdn.example.com/" + "a".repeat(2048), 1_000, "KRW")
         }
