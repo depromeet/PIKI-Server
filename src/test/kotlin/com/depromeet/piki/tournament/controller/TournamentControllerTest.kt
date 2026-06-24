@@ -1113,6 +1113,102 @@ class TournamentControllerTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `GET tournaments-id 에서 ROOT 소유자의 COMPLETED 응답에 canAddItem=true 가 포함된다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId) = completeTournamentWith2Items(mockMvc)
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$tournamentId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.completed.canAddItem").value(true))
+    }
+
+    @Test
+    fun `GET tournaments-id 에서 플레이링크 CLONE 소유자의 COMPLETED 응답에 canAddItem=false 가 포함된다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(otherUserId, "https://cdn.example.com/guest.jpg", "게스트")
+        val (rootId, ti1, ti2) = completeTournamentWith2Items(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$rootId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+        val cloneResult = mockMvc.perform(
+            post("/api/v1/tournaments/$rootId/from-play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+        ).andReturn()
+        val cloneId = objectMapper.readTree(cloneResult.response.contentAsString)["data"].asLong()
+        mockMvc.perform(
+            post("/api/v1/tournaments/$cloneId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+        )
+        mockMvc.perform(
+            post("/api/v1/tournaments/$cloneId/matches")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"currentRound":2,"firstTournamentItemId":$ti1,"secondTournamentItemId":$ti2,"selectedTournamentItemId":$ti1}"""),
+        )
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$cloneId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.completed.canAddItem").value(false))
+    }
+
+    @Test
+    fun `GET tournaments-id 에서 소셜 초대 CLONE 소유자의 COMPLETED 응답에 canAddItem=true 가 포함된다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+
+        // ROOT 생성 + otherUserId 소셜 참여
+        val rootTournamentId = createTournament(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$rootTournamentId/join")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"inviteCode":null}"""),
+        )
+
+        // 아이템 추가 후 소유자 start (ROOT IN_PROGRESS 전환)
+        addItemsToTournament(mockMvc, rootTournamentId, userId, saveWishItem(name = "소셜1"), saveWishItem(name = "소셜2"))
+        mockMvc.perform(
+            post("/api/v1/tournaments/$rootTournamentId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+
+        // otherUserId start → CLONE 생성 + 시작 (response 에 cloneId·items 포함)
+        val startResult = mockMvc.perform(
+            post("/api/v1/tournaments/$rootTournamentId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+        ).andReturn()
+        val startData = objectMapper.readTree(startResult.response.contentAsString)["data"]
+        val cloneId = startData["tournamentId"].asLong()
+        val cloneItems = startData["items"]
+        val cloneTi1 = cloneItems[0]["tournamentItemId"].asLong()
+        val cloneTi2 = cloneItems[1]["tournamentItemId"].asLong()
+
+        // CLONE 결승 완료
+        mockMvc.perform(
+            post("/api/v1/tournaments/$cloneId/matches")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"currentRound":2,"firstTournamentItemId":$cloneTi1,"secondTournamentItemId":$cloneTi2,"selectedTournamentItemId":$cloneTi1}"""),
+        )
+
+        mockMvc
+            .perform(
+                get("/api/v1/tournaments/$cloneId")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+            ).andExpect(status().isOk)
+            .andExpect(jsonPath("$.data.completed.canAddItem").value(true))
+    }
+
+    @Test
     fun `DELETE tournaments-id-items-itemId 는 PENDING 토너먼트에서 아이템을 삭제하고 200 을 반환한다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
