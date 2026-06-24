@@ -16,8 +16,12 @@ import com.depromeet.piki.support.StubRefreshTokenStore
 import com.depromeet.piki.tournament.domain.Tournament
 import com.depromeet.piki.tournament.domain.TournamentItem
 import com.depromeet.piki.tournament.domain.TournamentUser
+import com.depromeet.piki.tournament.event.TournamentCompleted
 import com.depromeet.piki.tournament.event.TournamentItemAdded
 import com.depromeet.piki.tournament.event.TournamentJoined
+import com.depromeet.piki.tournament.event.TournamentPlayedFromLink
+import com.depromeet.piki.tournament.event.TournamentResultReady
+import com.depromeet.piki.tournament.event.TournamentStarted
 import com.depromeet.piki.tournament.repository.TournamentItemJpaRepository
 import com.depromeet.piki.tournament.repository.TournamentJpaRepository
 import com.depromeet.piki.tournament.repository.TournamentUserJpaRepository
@@ -60,7 +64,7 @@ import kotlin.test.assertTrue
 
 @RecordApplicationEvents
 @Transactional
-class TournamentControllerTest : IntegrationTestSupport() {
+class TournamentIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var webApplicationContext: WebApplicationContext
 
     @Autowired private lateinit var objectMapper: ObjectMapper
@@ -2610,6 +2614,178 @@ class TournamentControllerTest : IntegrationTestSupport() {
                 get("/api/v1/tournaments/$rootId/group-result")
                     .header(HttpHeaders.AUTHORIZATION, authHeader(outsiderId)),
             ).andExpect(status().isForbidden)
+    }
+
+    @Test
+    fun `POST tournaments-id-join 시 TournamentJoined 이벤트가 발행된다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/join")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteCode":"$inviteCode"}"""),
+            ).andExpect(status().isOk)
+
+        val events = applicationEvents.stream(TournamentJoined::class.java).toList()
+        assertEquals(1, events.size)
+        assertEquals(tournamentId, events.first().tournamentId)
+        assertEquals(otherUserId, events.first().actorId)
+    }
+
+    @Test
+    fun `POST tournaments-id-items-wish 에서 여러 아이템을 추가해도 TournamentItemAdded 를 한 번만 발행한다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+
+        addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem(name = "아이템1"), saveWishItem(name = "아이템2"))
+
+        val events = applicationEvents.stream(TournamentItemAdded::class.java).toList()
+        assertEquals(1, events.size)
+        assertEquals(tournamentId, events.first().tournamentId)
+        assertEquals(userId, events.first().actorId)
+    }
+
+    @Test
+    fun `POST tournaments-id-start 시 TournamentStarted 이벤트가 발행된다`() {
+        val mockMvc = buildMockMvc()
+        val tournamentId = createTournament(mockMvc)
+        addItemsToTournament(mockMvc, tournamentId, userId, saveWishItem(), saveWishItem())
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/start")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+            ).andExpect(status().isOk)
+
+        val events = applicationEvents.stream(TournamentStarted::class.java).toList()
+        assertEquals(1, events.size)
+        assertEquals(tournamentId, events.first().tournamentId)
+        assertEquals(userId, events.first().actorId)
+    }
+
+    @Test
+    fun `POST tournaments-id-matches 결승 완료 시 ROOT 토너먼트이면 TournamentResultReady 를 발행한다`() {
+        val mockMvc = buildMockMvc()
+        val (tournamentId, ti1, ti2) = startTournamentWith2Items(mockMvc)
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/matches")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"currentRound":2,"firstTournamentItemId":$ti1,"secondTournamentItemId":$ti2,"selectedTournamentItemId":$ti1}"""),
+            ).andExpect(status().isOk)
+
+        val events = applicationEvents.stream(TournamentResultReady::class.java).toList()
+        assertEquals(1, events.size)
+        assertEquals(tournamentId, events.first().rootTournamentId)
+        assertEquals(userId, events.first().actorId)
+    }
+
+    @Test
+    fun `POST tournaments-id-matches 결승 완료 시 CLONE 토너먼트이면 TournamentCompleted 를 발행한다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+        val rootId = createTournament(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$rootId/join")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"inviteCode":null}"""),
+        )
+        addItemsToTournament(mockMvc, rootId, userId, saveWishItem(), saveWishItem())
+        mockMvc.perform(
+            post("/api/v1/tournaments/$rootId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId)),
+        )
+        val rootItems = tournamentItemJpaRepository.findAllByTournamentIdAndNotDeleted(rootId)
+        val ti1 = rootItems[0].getId()
+        val ti2 = rootItems[1].getId()
+        mockMvc.perform(
+            post("/api/v1/tournaments/$rootId/matches")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"currentRound":2,"firstTournamentItemId":$ti1,"secondTournamentItemId":$ti2,"selectedTournamentItemId":$ti1}"""),
+        )
+        val startResult = mockMvc.perform(
+            post("/api/v1/tournaments/$rootId/start")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
+        ).andReturn()
+        val cloneId = objectMapper.readTree(startResult.response.contentAsString)["data"]["tournamentId"].asLong()
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$cloneId/matches")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"currentRound":2,"firstTournamentItemId":$ti1,"secondTournamentItemId":$ti2,"selectedTournamentItemId":$ti1}"""),
+            ).andExpect(status().isOk)
+
+        val events = applicationEvents.stream(TournamentCompleted::class.java).toList()
+        assertEquals(1, events.size)
+        assertEquals(rootId, events.first().rootTournamentId)
+        assertEquals(otherUserId, events.first().actorId)
+    }
+
+    @Test
+    fun `POST from-play-link 신규 클론 생성 시 TournamentPlayedFromLink 를 발행한다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+        val (rootId, _, _) = completeTournamentWith2Items(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$rootId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$rootId/from-play-link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}"),
+            ).andExpect(status().isOk)
+
+        val events = applicationEvents.stream(TournamentPlayedFromLink::class.java).toList()
+        assertEquals(1, events.size)
+        assertEquals(rootId, events.first().rootTournamentId)
+        assertEquals(otherUserId, events.first().actorId)
+    }
+
+    @Test
+    fun `POST from-play-link 기존 클론 재요청 시 TournamentPlayedFromLink 를 발행하지 않는다`() {
+        val mockMvc = buildMockMvc()
+        saveUser(otherUserId, "https://cdn.example.com/other.jpg", "다른유저")
+        val (rootId, _, _) = completeTournamentWith2Items(mockMvc)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$rootId/play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+        // 1회차: 신규 클론 생성 (이벤트 발행)
+        mockMvc.perform(
+            post("/api/v1/tournaments/$rootId/from-play-link")
+                .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"),
+        )
+        // 2회차: 기존 클론 반환 (이벤트 미발행) — 테스트 메서드 내 총 발행 횟수가 1 이어야 한다
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$rootId/from-play-link")
+                    .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}"),
+            ).andExpect(status().isOk)
+
+        val events = applicationEvents.stream(TournamentPlayedFromLink::class.java).toList()
+        assertEquals(1, events.size)
     }
 
     private fun completeTournamentWith2Items(mockMvc: MockMvc): TournamentStart {
