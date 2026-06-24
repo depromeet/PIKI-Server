@@ -266,6 +266,10 @@ es.addEventListener("silent-sync", (e) => {
       // (tournamentId, tournamentItemId)로 그 카드를 찾아 status 로 갱신 (또는 그 토너먼트 아이템 목록 재조회).
       updateTournamentItemCard(s.tournamentId, s.tournamentItemId, s.status); // status: "READY" | "FAILED"
       break;
+    case "UNREAD_BADGE":
+      // 읽음 후 다른 기기의 인앱 배지 동기화: 전체/탭별 안읽음 수를 그대로 미러링(+1/-1 산수 없이).
+      setBadge(s.unreadCount, s.unreadCountByCategory); // unreadCountByCategory = {"ACTIVITY":n, "SYSTEM":n}
+      break;
   }
 });
 
@@ -299,9 +303,18 @@ fun openSse() {
                     //   TOURNAMENT_*         -> refId(= tournamentId) 로 토너먼트
                 }
                 "silent-sync" -> {
-                    // 조용한 화면 갱신(알림 아님). payload 의 type 으로 사건 분기.
-                    //   type == "TOURNAMENT_ITEM_PARSED" -> (tournamentId, tournamentItemId)로 그 출전 카드를 status 로 갱신
-                    val s = json.decode<SilentSyncPayload>(data)  // {type, ...}
+                    // 조용한 화면 갱신(알림 아님). SilentSyncPayload 는 sealed 지만 @JsonTypeInfo 가 없어 인터페이스로 바로
+                    // 디코드하면 안 된다. data 의 "type" 을 먼저 읽고 그 concrete 타입으로 디코드한다.
+                    when (jsonType(data)) {  // data 의 "type" 필드만 먼저 파싱
+                        "TOURNAMENT_ITEM_PARSED" -> {
+                            val s = json.decode<TournamentItemParsed>(data)  // {type, tournamentId, tournamentItemId, status: READY|FAILED}
+                            // (s.tournamentId, s.tournamentItemId)로 그 출전 카드를 s.status 로 갱신
+                        }
+                        "UNREAD_BADGE" -> {
+                            val s = json.decode<UnreadBadgeChanged>(data)  // {type, unreadCount, unreadCountByCategory}
+                            // 다른 기기의 인앱 배지를 s.unreadCount / s.unreadCountByCategory 로 미러링
+                        }
+                    }
                 }
                 // 그 외(주석 ping 등)는 무시
             }
