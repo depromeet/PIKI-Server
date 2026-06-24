@@ -32,6 +32,9 @@ class StubImageStorage : ImageStorage {
     }
 
     companion object {
-        const val BASE_URL = "https://stub-images.example.com"
+        // 실제 S3ImageStorage 와 같은 "{publicBaseUrl}/{key}" 형식을 흉내 내도록, 테스트 application.yml 의
+        // s3.public-base-url 과 동일하게 둔다. 공지 이미지 rehost(#561)가 "이미 우리 S3 인 URL"을 publicBaseUrl
+        // prefix 로 판별하므로, 이 값이 어긋나면 재저장 시 stub URL 을 외부로 오인해 다시 fetch 하려 한다.
+        const val BASE_URL = "https://test-bucket.s3.ap-northeast-2.amazonaws.com"
     }
 }

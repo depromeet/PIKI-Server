@@ -10,7 +10,10 @@ data class AnnouncementResponse(
     val id: Long,
     @field:Schema(description = "제목", example = "서비스 점검 안내")
     val title: String,
-    @field:Schema(description = "본문", example = "6월 20일 02:00~04:00 점검이 예정되어 있어요.")
+    @field:Schema(
+        description = "본문 (마크다운). 클라이언트는 마크다운으로 렌더한다 (제목/굵게/목록/링크 등).",
+        example = "## 점검 안내\n6월 20일 **02:00~04:00** 점검이 예정되어 있어요.\n\n- 점검 중 일부 기능 제한\n- [자세히 보기](https://piki.day)",
+    )
     val body: String,
     @field:Schema(description = "발송 시각(KST)", example = "2026-06-18T10:00:00")
     val sentAt: LocalDateTime,

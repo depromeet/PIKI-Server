@@ -32,20 +32,23 @@ class AnnouncementBroadcaster(
     private val log = LoggerFactory.getLogger(javaClass)
 
     fun broadcast(
-        title: String,
-        body: String,
+        pushTitle: String,
+        pushBody: String,
+        pushEnabled: Boolean,
         refId: Long,
         recipients: List<UUID>,
         onRecipient: (RecipientDelivery) -> Unit,
     ) {
-        // FCM sender 부재는 로컬(키 없음)에선 정상 — 알림은 만들되(SSE/히스토리) 푸시는 SKIPPED 로 기록한다.
-        val sender = fcmSenderProvider.getIfAvailable()
+        // 알림(SSE·히스토리)엔 공지 body(마크다운 장문)가 아니라 push 전용 문구(≤255)가 들어간다(#561) — notifications.body 한도 준수.
+        // push_enabled=false 면 FCM 인터럽트를 보내지 않는다 — sender 를 null 로 둬 기존 "sender 부재 → SKIPPED" 경로를 재사용한다.
+        // (공지는 페이지·알림센터엔 그대로 남고 FCM 만 생략. FCM 키 미설정 로컬도 같은 SKIPPED 경로.) SSE 는 인터럽트가 아니라 그대로 둔다.
+        val sender = if (pushEnabled) fcmSenderProvider.getIfAvailable() else null
         recipients.forEach { userId ->
             // 수신자 1건 처리 실패(알림 저장·FCM 등)가 전체 fan-out 을 멈추지 않도록 수신자 단위로 흡수한다.
             // 멈추면 일부만 발송된 채 상위가 완료 처리돼 집계 정합성이 깨진다 — 실패는 FAILED 로 기록하고 다음으로.
             val delivery =
                 runCatching {
-                    val notification = persistence.save(Notification(userId, NotificationType.ANNOUNCEMENT, title, body, refId))
+                    val notification = persistence.save(Notification(userId, NotificationType.ANNOUNCEMENT, pushTitle, pushBody, refId))
                     // SSE 는 best-effort(접속 중인 유저만 즉시 수신) — 실패해도 fan-out 을 멈추지 않는다. 히스토리엔 이미 저장됨.
                     runCatching { sseChannel.send(userId, notification) }
                         .onFailure { log.warn("공지 SSE 전달 실패 userId={}", userId, it) }
