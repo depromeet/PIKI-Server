@@ -91,6 +91,9 @@ data class TournamentDetailResponse(
     data class CompletedData(
         val result: List<RankedItemResponse>,
         val hasGroupResult: Boolean,
+        // true: ROOT 소유자 또는 소셜 초대 CLONE 소유자 — 아이템 담기 허용(위시/링크/이미지).
+        // false: 플레이링크 CLONE 소유자 — 아이템 담기 불가.
+        val canAddItem: Boolean,
         val playLinkExpiresAt: LocalDateTime?,
     ) {
         companion object {
@@ -98,6 +101,7 @@ data class TournamentDetailResponse(
                 CompletedData(
                     result = completed.result.map { RankedItemResponse.from(it) },
                     hasGroupResult = completed.hasGroupResult,
+                    canAddItem = completed.canAddItem,
                     playLinkExpiresAt = completed.playLinkExpiresAt,
                 )
         }

@@ -1,0 +1,222 @@
+name: Promote
+
+# 환경 승격(promotion): dev → staging → main(prod).
+# 코드는 PR 로 dev 에만 들어오고(squash), 이 워크플로가 "이미 CI 통과·배포된 동일 커밋"을 다음 환경으로
+# 앞으로만(fast-forward) 옮긴다. ff 전용이라 세 브랜치 SHA 가 항상 정렬되고, squash·분기 사고를 구조적으로 막는다.
+#
+# prod 승격 시 선택한 단위(patch/minor/major)로 다음 semver 버전을 계산해 deploy 로 넘긴다. 실제 태그·릴리즈는
+# deploy 의 release job 이 "배포 성공 후" 만든다(안 뜬 버전에 태그를 안 박기 위해).
+#
+# staging·main 에는 직접 커밋하지 않는 것이 전제다 (직접 커밋이 들어가면 ff 가 깨져 이 워크플로가 에러로 멈춘다).
+on:
+  # 승격 대상은 '실행 브랜치'가 강제한다: dev 에서 실행 → staging, staging 에서 실행 → prod(main).
+  # Actions 의 'Run workflow' 브랜치 드롭다운에서 dev/staging 을 고르면 되고, 대상을 따로 선택하지 않는다(오선택 차단).
+  # 그 외 브랜치에서 실행하면 '승격 경로 결정' 단계가 에러로 멈춘다. 이로써 dev→staging→prod 순서가 구조적으로 강제된다.
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "prod 버전 증가 단위 (staging 은 무시). 최신 vX.Y.Z 에서 bump, 태그 없으면 v1.0.0 baseline."
+        required: false
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+# ref 업데이트(contents) + deploy 워크플로 dispatch(actions) 권한.
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: promote-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 승격 경로 결정 (실행 브랜치로 강제)
+        id: plan
+        # 실행 ref 가 대상을 강제한다 — dev→staging, staging→prod(main). 그 외 브랜치는 거부.
+        # ref 는 env 로 받아 셸에 직접 보간(injection)하지 않는다.
+        env:
+          REF: ${{ github.ref_name }}
+        run: |
+          case "$REF" in
+            dev)     S=dev;     D=staging; E=staging ;;
+            staging) S=staging; D=main;    E=prod    ;;
+            *)
+              echo "::error::promote 는 dev(→staging)·staging(→prod) 브랜치에서만 실행할 수 있다. 현재 ref=$REF. Actions 의 'Run workflow' 에서 dev 또는 staging 브랜치를 선택하라."
+              exit 1
+              ;;
+          esac
+          {
+            echo "source=$S"
+            echo "target=$D"
+            echo "env=$E"
+          } >> "$GITHUB_OUTPUT"
+
+      # ff-push 는 기본 GITHUB_TOKEN(contents: write)으로 한다. staging·main 은 ruleset
+      # protectReleaseBranches 가 deletion·non_fast_forward 만 강제하고 PR 규칙이 없어, ff 업데이트가
+      # 그대로 통과한다(별도 App·PAT bypass 불필요). dev 만 protectImportantBranch 로 PR 필수를 유지한다.
+
+      # prod 승격에만 필요 — 태그를 읽어 다음 버전 계산.
+      - name: Checkout (태그 조회용)
+        if: ${{ steps.plan.outputs.env == 'prod' }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 다음 prod 버전 계산
+        id: ver
+        if: ${{ steps.plan.outputs.env == 'prod' }}
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          # 최신 semver 태그. 없으면 v1.0.0 을 "이미 출시된 baseline" 으로 보고 거기서 bump (첫 릴리즈는 v1.0.1~).
+          LATEST=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1)
+          BASE="${LATEST#v}"
+          [ -z "$BASE" ] && BASE="1.0.0"
+          IFS=. read -r MA MI PA <<< "$BASE"
+          case "$BUMP" in
+            major) MA=$((MA + 1)); MI=0; PA=0 ;;
+            minor) MI=$((MI + 1)); PA=0 ;;
+            *)     PA=$((PA + 1)) ;;
+          esac
+          VER="v${MA}.${MI}.${PA}"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "::notice::다음 prod 버전 $VER (latest=${LATEST:-none}, bump=$BUMP)"
+
+      - name: Fast-forward 승격
+        id: ff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R: ${{ github.repository }}
+          SRC: ${{ steps.plan.outputs.source }}
+          DST: ${{ steps.plan.outputs.target }}
+        run: |
+          SRC_SHA=$(gh api "repos/$R/git/refs/heads/$SRC" --jq '.object.sha')
+          DST_SHA=$(gh api "repos/$R/git/refs/heads/$DST" --jq '.object.sha')
+          echo "promote $SRC($SRC_SHA) → $DST($DST_SHA)"
+          echo "sha=$SRC_SHA" >> "$GITHUB_OUTPUT"
+
+          if [ "$SRC_SHA" = "$DST_SHA" ]; then
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$DST 는 이미 $SRC 와 동일 — 승격할 변경 없음, 배포 생략"
+            exit 0
+          fi
+
+          # force 없이 PATCH → fast-forward 만 허용. 분기(non-ff)면 422 로 실패해 안전하게 멈춘다.
+          if ! gh api -X PATCH "repos/$R/git/refs/heads/$DST" -f "sha=$SRC_SHA"; then
+            echo "::error::$SRC → $DST fast-forward 불가. $DST 가 $SRC 에서 분기됨(직접 커밋·hotfix 의심) 또는 branch protection 이 ref 업데이트를 막음."
+            exit 1
+          fi
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::$SRC → $DST 승격 완료 ($SRC_SHA)"
+
+      - name: 대상 환경 배포 dispatch
+        if: ${{ steps.ff.outputs.skipped == 'false' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # gh workflow run 은 repo 를 로컬 .git 에서 추론하려 한다. 이 job 은 (staging 경로에선) checkout 을 안 해
+          # .git 이 없어 "not a git repository" 로 실패한다(#실측). GH_REPO 로 대상 repo 를 명시해 git 의존을 끊는다.
+          GH_REPO: ${{ github.repository }}
+          TARGET: ${{ steps.plan.outputs.env }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          # GITHUB_TOKEN 으로 한 ref 업데이트는 CI(on: push)를 자동 트리거하지 않는다(Actions recursion 방지).
+          # ff 라 대상 SHA 는 dev 에서 이미 CI 를 통과한 동일 커밋이므로, CI 재실행 없이 배포만 직접 dispatch 한다.
+          if [ "$TARGET" = "prod" ]; then
+            gh workflow run deploy.yml --ref main -f version="$VERSION"
+            echo "::notice::deploy.yml dispatch → main (version=$VERSION)"
+          else
+            gh workflow run deploy.yml --ref staging
+            echo "::notice::deploy.yml dispatch → staging"
+          fi
+
+      - name: 요약
+        if: ${{ always() }}
+        env:
+          TARGET_INPUT: ${{ steps.plan.outputs.env }}
+          SRC: ${{ steps.plan.outputs.source }}
+          DST: ${{ steps.plan.outputs.target }}
+          SHA: ${{ steps.ff.outputs.sha }}
+          SKIPPED: ${{ steps.ff.outputs.skipped }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          {
+            echo "### Promote: $TARGET_INPUT"
+            echo ""
+            echo "- 경로: \`$SRC\` → \`$DST\`"
+            echo "- 커밋: \`$SHA\`"
+            if [ "$TARGET_INPUT" = "prod" ]; then
+              echo "- 버전: \`$VERSION\` (배포 성공 시 deploy 가 태그·릴리즈 생성)"
+            fi
+            if [ "$SKIPPED" = "true" ]; then
+              echo "- 결과: 변경 없음(이미 동일) — 배포 생략"
+            else
+              echo "- 결과: fast-forward 승격 + 배포 dispatch"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 승격 자체의 알림(배포 성공/실패 알림은 deploy.yml 이 따로 보낸다). deploy.yml 의 Slack 패턴과 동일하게
+      # SLACK_BOT_TOKEN·SLACK_CHANNEL_ID·actor 멘션 맵을 쓴다. 전송 실패가 워크플로를 깨지 않게 continue-on-error.
+      - name: Notify Slack on success
+        if: success()
+        continue-on-error: true
+        shell: bash
+        env:
+          SRC: ${{ steps.plan.outputs.source }}
+          DST: ${{ steps.plan.outputs.target }}
+          SHA: ${{ steps.ff.outputs.sha }}
+          SKIPPED: ${{ steps.ff.outputs.skipped }}
+          TARGET_INPUT: ${{ steps.plan.outputs.env }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          SLACK_USER_MAP='{"m-a-king":"U0AKAEF2K9U","1o18z":"U0AKQ6G8BT3","sevineleven":"U0AK6U2J62F"}'
+          ACTOR="${{ github.actor }}"
+          SLACK_ID=$(echo "$SLACK_USER_MAP" | jq -r --arg login "$ACTOR" '.[$login] // empty')
+          ACTOR_MENTION="${SLACK_ID:+<@$SLACK_ID>}"; ACTOR_MENTION="${ACTOR_MENTION:-$ACTOR}"
+          SHORT_SHA="${SHA:0:7}"
+          COMMIT_URL="https://github.com/${{ github.repository }}/commit/$SHA"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          VER_LINE=""
+          [ "$TARGET_INPUT" = "prod" ] && VER_LINE=$(printf '\n• 버전: `%s` (배포 성공 시 릴리즈 생성)' "$VERSION")
+
+          if [ "$SKIPPED" = "true" ]; then
+            TEXT=$(printf '🔁 Promote: `%s` → `%s` — 변경 없음(이미 동일), 배포 생략\n• 실행: %s\n• <%s|워크플로우 로그>' \
+              "$SRC" "$DST" "$ACTOR_MENTION" "$RUN_URL")
+          else
+            TEXT=$(printf '🚀 Promote 성공: `%s` → `%s`\n• 커밋: <%s|%s>%s\n• 실행: %s\n• 배포는 deploy 워크플로에서 진행\n• <%s|워크플로우 로그>' \
+              "$SRC" "$DST" "$COMMIT_URL" "$SHORT_SHA" "$VER_LINE" "$ACTOR_MENTION" "$RUN_URL")
+          fi
+          curl -s -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            --data "$(jq -n --arg channel "${{ secrets.SLACK_CHANNEL_ID }}" --arg text "$TEXT" \
+              '{channel:$channel,text:$text,unfurl_links:false,unfurl_media:false}')"
+
+      - name: Notify Slack on failure
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        env:
+          SRC: ${{ steps.plan.outputs.source }}
+          DST: ${{ steps.plan.outputs.target }}
+          TARGET_INPUT: ${{ steps.plan.outputs.env }}
+        run: |
+          SLACK_USER_MAP='{"m-a-king":"U0AKAEF2K9U","1o18z":"U0AKQ6G8BT3","sevineleven":"U0AK6U2J62F"}'
+          ACTOR="${{ github.actor }}"
+          SLACK_ID=$(echo "$SLACK_USER_MAP" | jq -r --arg login "$ACTOR" '.[$login] // empty')
+          ACTOR_MENTION="${SLACK_ID:+<@$SLACK_ID>}"; ACTOR_MENTION="${ACTOR_MENTION:-$ACTOR}"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          # 분기(non-ff)·dispatch 실패 등. 경로는 입력 기준으로만 표기(ff 실패 시 plan 출력이 비어있을 수 있음).
+          TEXT=$(printf '❌ Promote 실패: target=`%s` (`%s` → `%s`)\n• 실행: %s\n• <%s|워크플로우 로그에서 원인 확인>' \
+            "$TARGET_INPUT" "${SRC:-?}" "${DST:-?}" "$ACTOR_MENTION" "$RUN_URL")
+          curl -s -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer ${{ secrets.SLACK_BOT_TOKEN }}" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            --data "$(jq -n --arg channel "${{ secrets.SLACK_CHANNEL_ID }}" --arg text "$TEXT" \
+              '{channel:$channel,text:$text,unfurl_links:false,unfurl_media:false}')"

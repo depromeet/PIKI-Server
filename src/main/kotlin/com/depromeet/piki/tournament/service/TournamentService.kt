@@ -336,7 +336,7 @@ class TournamentService(
                     val userHistories = tournamentRepository.findHistoriesByTournamentIdAndTournamentUserId(
                         tournamentId, currentUser.getId(),
                     )
-                    return buildCompleted(tournament, userHistories, computeHasGroupResult(tournament), isOwner)
+                    return buildCompleted(tournament, userHistories, computeHasGroupResult(tournament), isOwner, canAddItemForTournament(tournament, userId))
                 }
 
                 // 본인 history만 사용 — 다른 참여자의 매치는 본인 진행 상태에 영향을 주지 않는다.
@@ -407,9 +407,9 @@ class TournamentService(
                     val cloneHistories = tournamentRepository.findHistoriesByTournamentIdAndTournamentUserId(
                         myClone.getId(), myCloneOwnerTU.getId(),
                     )
-                    return buildCompleted(myClone, cloneHistories, computeHasGroupResult(tournament), false)
+                    return buildCompleted(myClone, cloneHistories, computeHasGroupResult(tournament), false, true)
                 }
-                buildCompleted(tournament, histories, computeHasGroupResult(tournament), isOwner)
+                buildCompleted(tournament, histories, computeHasGroupResult(tournament), isOwner, canAddItemForTournament(tournament, userId))
             }
         }
     }
@@ -587,7 +587,7 @@ class TournamentService(
         }
 
         val isOwner = tournamentUser.getId() == tournament.ownerTournamentUserId
-        return buildCompleted(tournament, histories + newHistory, computeHasGroupResult(tournament), isOwner)
+        return buildCompleted(tournament, histories + newHistory, computeHasGroupResult(tournament), isOwner, canAddItemForTournament(tournament, userId))
     }
 
     private fun computeHasGroupResult(tournament: Tournament): Boolean {
@@ -598,11 +598,21 @@ class TournamentService(
         return completedInRoot + completedClones >= 2
     }
 
+    // ROOT 는 항상 아이템 담기 가능. CLONE 은 소셜 초대로 ROOT 에 TournamentUser 가 있으면 true,
+    // 플레이링크 경유(ROOT 에 없음)이면 false.
+    private fun canAddItemForTournament(tournament: Tournament, userId: UUID): Boolean {
+        if (tournament.isRoot()) return true
+        val rootId = tournament.sourceTournamentId ?: error("CLONE must have sourceTournamentId")
+        return tournamentUserRepository.findByTournamentIdAndUserId(rootId, userId)
+            ?.let { true } ?: false
+    }
+
     private fun buildCompleted(
         tournament: Tournament,
         histories: List<TournamentHistory>,
         hasGroupResult: Boolean,
         isOwner: Boolean,
+        canAddItem: Boolean,
     ): TournamentDetail.Completed {
         val isRoot = tournament.isRoot()
         val rankedPairs = computeRanking(histories)
@@ -629,6 +639,7 @@ class TournamentService(
             hasGroupResult = hasGroupResult,
             isOwner = isOwner,
             isRoot = isRoot,
+            canAddItem = canAddItem,
             playLinkExpiresAt = tournament.playLinkExpiresAt,
             sourceTournamentId = tournament.sourceTournamentId,
         )

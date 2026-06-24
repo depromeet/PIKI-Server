@@ -92,6 +92,7 @@ interface TournamentApi {
             - COMPLETED: completed 필드
               - result: 1위부터 최대 4위까지 순위 아이템 목록
               - hasGroupResult: 참여자 2명 이상이면 true. 클라이언트는 이 값으로 친구 토너먼트 결과 보기 버튼을 제어한다.
+              - canAddItem: 결과 화면에서 아이템 담기(위시/링크/이미지)가 가능하면 true. ROOT 소유자·소셜 초대 CLONE 소유자는 true, 플레이링크 CLONE 소유자는 false.
             나머지 필드는 응답에 포함되지 않는다.
         """,
     )
