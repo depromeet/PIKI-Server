@@ -25,6 +25,8 @@
     .title{color:var(--ink);}
     .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;}
     .badge.ACTIVITY{background:var(--accent-soft);color:var(--accent);} .badge.SYSTEM{background:var(--system-soft);color:var(--system);}
+    .push{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;}
+    .push.on{background:#dcfce7;color:#15803d;} .push.off{background:#f1f3f5;color:#94a3b8;}
     .edit{color:var(--accent);font-weight:700;text-decoration:none;font-size:13px;}
   </style>
 </head>
@@ -32,17 +34,18 @@
   <div th:replace="~{admin/fragments :: topbar('/admin', '← 홈')}"></div>
   <div class="wrap">
     <h1>알림 템플릿</h1>
-    <p class="lede">배포 없이 알림 문구를 수정합니다. 수정은 <b>앞으로 발송될 알림</b>에만 적용됩니다(과거 알림 불변).<br>
+    <p class="lede">배포 없이 알림 문구와 <b>OS 푸시(FCM) 발송 여부</b>를 수정합니다. 수정은 <b>앞으로 발송될 알림</b>에만 적용됩니다(과거 알림 불변).<br>
       <span style="color:#92400e">새 알림 <b>타입</b> 추가는 코드 변경(이벤트·핸들러·변수)이 필요해 <b>백엔드 담당자에게 문의</b>하세요 — 여기선 기존 타입의 문구만 수정합니다.</span></p>
     <div class="ok" th:if="${param.updated}">템플릿이 저장됐습니다.</div>
     <div class="card">
       <table>
-        <thead><tr><th>타입</th><th>카테고리</th><th>현재 문구</th><th></th></tr></thead>
+        <thead><tr><th>타입</th><th>카테고리</th><th>현재 문구</th><th>푸시</th><th></th></tr></thead>
         <tbody>
           <tr th:each="t : ${templates}">
             <td><span class="type" th:text="${t.type}">TYPE</span></td>
             <td><span class="badge" th:classappend="${t.category}" th:text="${t.category == T(com.depromeet.piki.notification.domain.NotificationCategory).ACTIVITY ? '활동' : '시스템'}">활동</span></td>
             <td><span class="title" th:text="${#strings.isEmpty(t.title)} ? '(빈 제목)' : ${t.title}">제목</span></td>
+            <td><span th:if="${t.pushEnabled}" class="push on">ON</span><span th:unless="${t.pushEnabled}" class="push off">OFF</span></td>
             <td><a class="edit" th:href="@{/admin/templates/{type}(type=${t.type})}">편집 →</a></td>
           </tr>
         </tbody>

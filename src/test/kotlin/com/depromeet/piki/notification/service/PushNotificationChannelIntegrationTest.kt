@@ -5,6 +5,7 @@ import com.depromeet.piki.notification.domain.NotificationType
 import com.depromeet.piki.notification.fcm.domain.UserDevice
 import com.depromeet.piki.notification.fcm.repository.UserDeviceRepository
 import com.depromeet.piki.notification.repository.NotificationRepository
+import com.depromeet.piki.notification.repository.NotificationTemplateJpaRepository
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubFcmMessageSender
 import org.junit.jupiter.api.Test
@@ -30,6 +31,10 @@ class PushNotificationChannelIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var notificationRepository: NotificationRepository
 
     @Autowired private lateinit var stubFcmMessageSender: StubFcmMessageSender
+
+    @Autowired private lateinit var templateRepository: NotificationTemplateJpaRepository
+
+    @Autowired private lateinit var templateProvider: DbNotificationTemplateProvider
 
     private fun saveNotification(userId: UUID): Notification =
         notificationRepository.save(
@@ -128,5 +133,36 @@ class PushNotificationChannelIntegrationTest : IntegrationTestSupport() {
         pushNotificationChannel.send(userId, saveNotification(userId))
 
         assertFalse(called)
+    }
+
+    @Test
+    fun `백오피스에서 푸시를 끈 타입은 토큰이 있어도 외부 발송을 시도하지 않는다`() {
+        // 발송 여부는 정적 정책이 아니라 DB(push_enabled)에서 온다 — 시드 기본 on 인 ITEM_PARSING_COMPLETED 를
+        // off 로 토글하고 reload 하면, 채널이 캐시에서 off 를 읽어 토큰이 있어도 발송을 건너뛴다(동적 라우팅의 본질).
+        val type = NotificationType.ITEM_PARSING_COMPLETED
+        val entity = templateRepository.findById(type).orElseThrow()
+        val title = entity.titleTemplate
+        val body = entity.bodyTemplate
+        val userId = UUID.randomUUID()
+        userDeviceRepository.save(UserDevice(userId = userId, deviceId = "device-1", fcmToken = "token-1"))
+        var called = false
+        stubFcmMessageSender.onSend = { _, _, _ ->
+            called = true
+            emptyList()
+        }
+        try {
+            entity.update(title, body, pushEnabled = false)
+            templateRepository.saveAndFlush(entity)
+            templateProvider.reload()
+
+            pushNotificationChannel.send(userId, saveNotification(userId))
+
+            assertFalse(called)
+        } finally {
+            // 컨텍스트 공유 캐시는 트랜잭션 롤백으로 안 되돌아가므로, DB·캐시를 시드 기본(push on)으로 복구해 다른 테스트에 누수되지 않게 한다.
+            entity.update(title, body, pushEnabled = true)
+            templateRepository.saveAndFlush(entity)
+            templateProvider.reload()
+        }
     }
 }
