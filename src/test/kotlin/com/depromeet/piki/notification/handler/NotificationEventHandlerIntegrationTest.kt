@@ -14,7 +14,7 @@ import kotlin.test.assertEquals
 
 // 핸들러가 이제 repo·resolver 를 주입받으므로 무인자 생성이 불가하다. 실제 와이어링된 빈을 autowire 해
 // 베이스 클래스의 제네릭 eventType 도출·notificationType·유일성을 검증한다(내부 모킹 없이 실제 빈으로).
-class NotificationEventHandlerTest : IntegrationTestSupport() {
+class NotificationEventHandlerIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var itemParsingCompletedHandler: ItemParsingCompletedHandler
 
     @Autowired private lateinit var itemParsingFailedHandler: ItemParsingFailedHandler
