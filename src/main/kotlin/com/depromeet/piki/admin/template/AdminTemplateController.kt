@@ -48,6 +48,8 @@ class AdminTemplateController(
         @PathVariable type: NotificationType,
         @RequestParam title: String,
         @RequestParam(required = false) body: String?,
+        // 체크박스는 체크됐을 때만 "true" 를 전송하고 해제 시 파라미터가 아예 안 온다 — 미전송을 off(기본 false)로 받는다.
+        @RequestParam(defaultValue = "false") pushEnabled: Boolean,
         request: HttpServletRequest,
         model: Model,
     ): String {
@@ -55,11 +57,11 @@ class AdminTemplateController(
         if (type == NotificationType.ANNOUNCEMENT) return "redirect:/admin/announcements"
         val safeBody = body ?: ""
         return try {
-            adminTemplateService.update(type, title, safeBody, actor = actor(request), clientIp = clientIp(request))
+            adminTemplateService.update(type, title, safeBody, pushEnabled, actor = actor(request), clientIp = clientIp(request))
             "redirect:/admin/templates?updated"
         } catch (e: IllegalArgumentException) {
             // 선언 안 된 변수 등 검증 실패 — 제출값을 유지한 채 편집 화면에 에러를 표시한다(400 JSON 대신 SSR).
-            model.addAttribute("template", adminTemplateService.get(type).copy(title = title, body = safeBody))
+            model.addAttribute("template", adminTemplateService.get(type).copy(title = title, body = safeBody, pushEnabled = pushEnabled))
             model.addAttribute("error", e.message)
             "admin/template-edit"
         }

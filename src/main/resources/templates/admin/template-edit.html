@@ -56,6 +56,12 @@
         <label for="body">본문 (body) <span style="font-weight:400">— 비우면 제목만 표시</span></label>
         <textarea id="body" name="body" th:text="${template.body}"></textarea>
 
+        <label>OS 푸시 (FCM)</label>
+        <label style="display:flex;align-items:center;gap:9px;margin-top:0;font-weight:500;color:var(--ink);cursor:pointer;">
+          <input type="checkbox" name="pushEnabled" value="true" th:checked="${template.pushEnabled}" style="width:auto;flex:none;">
+          <span>OS 트레이 푸시를 보냅니다 — 끄면 인앱(SSE)·알림센터에만 표시됩니다.</span>
+        </label>
+
         <label>사용 가능한 변수 (클릭하면 삽입)</label>
         <div class="vars" th:if="${!template.variables.isEmpty()}">
           <button type="button" class="chip" th:each="v : ${template.variables}"
