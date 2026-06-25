@@ -44,6 +44,18 @@ class ProductImage private constructor(
                 "image/heif",
             )
 
+        // 스토리지 object key 확장자에서 mimeType 을 복원한다 — extension getter 의 역. 이미지 outbox 워커가 S3 download 시
+        // content-type 메타를 못 받았을 때, 등록 때 우리가 key 에 박은 확장자로 mimeType 을 되살리는 fallback 으로 쓴다.
+        fun mimeTypeOfExtension(extension: String): String? =
+            when (extension.lowercase()) {
+                "png" -> "image/png"
+                "jpg", "jpeg" -> "image/jpeg"
+                "webp" -> "image/webp"
+                "heic" -> "image/heic"
+                "heif" -> "image/heif"
+                else -> null
+            }
+
         fun of(
             bytes: ByteArray,
             mimeType: String?,

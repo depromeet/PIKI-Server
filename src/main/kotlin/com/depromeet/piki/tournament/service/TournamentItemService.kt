@@ -39,6 +39,8 @@ class TournamentItemService(
         images: List<MultipartFile>,
     ): List<Long> {
         if (images.size !in MIN_IMAGE_COUNT..MAX_IMAGE_COUNT) throw TournamentException.invalidImageCount()
+        // 권한·상태·복제를 업로드 전에 미리 검증 — 거부될 요청이 S3 에 orphan raw 를 남기지 않게 한다(정원 동시성 최종 검증은 persist 의 FOR UPDATE).
+        tournamentItemPersistenceService.verifyCanAddItems(userId, tournamentId)
         // 형식 검증(빈 바이트·미지원 MIME) — 실패 시 즉시 400. 유효한 이미지만 durable 적재한다.
         val productImages = images.map { ProductImage.of(it.bytes, it.contentType) }
         // 원본을 S3 raw 에 올려 입력을 durable 화한다(외부 호출, 트랜잭션 밖). 이 key 가 item 의 입력 정체성이 된다.

@@ -78,7 +78,7 @@ class ItemParsingService(
     //
     // 단건 시도는 워커가 60s 안에 끝내므로(외부 timeout 합 ≤ 약 55s, Gemini 내부 재시도 off), updated_at 이 60s 보다 오래된
     // PROCESSING 은 워커가 더는 돌고 있지 않다는 뜻이다. 그런 행을:
-    //   - link 가 없으면(이미지 경로 — 원본이 메모리 ByteArray 라 크래시 시 소실) 되살릴 수 없으므로 즉시 FAILED.
+    //   - link·imageKey 가 둘 다 없으면(입력 없는 orphan) 되살릴 수 없으므로 즉시 FAILED. 이미지(imageKey)는 S3 raw 로 durable 해 link 처럼 재실행한다.
     //   - attempt 가 상한(maxAttempts)에 도달했으면 더 시도하지 않고 FAILED (무한 재큐잉 방지, 절대 3분 초과 금지).
     //   - 그 외에는 reclaim(attempt++, PROCESSING 유지)해 재실행 대상으로 반환한다 — 실제 워커 제출은 스케줄러가 트랜잭션 밖에서 한다.
     //

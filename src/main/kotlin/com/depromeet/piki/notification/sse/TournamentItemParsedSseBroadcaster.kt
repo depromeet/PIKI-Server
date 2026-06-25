@@ -50,7 +50,7 @@ class TournamentItemParsedSseBroadcaster(
     // adder(주최자)도 참여자라 함께 받는다 — 이 신호는 "알림"이 아니라 카드 갱신이라, 보는 화면이 모두 동일하게
     // 갱신되는 게 옳다(adder 의 ITEM_PARSING_COMPLETED 알림과는 목적이 다르다).
     //
-    // 파싱 시점엔 add 마다 새 item·snapshot 이 생겨(persistLinkItem·persistProcessingItems) 한 itemId 가 한
+    // 파싱 시점엔 add 마다 새 item·snapshot 이 생겨(persistLinkItem·persistPendingImageItems) 한 itemId 가 한
     // tournament_item 에만 매이므로 routings 는 0~1 행이다. List·순회로 둔 건 향후 item 공유(한 아이템이 여러
     // 토너먼트에 동시 출전) 도입 대비이며, 그땐 routing 별로 각 snapshot 의 실제 상태를 확인해야 한다 — 지금은
     // 단일이라 이벤트 status 를 그대로 싣는다(공유 도입 시 spurious 갱신 주의, 후속 이슈). 위시 전용(어느 토너먼트에도

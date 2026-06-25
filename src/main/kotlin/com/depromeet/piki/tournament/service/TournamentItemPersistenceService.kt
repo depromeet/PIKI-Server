@@ -121,6 +121,22 @@ class TournamentItemPersistenceService(
         snapshot.recover(name = name, currentPrice = price, imageUrl = imageUrl, currency = currency)
     }
 
+    // 이미지 업로드(외부 호출) 전에 권한·상태·복제를 미리 검증해 거부될 요청이 S3 에 orphan raw 를 남기지 않게 한다.
+    // 정원은 동시성 때문에 persist 의 FOR UPDATE(validateAndCheckCapacity)가 최종 판정하므로 여기선 제외한다(다층 방어).
+    @Transactional(readOnly = true)
+    fun verifyCanAddItems(
+        userId: UUID,
+        tournamentId: Long,
+    ) {
+        val tournament =
+            tournamentRepository.findTournamentById(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        if (!tournament.isPending()) throw TournamentException.notPendingTournament()
+        tournament.sourceTournamentId?.let { throw TournamentException.clonedTournamentCannotAddItems() }
+        tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+            ?: throw TournamentException.forbiddenTournament()
+    }
+
     private fun validateAndCheckCapacity(
         userId: UUID,
         tournamentId: Long,

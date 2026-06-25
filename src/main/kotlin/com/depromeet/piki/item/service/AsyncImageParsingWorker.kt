@@ -41,7 +41,10 @@ class AsyncImageParsingWorker(
     ) {
         runCatching {
             val stored = imageStorage.download(imageKey)
-            val image = ProductImage.of(stored.bytes, stored.contentType)
+            // download 가 S3 content-type 메타를 못 주면(메타 유실 등) 등록 때 key 에 박은 확장자로 mimeType 을 복원한다 —
+            // 멀쩡한 raw 가 메타 결함만으로 비복구 FAILED 되는 것을 막는다(key 확장자가 우리가 박은 신뢰값, content-type 은 fallback).
+            val contentType = ProductImage.mimeTypeOfExtension(imageKey.substringAfterLast('.', "")) ?: stored.contentType
+            val image = ProductImage.of(stored.bytes, contentType)
             val extraction = productImageExtractor.extract(image)
             // bbox 있으면 크롭 이미지를, 없으면 원본을 결과 이미지로 S3 에 올린다(READY 불변식: imageUrl 필수).
             val bytes = extraction.boundingBox?.let { imageCropper.crop(image.bytes, it) } ?: image.bytes
@@ -74,7 +77,7 @@ class AsyncImageParsingWorker(
 
     // 파싱 실패는 두 갈래다 — 일시 오류는 recover 에 맡기고(PROCESSING 유지), 확정 실패만 즉시 종결한다.
     // 판정은 ErrorCategory 가 쥔다(AsyncItemParsingWorker 와 동일): RETRYABLE(S3 다운로드·Gemini timeout·5xx 등)만 PROCESSING 으로 두고,
-    // 그 외는 즉시 FAILED. HttpMappable 이 아닌 예상 못한 예외는 일시·영구를 단정할 수 없어 보수적으로 일시로 둔다.
+    // 그 외(비-HttpMappable 예외 포함)는 즉시 FAILED — 재시도해도 같은 결과인 코드 버그성 예외라 되살리지 않는다.
     private fun onExtractFailed(
         itemId: Long,
         snapshotId: Long,
