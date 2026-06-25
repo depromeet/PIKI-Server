@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 
-// 백오피스 템플릿 관리(#250). 편집은 미래 발송에만 적용(렌더 결과는 발송 시점 freeze) — 여기선 템플릿 문자열만 바꾼다.
+// 백오피스 템플릿 관리(#250). 편집은 미래 발송에만 적용(렌더 결과는 발송 시점 freeze) — 여기선 템플릿 문자열·푸시 토글만 바꾼다.
 // 수정 시: 변수 검증(선언 안 된 변수 차단) → 저장 → provider 캐시 reload → 감사 기록.
 @Service
 @ConditionalOnAdminEnabled
@@ -38,6 +38,7 @@ class AdminTemplateService(
                 category = NotificationCategory.of(entity.type),
                 title = entity.titleTemplate,
                 body = entity.bodyTemplate,
+                pushEnabled = entity.pushEnabled,
                 variables = NotificationTemplateVariables.availableFor(entity.type),
             )
         }
@@ -49,6 +50,7 @@ class AdminTemplateService(
             category = NotificationCategory.of(entity.type),
             title = entity.titleTemplate,
             body = entity.bodyTemplate,
+            pushEnabled = entity.pushEnabled,
             variables = NotificationTemplateVariables.availableFor(entity.type),
         )
     }
@@ -58,6 +60,7 @@ class AdminTemplateService(
         type: NotificationType,
         title: String,
         body: String,
+        pushEnabled: Boolean,
         actor: String,
         clientIp: String?,
     ) {
@@ -65,9 +68,14 @@ class AdminTemplateService(
         validateLengths(title, body)
         validateVariables(type, title, body)
         val entity = templateRepository.findById(type).orElseThrow { IllegalStateException("템플릿 없음: $type") }
-        entity.update(title, body)
+        entity.update(title, body, pushEnabled)
         templateRepository.save(entity)
-        auditService.record(actor, AdminAuditAction.TEMPLATE_UPDATE, "$type 템플릿 수정", clientIp)
+        auditService.record(
+            actor,
+            AdminAuditAction.TEMPLATE_UPDATE,
+            "$type 템플릿 수정 (푸시 ${if (pushEnabled) "ON" else "OFF"})",
+            clientIp,
+        )
         // 캐시 갱신은 커밋 후로 미룬다 — 커밋 전 reload 면 이후 단계(감사 저장 등) 롤백 시 캐시만 새 문구로 남아 DB 와 어긋난다.
         TransactionSynchronizationManager.registerSynchronization(
             object : TransactionSynchronization {
@@ -123,6 +131,7 @@ data class TemplateView(
     val category: NotificationCategory,
     val title: String,
     val body: String,
+    val pushEnabled: Boolean,
     val variables: List<TemplateVariable>,
 )
 

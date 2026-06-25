@@ -16,8 +16,8 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 
-// 디스패처의 타입별 채널 선택(NotificationChannelPolicy)을 실제 빈으로 검증한다.
-// 같은 수신자(FCM 토큰 보유)에 대해 푸시 비대상(아이템 추가)은 FCM 을 안 타고 푸시 대상(참여)은 타는지로 채널 선택을 가른다.
+// 디스패처의 타입별 채널 선택(notification_templates.push_enabled)을 실제 빈으로 검증한다.
+// 같은 수신자(FCM 토큰 보유)에 대해 푸시 비대상(아이템 추가 — 시드 기본 push off)은 FCM 을 안 타고 푸시 대상(참여 — push on)은 타는지로 채널 선택을 가른다.
 // 외부 FCM 만 StubFcmMessageSender 로 격리하고, 수신자·토큰·알림 영속은 실제 DB(Testcontainers)다.
 @Transactional
 class NotificationChannelSelectionIntegrationTest : IntegrationTestSupport() {

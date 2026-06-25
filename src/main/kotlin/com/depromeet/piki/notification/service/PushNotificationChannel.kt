@@ -2,7 +2,6 @@ package com.depromeet.piki.notification.service
 
 import com.depromeet.piki.common.config.AsyncConfig
 import com.depromeet.piki.notification.domain.Notification
-import com.depromeet.piki.notification.domain.NotificationChannelPolicy
 import com.depromeet.piki.notification.fcm.service.FcmMessageSender
 import com.depromeet.piki.notification.fcm.service.UserDeviceService
 import com.depromeet.piki.notification.repository.NotificationRepository
@@ -27,6 +26,9 @@ class PushNotificationChannel(
     private val senderProvider: ObjectProvider<FcmMessageSender>,
     private val userDeviceService: UserDeviceService,
     private val notificationRepository: NotificationRepository,
+    // 타입별 푸시 발송 여부(push_enabled)를 DB 캐시에서 읽는다 — 옛 정적 NotificationChannelPolicy.pushable 을 대체한다.
+    // 백오피스가 토글하면 reload 로 캐시가 갱신돼, 코드 배포 없이 타입별 OS 푸시 on/off 가 바뀐다.
+    private val templateProvider: NotificationTemplateProvider,
 ) : NotificationChannel {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -38,8 +40,9 @@ class PushNotificationChannel(
         userId: UUID,
         notification: Notification,
     ) {
-        // 푸시 비대상 알림(아이템 추가/삭제 — 인앱 SSE 로 충분)은 OS 트레이 푸시를 보내지 않는다 — 토큰 게이트와 같은 자리의 자기-적용 판단.
-        if (!NotificationChannelPolicy.pushable(notification.type)) return
+        // 푸시가 꺼진 타입(예: 아이템 추가/삭제 — 인앱 SSE 로 충분)은 OS 트레이 푸시를 보내지 않는다 — 토큰 게이트와 같은 자리의 자기-적용 판단.
+        // 발송 여부는 백오피스가 토글하는 DB 값(push_enabled)이라 캐시에서 읽는다(@Volatile 캐시 lookup 이라 싸다).
+        if (!templateProvider.find(notification.type).pushEnabled) return
         val sender = sender() ?: return
         val tokens = userDeviceService.findTokens(userId)
         if (tokens.isEmpty()) return

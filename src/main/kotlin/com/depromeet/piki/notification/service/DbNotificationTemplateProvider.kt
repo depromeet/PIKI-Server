@@ -21,7 +21,7 @@ class DbNotificationTemplateProvider(
     fun load() {
         val loaded =
             templateRepository.findAll().associate {
-                it.type to NotificationTemplate(title = it.titleTemplate, body = it.bodyTemplate)
+                it.type to NotificationTemplate(title = it.titleTemplate, body = it.bodyTemplate, pushEnabled = it.pushEnabled)
             }
         val missing = NotificationType.entries.filterNot { it in loaded }
         require(missing.isEmpty()) { "notification_templates 시드 누락: $missing (Flyway 시드 확인)" }
