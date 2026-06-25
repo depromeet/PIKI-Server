@@ -16,6 +16,7 @@ import com.depromeet.piki.wishlist.repository.WishRepository
 import com.depromeet.piki.wishlist.service.dto.WishPriceHistory
 import com.depromeet.piki.wishlist.service.dto.WishWithItem
 import com.depromeet.piki.wishlist.service.dto.WishlistPage
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
@@ -30,6 +31,8 @@ class WishlistService(
     private val itemSnapshotRepository: ItemSnapshotRepository,
     private val userService: UserService,
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
     // 위시리스트는 회원 전용. 게스트(인증은 됐으나 회원 아님)는 Security 가 아니라 여기서 도메인 계약으로 막아
     // "회원만 이용 가능" 이라는 구체 사유를 내려준다(SecurityConfig 의 wishlists authenticated() 주석 참고).
     // 인증 principal 은 userId 뿐이라 identityType 은 조회로 확인한다 — 모든 진입 메서드가 처리 전에 가장 먼저 호출한다.
@@ -68,7 +71,11 @@ class WishlistService(
         val productImages = images.map { ProductImage.of(it.bytes, it.contentType) }
         // 원본을 S3 raw 에 올려 입력을 durable 화한다(외부 호출, 트랜잭션 밖). 이 key 가 item 의 입력 정체성이 된다.
         val imageKeys = productImages.map { uploadRaw(it) }
-        return wishPersistenceService.persistPendingImages(userId, imageKeys)
+        // 위시 이미지 등록엔 정원 같은 계약 거부가 없어 정상 흐름에선 persist 가 떨어지지 않지만, 예기치 못한 영속화 실패에도
+        // 방금 올린 raw 가 orphan 으로 새지 않게 즉시 회수한다(tournament 경로와 대칭, best-effort, lifecycle 백업).
+        return runCatching { wishPersistenceService.persistPendingImages(userId, imageKeys) }
+            .onFailure { deleteRawsQuietly(imageKeys) }
+            .getOrThrow()
     }
 
     // 원본 이미지를 S3 raw prefix 에 올리고 그 object key 를 돌려준다. upload 는 공개 URL 을 반환하지만 outbox 입력엔
@@ -77,6 +84,15 @@ class WishlistService(
         val key = "items/raw/${UUID.randomUUID()}.${image.extension}"
         imageStorage.upload(image.bytes, key, image.mimeType)
         return key
+    }
+
+    // persist 실패로 item 에 매이지 못한 raw 를 즉시 회수한다. best-effort — 삭제 실패가 원래 예외를 덮지 않게 삼키고
+    // 경고만 남긴다(tournament 경로와 동일). 회수 못 한 raw 는 items/raw/ S3 lifecycle 이 백업으로 만료한다.
+    private fun deleteRawsQuietly(imageKeys: List<String>) {
+        imageKeys.forEach { key ->
+            runCatching { imageStorage.delete(key) }
+                .onFailure { e -> log.warn("거부된 등록의 raw {} 회수 실패(lifecycle 이 만료): {}", key, e.message) }
+        }
     }
 
     @Transactional(readOnly = true)
