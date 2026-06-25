@@ -62,15 +62,16 @@ class TournamentItemPersistenceService(
     }
 
     @Transactional
-    fun persistProcessingItems(
+    fun persistPendingImageItems(
         userId: UUID,
         tournamentId: Long,
-        count: Int,
+        imageKeys: List<String>,
     ): List<PersistedTournamentItem> {
-        validateAndCheckCapacity(userId, tournamentId, count)
-        val items = itemRepository.saveAll(List(count) { Item() })
+        validateAndCheckCapacity(userId, tournamentId, imageKeys.size)
+        val items = itemRepository.saveAll(imageKeys.map { Item(sourceImageKey = it) })
         // saveAll 은 입력 순서를 보존하므로 items[i] 와 snapshots[i] 가 같은 상품이다. 각 tournament_item 에 그 snapshot 을 고정한다.
-        val snapshots = itemSnapshotRepository.saveAll(items.map { ItemSnapshot.processing(it.getId()) })
+        // 입력(imageKey)이 durable 하므로 link 경로처럼 PENDING 으로 적재한다 — 디스패처가 집어 파싱한다.
+        val snapshots = itemSnapshotRepository.saveAll(items.map { ItemSnapshot.pending(it.getId()) })
         val tournamentItems = tournamentItemRepository.saveAll(
             items.zip(snapshots) { item, snapshot ->
                 TournamentItem(

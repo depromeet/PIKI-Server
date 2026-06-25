@@ -204,14 +204,10 @@ class ItemSnapshot(
         const val IMAGE_URL_MAX_LENGTH = 2048
         const val CURRENCY_MAX_LENGTH = 8
 
-        // URL 등록 시작점 — 추출 전 PENDING 버전(outbox 적재). 등록은 이 행을 커밋만 하고 즉시 반환하며,
-        // 디스패처가 PENDING 을 집어 markProcessing 으로 claim 한 뒤 워커가 파싱한다. @Async 유실(인스턴스 재시작 등)과
-        // 무관하게 DB 의 PENDING 행이 작업의 진실 원천이라, 반드시 한 번은 claim 돼 실행이 시작된다(최소 1회 실행 보장).
+        // 등록 시작점 — 추출 전 PENDING 버전(outbox 적재). URL·이미지 두 경로가 공유한다(이미지 입력도 S3 raw 로 durable
+        // 적재되므로 같은 outbox 에 태운다). 등록은 이 행을 커밋만 하고 즉시 반환하며, 디스패처가 PENDING 을 집어
+        // markProcessing 으로 claim 한 뒤 워커가 파싱한다. @Async 유실(인스턴스 재시작 등)과 무관하게 DB 의 PENDING 행이
+        // 작업의 진실 원천이라, 반드시 한 번은 claim 돼 실행이 시작된다(최소 1회 실행 보장).
         fun pending(itemId: Long): ItemSnapshot = ItemSnapshot(itemId = itemId, status = ItemStatus.PENDING)
-
-        // 이미지 등록 시작점 — 추출 전 PROCESSING 버전. 이미지 경로는 outbox(PENDING)를 거치지 않고 @Async 워커를
-        // 등록 즉시 직접 트리거하므로 곧장 PROCESSING 으로 출발한다. 파싱이 끝나면 markReady/markFailed 로 전이한다.
-        // (이미지 원본이 메모리 ByteArray 라 durable 적재가 선행돼야 outbox 화할 수 있어, 그 비대칭은 후속 범위다.)
-        fun processing(itemId: Long): ItemSnapshot = ItemSnapshot(itemId = itemId, status = ItemStatus.PROCESSING)
     }
 }

@@ -183,8 +183,8 @@ class WishlistApiExamples(
                 operation.examples(openApiObjectMapper.delegate) {
                     add(
                         status = HttpStatus.CREATED,
-                        name = "이미지 등록 접수 (PROCESSING, 다건)",
-                        payload = ApiResponseBody.created(imageProcessingEntries),
+                        name = "이미지 등록 접수 (PENDING, 다건)",
+                        payload = ApiResponseBody.created(imagePendingEntries),
                     )
                     add(WishException.invalidImageCount(), name = "이미지 개수 위반 (1~5개 아님)")
                     add(ProductImageException.unsupportedType(), name = "지원하지 않는 이미지 형식")
@@ -298,8 +298,8 @@ class WishlistApiExamples(
                 ),
         )
 
-    // 이미지 등록 직후 항목들 — link 도 없는 PROCESSING(sourceUrl=null). 비동기 추출이 끝나면 name·가격·이미지가 채워진다.
-    private val imageProcessingEntries =
+    // 이미지 등록 직후 항목들 — link 도 없이 imageKey 로 outbox 적재된 PENDING(sourceUrl=null). 디스패처가 집어 PROCESSING→READY/FAILED 로 전이한다.
+    private val imagePendingEntries =
         listOf(
             WishItemResponse(
                 wish =
@@ -310,7 +310,7 @@ class WishlistApiExamples(
                 item =
                     WishItemResponse.ItemView(
                         id = 513,
-                        status = ItemStatus.PROCESSING,
+                        status = ItemStatus.PENDING,
                         name = null,
                         currentPrice = null,
                         currency = null,
@@ -327,7 +327,7 @@ class WishlistApiExamples(
                 item =
                     WishItemResponse.ItemView(
                         id = 515,
-                        status = ItemStatus.PROCESSING,
+                        status = ItemStatus.PENDING,
                         name = null,
                         currentPrice = null,
                         currency = null,

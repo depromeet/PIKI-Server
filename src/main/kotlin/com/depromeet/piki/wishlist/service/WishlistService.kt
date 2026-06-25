@@ -5,8 +5,6 @@ import com.depromeet.piki.image.domain.ProductImage
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.repository.ItemRepository
 import com.depromeet.piki.item.repository.ItemSnapshotRepository
-import com.depromeet.piki.item.service.ImageParsingWorker
-import com.depromeet.piki.item.service.ItemParsingService
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.user.domain.IdentityType
 import com.depromeet.piki.user.service.UserService
@@ -18,8 +16,6 @@ import com.depromeet.piki.wishlist.repository.WishRepository
 import com.depromeet.piki.wishlist.service.dto.WishPriceHistory
 import com.depromeet.piki.wishlist.service.dto.WishWithItem
 import com.depromeet.piki.wishlist.service.dto.WishlistPage
-import org.slf4j.LoggerFactory
-import org.springframework.core.task.TaskRejectedException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
@@ -27,8 +23,6 @@ import java.util.UUID
 
 @Service
 class WishlistService(
-    private val imageParsingWorker: ImageParsingWorker,
-    private val itemParsingService: ItemParsingService,
     private val wishPersistenceService: WishPersistenceService,
     private val imageStorage: ImageStorage,
     private val wishRepository: WishRepository,
@@ -36,8 +30,6 @@ class WishlistService(
     private val itemSnapshotRepository: ItemSnapshotRepository,
     private val userService: UserService,
 ) {
-    private val log = LoggerFactory.getLogger(javaClass)
-
     // 위시리스트는 회원 전용. 게스트(인증은 됐으나 회원 아님)는 Security 가 아니라 여기서 도메인 계약으로 막아
     // "회원만 이용 가능" 이라는 구체 사유를 내려준다(SecurityConfig 의 wishlists authenticated() 주석 참고).
     // 인증 principal 은 userId 뿐이라 identityType 은 조회로 확인한다 — 모든 진입 메서드가 처리 전에 가장 먼저 호출한다.
@@ -62,32 +54,29 @@ class WishlistService(
         return wishPersistenceService.persist(userId, Item(link))
     }
 
-    // 이미지 등록은 registerFromUrl(link)와 같은 비동기 흐름 — 입력이 이미지(다건)일 뿐이다.
-    // 개수·형식을 동기로 검증(400)한 뒤 PROCESSING item·wish 를 배치 저장해 즉시 반환하고,
-    // 실제 추출(Gemini·크롭·S3)은 imageParsingWorker 가 백그라운드에서 각 이미지를 병렬 파싱해
-    // READY/FAILED 로 전이시킨다. 토너먼트 아이템 이미지 등록과 동일한 패턴이다.
+    // 이미지 등록은 registerFromUrl(link)와 같은 비동기 outbox 흐름 — 입력이 이미지(다건)일 뿐이다.
+    // 개수·형식을 동기로 검증(400)한 뒤, 원본을 S3 에 durable 적재(raw key 확보)하고 link 경로처럼 PENDING item·wish 를
+    // 배치 저장해 즉시 반환한다. 실제 추출(Gemini·크롭·결과 업로드)은 디스패처(@Scheduled)가 PENDING 을 집어 워커에 넘긴다.
+    // raw 를 먼저 올려 입력이 durable 하므로, @Async 유실·일시 오류로 재실행돼도 워커가 그 key 로 원본을 다시 읽는다.
     fun registerFromImages(
         images: List<MultipartFile>,
         userId: UUID,
     ): List<WishWithItem> {
         requireMember(userId)
         if (images.size !in MIN_IMAGE_COUNT..MAX_IMAGE_COUNT) throw WishException.invalidImageCount()
-        // 형식 검증(빈 바이트·미지원 MIME) — 실패 시 즉시 400. 유효한 이미지만 PROCESSING 으로 등록한다.
+        // 형식 검증(빈 바이트·미지원 MIME) — 실패 시 즉시 400. 유효한 이미지만 durable 적재한다.
         val productImages = images.map { ProductImage.of(it.bytes, it.contentType) }
-        val results = wishPersistenceService.persistProcessingImages(userId, productImages.size)
-        results.zip(productImages).forEach { (result, productImage) ->
-            val itemId = result.item.getId()
-            val snapshotId = result.snapshot.getId()
-            // 워커 디스패치가 큐 포화 등으로 거부되면 PROCESSING 으로 방치하지 않고 즉시 FAILED 로 떨어뜨린다.
-            try {
-                imageParsingWorker.parse(itemId, snapshotId, productImage)
-            } catch (e: TaskRejectedException) {
-                log.warn("파싱 워커 디스패치 거부, item {} 를 FAILED 처리: {}", itemId, e.message)
-                runCatching { itemParsingService.markFailed(snapshotId) }
-                    .onFailure { ex -> log.error("item {} FAILED 전이 실패, PROCESSING 방치 위험", itemId, ex) }
-            }
-        }
-        return results
+        // 원본을 S3 raw 에 올려 입력을 durable 화한다(외부 호출, 트랜잭션 밖). 이 key 가 item 의 입력 정체성이 된다.
+        val imageKeys = productImages.map { uploadRaw(it) }
+        return wishPersistenceService.persistPendingImages(userId, imageKeys)
+    }
+
+    // 원본 이미지를 S3 raw prefix 에 올리고 그 object key 를 돌려준다. upload 는 공개 URL 을 반환하지만 outbox 입력엔
+    // 우리가 만든 key 가 필요하다(워커가 download(key)로 다시 읽는다). 파싱이 끝나면 워커가 이 raw 를 회수한다.
+    private fun uploadRaw(image: ProductImage): String {
+        val key = "items/raw/${UUID.randomUUID()}.${image.extension}"
+        imageStorage.upload(image.bytes, key, image.mimeType)
+        return key
     }
 
     @Transactional(readOnly = true)

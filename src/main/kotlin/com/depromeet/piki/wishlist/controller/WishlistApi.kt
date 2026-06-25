@@ -541,7 +541,7 @@ interface WishlistApi {
     @Operation(
         summary = "위시리스트 등록 (이미지)",
         description = """
-            상품 페이지를 캡처한 이미지 1~5장을 받아, 각 이미지를 PROCESSING 상태의 위시 항목으로 즉시 등록하고 목록을 반환한다.
+            상품 페이지를 캡처한 이미지 1~5장을 받아, 각 이미지를 PENDING 상태의 위시 항목으로 즉시 등록하고(link 처럼 outbox 적재) 목록을 반환한다.
             실제 상품 정보 추출(Gemini Vision)은 백그라운드에서 비동기로 진행되어 각 항목을 READY 또는 FAILED 로 전이시킨다.
             URL 등록과 결과 모양(WishItemResponse)이 같다. 이미지 등록 항목은 URL 이 없어 sourceUrl 이 null 이며,
             추출 결과는 SSE(`/api/v1/notifications/subscribe`)로 완료·실패를 통보받아 재조회하며, 추출 실패(FAILED) 항목은 보정 API(PATCH)로 직접 채워 복구한다.
@@ -551,7 +551,7 @@ interface WishlistApi {
         value = [
             ApiResponse(
                 responseCode = "201",
-                description = "이미지 등록 접수 — 각 항목이 PROCESSING 상태로 생성되고 비동기 파싱이 시작된다",
+                description = "이미지 등록 접수 — 각 항목이 PENDING 상태로 생성되고 비동기 파싱이 시작된다",
                 content = [
                     Content(
                         mediaType = MediaType.APPLICATION_JSON_VALUE,

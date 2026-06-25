@@ -3,29 +3,21 @@ package com.depromeet.piki.tournament.service
 import com.depromeet.piki.common.storage.ImageStorage
 import com.depromeet.piki.image.domain.ProductImage
 import com.depromeet.piki.item.repository.ItemSnapshotRepository
-import com.depromeet.piki.item.service.ImageParsingWorker
-import com.depromeet.piki.item.service.ItemParsingService
 import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.tournament.repository.TournamentItemRepository
 import com.depromeet.piki.tournament.repository.TournamentRepository
-import org.slf4j.LoggerFactory
-import org.springframework.core.task.TaskRejectedException
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
 @Service
 class TournamentItemService(
-    private val imageParsingWorker: ImageParsingWorker,
-    private val itemParsingService: ItemParsingService,
     private val tournamentItemPersistenceService: TournamentItemPersistenceService,
     private val imageStorage: ImageStorage,
     private val tournamentRepository: TournamentRepository,
     private val tournamentItemRepository: TournamentItemRepository,
     private val itemSnapshotRepository: ItemSnapshotRepository,
 ) {
-    private val log = LoggerFactory.getLogger(javaClass)
-
     fun addItemFromLink(
         userId: UUID,
         tournamentId: Long,
@@ -47,22 +39,20 @@ class TournamentItemService(
         images: List<MultipartFile>,
     ): List<Long> {
         if (images.size !in MIN_IMAGE_COUNT..MAX_IMAGE_COUNT) throw TournamentException.invalidImageCount()
-        // 형식 검증(빈 바이트·미지원 MIME) — 실패 시 즉시 400. 유효한 이미지만 PROCESSING 으로 등록한다.
+        // 형식 검증(빈 바이트·미지원 MIME) — 실패 시 즉시 400. 유효한 이미지만 durable 적재한다.
         val productImages = images.map { ProductImage.of(it.bytes, it.contentType) }
+        // 원본을 S3 raw 에 올려 입력을 durable 화한다(외부 호출, 트랜잭션 밖). 이 key 가 item 의 입력 정체성이 된다.
+        val imageKeys = productImages.map { uploadRaw(it) }
         // 파싱·상태 전이는 item PK 를, 클라이언트 응답은 tournament_item PK 를 쓴다 (PersistedTournamentItem).
-        val persisted = tournamentItemPersistenceService.persistProcessingItems(userId, tournamentId, productImages.size)
-        persisted.zip(productImages).forEach { (persistedItem, productImage) ->
-            val itemId = persistedItem.itemId
-            val snapshotId = persistedItem.snapshotId
-            try {
-                imageParsingWorker.parse(itemId, snapshotId, productImage)
-            } catch (e: TaskRejectedException) {
-                log.warn("item {} async 디스패치 거부 → FAILED 처리", itemId, e)
-                runCatching { itemParsingService.markFailed(snapshotId) }
-                    .onFailure { ex -> log.error("item {} FAILED 전이 실패, PROCESSING 방치 위험", itemId, ex) }
-            }
-        }
+        val persisted = tournamentItemPersistenceService.persistPendingImageItems(userId, tournamentId, imageKeys)
         return persisted.map { it.tournamentItemId }
+    }
+
+    // 원본 이미지를 S3 raw prefix 에 올리고 그 object key 를 돌려준다(워커가 download(key)로 다시 읽는다). 파싱이 끝나면 워커가 회수한다.
+    private fun uploadRaw(image: ProductImage): String {
+        val key = "items/raw/${UUID.randomUUID()}.${image.extension}"
+        imageStorage.upload(image.bytes, key, image.mimeType)
+        return key
     }
 
     // recoverWishItem 과 동일한 패턴 — 이미지 형식 검증 후 S3 업로드는 트랜잭션 밖에서,

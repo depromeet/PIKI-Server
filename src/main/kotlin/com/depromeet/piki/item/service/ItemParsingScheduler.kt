@@ -5,7 +5,7 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.time.LocalDateTime
 
-// URL 파싱 경로의 outbox 디스패처 + recover.
+// 아이템 파싱 outbox 디스패처 + recover (URL·이미지 공용 — claim 종류로 워커를 라우팅한다).
 //
 // 등록은 PENDING snapshot 을 커밋만 하고(작업 적재), 작업의 진실 원천은 인메모리 큐가 아니라 DB 의 PENDING 행이다.
 // 디스패처가 그 행을 집어 실행하므로, @Async 큐 유실(인스턴스 재시작 등)로 PENDING 이 방치되는 일이 없다 —
@@ -27,6 +27,7 @@ import java.time.LocalDateTime
 class ItemParsingScheduler(
     private val itemParsingService: ItemParsingService,
     private val itemParsingWorker: ItemParsingWorker,
+    private val imageParsingWorker: ImageParsingWorker,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -40,12 +41,16 @@ class ItemParsingScheduler(
         claimed.forEach { dispatchToWorker(it) }
     }
 
-    // 디스패처·recover 가 공유하는 워커 제출. 풀 포화(queue 초과)로 거부되면 PROCESSING 그대로 둔다 —
-    // recover 가 stale 로 잡아 재실행한다(execution at-least-once). "claim 됐는데 실행 0회" 도 되살릴 대상이라 종결하지 않는다.
+    // 디스패처·recover 가 공유하는 워커 제출. claim 종류(URL/이미지)로 알맞은 워커에 라우팅한다. 풀 포화(queue 초과)로 거부되면
+    // PROCESSING 그대로 둔다 — recover 가 stale 로 잡아 재실행한다(execution at-least-once). "claim 됐는데 실행 0회" 도 되살릴 대상이라 종결하지 않는다.
     // (#411 까지는 거부 시 즉시 FAILED 였으나, 실패·재시도 판정을 recover 한 곳으로 모으면서 여기선 종결하지 않는다.)
     private fun dispatchToWorker(claimed: ClaimedItem) {
-        runCatching { itemParsingWorker.parse(claimed.itemId, claimed.snapshotId, claimed.link) }
-            .onFailure { e -> log.warn("item {} 워커 디스패치 거부 → PROCESSING 유지, recover 가 재실행: {}", claimed.itemId, e.message) }
+        runCatching {
+            when (claimed) {
+                is LinkClaim -> itemParsingWorker.parse(claimed.itemId, claimed.snapshotId, claimed.link)
+                is ImageClaim -> imageParsingWorker.parse(claimed.itemId, claimed.snapshotId, claimed.imageKey)
+            }
+        }.onFailure { e -> log.warn("item {} 워커 디스패치 거부 → PROCESSING 유지, recover 가 재실행: {}", claimed.itemId, e.message) }
     }
 
     // recover — 단건 실행이 끝나지 않아 stale 해진 PROCESSING 을 재실행하거나(execution at-least-once) 상한 도달·되살림 불가 시 종결한다.
