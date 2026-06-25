@@ -124,7 +124,7 @@ class WishlistRefreshIntegrationTest : IntegrationTestSupport() {
         try {
             // PROCESSING 위시 시딩 — 디스패처는 PENDING 만 집고 recover 는 stale(60초)만 보므로 방금 만든 행은 PROCESSING 고정.
             val item = itemRepository.save(Item(ProductLink.parse("https://shop.example.com/products/inprogress")))
-            val snapshot = itemSnapshotRepository.save(ItemSnapshot.processing(item.getId()))
+            val snapshot = itemSnapshotRepository.save(ItemSnapshot.pending(item.getId()).apply { markProcessing() })
             val wish = wishRepository.save(Wish(userId = userId, snapshotId = snapshot.getId()))
             val itemId = item.getId()
             val before = countSnapshots(itemId)

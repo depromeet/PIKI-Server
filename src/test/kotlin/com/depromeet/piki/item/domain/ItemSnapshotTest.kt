@@ -204,7 +204,7 @@ class ItemSnapshotTest {
     fun `isInProgress 는 PENDING·PROCESSING 에서 true, READY·FAILED 에서 false 다`() {
         // 수동 새로고침(5단계) 멱등 가드용 — 이미 진행 중이면 새 추출 버전을 만들지 않는다.
         assertTrue(ItemSnapshot.pending(itemId = 1L).isInProgress())
-        assertTrue(ItemSnapshot.processing(itemId = 1L).isInProgress())
+        assertTrue(ItemSnapshot.pending(itemId = 1L).apply { markProcessing() }.isInProgress())
         assertFalse(
             ItemSnapshot(itemId = 1L)
                 .apply { markReady(ProductSnapshot(name = "x", currentPrice = 1_000, imageUrl = "https://img.example.com/a.png")) }
@@ -223,7 +223,7 @@ class ItemSnapshotTest {
     @Test
     fun `PENDING 이 아닌 스냅샷을 markProcessing 하면 IllegalStateException`() {
         // 이미 claim 된(PROCESSING)·완료(READY)·실패(FAILED)는 다시 claim 할 수 없다 — 디스패처 중복 집기 방어.
-        assertFailsWith<IllegalStateException> { ItemSnapshot.processing(1L).markProcessing() }
+        assertFailsWith<IllegalStateException> { ItemSnapshot.pending(1L).apply { markProcessing() }.markProcessing() }
         assertFailsWith<IllegalStateException> {
             ItemSnapshot(itemId = 1L)
                 .apply { markReady(ProductSnapshot(name = "x", currentPrice = 1_000, imageUrl = "https://img.example.com/a.png")) }
