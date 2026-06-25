@@ -40,9 +40,13 @@ class StubImageStorage : ImageStorage {
     // raw 이미지 download stub. 워커가 ProductImage.of(bytes, contentType)로 재구성하므로 non-empty 바이트 + 지원 MIME 를
     // 돌려준다(바이트 내용은 StubProductImageExtractor 가 결정하므로 무관). 502 시나리오는 downloadBehavior 를 throw 람다로 교체한다.
     val downloadedKeys = mutableListOf<String>()
-    var downloadBehavior: (String) -> StoredImage = { key ->
+
+    // 기본 동작 — upload 한 raw bytes 를 그대로 돌려준다. content-type 누락 같은 시나리오 테스트는 downloadBehavior 를
+    // 교체한 뒤 이 값으로 복원한다(upload 의 defaultBehavior 와 같은 결).
+    val defaultDownloadBehavior: (String) -> StoredImage = { key ->
         storedBytes[key]?.let { StoredImage(it.first, it.second) } ?: StoredImage(byteArrayOf(1), "image/png")
     }
+    var downloadBehavior: (String) -> StoredImage = defaultDownloadBehavior
 
     override fun download(key: String): StoredImage {
         downloadedKeys.add(key)

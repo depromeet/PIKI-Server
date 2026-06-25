@@ -11,6 +11,7 @@ import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubImageParsingWorker
+import com.depromeet.piki.support.StubImageStorage
 import com.depromeet.piki.support.StubItemParsingWorker
 import com.depromeet.piki.support.StubRefreshTokenStore
 import com.depromeet.piki.tournament.domain.Tournament
@@ -92,6 +93,8 @@ class TournamentIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var stubItemParsingWorker: StubItemParsingWorker
 
     @Autowired private lateinit var stubImageParsingWorker: StubImageParsingWorker
+
+    @Autowired private lateinit var stubImageStorage: StubImageStorage
 
     @Autowired private lateinit var stubRefreshTokenStore: StubRefreshTokenStore
 
@@ -1674,10 +1677,11 @@ class TournamentIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `POST tournaments-id-items-images 에서 토너먼트 참여자가 아니면 403 을 반환한다`() {
+    fun `POST tournaments-id-items-images 에서 토너먼트 참여자가 아니면 403 을 반환하고 raw 를 올리지 않는다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         val image = MockMultipartFile("images", "test.jpg", "image/jpeg", ByteArray(100) { 1 })
+        val rawBefore = stubImageStorage.uploadedKeys.count { it.startsWith("items/raw/") }
 
         mockMvc
             .perform(
@@ -1685,6 +1689,9 @@ class TournamentIntegrationTest : IntegrationTestSupport() {
                     .file(image)
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
             ).andExpect(status().isForbidden)
+
+        // 권한 검증(verifyCanAddItems)이 업로드 전에 거부하므로 raw 가 S3 에 올라가지 않아야 한다(orphan 방지).
+        assertEquals(rawBefore, stubImageStorage.uploadedKeys.count { it.startsWith("items/raw/") })
     }
 
     @Test

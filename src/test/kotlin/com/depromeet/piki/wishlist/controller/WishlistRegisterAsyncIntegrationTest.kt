@@ -1,6 +1,7 @@
 package com.depromeet.piki.wishlist.controller
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.piki.common.storage.StoredImage
 import com.depromeet.piki.image.domain.BoundingBox
 import com.depromeet.piki.image.service.ImageExtraction
 import com.depromeet.piki.item.domain.Item
@@ -402,6 +403,30 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             val rawKey = itemRepository.findById(itemId)?.sourceImageKey ?: error("item $itemId 의 sourceImageKey 가 없다")
             await().atMost(Duration.ofSeconds(2)).until { stubImageStorage.deletedKeys.contains(rawKey) }
         } finally {
+            cleanup(userId)
+        }
+    }
+
+    @Test
+    fun `download 가 content-type 메타를 못 줘도 key 확장자로 mimeType 을 복원해 READY 로 끝난다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            // S3 가 GetObject 응답에 content-type 을 안 싣는 상황 재현 — download 가 null content-type 을 돌려줘도
+            // 워커는 raw key 의 확장자(.png)로 mimeType 을 복원해 정상 파싱해야 한다(메타 결함이 비복구 FAILED 로 새지 않음).
+            stubImageStorage.downloadBehavior = { StoredImage(byteArrayOf(1), null) }
+            stubProductImageExtractor.build = {
+                ImageExtraction(
+                    snapshot = ProductSnapshot(link = null, name = "상품", currentPrice = 1_000, currency = "KRW"),
+                    boundingBox = null,
+                )
+            }
+            val image = MockMultipartFile("images", "p.png", "image/png", byteArrayOf(1, 2, 3))
+            val itemId = registerImageAndGetItemId(mockMvc, userId, image)
+            await().atMost(Duration.ofSeconds(5)).until { latestSnapshot(itemId)?.status == ItemStatus.READY }
+        } finally {
+            stubImageStorage.downloadBehavior = stubImageStorage.defaultDownloadBehavior
             cleanup(userId)
         }
     }
