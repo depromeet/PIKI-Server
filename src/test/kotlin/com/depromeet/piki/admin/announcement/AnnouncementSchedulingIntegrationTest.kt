@@ -79,11 +79,30 @@ class AnnouncementSchedulingIntegrationTest : IntegrationTestSupport() {
         stubFcm.onSend = { _, _, _ -> emptyList() } // 죽은 토큰 없음 → 전부 성공
 
         val deliveries = mutableListOf<RecipientDelivery>()
-        broadcaster.broadcast("공지 제목", "공지 본문", refId = 999_001L, recipients = listOf(userId)) { deliveries += it }
+        broadcaster.broadcast("공지 제목", "공지 본문", pushEnabled = true, refId = 999_001L, recipients = listOf(userId)) { deliveries += it }
 
         assertEquals(1, deliveries.size)
         assertEquals(DeliveryStatus.SUCCESS, deliveries.single().status)
         // 히스토리(알림)도 그 유저에게 ANNOUNCEMENT 로 생성된다.
+        val created = notificationJpaRepository.findAll().filter { it.userId == userId && it.type == NotificationType.ANNOUNCEMENT }
+        assertEquals(1, created.size)
+        // 알림엔 push 문구가 들어간다(공지 body 가 아니라).
+        assertEquals("공지 제목", created.single().title)
+        assertEquals("공지 본문", created.single().body)
+    }
+
+    @Test
+    fun `push_enabled=false 면 알림은 만들되 FCM 을 보내지 않아 delivery 가 SKIPPED 다`() {
+        val userId = UUID.randomUUID()
+        userDeviceJpaRepository.save(UserDevice(userId = userId, deviceId = "device-1", fcmToken = "tok-${UUID.randomUUID()}"))
+        // push off 면 sender 자체를 안 부르므로 stub 이 호출되면 안 된다 — 호출되면 throw 로 실패시킨다.
+        stubFcm.onSend = { _, _, _ -> error("push_enabled=false 인데 FCM 이 호출됐다") }
+
+        val deliveries = mutableListOf<RecipientDelivery>()
+        broadcaster.broadcast("공지 제목", "공지 본문", pushEnabled = false, refId = 999_002L, recipients = listOf(userId)) { deliveries += it }
+
+        // FCM 은 안 보내지만(SKIPPED), 알림(히스토리)은 그대로 생성된다 — 공지는 알림센터엔 남아야 한다.
+        assertEquals(DeliveryStatus.SKIPPED, deliveries.single().status)
         val created = notificationJpaRepository.findAll().count { it.userId == userId && it.type == NotificationType.ANNOUNCEMENT }
         assertEquals(1, created)
     }

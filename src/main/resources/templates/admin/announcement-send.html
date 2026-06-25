@@ -7,6 +7,7 @@
   <title>공지 발송 확인 · PiKi 백오피스</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <link rel="stylesheet" href="https://uicdn.toast.com/editor/3.2.2/toastui-editor-viewer.min.css">
   <style>
     :root{--accent:#0EA5E9;--accent-soft:#E0F2FE;--ink:#111827;--muted:#6b7280;--border:#e5e7eb;}
     *{box-sizing:border-box;} body{margin:0;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:#f7f8fa;color:var(--ink);}
@@ -56,8 +57,16 @@
     .banner{background:rgba(255,255,255,.95);border-radius:16px;padding:11px 12px;margin-top:16px;display:flex;gap:10px;align-items:flex-start;}
     .app{width:34px;height:34px;border-radius:8px;background:#cfe6fb;flex:none;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;font-style:italic;color:#1c2330;}
     .bt{flex:1;min-width:0;} .nm{font-size:10.5px;font-weight:700;color:#6b7280;text-transform:uppercase;}
-    .pt{font-size:13px;font-weight:700;color:#1c1f24;margin-top:1px;word-break:break-all;} .pb{font-size:12px;color:#4b5159;margin-top:1px;word-break:break-all;}
+    .pt{font-size:13px;font-weight:700;color:#1c1f24;margin-top:1px;word-break:keep-all;overflow-wrap:anywhere;} .pb{font-size:12px;color:#4b5159;margin-top:1px;word-break:keep-all;overflow-wrap:anywhere;}
     .side .lbl2{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;}
+    .side .lbl2 .hint{font-weight:500;color:#9ca3af;font-size:11px;}
+    /* 공지 페이지 렌더 미리보기 (마크다운 → HTML) */
+    .preview-frame{border:1px solid var(--border);border-radius:12px;padding:14px 16px;background:#fff;margin-top:8px;}
+    .viewer{font-size:14px;line-height:1.6;color:#1f2937;}
+    .viewer.empty{color:#9ca3af;font-size:13px;}
+    /* 푸시 미발송 상태 — 잠금화면 흐리게 + 안내 */
+    .phone.push-off{opacity:.4;filter:grayscale(.4);}
+    .push-note{font-size:12px;color:#92400e;background:#fef3c7;border-radius:10px;padding:9px 12px;margin-top:11px;line-height:1.45;}
   </style>
 </head>
 <body>
@@ -71,13 +80,13 @@
         <div class="extract">
           <div class="lbl">대상자 추출</div>
           <div class="big"><b th:text="${recipientCount}">0</b>명에게 발송됩니다</div>
-          <div class="sub">앱 토큰 보유자 전체 (DISTINCT user_id 기준). 조건별 세그먼트는 후속.</div>
+          <div class="sub">앱 토큰 보유자 전체 (DISTINCT user_id 기준).<br>조건별 세그먼트는 후속.</div>
         </div>
 
         <div class="card">
-          <div class="lbl">발송할 내용</div>
+          <div class="lbl">공지 페이지 미리보기 <span style="font-weight:500;color:#9ca3af">본문 마크다운이 공지 상세에서 이렇게 렌더됩니다 (앱 스타일과 다를 수 있음)</span></div>
           <div class="ttl" th:text="${announcement.title}">제목</div>
-          <div class="bd" th:if="${!#strings.isEmpty(announcement.body)}" th:text="${announcement.body}">본문</div>
+          <div class="preview-frame"><div id="bodyViewer" class="viewer"></div></div>
         </div>
 
         <form th:action="@{/admin/announcements/{id}/send(id=${announcement.id})}" method="post">
@@ -100,26 +109,38 @@
             <button class="btn" type="submit">발송/예약 확정</button>
             <a class="btn ghost" th:href="@{/admin/announcements}">취소</a>
           </div>
-          <div class="warn">즉시 발송은 실유저에게 바로 푸시가 나가며 되돌릴 수 없습니다. 예약은 목록에서 취소할 수 있습니다.</div>
+          <div class="warn">즉시 발송은 실유저에게 바로 푸시가 나가며 되돌릴 수 없습니다.<br>예약은 목록에서 취소할 수 있습니다.</div>
         </form>
       </div>
 
       <div class="side">
-        <div class="lbl2">잠금화면 미리보기</div>
-        <div class="phone">
+        <div class="lbl2">푸시 / 알림센터 미리보기 <span class="hint">실제 알림이 이렇게 뜹니다</span></div>
+        <div class="phone" th:classappend="${!announcement.pushEnabled} ? ' push-off' : ''">
           <div class="clock"><div class="t">9:41</div><div class="d">오늘</div></div>
           <div class="banner">
-            <div class="app"><img src="/favicon.ico" alt="PiKi" style="width:100%;height:100%;border-radius:8px;object-fit:cover"></div>
+            <div class="app"><img th:src="${pushIconUrl}" alt="PiKi" style="width:100%;height:100%;border-radius:8px;object-fit:cover"></div>
             <div class="bt"><div class="nm">PiKi</div>
-              <div class="pt" th:text="${announcement.title}">제목</div>
-              <div class="pb" th:if="${!#strings.isEmpty(announcement.body)}" th:text="${announcement.body}">본문</div>
+              <div class="pt" th:text="${announcement.effectivePushTitle}">제목</div>
+              <div class="pb" th:if="${!#strings.isEmpty(announcement.effectivePushBody)}" th:text="${announcement.effectivePushBody}">본문</div>
             </div>
           </div>
         </div>
+        <div class="push-note" th:if="${!announcement.pushEnabled}">푸시 미발송 - 배너(잠금화면) 알림은 보내지 않고 공지 페이지·알림센터에만 남습니다.</div>
       </div>
     </div>
   </div>
 
+  <script src="https://uicdn.toast.com/editor/3.2.2/toastui-editor-viewer.min.js"></script>
+  <script th:inline="javascript">
+    // 공지 본문(마크다운)을 실제 공지 페이지처럼 HTML 로 렌더해 보여준다. th:inline 이 따옴표·개행을 JS 문자열로 안전 이스케이프한다.
+    // 발송 직전 확인 화면이므로 '왼쪽=공지 페이지 렌더 / 오른쪽=푸시·알림센터' 이중 미리보기로 양쪽을 한눈에 대조한다.
+    (function () {
+      var body = /*[[${announcement.body}]]*/ '';
+      var el = document.getElementById('bodyViewer');
+      if (!body) { el.className = 'viewer empty'; el.textContent = '(본문 없음)'; return; }
+      toastui.Editor.factory({ el: el, viewer: true, initialValue: body });
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
   <script>

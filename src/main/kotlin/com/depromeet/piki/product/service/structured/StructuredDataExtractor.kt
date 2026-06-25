@@ -169,14 +169,87 @@ class StructuredDataExtractor(
         link: ProductLink,
     ): StructuredExtraction {
         val name = stripSiteSuffix(metaContent(document, "og:title"), metaContent(document, "og:site_name"))
-        // OG 표준엔 가격이 없어 product:price:amount(OG product 확장)를 best-effort 로 시도한다.
-        val priceText = metaContent(document, "product:price:amount")
         val imageUrl = metaContent(document, "og:image")
-        val currency = metaContent(document, "product:price:currency")
+        // 가격은 OG 표준(product:price:amount) 우선, 없으면 embedded JS state 에서 보강한다(resolvePrice).
+        val (priceText, currency) = resolvePrice(document)
         // OG 관련 태그(title·price·image·currency)가 하나도 없으면 구조화 데이터 부재. 하나라도 있으면 toResult 가 missing/invalid 를 가린다.
         // currency 도 포함해, 통화 태그만 단독으로 있는 페이지가 no_data 로 오분류되지 않게 한다(부분 제공 → missing_field).
         if (listOfNotNull(name, priceText, imageUrl, currency).isEmpty()) return StructuredExtraction.Miss.NO_DATA
         return toResult(link = link, name = name, imageUrl = imageUrl, priceText = priceText, currency = currency)
+    }
+
+    // 가격·통화 해석. OG 표준 가격 태그(product:price:amount)가 있으면 그대로, 없으면 embedded JS state 에서 보강한다.
+    // OG 가 이름·이미지는 주지만 가격을 JS state(window.__PRELOADED_STATE__ 등)에만 둔 SPA(예: 유니클로)를 LLM 없이
+    // 추출하기 위한 특화 경로다 — 가격이 거대 state 깊숙이 있어 Gemini fallback 의 토큰 상한에 안 맞는 사이트를 파서가 직접 건진다.
+    // OG 표준이 있으면 그대로 써 불필요한 state 파싱을 피한다.
+    private fun resolvePrice(document: Document): Pair<String?, String?> {
+        // currency(product:price:currency)는 amount 유무와 독립으로 읽는다 — 통화 태그만 단독으로 있는 페이지가
+        // no_data 로 오분류되지 않게(부분 제공 → missing_field). amount 가 있으면 그대로, 없으면 embedded state 로 보강.
+        val ogCurrency = metaContent(document, "product:price:currency")
+        metaContent(document, "product:price:amount")?.let { return it to ogCurrency }
+        val embedded = priceFromEmbeddedState(document) ?: return null to ogCurrency
+        return embedded.first to (embedded.second ?: ogCurrency)
+    }
+
+    // embedded JS state 의 JSON 에서 (가격, 통화)를 찾는다. 유니클로식 가격 컨테이너
+    // "prices":{"base":{"value":N,"currency":{"code":C}}} 를 트리에서 탐색한다.
+    private fun priceFromEmbeddedState(document: Document): Pair<String, String?>? {
+        val state = embeddedStateJson(document) ?: return null
+        val prices = findPricesNode(state) ?: return null
+        val base = prices.path("base")
+        val value = base.path("value").takeIf { it.isNumber }?.asString() ?: return null
+        val currency = base.path("currency").path("code").takeIf { it.isString }?.asString()
+        return value to currency
+    }
+
+    // 두 형태의 embedded state 를 JsonNode 로 읽는다: <script id="__NEXT_DATA__" type="application/json"> 의 순수 JSON,
+    // 또는 window.__PRELOADED_STATE__ = {...} JS 할당. 후자는 할당 뒤에 코드가 붙을 수 있어 균형 중괄호로 객체만 떼낸다.
+    private fun embeddedStateJson(document: Document): JsonNode? {
+        document
+            .selectFirst("script#__NEXT_DATA__")
+            ?.data()
+            ?.let { runCatching { objectMapper.readTree(it) }.getOrNull() }
+            ?.let { return it }
+        val script = document.select("script").firstOrNull { it.data().contains("__PRELOADED_STATE__") } ?: return null
+        val raw = script.data()
+        val start = raw.indexOf('{', raw.indexOf("__PRELOADED_STATE__"))
+        if (start < 0) return null
+        val json = extractBalancedJson(raw, start) ?: return null
+        return runCatching { objectMapper.readTree(json) }.getOrNull()
+    }
+
+    // '{' 부터 문자열 리터럴·이스케이프를 고려해 짝이 맞는 '}' 까지 잘라낸다(JS 할당 뒤 trailing 코드 제거).
+    private fun extractBalancedJson(
+        text: String,
+        start: Int,
+    ): String? {
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for (i in start until text.length) {
+            val c = text[i]
+            when {
+                escaped -> escaped = false
+                inString && c == '\\' -> escaped = true
+                c == '"' -> inString = !inString
+                !inString && c == '{' -> depth++
+                !inString && c == '}' -> {
+                    depth--
+                    if (depth == 0) return text.substring(start, i + 1)
+                }
+            }
+        }
+        return null
+    }
+
+    // JSON 트리를 재귀로 훑어 "prices":{"base":{"value":number}} 형태의 prices 노드를 찾는다(유니클로 상품 가격 컨테이너).
+    // JsonNode 는 자식(object 값·array 원소)에 대한 Iterable 이라 자식을 직접 순회한다. value 노드는 자식이 없어 멈춘다.
+    private fun findPricesNode(node: JsonNode): JsonNode? {
+        if (node.path("prices").path("base").path("value").isNumber) return node.path("prices")
+        for (child in node) {
+            findPricesNode(child)?.let { return it }
+        }
+        return null
     }
 
     private fun metaContent(
@@ -192,9 +265,13 @@ class StructuredDataExtractor(
     ): String? {
         title ?: return null
         val site = siteName?.trim()?.ifBlank { null } ?: return title
+        // 구분자(" | "·" - ") + site_name 으로 시작하는 꼬리표를 떼낸다. 정확 일치(끝이 딱 site_name)뿐 아니라
+        // site_name 뒤에 국가·언어 코드가 붙은 경우(유니클로 "상품명 | UNIQLO KR", site_name "UNIQLO")도 잘라낸다.
+        // 여러 번 나오면 마지막 위치 기준(상품명 본문의 구분자는 보존). 없거나 안 맞으면 원본 유지(host 무관 일반 규칙).
         for (separator in listOf(" | ", " - ")) {
-            val suffix = "$separator$site"
-            if (title.endsWith(suffix)) return title.removeSuffix(suffix).trim()
+            val marker = "$separator$site"
+            val idx = title.lastIndexOf(marker)
+            if (idx >= 0) return title.substring(0, idx).trim()
         }
         return title
     }

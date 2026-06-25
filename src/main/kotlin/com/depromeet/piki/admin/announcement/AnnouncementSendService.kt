@@ -40,7 +40,13 @@ class AnnouncementSendService(
         var failure = 0
         var skipped = 0
         runCatching {
-            broadcaster.broadcast(claim.title, claim.body, refId = announcementId, recipients = claim.recipients) { delivery ->
+            broadcaster.broadcast(
+                pushTitle = claim.pushTitle,
+                pushBody = claim.pushBody,
+                pushEnabled = claim.pushEnabled,
+                refId = announcementId,
+                recipients = claim.recipients,
+            ) { delivery ->
                 buffer += AnnouncementDelivery(announcementId, delivery.userId, delivery.status, delivery.fcmCode)
                 when (delivery.status) {
                     DeliveryStatus.SUCCESS -> success++

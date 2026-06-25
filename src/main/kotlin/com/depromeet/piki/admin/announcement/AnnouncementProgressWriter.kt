@@ -15,10 +15,12 @@ class AnnouncementProgressWriter(
     private val deliveryRepository: AnnouncementDeliveryRepository,
     private val userDeviceService: UserDeviceService,
 ) {
-    // 발송할 내용 + 대상 수신자. claim 이 성공하면 SENDING 으로 전환된 상태다.
+    // 발송할 푸시 내용 + 대상 수신자. claim 이 성공하면 SENDING 으로 전환된 상태다.
+    // 알림(notifications, ≤255)엔 공지 body(마크다운 장문)가 아니라 push 전용 문구가 들어간다(#561). 긴 body 는 공지 페이지 전용.
     data class Claim(
-        val title: String,
-        val body: String,
+        val pushTitle: String,
+        val pushBody: String,
+        val pushEnabled: Boolean,
         val recipients: List<UUID>,
     )
 
@@ -35,7 +37,7 @@ class AnnouncementProgressWriter(
         val recipients = userDeviceService.findAllTokenHolderIds()
         announcement.markSending(recipientCount = recipients.size, sentBy = actor)
         announcementRepository.save(announcement)
-        return Claim(announcement.title, announcement.body, recipients)
+        return Claim(announcement.effectivePushTitle, announcement.effectivePushBody, announcement.pushEnabled, recipients)
     }
 
     // 배치 flush — delivery 건별 행 저장 + 진행률 누적. fan-out 중 주기적으로 호출돼 폴링이 진행률을 본다.

@@ -1,6 +1,7 @@
 package com.depromeet.piki.notification.controller.dto
 
 import com.depromeet.piki.notification.domain.NotificationCategory
+import com.depromeet.piki.notification.service.toUnreadTotal
 import io.swagger.v3.oas.annotations.media.Schema
 
 // 읽음 처리 응답 — 처리 후 안읽음 수(전체·탭별)를 서버 권위 값으로 내려, 클라가 +1/-1 산수 없이 그대로 미러링하게 한다.
@@ -14,10 +15,10 @@ data class NotificationReadResponse(
     val unreadCountByCategory: Map<NotificationCategory, Long>,
 ) {
     companion object {
-        // total 은 카테고리 합으로 도출 — 전체·탭별 두 수치가 어긋날 여지를 없앤다(getHistory 와 동일 규칙).
+        // total 은 카테고리 합으로 도출 — toUnreadTotal 단일 소스를 거쳐 전체·탭별 두 수치가 어긋날 여지를 없앤다(getHistory 와 동일 규칙).
         fun of(unreadCountByCategory: Map<NotificationCategory, Long>): NotificationReadResponse =
             NotificationReadResponse(
-                unreadCount = unreadCountByCategory.values.sum(),
+                unreadCount = unreadCountByCategory.toUnreadTotal(),
                 unreadCountByCategory = unreadCountByCategory,
             )
     }

@@ -31,3 +31,6 @@ out/
 
 # superpowers AI 워크플로 산출물 (로컬 전용) — 로컬 세팅 차이로 새어나가지 않도록 레포에서 무시
 docs/superpowers/
+
+# 링크 검수(LinkScreening*E2ETest) 입력 — SCREENING_INPUT 이 가리키는 로컬 전용 URL 묶음, 커밋하지 않는다
+screening-input.json
