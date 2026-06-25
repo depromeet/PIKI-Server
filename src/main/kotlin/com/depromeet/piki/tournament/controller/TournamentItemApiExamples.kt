@@ -97,6 +97,7 @@ class TournamentItemApiExamples(
                         add(TournamentException.clonedTournamentCannotAddItems(), name = "플레이링크 복제 토너먼트에는 아이템 추가 불가")
                         add(TournamentException.notFoundTournament(), name = "토너먼트를 찾을 수 없음")
                         add(TournamentException.notPendingTournament(), name = "PENDING 상태 아님")
+                        add(ImageStorageException.uploadFailed(), name = "이미지 저장 실패 (S3 업로드 장애)")
                     }
 
                 handlerMethod.binds(TournamentItemController::updateItem) ->

@@ -188,6 +188,7 @@ class WishlistApiExamples(
                     )
                     add(WishException.invalidImageCount(), name = "이미지 개수 위반 (1~5개 아님)")
                     add(ProductImageException.unsupportedType(), name = "지원하지 않는 이미지 형식")
+                    add(ImageStorageException.uploadFailed(), name = "이미지 저장 실패 (S3 업로드 장애)")
                     unauthorized()
                     add(WishException.guestCannotUseWishlist(), name = "게스트의 위시리스트 이용 거부 (회원 전용)")
                 }

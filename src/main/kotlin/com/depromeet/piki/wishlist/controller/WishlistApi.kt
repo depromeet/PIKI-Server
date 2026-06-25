@@ -591,6 +591,16 @@ interface WishlistApi {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "502",
+                description = "이미지 저장 실패 (원본을 S3 에 적재하는 중 스토리지 장애 — 클라이언트는 재시도)",
+                content = [
+                    Content(
+                        mediaType = MediaType.APPLICATION_JSON_VALUE,
+                        schema = Schema(implementation = ApiResponseBody::class),
+                    ),
+                ],
+            ),
         ],
     )
     fun registerFromImages(
