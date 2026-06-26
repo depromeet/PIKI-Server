@@ -26,4 +26,12 @@ class Item(
     // 워커가 이 key 로 S3 에서 원본을 다시 읽어 파싱하므로, 메모리 ByteArray 와 달리 유실돼도 recover 가 재실행할 수 있다.
     @Column(name = "source_image_key", nullable = true, length = 1024)
     val sourceImageKey: String? = null,
-) : LongBaseEntity()
+) : LongBaseEntity() {
+    // 입력은 link XOR sourceImageKey 다 — 둘 다 채워지면 toClaim 이 link 를 우선해 imageKey 가 조용히 무시되는 모호성이 생긴다.
+    // 정상 경로(URL 추출 / 이미지 추출)는 한쪽만 채우므로, 둘 다 들어오면 호출부 버그 → 불변식으로 즉시 깬다(둘 다 비어도 됨: 테스트 픽스처).
+    init {
+        require(listOfNotNull(link, sourceImageKey).size <= 1) {
+            "Item 은 link 와 sourceImageKey 중 하나만 가질 수 있다"
+        }
+    }
+}
