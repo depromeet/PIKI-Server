@@ -232,6 +232,30 @@ class TournamentIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
+    fun `POST tournaments-id-join-guest 는 이미 점유된 닉네임이면 409 를 반환한다`() {
+        // createGuestWithNickname 은 existsByNickname pre-check 가 없어, 충돌이 save 시점에 난다.
+        // saveAndFlush 로 그 unique 충돌을 같은 메서드 안에서 끌어올려 duplicateNickname(409)으로 변환하는지 검증한다(#636).
+        val mockMvc = buildMockMvc()
+        val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)
+
+        // 첫 게스트가 "철수" 로 합류해 닉네임을 점유한다.
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/join/guest")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteCode":"$inviteCode","nickname":"철수"}"""),
+            ).andExpect(status().isCreated)
+
+        // 같은 닉네임으로 또 합류하면 닉네임 unique 충돌 → 409 (saveAndFlush 변환, 500 아님).
+        mockMvc
+            .perform(
+                post("/api/v1/tournaments/$tournamentId/join/guest")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"inviteCode":"$inviteCode","nickname":"철수"}"""),
+            ).andExpect(status().isConflict)
+    }
+
+    @Test
     fun `POST tournaments-id-join-guest 는 JWT 없이도 호출 가능하다`() {
         val mockMvc = buildMockMvc()
         val (tournamentId, inviteCode) = createTournamentWithInviteCode(mockMvc)

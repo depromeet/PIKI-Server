@@ -159,4 +159,121 @@ class MetricsDashboardIntegrationTest : IntegrationTestSupport() {
         assertEquals(2, snapshot.retention.d1Returned)
         assertEquals(100, snapshot.retention.d1Rate)
     }
+
+    // 개발진은 developers 명단(user_id)으로 식별된다. 같은 활동을 한 일반 유저 1·개발진 1을 심고,
+    // excludeInternal=true(기본)면 개발진이 빠져 1명분만, false(토글 포함)면 둘 다 2명분이 집계되는지 본다.
+    private fun snapshotVia(excludeInternal: Boolean): MetricsSnapshot =
+        mockMvc()
+            .perform(
+                get("/admin/metrics")
+                    .param("from", "2026-06-20T13:00")
+                    .param("to", "2026-06-20T18:00")
+                    .param("excludeInternal", excludeInternal.toString()),
+            ).andExpect(status().isOk)
+            .andReturn()
+            .modelAndView!!
+            .model["snapshot"] as MetricsSnapshot
+
+    @Test
+    fun `개발진 포함 토글에 따라 developers 명단의 활동이 빠지거나 포함된다`() {
+        val normal = UUID.randomUUID()
+        val dev = UUID.randomUUID()
+        insertUser(normal, "MEMBER", withinWindow)
+        insertUser(dev, "MEMBER", withinWindow)
+        // 개발진을 developers 명단에 user_id 로 등록(운영에선 이메일로 1회 해석해 넣는 그 user_id).
+        jdbcTemplate.update("INSERT INTO developers (user_id) VALUES (?)", uuidToBytes(dev))
+
+        // 위시 — 각 유저 1건(snapshot_id 로 참조).
+        jdbcTemplate.update("INSERT INTO items (id, source_url, created_at, updated_at) VALUES (7001, 'https://shop.example/n', ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO items (id, source_url, created_at, updated_at) VALUES (7002, 'https://shop.example/d', ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO item_snapshots (id, item_id, status, created_at, updated_at) VALUES (7101, 7001, 'READY', ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO item_snapshots (id, item_id, status, created_at, updated_at) VALUES (7102, 7002, 'READY', ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO wishes (user_id, snapshot_id, created_at, updated_at) VALUES (?, 7101, ?, ?)", uuidToBytes(normal), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO wishes (user_id, snapshot_id, created_at, updated_at) VALUES (?, 7102, ?, ?)", uuidToBytes(dev), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+
+        // 푸시 도달 가능 — 각자 활성 디바이스 1개.
+        jdbcTemplate.update("INSERT INTO user_devices (user_id, device_id, fcm_token, created_at, updated_at) VALUES (?, 'dev-n', 'tok-n', ?, ?)", uuidToBytes(normal), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO user_devices (user_id, device_id, fcm_token, created_at, updated_at) VALUES (?, 'dev-d', 'tok-d', ?, ?)", uuidToBytes(dev), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+
+        // DAU — 각자 구간 날짜(6/20 KST)에 활동.
+        jdbcTemplate.update("INSERT INTO user_daily_activity (user_id, active_date, created_at) VALUES (?, ?, NOW(6))", uuidToBytes(normal), Date.valueOf(LocalDate.of(2026, 6, 20)))
+        jdbcTemplate.update("INSERT INTO user_daily_activity (user_id, active_date, created_at) VALUES (?, ?, NOW(6))", uuidToBytes(dev), Date.valueOf(LocalDate.of(2026, 6, 20)))
+
+        // 기본(제외) — 개발진(dev)이 빠져 일반 유저 1명분만.
+        val excluded = snapshotVia(excludeInternal = true)
+        assertEquals(1, excluded.signup.within)
+        assertEquals(1, excluded.wish.total)
+        assertEquals(1, excluded.pushReachableUsers)
+        assertEquals(1, excluded.retention.dau.single { it.date == LocalDate.of(2026, 6, 20) }.count)
+
+        // 토글 포함 — 개발진까지 2명분.
+        val included = snapshotVia(excludeInternal = false)
+        assertEquals(2, included.signup.within)
+        assertEquals(2, included.wish.total)
+        assertEquals(2, included.pushReachableUsers)
+        assertEquals(2, included.retention.dau.single { it.date == LocalDate.of(2026, 6, 20) }.count)
+    }
+
+    @Test
+    fun `공지 발송 집계는 KST sent_at 으로 조회돼 구간 안의 성공·실패·미도달이 잡힌다`() {
+        // announcements.sent_at 은 (다른 테이블과 달리) KST wall-clock 으로 저장된다. 조회 구간이 KST 13:00~18:00 이면
+        // sent_at=15:00(KST)인 공지가 잡혀야 한다. UTC 로 변환해 조회하던 버그(9시간 어긋나 항상 0/0/0)의 회귀 방지.
+        jdbcTemplate.update(
+            "INSERT INTO announcements (title, body, target, status, sent_at, success_count, failure_count, skipped_count, created_at, updated_at) " +
+                "VALUES ('공지', '본문', '토큰 보유자 전체', 'SENT', ?, 5, 2, 1, ?, ?)",
+            Timestamp.valueOf("2026-06-20 15:00:00"),
+            Timestamp.valueOf(withinWindow),
+            Timestamp.valueOf(withinWindow),
+        )
+
+        val snapshot =
+            mockMvc()
+                .perform(get("/admin/metrics").param("from", "2026-06-20T13:00").param("to", "2026-06-20T18:00"))
+                .andExpect(status().isOk)
+                .andReturn()
+                .modelAndView!!
+                .model["snapshot"] as MetricsSnapshot
+
+        assertEquals(5, snapshot.push.deliverySuccess)
+        assertEquals(2, snapshot.push.deliveryFailure)
+        assertEquals(1, snapshot.push.deliverySkipped)
+    }
+
+    @Test
+    fun `토글이 via-TU 토너먼트(생성·플레이) 제외에도 적용되고 tournament_user_id 가 NULL 인 history 는 보존된다`() {
+        // tournaments·tournament_histories 는 user_id 를 직접 안 갖고 tournament_users 경유로만 알아, 제외가 가장 복잡한 경로다.
+        // 개발진 소유 토너먼트 1 · 일반 토너먼트 1 · tournament_user_id NULL(옛 행) history 1 을 심어,
+        // excludeInternal=true 면 개발진 생성·플레이만 빠지고 NULL history 는 보존되는지 본다.
+        val normal = UUID.randomUUID()
+        val dev = UUID.randomUUID()
+        insertUser(normal, "MEMBER", withinWindow)
+        insertUser(dev, "MEMBER", withinWindow)
+        jdbcTemplate.update("INSERT INTO developers (user_id) VALUES (?)", uuidToBytes(dev))
+
+        // tournament_users — 각자 1명(id 명시).
+        jdbcTemplate.update("INSERT INTO tournament_users (id, tournament_id, user_id, created_at, updated_at) VALUES (9001, 8001, ?, ?, ?)", uuidToBytes(normal), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO tournament_users (id, tournament_id, user_id, created_at, updated_at) VALUES (9002, 8002, ?, ?, ?)", uuidToBytes(dev), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+
+        // tournaments — 생성자(owner_tournament_user_id) 경유로 제외. invite_code 는 활성 토너먼트 간 UNIQUE 라 행마다 다른 값.
+        jdbcTemplate.update("INSERT INTO tournaments (id, owner_tournament_user_id, name, status, invite_code, created_at, updated_at) VALUES (8001, 9001, 'n', 'PENDING', '111111', ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO tournaments (id, owner_tournament_user_id, name, status, invite_code, created_at, updated_at) VALUES (8002, 9002, 'd', 'PENDING', '222222', ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+
+        // tournament_histories — 일반 TU / 개발진 TU / NULL(옛 행). 플레이는 라운드 픽 1건당 1행.
+        val histCols = "(tournament_id, current_round, first_tournament_item_id, second_tournament_item_id, selected_tournament_item_id, tournament_user_id, created_at, updated_at)"
+        jdbcTemplate.update("INSERT INTO tournament_histories $histCols VALUES (8001, 1, 1, 2, 1, 9001, ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO tournament_histories $histCols VALUES (8002, 1, 1, 2, 1, 9002, ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO tournament_histories $histCols VALUES (8001, 1, 1, 2, 1, NULL, ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+
+        // 제외 — 개발진 생성·플레이·참여가 빠지고, NULL history 는 살아남는다.
+        val excluded = snapshotVia(excludeInternal = true)
+        assertEquals(1, excluded.tournament.created) // 개발진 소유(8002) 제외
+        assertEquals(1, excluded.tournament.participants) // 개발진 TU(9002) 제외
+        assertEquals(2, excluded.tournament.plays) // 개발진 history 제외, NULL·일반 history 보존
+
+        // 포함 — 전부 집계.
+        val included = snapshotVia(excludeInternal = false)
+        assertEquals(2, included.tournament.created)
+        assertEquals(2, included.tournament.participants)
+        assertEquals(3, included.tournament.plays)
+    }
 }
