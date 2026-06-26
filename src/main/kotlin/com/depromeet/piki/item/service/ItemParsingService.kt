@@ -1,5 +1,7 @@
 package com.depromeet.piki.item.service
 
+import com.depromeet.piki.item.domain.Item
+import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.event.ItemParsingCompleted
 import com.depromeet.piki.item.event.ItemParsingFailed
 import com.depromeet.piki.item.repository.ItemRepository
@@ -63,20 +65,11 @@ class ItemParsingService(
     fun claimDuePending(batchSize: Int): List<ClaimedItem> {
         val snapshots = itemSnapshotRepository.findDuePending(batchSize)
         if (snapshots.isEmpty()) return emptyList()
-        // per-snapshot N+1 대신 link 를 item 에서 한 번에 로드한다 (snapshot 은 itemId 만 들고 link 는 item 소관).
-        val linkByItemId = itemRepository.findByIds(snapshots.map { it.itemId }).associateBy({ it.getId() }, { it.link })
+        // per-snapshot N+1 대신 item 을 한 번에 로드한다 (snapshot 은 itemId 만 들고 입력(link/imageKey)은 item 소관).
+        val itemById = itemRepository.findByIds(snapshots.map { it.itemId }).associateBy { it.getId() }
         return snapshots.mapNotNull { snapshot ->
             snapshot.markProcessing()
-            val link =
-                linkByItemId[snapshot.itemId] ?: run {
-                    log.error(
-                        "PENDING snapshot {} (item {}) 에 link 가 없어 claim 제외 (URL 등록 경로만 PENDING 이어야 한다)",
-                        snapshot.getId(),
-                        snapshot.itemId,
-                    )
-                    return@mapNotNull null
-                }
-            ClaimedItem(itemId = snapshot.itemId, snapshotId = snapshot.getId(), link = link)
+            toClaim(snapshot, itemById[snapshot.itemId])
         }
     }
 
@@ -85,7 +78,7 @@ class ItemParsingService(
     //
     // 단건 시도는 워커가 60s 안에 끝내므로(외부 timeout 합 ≤ 약 55s, Gemini 내부 재시도 off), updated_at 이 60s 보다 오래된
     // PROCESSING 은 워커가 더는 돌고 있지 않다는 뜻이다. 그런 행을:
-    //   - link 가 없으면(이미지 경로 — 원본이 메모리 ByteArray 라 크래시 시 소실) 되살릴 수 없으므로 즉시 FAILED.
+    //   - link·imageKey 가 둘 다 없으면(입력 없는 orphan) 되살릴 수 없으므로 즉시 FAILED. 이미지(imageKey)는 S3 raw 로 durable 해 link 처럼 재실행한다.
     //   - attempt 가 상한(maxAttempts)에 도달했으면 더 시도하지 않고 FAILED (무한 재큐잉 방지, 절대 3분 초과 금지).
     //   - 그 외에는 reclaim(attempt++, PROCESSING 유지)해 재실행 대상으로 반환한다 — 실제 워커 제출은 스케줄러가 트랜잭션 밖에서 한다.
     //
@@ -98,14 +91,14 @@ class ItemParsingService(
     ): StaleProcessingOutcome {
         val stale = itemSnapshotRepository.findStaleProcessing(threshold, batchSize)
         if (stale.isEmpty()) return StaleProcessingOutcome(emptyList(), 0)
-        // per-snapshot N+1 대신 link 를 item 에서 한 번에 로드한다 (snapshot 은 itemId 만 들고 link 는 item 소관).
-        val linkByItemId = itemRepository.findByIds(stale.map { it.itemId }).associateBy({ it.getId() }, { it.link })
+        // per-snapshot N+1 대신 item 을 한 번에 로드한다 (snapshot 은 itemId 만 들고 입력(link/imageKey)은 item 소관).
+        val itemById = itemRepository.findByIds(stale.map { it.itemId }).associateBy { it.getId() }
         val toRetry = mutableListOf<ClaimedItem>()
         var failedCount = 0
         stale.forEach { snapshot ->
-            // link 없음(이미지·orphan): 되살릴 원본이 없으므로 종결. associateBy 값이 null(이미지)이든 키 부재(orphan)든 Elvis 로 동일 처리.
-            val link =
-                linkByItemId[snapshot.itemId] ?: run {
+            // 되살릴 입력(link/imageKey)이 없으면(둘 다 부재 = orphan, 또는 item 부재) 종결. toClaim 이 null 로 일괄 판정한다.
+            val claim =
+                toClaim(snapshot, itemById[snapshot.itemId]) ?: run {
                     snapshot.markFailed()
                     eventPublisher.publishEvent(ItemParsingFailed(snapshot.itemId))
                     ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_FAILED, ItemParsingMetrics.REASON_NO_SOURCE)
@@ -122,8 +115,26 @@ class ItemParsingService(
             }
             // 재실행: PROCESSING 유지 + attempt++ (updated_at 갱신으로 stale 시계 리셋). 디스패치는 스케줄러가.
             snapshot.reclaim()
-            toRetry.add(ClaimedItem(itemId = snapshot.itemId, snapshotId = snapshot.getId(), link = link))
+            toRetry.add(claim)
         }
         return StaleProcessingOutcome(toRetry, failedCount)
+    }
+
+    // snapshot 의 item 입력(link XOR imageKey)으로 claim 객체를 만든다. link 우선, 없으면 imageKey, 둘 다 없으면
+    // (입력 없는 orphan 또는 item 부재) null — claim 경로는 워커에 안 넘기고(다음 recover 가 stale 로 잡아 FAILED),
+    // recover 경로는 즉시 FAILED 한다. 정상 흐름(URL·이미지 등록)엔 항상 입력이 있어 null 은 영속화 경로가 깨진 신호다.
+    private fun toClaim(
+        snapshot: ItemSnapshot,
+        item: Item?,
+    ): ClaimedItem? {
+        val resolved =
+            item ?: run {
+                log.error("snapshot {} 의 item {} 이 없어 claim 제외", snapshot.getId(), snapshot.itemId)
+                return null
+            }
+        resolved.link?.let { return LinkClaim(snapshot.itemId, snapshot.getId(), it) }
+        resolved.sourceImageKey?.let { return ImageClaim(snapshot.itemId, snapshot.getId(), it) }
+        log.error("snapshot {} (item {}) 에 link·imageKey 둘 다 없어 claim 제외 (입력 없는 orphan)", snapshot.getId(), snapshot.itemId)
+        return null
     }
 }

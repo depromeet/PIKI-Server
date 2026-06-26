@@ -62,27 +62,29 @@ class TournamentItemPersistenceService(
     }
 
     @Transactional
-    fun persistProcessingItems(
+    fun persistPendingImageItems(
         userId: UUID,
         tournamentId: Long,
-        count: Int,
+        imageKeys: List<String>,
     ): List<PersistedTournamentItem> {
-        validateAndCheckCapacity(userId, tournamentId, count)
-        val items = itemRepository.saveAll(List(count) { Item() })
-        // saveAll 은 입력 순서를 보존하므로 items[i] 와 snapshots[i] 가 같은 상품이다. 각 tournament_item 에 그 snapshot 을 고정한다.
-        val snapshots = itemSnapshotRepository.saveAll(items.map { ItemSnapshot.processing(it.getId()) })
-        val tournamentItems = tournamentItemRepository.saveAll(
-            items.zip(snapshots) { item, snapshot ->
-                TournamentItem(
-                    tournamentId = tournamentId,
-                    userId = userId,
-                    snapshotId = snapshot.getId(),
-                )
-            },
-        )
+        validateAndCheckCapacity(userId, tournamentId, imageKeys.size)
+        val items = itemRepository.saveAll(imageKeys.map { Item(sourceImageKey = it) })
+        // snapshot·tournament_item 을 itemId·snapshotId 로 되짚어 saveAll 반환 순서에 의존하지 않는다(순서 보존은 공식 계약이 아니다 — WishPersistenceService 와 동일).
+        // 입력(imageKey)이 durable 하므로 link 경로처럼 PENDING 으로 적재한다 — 디스패처가 집어 파싱한다.
+        val snapshotByItemId = itemSnapshotRepository.saveAll(items.map { ItemSnapshot.pending(it.getId()) }).associateBy { it.itemId }
+        val tournamentItemBySnapshotId =
+            tournamentItemRepository
+                .saveAll(
+                    items.map { item ->
+                        val snapshot = snapshotByItemId[item.getId()] ?: error("item ${item.getId()} 의 snapshot 이 없다")
+                        TournamentItem(tournamentId = tournamentId, userId = userId, snapshotId = snapshot.getId())
+                    },
+                ).associateBy { it.snapshotId }
         // 이미지를 여러 장 한 번에 올려도 "아이템이 추가됐다"는 사실은 1건이라 이벤트도 1회만 발행한다.
         eventPublisher.publishEvent(TournamentItemAdded(tournamentId = tournamentId, actorId = userId))
-        return items.zip(tournamentItems) { item, tournamentItem ->
+        return items.map { item ->
+            val snapshot = snapshotByItemId[item.getId()] ?: error("item ${item.getId()} 의 snapshot 이 없다")
+            val tournamentItem = tournamentItemBySnapshotId[snapshot.getId()] ?: error("snapshot ${snapshot.getId()} 의 tournament_item 이 없다")
             PersistedTournamentItem(itemId = item.getId(), snapshotId = tournamentItem.snapshotId, tournamentItemId = tournamentItem.getId())
         }
     }
@@ -118,6 +120,22 @@ class TournamentItemPersistenceService(
             itemSnapshotRepository.findById(snapshotId)
                 ?: error("snapshot 없음 — tournamentItemId=$tournamentItemId, snapshotId=$snapshotId")
         snapshot.recover(name = name, currentPrice = price, imageUrl = imageUrl, currency = currency)
+    }
+
+    // 이미지 업로드(외부 호출) 전에 권한·상태·복제를 미리 검증해 거부될 요청이 S3 에 orphan raw 를 남기지 않게 한다.
+    // 정원은 동시성 때문에 persist 의 FOR UPDATE(validateAndCheckCapacity)가 최종 판정하므로 여기선 제외한다(다층 방어).
+    @Transactional(readOnly = true)
+    fun verifyCanAddItems(
+        userId: UUID,
+        tournamentId: Long,
+    ) {
+        val tournament =
+            tournamentRepository.findTournamentById(tournamentId)
+                ?: throw TournamentException.notFoundTournament()
+        if (!tournament.isPending()) throw TournamentException.notPendingTournament()
+        tournament.sourceTournamentId?.let { throw TournamentException.clonedTournamentCannotAddItems() }
+        tournamentUserRepository.findByTournamentIdAndUserId(tournamentId, userId)
+            ?: throw TournamentException.forbiddenTournament()
     }
 
     private fun validateAndCheckCapacity(

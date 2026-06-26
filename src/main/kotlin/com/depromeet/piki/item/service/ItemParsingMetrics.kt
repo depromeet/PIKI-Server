@@ -30,7 +30,8 @@ object ItemParsingMetrics {
     // recover — 일시 오류 재실행이 상한을 소진. "우리 파이프라인이 끝내 못 끝낸" 진짜 실패라 가장 주목할 reason.
     const val REASON_RETRY_EXHAUSTED = "retry_exhausted"
 
-    // recover — 되살릴 원본이 없음(이미지: 원본이 메모리 ByteArray 라 크래시 시 소실 / orphan: link 부재).
+    // recover — 되살릴 입력이 없음(link·imageKey 둘 다 부재인 orphan). 이미지도 S3 raw 로 durable 적재되므로 정상 흐름엔 없고,
+    // 도달하면 영속화 경로가 깨진 신호다.
     const val REASON_NO_SOURCE = "no_source"
 
     fun record(

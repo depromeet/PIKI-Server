@@ -1,6 +1,7 @@
 package com.depromeet.piki.wishlist.controller
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.piki.common.storage.StoredImage
 import com.depromeet.piki.image.domain.BoundingBox
 import com.depromeet.piki.image.service.ImageExtraction
 import com.depromeet.piki.item.domain.Item
@@ -83,6 +84,9 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
 
     @Autowired
     private lateinit var meterRegistry: MeterRegistry
+
+    @Autowired
+    private lateinit var stubImageStorage: StubImageStorage
 
     @Test
     fun `등록하면 추출을 기다리지 않고 PENDING 상태로 201 이 즉시 반환된다`() {
@@ -226,7 +230,7 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `이미지로 등록하면 PROCESSING 으로 201 즉시 반환 후 파싱 성공 시 READY 로 전이한다`() {
+    fun `이미지로 등록하면 PENDING 으로 201 즉시 반환 후 파싱 성공 시 READY 로 전이한다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
@@ -287,14 +291,13 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `이미지 파싱이 실패하면 item 이 FAILED 로 전이한다`() {
+    fun `이미지 파싱이 확정 실패(상품 아님)면 item 이 FAILED 로 전이한다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
         try {
-            stubProductImageExtractor.build = {
-                throw GeminiApiException.upstreamError(RuntimeException("connection timeout"))
-            }
+            // 확정 실패(상품 아님)는 다시 해도 결과가 같아 즉시 FAILED 로 종결한다 (일시 외부 오류는 PROCESSING 유지 — 아래 별도 테스트).
+            stubProductImageExtractor.build = { throw ProductSnapshotException.notProductPage() }
             val image = MockMultipartFile("images", "p.png", "image/png", byteArrayOf(1, 2, 3))
             val itemId = registerImageAndGetItemId(mockMvc, userId, image)
 
@@ -310,7 +313,31 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `이미지 5개를 등록하면 모두 PROCESSING 으로 반환되고 각각 READY 로 전이한다`() {
+    fun `이미지 파싱이 일시 외부 오류면 FAILED 가 아니라 PROCESSING 으로 남아 recover 재시도 대상이 된다`() {
+        // URL 경로와 동일 — 일시 외부 오류(Gemini 5xx 등)는 워커가 FAILED 로 종결하지 않고 PROCESSING 그대로 둔다.
+        // 이미지 입력은 S3 raw 로 durable 하므로 recover 가 그 key 로 원본을 다시 읽어 재실행한다(#461).
+        val calls = AtomicInteger(0)
+        stubProductImageExtractor.build = {
+            calls.incrementAndGet()
+            throw GeminiApiException.upstreamError(RuntimeException("transient 503"))
+        }
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            val image = MockMultipartFile("images", "p.png", "image/png", byteArrayOf(1, 2, 3))
+            val itemId = registerImageAndGetItemId(mockMvc, userId, image)
+            // 디스패처 claim → 워커가 일시 오류로 throw → 워커가 실제로 한 번 실행됐는지 확인.
+            await().atMost(Duration.ofSeconds(5)).until { calls.get() >= 1 }
+            // 확정 실패가 아니므로 FAILED 로 떨어지지 않고 PROCESSING 으로 남아야 한다 (recover 재시도 대상).
+            assertEquals(ItemStatus.PROCESSING, latestSnapshot(itemId)?.status)
+        } finally {
+            cleanup(userId)
+        }
+    }
+
+    @Test
+    fun `이미지 5개를 등록하면 모두 PENDING 으로 반환되고 각각 READY 로 전이한다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
@@ -331,9 +358,9 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
                     .perform(request)
                     .andExpect(status().isCreated)
                     .andExpect(jsonPath("$.data.length()").value(5))
-                    // 등록 직후 응답은 모두 PROCESSING 이어야 한다 — 서버가 즉시 READY 를 내리는 회귀를 잡는다.
-                    .andExpect(jsonPath("$.data[0].item.status").value("PROCESSING"))
-                    .andExpect(jsonPath("$.data[4].item.status").value("PROCESSING"))
+                    // 등록 직후 응답은 모두 PENDING 이어야 한다 — 이미지도 link 처럼 outbox 에 적재되고, 서버가 즉시 READY/PROCESSING 을 내리는 회귀를 잡는다.
+                    .andExpect(jsonPath("$.data[0].item.status").value("PENDING"))
+                    .andExpect(jsonPath("$.data[4].item.status").value("PENDING"))
                     .andReturn()
                     .response
                     .getContentAsString(Charsets.UTF_8)
@@ -351,6 +378,55 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
                 itemIds.all { latestSnapshot(it)?.status == ItemStatus.READY }
             }
         } finally {
+            cleanup(userId)
+        }
+    }
+
+    @Test
+    fun `이미지 파싱이 READY 로 끝나면 등록 시 durable 적재한 raw 원본을 회수한다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            stubProductImageExtractor.build = {
+                ImageExtraction(
+                    snapshot = ProductSnapshot(link = null, name = "상품", currentPrice = 1_000, currency = "KRW"),
+                    boundingBox = null,
+                )
+            }
+            val image = MockMultipartFile("images", "p.png", "image/png", byteArrayOf(1, 2, 3))
+            val itemId = registerImageAndGetItemId(mockMvc, userId, image)
+            await().atMost(Duration.ofSeconds(5)).until { latestSnapshot(itemId)?.status == ItemStatus.READY }
+
+            // 파싱이 끝나면 등록 시 올린 raw 원본(items/raw/...)을 S3 에서 회수한다(누수 방지, best-effort 라 회수까지 await).
+            // 자기 item 의 sourceImageKey 로 특정해 단언하므로 공유 stub 의 다른 테스트 회수와 섞이지 않는다.
+            val rawKey = itemRepository.findById(itemId)?.sourceImageKey ?: error("item $itemId 의 sourceImageKey 가 없다")
+            await().atMost(Duration.ofSeconds(2)).until { stubImageStorage.deletedKeys.contains(rawKey) }
+        } finally {
+            cleanup(userId)
+        }
+    }
+
+    @Test
+    fun `download 가 content-type 메타를 못 줘도 key 확장자로 mimeType 을 복원해 READY 로 끝난다`() {
+        val mockMvc = buildMockMvc()
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            // S3 가 GetObject 응답에 content-type 을 안 싣는 상황 재현 — download 가 null content-type 을 돌려줘도
+            // 워커는 raw key 의 확장자(.png)로 mimeType 을 복원해 정상 파싱해야 한다(메타 결함이 비복구 FAILED 로 새지 않음).
+            stubImageStorage.downloadBehavior = { StoredImage(byteArrayOf(1), null) }
+            stubProductImageExtractor.build = {
+                ImageExtraction(
+                    snapshot = ProductSnapshot(link = null, name = "상품", currentPrice = 1_000, currency = "KRW"),
+                    boundingBox = null,
+                )
+            }
+            val image = MockMultipartFile("images", "p.png", "image/png", byteArrayOf(1, 2, 3))
+            val itemId = registerImageAndGetItemId(mockMvc, userId, image)
+            await().atMost(Duration.ofSeconds(5)).until { latestSnapshot(itemId)?.status == ItemStatus.READY }
+        } finally {
+            stubImageStorage.downloadBehavior = stubImageStorage.defaultDownloadBehavior
             cleanup(userId)
         }
     }
@@ -412,10 +488,42 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `link 없는 이미지 stale PROCESSING 은 recover 가 FAILED 로 종결한다`() {
-        // 이미지 경로(link 없음)는 원본이 메모리 ByteArray 라 크래시 시 소실 — 되살릴 수 없으므로 attempt 와 무관하게 종결한다.
+    fun `imageKey 있는 stale PROCESSING 은 recover 가 재실행해 READY 로 되살린다`() {
+        // 이미지 경로도 원본을 S3 raw 로 durable 적재하므로(link 와 대칭), 크래시로 stale 된 PROCESSING 을 recover 가 재실행해
+        // 워커가 그 key 로 원본을 다시 읽어 완성시킨다 — 메모리 ByteArray 시절의 "이미지는 복구 불가" 비대칭이 사라졌다(#461).
+        stubProductImageExtractor.build = {
+            ImageExtraction(
+                snapshot = ProductSnapshot(link = null, name = "되살아난 이미지", currentPrice = 2_000, currency = "KRW"),
+                boundingBox = null,
+            )
+        }
+        val item = itemRepository.save(Item(sourceImageKey = "items/raw/${UUID.randomUUID()}.png"))
+        val snapshot = itemSnapshotRepository.save(ItemSnapshot.pending(item.getId()).apply { markProcessing() })
+        val itemId = item.getId()
+        try {
+            jdbcTemplate.update(
+                "UPDATE item_snapshots SET updated_at = ? WHERE id = ?",
+                LocalDateTime.now().minusSeconds(120),
+                snapshot.getId(),
+            )
+
+            itemParsingScheduler.recover() // reclaim(attempt 2) + 재실행 디스패치
+
+            await().atMost(Duration.ofSeconds(5)).until { latestSnapshot(itemId)?.status == ItemStatus.READY }
+            val recovered = latestSnapshot(itemId) ?: error("item $itemId 의 snapshot 이 없다")
+            assertEquals("되살아난 이미지", recovered.name)
+            assertEquals(2, recovered.attemptCount) // 초회 claim 1 + 재실행 1
+        } finally {
+            jdbcTemplate.update("DELETE FROM item_snapshots WHERE item_id = ?", itemId)
+            jdbcTemplate.update("DELETE FROM items WHERE id = ?", itemId)
+        }
+    }
+
+    @Test
+    fun `link·imageKey 둘 다 없는 orphan stale PROCESSING 은 recover 가 FAILED 로 종결한다`() {
+        // 정상 흐름엔 없는 "입력 없는 행"(영속화 경로가 깨진 신호) — 되살릴 입력이 없으므로 attempt 와 무관하게 종결한다.
         val item = itemRepository.save(Item(link = null))
-        val snapshot = itemSnapshotRepository.save(ItemSnapshot.processing(item.getId()))
+        val snapshot = itemSnapshotRepository.save(ItemSnapshot.pending(item.getId()).apply { markProcessing() })
         val itemId = item.getId()
         try {
             jdbcTemplate.update(
@@ -425,10 +533,10 @@ class WishlistRegisterAsyncIntegrationTest : IntegrationTestSupport() {
             )
 
             val noSourceBefore = parseCount("failed", "no_source")
-            itemParsingScheduler.recover() // link 없음 → FAILED
+            itemParsingScheduler.recover() // 입력 없음 → FAILED
 
             assertEquals(ItemStatus.FAILED, latestSnapshot(itemId)?.status)
-            // 결과 메트릭(#506): 되살릴 원본 없음(이미지) 종결 → result=failed,reason=no_source +1.
+            // 결과 메트릭(#506): 되살릴 입력 없음 종결 → result=failed,reason=no_source +1.
             assertTrue(parseCount("failed", "no_source") - noSourceBefore >= 1.0, "no_source 메트릭이 증가해야 한다")
         } finally {
             jdbcTemplate.update("DELETE FROM item_snapshots WHERE item_id = ?", itemId)

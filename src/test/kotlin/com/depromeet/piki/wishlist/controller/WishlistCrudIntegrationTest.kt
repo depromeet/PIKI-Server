@@ -37,7 +37,7 @@ import java.util.UUID
 
 // 조회·수정·삭제 contract 검증. 이 시나리오들의 본질은 "완성된 위시가 있을 때의 동작"이라
 // 등록(비동기) 경로를 거치지 않고 seedReadyWish 로 READY 상태를 시딩한다.
-// 등록 PROCESSING 응답·파싱 전이는 WishlistRegisterAsyncIntegrationTest 가 검증한다.
+// 등록 PENDING 응답·파싱 전이는 WishlistRegisterAsyncIntegrationTest 가 검증한다.
 @Transactional
 class WishlistCrudIntegrationTest : IntegrationTestSupport() {
     @Autowired
@@ -818,7 +818,7 @@ class WishlistCrudIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `다건 이미지로 등록하면 201 과 함께 PROCESSING 항목이 개수만큼 반환된다`() {
+    fun `다건 이미지로 등록하면 201 과 함께 PENDING 항목이 개수만큼 반환된다`() {
         val mockMvc = buildMockMvc()
         val userId = UUID.randomUUID()
         insertMember(userId)
@@ -833,13 +833,13 @@ class WishlistCrudIntegrationTest : IntegrationTestSupport() {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer ${memberToken(userId)}"),
             ).andExpect(status().isCreated)
             .andExpect(jsonPath("$.data.length()").value(2))
-            // 등록 직후라 두 항목 모두 PROCESSING — 추출 결과는 비어 있고 sourceUrl 도 null(이미지 등록).
+            // 등록 직후라 두 항목 모두 PENDING(link 처럼 outbox 적재) — 추출 결과는 비어 있고 sourceUrl 도 null(이미지 등록).
             // 실제 파싱 완료(READY/FAILED)·크롭 imageUrl 은 WishlistRegisterAsyncIntegrationTest 가 검증한다.
-            .andExpect(jsonPath("$.data[0].item.status").value("PROCESSING"))
+            .andExpect(jsonPath("$.data[0].item.status").value("PENDING"))
             .andExpect(jsonPath("$.data[0].item.name").value(nullValue()))
             .andExpect(jsonPath("$.data[0].item.sourceUrl").value(nullValue()))
             .andExpect(jsonPath("$.data[0].wish.id").isNumber)
-            .andExpect(jsonPath("$.data[1].item.status").value("PROCESSING"))
+            .andExpect(jsonPath("$.data[1].item.status").value("PENDING"))
     }
 
     @Test

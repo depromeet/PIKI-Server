@@ -11,6 +11,7 @@ import com.depromeet.piki.product.domain.ProductLink
 import com.depromeet.piki.product.service.ProductSnapshot
 import com.depromeet.piki.support.IntegrationTestSupport
 import com.depromeet.piki.support.StubImageParsingWorker
+import com.depromeet.piki.support.StubImageStorage
 import com.depromeet.piki.support.StubItemParsingWorker
 import com.depromeet.piki.support.StubRefreshTokenStore
 import com.depromeet.piki.tournament.domain.Tournament
@@ -92,6 +93,8 @@ class TournamentIntegrationTest : IntegrationTestSupport() {
     @Autowired private lateinit var stubItemParsingWorker: StubItemParsingWorker
 
     @Autowired private lateinit var stubImageParsingWorker: StubImageParsingWorker
+
+    @Autowired private lateinit var stubImageStorage: StubImageStorage
 
     @Autowired private lateinit var stubRefreshTokenStore: StubRefreshTokenStore
 
@@ -349,7 +352,7 @@ class TournamentIntegrationTest : IntegrationTestSupport() {
         val tournamentId = createTournament(mockMvc)
         // 위시에는 등록되어 있지만 item 테이블에는 없는 ID — wish 확인 통과 후 item 존재 확인에서 404.
         // itemId 단일 출처는 snapshot 이므로, item 행 없이 itemId=999999 를 가리키는 snapshot 만 시딩해 wish 가 가리키게 한다(FK 없음).
-        val danglingSnapshotId = itemSnapshotJpaRepository.save(ItemSnapshot.processing(999999L)).getId()
+        val danglingSnapshotId = itemSnapshotJpaRepository.save(ItemSnapshot.pending(999999L).apply { markProcessing() }).getId()
         wishJpaRepository.save(Wish(userId = userId, snapshotId = danglingSnapshotId))
 
         mockMvc
@@ -368,7 +371,7 @@ class TournamentIntegrationTest : IntegrationTestSupport() {
         val processingItemId = itemJpaRepository.save(Item()).getId()
         // 활성 snapshot 이 PROCESSING — 표시값·상태는 snapshot 소관이라 PROCESSING snapshot 을 만들어 wish 가 가리키게 한다.
         val processingSnapshotId =
-            itemSnapshotJpaRepository.save(ItemSnapshot.processing(processingItemId)).getId()
+            itemSnapshotJpaRepository.save(ItemSnapshot.pending(processingItemId).apply { markProcessing() }).getId()
         // 위시에도 등록 — wish 확인 통과 후 READY 상태 확인에서 409
         wishJpaRepository.save(Wish(userId = userId, snapshotId = processingSnapshotId))
 
@@ -1606,7 +1609,7 @@ class TournamentIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `POST tournaments-id-items-images 는 참여자이면 PROCESSING 아이템을 생성하고 tournamentItemIds 를 반환한다`() {
+    fun `POST tournaments-id-items-images 는 참여자이면 PENDING 아이템을 생성하고 tournamentItemIds 를 반환한다`() {
         stubImageParsingWorker.enabled = false
         try {
             val mockMvc = buildMockMvc()
@@ -1698,10 +1701,11 @@ class TournamentIntegrationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `POST tournaments-id-items-images 에서 토너먼트 참여자가 아니면 403 을 반환한다`() {
+    fun `POST tournaments-id-items-images 에서 토너먼트 참여자가 아니면 403 을 반환하고 raw 를 올리지 않는다`() {
         val mockMvc = buildMockMvc()
         val tournamentId = createTournament(mockMvc)
         val image = MockMultipartFile("images", "test.jpg", "image/jpeg", ByteArray(100) { 1 })
+        val rawBefore = stubImageStorage.uploadedKeys.count { it.startsWith("items/raw/") }
 
         mockMvc
             .perform(
@@ -1709,6 +1713,9 @@ class TournamentIntegrationTest : IntegrationTestSupport() {
                     .file(image)
                     .header(HttpHeaders.AUTHORIZATION, authHeader(otherUserId)),
             ).andExpect(status().isForbidden)
+
+        // 권한 검증(verifyCanAddItems)이 업로드 전에 거부하므로 raw 가 S3 에 올라가지 않아야 한다(orphan 방지).
+        assertEquals(rawBefore, stubImageStorage.uploadedKeys.count { it.startsWith("items/raw/") })
     }
 
     @Test
@@ -1939,11 +1946,12 @@ class TournamentIntegrationTest : IntegrationTestSupport() {
             ),
         )
 
-    // 위시리스트에도 등록된 READY 아이템 생성 — /items/wish 엔드포인트용. link 없는(이미지 등록류) 아이템이라 sourceUrl 이 없다.
-    // 이미지 경로는 outbox(PENDING)를 거치지 않고 PROCESSING 으로 시작하므로, persistProcessingImages 로 만든 뒤
-    // markReady 로 그 PROCESSING snapshot 을 READY 전이시켜 추출값을 채운다(4a). 표시값·상태는 활성 snapshot 이 보유한다.
+    // 위시리스트에도 등록된 READY 아이템 생성 — /items/wish 엔드포인트용. 이미지 등록류(link 없이 sourceImageKey)라 sourceUrl 이 없다.
+    // 이미지 경로도 link 처럼 PENDING 으로 outbox 적재되므로, persistPendingImages 로 만든 뒤 claim(PROCESSING)→markReady 로
+    // 전이시켜 추출값을 채운다. 표시값·상태는 활성 snapshot 이 보유한다.
     private fun saveWishItem(owner: UUID = userId, name: String = "테스트 아이템", price: Int = 10_000): Long {
-        val result = wishPersistenceService.persistProcessingImages(owner, 1).first()
+        val result = wishPersistenceService.persistPendingImages(owner, listOf("items/raw/${UUID.randomUUID()}.png")).first()
+        itemSnapshotJpaRepository.findById(result.snapshot.getId()).get().markProcessing()
         itemParsingService.markReady(
             result.snapshot.getId(),
             ProductSnapshot(name = name, currentPrice = price, currency = "KRW", imageUrl = "https://img.example.com/a.png"),

@@ -40,17 +40,17 @@ class WishPersistenceService(
         return WishWithItem(wish = wish, item = saved, snapshot = snapshot)
     }
 
-    // 이미지 다건 등록용 — link 없는 item 을 count 만큼 배치 저장하고, 각각에 PROCESSING snapshot·wish 를 건다.
-    // 추출은 호출부가 비동기 워커에 위임하므로 여기선 PROCESSING 버전만 영속화한다.
+    // 이미지 다건 등록용 — 각 이미지의 S3 raw key 를 든 item 을 배치 저장하고, 각각에 PENDING snapshot·wish 를 건다.
+    // 입력(imageKey)이 행에 박혀 durable 하므로 link 경로와 같은 outbox 에 적재한다 — 디스패처가 PENDING 을 집어 워커에 넘긴다.
     @Transactional
-    fun persistProcessingImages(
+    fun persistPendingImages(
         userId: UUID,
-        count: Int,
+        imageKeys: List<String>,
     ): List<WishWithItem> {
-        val items = itemRepository.saveAll(List(count) { Item() })
+        val items = itemRepository.saveAll(imageKeys.map { Item(sourceImageKey = it) })
         // snapshot 을 itemId 로 매핑해 saveAll 반환 순서에 의존하지 않는다(순서 보존은 공식 계약이 아니다).
         val snapshotsByItemId =
-            itemSnapshotRepository.saveAll(items.map { ItemSnapshot.processing(it.getId()) }).associateBy { it.itemId }
+            itemSnapshotRepository.saveAll(items.map { ItemSnapshot.pending(it.getId()) }).associateBy { it.itemId }
         return items.map { item ->
             val snapshot = snapshotsByItemId[item.getId()] ?: error("item ${item.getId()} 의 snapshot 이 없다")
             val wish = wishRepository.save(Wish(userId = userId, snapshotId = snapshot.getId()))

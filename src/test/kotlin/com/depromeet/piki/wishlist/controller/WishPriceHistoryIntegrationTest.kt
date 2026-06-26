@@ -93,7 +93,7 @@ class WishPriceHistoryIntegrationTest : IntegrationTestSupport() {
         val ready = saveReadySnapshot(itemId, "완성 버전", 50_000, LocalDateTime.now())
         // 같은 item 에 가격 없는 버전들을 섞어 둔다 — 히스토리에서 빠져야 한다.
         itemSnapshotRepository.save(ItemSnapshot.pending(itemId))
-        itemSnapshotRepository.save(ItemSnapshot.processing(itemId))
+        itemSnapshotRepository.save(ItemSnapshot.pending(itemId).apply { markProcessing() })
         itemSnapshotRepository.save(ItemSnapshot(itemId = itemId, status = ItemStatus.FAILED))
         val wishId = saveWish(userId, ready)
 

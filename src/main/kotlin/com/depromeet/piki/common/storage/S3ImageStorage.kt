@@ -4,7 +4,9 @@ import org.springframework.stereotype.Component
 import software.amazon.awssdk.core.sync.RequestBody
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.Delete
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest
+import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
@@ -68,6 +70,25 @@ class S3ImageStorage(
                     }
                 continuationToken = listed.nextContinuationToken().takeIf { listed.isTruncated } ?: break
             }
+        }.getOrElse { e -> throw ImageStorageException.deleteFailed(e) }
+    }
+
+    override fun download(key: String): StoredImage =
+        // AWS SDK 예외(네트워크·권한·객체 없음)를 계약 예외(502, RETRYABLE)로 변환한다 — 워커가 일시 오류로 받아 PROCESSING 유지(recover 재시도).
+        runCatching {
+            val response =
+                s3Client.getObjectAsBytes(
+                    GetObjectRequest.builder().bucket(s3Properties.bucket).key(key).build(),
+                )
+            StoredImage(bytes = response.asByteArray(), contentType = response.response().contentType())
+        }.getOrElse { e -> throw ImageStorageException.downloadFailed(e) }
+
+    override fun delete(key: String) {
+        // 단건 raw 원본 회수. 객체가 없어도 S3 deleteObject 는 성공(멱등)이라 별도 존재 확인이 필요 없다.
+        runCatching {
+            s3Client.deleteObject(
+                DeleteObjectRequest.builder().bucket(s3Properties.bucket).key(key).build(),
+            )
         }.getOrElse { e -> throw ImageStorageException.deleteFailed(e) }
     }
 

@@ -23,5 +23,8 @@ class ImageStorageException private constructor(
 
         fun deleteFailed(cause: Throwable? = null): ImageStorageException =
             ImageStorageException("이미지를 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.", ErrorCategory.RETRYABLE, cause)
+
+        fun downloadFailed(cause: Throwable? = null): ImageStorageException =
+            ImageStorageException("이미지를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.", ErrorCategory.RETRYABLE, cause)
     }
 }

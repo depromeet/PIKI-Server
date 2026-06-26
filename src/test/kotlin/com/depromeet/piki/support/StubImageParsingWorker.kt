@@ -1,6 +1,5 @@
 package com.depromeet.piki.support
 
-import com.depromeet.piki.image.domain.ProductImage
 import com.depromeet.piki.item.service.ImageParsingWorker
 
 // ImageParsingWorker 를 래핑해 테스트별로 활성화/비활성화한다.
@@ -13,8 +12,8 @@ class StubImageParsingWorker(
     override fun parse(
         itemId: Long,
         snapshotId: Long,
-        image: ProductImage,
+        imageKey: String,
     ) {
-        if (enabled) delegate.parse(itemId, snapshotId, image)
+        if (enabled) delegate.parse(itemId, snapshotId, imageKey)
     }
 }

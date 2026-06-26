@@ -144,7 +144,7 @@ class TournamentItemParsedSseIntegrationTest : IntegrationTestSupport() {
 
     // 알림 역조회는 tournament_item→item_snapshots 를 snapshot_id 로 조인해 s.item_id 로 매칭한다.
     // 그 itemId 로 시딩한 snapshot 의 id 를 tournament_item 의 snapshotId 로 넘겨야 역조회가 맞아떨어진다.
-    private fun snapshotIdFor(itemId: Long): Long = itemSnapshotRepository.save(ItemSnapshot.processing(itemId)).getId()
+    private fun snapshotIdFor(itemId: Long): Long = itemSnapshotRepository.save(ItemSnapshot.pending(itemId).apply { markProcessing() }).getId()
 }
 
 // send(SseEventBuilder) 를 가로채 실제 IO 없이 전송 내용을 기록한다. build() 가 내놓는 data 항목
