@@ -6,6 +6,7 @@ import com.depromeet.piki.user.domain.UserException
 import com.depromeet.piki.user.repository.UserDetailRepository
 import com.depromeet.piki.user.repository.UserRepository
 import com.depromeet.piki.user.service.dto.UserProfile
+import org.hibernate.exception.ConstraintViolationException
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
@@ -160,64 +161,83 @@ class UserService(
         internal val NICKNAME_POOL: List<String> by lazy {
             NICKNAME_PREFIXES.flatMap { prefix -> NICKNAME_ANIMALS.map { animal -> "$prefix $animal" } }
         }
+
+        // 닉네임 unique 제약 이름(V20260521234243 의 uq_users_nickname). DataIntegrityViolationException 중
+        // 이 제약 위반만 닉네임 중복으로 다룬다 — 다른 DB 오류(NOT NULL·길이 등)를 409 로 숨기지 않기 위해.
+        private const val USERS_NICKNAME_CONSTRAINT = "uq_users_nickname"
+
+        // 게스트 닉네임 자동 생성 시 save 직전 race 로 unique 충돌이 나면 닉네임을 다시 뽑아 재시도하는 최대 횟수.
+        private const val GUEST_NICKNAME_MAX_ATTEMPTS = 5
     }
 
-    @Transactional
+    // 게스트는 닉네임을 자동 생성하므로 '닉네임 중복' 이라는 사용자 입력 오류가 없다. 다만 generateUniqueGuestNickname()
+    // 와 save 사이 race 로 다른 요청이 같은 닉네임을 선점하면 unique 충돌이 날 수 있어, 닉네임을 다시 뽑아 재시도한다.
+    // @Transactional 을 두지 않아 각 save 가 독립 트랜잭션으로 돈다 — 한 시도의 충돌이 다음 시도를 오염시키지 않게.
     fun createGuest(): User {
-        val id = UUID.randomUUID()
-        val nickname = generateUniqueGuestNickname()
-        val profileImage = defaultProfileImages.random()
-        return userRepository.save(
-            User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.GUEST),
-        )
+        repeat(GUEST_NICKNAME_MAX_ATTEMPTS) {
+            try {
+                // saveAndFlush — 충돌을 이 try 안에서 결정적으로 끌어올려(비트랜잭션이라 save 만 해도 즉시 커밋되지만,
+                // 명시 flush 로 시점을 못 박는다) 재시도 분기가 항상 동작하게 한다.
+                return userRepository.saveAndFlush(
+                    User(
+                        id = UUID.randomUUID(),
+                        nickname = generateUniqueGuestNickname(),
+                        profileImage = defaultProfileImages.random(),
+                        identityType = IdentityType.GUEST,
+                    ),
+                )
+            } catch (e: DataIntegrityViolationException) {
+                if (!isNicknameUniqueViolation(e)) throw e
+                // 닉네임 unique 충돌(race) → 닉네임을 다시 뽑아 재시도
+            }
+        }
+        throw UserException.nicknameGenerationFailed()
     }
 
     @Transactional
-    fun createGuestWithNickname(nickname: String): User {
-        val id = UUID.randomUUID()
-        val profileImage = defaultProfileImages.random()
-        return try {
-            userRepository.save(
-                User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.GUEST),
-            )
-        } catch (e: org.springframework.dao.DataIntegrityViolationException) {
-            throw UserException.duplicateNickname()
-        }
-    }
+    fun createGuestWithNickname(nickname: String): User =
+        saveNewUser(nickname, defaultProfileImages.random(), IdentityType.GUEST)
 
     @Transactional
     fun createMember(nickname: String): User {
         if (userRepository.existsByNickname(nickname)) throw UserException.duplicateNickname()
-        val id = UUID.randomUUID()
-        val profileImage = defaultProfileImages.random()
-        return try {
-            userRepository.save(
-                User(id = id, nickname = nickname, profileImage = profileImage, identityType = IdentityType.MEMBER),
-            )
-        } catch (e: DataIntegrityViolationException) {
-            throw UserException.duplicateNickname()
-        }
+        return saveNewUser(nickname, defaultProfileImages.random(), IdentityType.MEMBER)
     }
 
-    // 소셜 신규 가입용 MEMBER 생성. 닉네임은 게스트와 동일하게 자동 생성(fill)하고 사용자가 나중에 수정한다.
-    // 프로필 이미지는 provider 가 준 게 있으면 쓰고, 없으면(동의 거부 등) 기본 아바타 4종 중 랜덤.
+    // 소셜 신규 가입용 MEMBER 생성. 닉네임은 게스트와 동일하게 자동 생성하고 사용자가 나중에 수정한다.
+    // 프로필 이미지는 provider 가 준 게 있으면 쓰고, 없으면(동의 거부 등) 기본 아바타 중 랜덤.
     @Transactional
-    fun createSocialUser(profileImage: String?): User {
-        val id = UUID.randomUUID()
-        val nickname = generateUniqueGuestNickname()
-        return try {
-            userRepository.save(
-                User(
-                    id = id,
-                    nickname = nickname,
-                    profileImage = profileImage ?: defaultProfileImages.random(),
-                    identityType = IdentityType.MEMBER,
-                ),
+    fun createSocialUser(profileImage: String?): User =
+        saveNewUser(generateUniqueGuestNickname(), profileImage ?: defaultProfileImages.random(), IdentityType.MEMBER)
+
+    // 신규 user 영속화 공통 경로. 닉네임 unique 충돌(uq_users_nickname)만 duplicateNickname 으로 변환하고,
+    // 그 외 DB 제약 위반(NOT NULL·길이 등)은 원본 예외를 그대로 던져 500 으로 드러나게 한다.
+    private fun saveNewUser(
+        nickname: String,
+        profileImage: String,
+        identityType: IdentityType,
+    ): User =
+        try {
+            // saveAndFlush — @Transactional 호출자(createMember 등) 안에서 save 만 하면 클라 할당 UUID 라 INSERT 가
+            // 커밋 시점까지 미뤄져, unique 충돌이 이 catch 밖(커밋)에서 터져 409 변환을 못 한다(→ 500). flush 로 같은
+            // 메서드 안에서 제약 위반을 끌어올려, 닉네임 충돌을 여기서 잡아 duplicateNickname(409)으로 변환한다.
+            userRepository.saveAndFlush(
+                User(id = UUID.randomUUID(), nickname = nickname, profileImage = profileImage, identityType = identityType),
             )
         } catch (e: DataIntegrityViolationException) {
-            throw UserException.duplicateNickname()
+            if (isNicknameUniqueViolation(e)) throw UserException.duplicateNickname()
+            throw e
         }
-    }
+
+    // DataIntegrityViolationException 이 닉네임 unique 제약(uq_users_nickname) 위반인지 판별한다.
+    // cause 체인을 끝까지 훑는다 — PersistenceException 같은 래퍼가 한 겹 더 끼면 e.cause 만 봐서는 ConstraintViolationException
+    // 을 놓쳐 닉네임 충돌이 409 대신 500 으로 샐 수 있다. 각 단계에서 ConstraintViolationException 의 constraintName(Hibernate 가
+    // 못 채우면 null)과 예외 메시지(드라이버가 제약명을 담는다) 둘 다 본다.
+    private fun isNicknameUniqueViolation(e: DataIntegrityViolationException): Boolean =
+        generateSequence(e as Throwable) { it.cause }.any { t ->
+            (t as? ConstraintViolationException)?.constraintName?.contains(USERS_NICKNAME_CONSTRAINT, ignoreCase = true) == true ||
+                t.message?.contains(USERS_NICKNAME_CONSTRAINT, ignoreCase = true) == true
+        }
 
     @Transactional(readOnly = true)
     fun findById(userId: UUID): User = userRepository.findById(userId) ?: throw UserException.notFound()

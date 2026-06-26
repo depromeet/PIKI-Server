@@ -11,6 +11,8 @@ class UserRepositoryImpl(
 ) : UserRepository {
     override fun save(user: User): User = userJpaRepository.save(user)
 
+    override fun saveAndFlush(user: User): User = userJpaRepository.saveAndFlush(user)
+
     override fun findById(id: UUID): User? = userJpaRepository.findByIdOrNull(id)
 
     override fun findByIds(ids: Collection<UUID>): List<User> = userJpaRepository.findAllById(ids)
