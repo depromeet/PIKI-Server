@@ -29,6 +29,7 @@ class AsyncImageParsingWorker(
     private val imageCropper: ImageCropper,
     private val imageStorage: ImageStorage,
     private val itemParsingService: ItemParsingService,
+    private val transitionRetry: TransitionRetry,
     private val meterRegistry: MeterRegistry,
 ) : ImageParsingWorker {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -60,7 +61,8 @@ class AsyncImageParsingWorker(
         imageKey: String,
         snapshot: ProductSnapshot,
     ) {
-        runCatching { itemParsingService.markReady(snapshotId, snapshot) }
+        // 일시 DB 오류(데드락·lock timeout)면 추출 재실행 없이 전이 write 만 짧게 재시도한다(TransitionRetry).
+        runCatching { transitionRetry.execute { itemParsingService.markReady(snapshotId, snapshot) } }
             .onSuccess {
                 log.info("item {} 이미지 파싱 완료 → READY", itemId)
                 ItemParsingMetrics.record(meterRegistry, ItemParsingMetrics.RESULT_READY, ItemParsingMetrics.REASON_NONE)
@@ -121,11 +123,12 @@ class AsyncImageParsingWorker(
             .onFailure { e -> log.warn("raw 이미지 {} 회수 실패(lifecycle 이 만료): {}", imageKey, e.message) }
     }
 
+    // 일시 DB 오류는 짧게 재시도한다(TransitionRetry). 영구 오류·sweeper 레이스는 즉시 전파돼 아래에서 흡수된다.
     private fun markFailedQuietly(
         itemId: Long,
         snapshotId: Long,
     ) {
-        runCatching { itemParsingService.markFailed(snapshotId) }
+        runCatching { transitionRetry.execute { itemParsingService.markFailed(snapshotId) } }
             .onFailure { e ->
                 when (e) {
                     is IllegalStateException -> log.info("item {} 는 이미 전이됨, FAILED 처리 생략: {}", itemId, e.message)
