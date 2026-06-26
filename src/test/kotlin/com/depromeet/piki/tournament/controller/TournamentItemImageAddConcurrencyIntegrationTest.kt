@@ -63,7 +63,9 @@ class TournamentItemImageAddConcurrencyIntegrationTest : IntegrationTestSupport(
     fun `이미지 담기를 동시에 두 번 요청하면 FOR UPDATE 로 직렬화되어 32개 상한을 넘지 않고 거부된 요청의 raw 가 회수된다`() {
         // 디스패처(@Scheduled)가 성공 요청의 PENDING raw 를 워커로 회수하면 deletedKeys 단언이 흔들린다 — 워커를 꺼
         // 성공분 raw 는 PENDING 으로 보존하고, 거부분 raw 회수(서비스 cleanup)만 결정적으로 관찰한다.
-        stubImageParsingWorker.enabled = false
+        // enabled 는 컨텍스트 공유 전역 상태라, try 진입 전 setup 이 실패해 끈 채 새면 다른 테스트가 연쇄 실패한다.
+        // 끄기는 try 안으로 미루고 원래 값을 보관해, finally 가 항상 원복하도록 한다.
+        val previousWorkerEnabled = stubImageParsingWorker.enabled
 
         val ownerId = UUID.randomUUID()
         userJpaRepository.save(
@@ -85,6 +87,7 @@ class TournamentItemImageAddConcurrencyIntegrationTest : IntegrationTestSupport(
 
         var tournamentId = 0L
         try {
+            stubImageParsingWorker.enabled = false
             // 토너먼트 생성 — TournamentUser(owner) 도 함께 생성된다(verifyCanAddItems 의 참여자 검증 통과).
             val createResult = mockMvc.perform(
                 post("/api/v1/tournaments")
@@ -120,7 +123,7 @@ class TournamentItemImageAddConcurrencyIntegrationTest : IntegrationTestSupport(
             val start = CountDownLatch(1)
             val done = CountDownLatch(2)
 
-            repeat(2) { req ->
+            val futures = (0 until 2).map { req ->
                 executor.submit {
                     ready.countDown()
                     start.await()
@@ -140,10 +143,15 @@ class TournamentItemImageAddConcurrencyIntegrationTest : IntegrationTestSupport(
                 }
             }
 
-            ready.await()
-            start.countDown()
-            assertTrue(done.await(15, TimeUnit.SECONDS), "동시 요청이 15초 안에 완료되어야 한다")
-            executor.shutdown()
+            // executor 종료는 finally 가 보장하고(단언 실패로 새는 스레드 방지), 요청 스레드 내부 예외는 get() 으로 본문에 전파한다(삼키면 거짓 통과).
+            try {
+                assertTrue(ready.await(5, TimeUnit.SECONDS), "두 요청 스레드가 출발 대기에 들어가야 한다")
+                start.countDown()
+                assertTrue(done.await(15, TimeUnit.SECONDS), "동시 요청이 15초 안에 완료되어야 한다")
+                futures.forEach { it.get(1, TimeUnit.SECONDS) }
+            } finally {
+                executor.shutdownNow()
+            }
 
             assertEquals(1, status200.get(), "정확히 하나만 성공이어야 한다 (5장 담기 성공)")
             assertEquals(1, status400.get(), "나머지 하나는 락 대기 후 32개 초과로 400 이어야 한다")
@@ -153,7 +161,14 @@ class TournamentItemImageAddConcurrencyIntegrationTest : IntegrationTestSupport(
             val rawDeleted = stubImageStorage.deletedKeys.count { it.startsWith("items/raw/") } - rawDeletedBefore
             assertEquals(5, rawDeleted, "거부된 요청이 올린 raw 5장이 즉시 회수되어야 한다")
         } finally {
-            stubImageParsingWorker.enabled = true
+            stubImageParsingWorker.enabled = previousWorkerEnabled
+            // 워커를 꺼 둔 탓에 성공분 raw 는 stub 에 orphan 으로 남는다(정상 흐름이면 워커가 회수). 동시성 테스트는 자기가 만든 것을
+            // 직접 정리하므로, DB 행을 지우기 전에 이 테스트가 올린 raw 도 stub 에서 회수한다(공유 stub 누적 방지).
+            jdbcTemplate.queryForList(
+                "SELECT source_image_key FROM items WHERE id > ? AND source_image_key IS NOT NULL",
+                String::class.java,
+                maxItemIdBefore,
+            ).filterNotNull().forEach { key -> runCatching { stubImageStorage.delete(key) } }
             // @Transactional 자동 롤백이 없으므로 직접 지운다. 추가된 item/snapshot 은 id 하한으로 일괄 정리한다.
             if (tournamentId != 0L) {
                 jdbcTemplate.update("DELETE FROM tournament_items WHERE tournament_id = ?", tournamentId)
