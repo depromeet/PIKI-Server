@@ -38,36 +38,40 @@ class MetricsService(
         }
     }
 
+    // excludeInternal=true 면 개발진(developers 명단) 활동을 빼고 집계한다(/admin/metrics 기본). 토글로 false 면 포함.
     @Transactional(readOnly = true)
     fun snapshot(
         from: LocalDateTime,
         to: LocalDateTime,
+        excludeInternal: Boolean,
     ): MetricsSnapshot {
         val fromUtc = from.atZone(KST).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime()
         val toUtc = to.atZone(KST).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime()
 
-        val identityCounts = repository.countWithinByIdentityType(fromUtc, toUtc)
-        val (wishUrl, wishImage) = repository.countWishesBySource(fromUtc, toUtc)
+        val identityCounts = repository.countWithinByIdentityType(fromUtc, toUtc, excludeInternal)
+        val (wishUrl, wishImage) = repository.countWishesBySource(fromUtc, toUtc, excludeInternal)
         val (parsedReady, parsedFailed) = repository.countParsing(fromUtc, toUtc)
-        val (notifTotal, notifRead) = repository.notificationReadApprox(fromUtc, toUtc)
-        val (deliverySuccess, deliveryFailure, deliverySkipped) = repository.announcementDelivery(fromUtc, toUtc)
-        val hourly = repository.hourlySignups(fromUtc, toUtc)
+        val (notifTotal, notifRead) = repository.notificationReadApprox(fromUtc, toUtc, excludeInternal)
+        // announcements.sent_at 은 다른 테이블(UTC 저장)과 달리 KST wall-clock 으로 저장된다(Announcement.markSent → now(KST)).
+        // 그래서 UTC 로 변환한 fromUtc/toUtc 로 조회하면 9시간 어긋나 늘 0/0/0 이 된다 → 원본 KST 구간(from·to)으로 조회한다.
+        val (deliverySuccess, deliveryFailure, deliverySkipped) = repository.announcementDelivery(from, to)
+        val hourly = repository.hourlySignups(fromUtc, toUtc, excludeInternal)
 
         return MetricsSnapshot(
             from = from,
             to = to,
             signup =
                 MetricsSnapshot.Signup(
-                    before = repository.countActiveUsersBefore(fromUtc),
-                    within = repository.countActiveUsersWithin(fromUtc, toUtc),
+                    before = repository.countActiveUsersBefore(fromUtc, excludeInternal),
+                    within = repository.countActiveUsersWithin(fromUtc, toUtc, excludeInternal),
                     withinMembers = identityCounts["MEMBER"] ?: 0L,
                     withinGuests = identityCounts["GUEST"] ?: 0L,
-                    byProvider = repository.countSignupsByProvider(fromUtc, toUtc),
-                    guestToMemberConversions = repository.countGuestToMemberConversions(fromUtc, toUtc),
+                    byProvider = repository.countSignupsByProvider(fromUtc, toUtc, excludeInternal),
+                    guestToMemberConversions = repository.countGuestToMemberConversions(fromUtc, toUtc, excludeInternal),
                 ),
             wish =
                 MetricsSnapshot.Wish(
-                    total = repository.countWishes(fromUtc, toUtc),
+                    total = repository.countWishes(fromUtc, toUtc, excludeInternal),
                     fromUrl = wishUrl,
                     fromImage = wishImage,
                     parsedReady = parsedReady,
@@ -75,22 +79,22 @@ class MetricsService(
                 ),
             tournament =
                 MetricsSnapshot.Tournament(
-                    created = repository.countTournamentsCreated(fromUtc, toUtc),
-                    participants = repository.countTournamentParticipants(fromUtc, toUtc),
-                    itemsAdded = repository.countTournamentItems(fromUtc, toUtc),
-                    completed = repository.countTournamentCompleted(fromUtc, toUtc),
-                    plays = repository.countTournamentPlays(fromUtc, toUtc),
+                    created = repository.countTournamentsCreated(fromUtc, toUtc, excludeInternal),
+                    participants = repository.countTournamentParticipants(fromUtc, toUtc, excludeInternal),
+                    itemsAdded = repository.countTournamentItems(fromUtc, toUtc, excludeInternal),
+                    completed = repository.countTournamentCompleted(fromUtc, toUtc, excludeInternal),
+                    plays = repository.countTournamentPlays(fromUtc, toUtc, excludeInternal),
                 ),
-            pushReachableUsers = repository.countPushReachableUsers(),
+            pushReachableUsers = repository.countPushReachableUsers(excludeInternal),
             retention =
                 MetricsSnapshot.Retention(
-                    cohortSignups = repository.countSignupsInWindow(fromUtc, toUtc),
-                    d1Returned = repository.countD1Returned(fromUtc, toUtc),
-                    dau = repository.dailyActiveUsers(from.toLocalDate(), to.minusSeconds(1).toLocalDate()),
+                    cohortSignups = repository.countSignupsInWindow(fromUtc, toUtc, excludeInternal),
+                    d1Returned = repository.countD1Returned(fromUtc, toUtc, excludeInternal),
+                    dau = repository.dailyActiveUsers(from.toLocalDate(), to.minusSeconds(1).toLocalDate(), excludeInternal),
                 ),
             push =
                 MetricsSnapshot.Push(
-                    byType = repository.notificationsByType(fromUtc, toUtc),
+                    byType = repository.notificationsByType(fromUtc, toUtc, excludeInternal),
                     deliverySuccess = deliverySuccess,
                     deliveryFailure = deliveryFailure,
                     deliverySkipped = deliverySkipped,
@@ -106,11 +110,12 @@ class MetricsService(
     fun compareWithPrevious(
         from: LocalDateTime,
         to: LocalDateTime,
+        excludeInternal: Boolean,
     ): PeriodComparison {
         val length = Duration.between(from, to)
         val prevFrom = from.minus(length)
-        val prev = snapshot(prevFrom, from)
-        val cur = snapshot(from, to)
+        val prev = snapshot(prevFrom, from, excludeInternal)
+        val cur = snapshot(from, to, excludeInternal)
         val rows =
             listOf(
                 PeriodComparison.Row("신규 가입", prev.signup.within, cur.signup.within),

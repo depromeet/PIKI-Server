@@ -79,25 +79,34 @@
     <h1>운영 통계 대시보드</h1>
     <p class="lede">백엔드 관점 지표(가입·위시·토너먼트·리텐션·푸시)를 기간별로. 구간 <b th:text="${#temporals.format(snapshot.from,'yyyy-MM-dd HH:mm')}">-</b> ~ <b th:text="${#temporals.format(snapshot.to,'yyyy-MM-dd HH:mm')}">-</b> (KST)</p>
 
-    <!-- 프리셋 + 직접 지정 -->
+    <!-- 프리셋 + 직접 지정. 프리셋·직접지정·다운로드 링크는 현재 토글 상태(excludeInternal)를 그대로 이어 받는다. -->
     <div class="controls">
-      <a class="chip" th:classappend="${activePreset=='today'}?'on'" th:href="@{/admin/metrics(preset='today')}">오늘</a>
-      <a class="chip" th:classappend="${activePreset=='yesterday'}?'on'" th:href="@{/admin/metrics(preset='yesterday')}">어제</a>
-      <a class="chip" th:classappend="${activePreset=='7d'}?'on'" th:href="@{/admin/metrics(preset='7d')}">최근 7일</a>
-      <a class="chip" th:classappend="${activePreset=='30d'}?'on'" th:href="@{/admin/metrics(preset='30d')}">최근 30일</a>
+      <a class="chip" th:classappend="${activePreset=='today'}?'on'" th:href="@{/admin/metrics(preset='today', excludeInternal=${excludeInternal})}">오늘</a>
+      <a class="chip" th:classappend="${activePreset=='yesterday'}?'on'" th:href="@{/admin/metrics(preset='yesterday', excludeInternal=${excludeInternal})}">어제</a>
+      <a class="chip" th:classappend="${activePreset=='7d'}?'on'" th:href="@{/admin/metrics(preset='7d', excludeInternal=${excludeInternal})}">최근 7일</a>
+      <a class="chip" th:classappend="${activePreset=='30d'}?'on'" th:href="@{/admin/metrics(preset='30d', excludeInternal=${excludeInternal})}">최근 30일</a>
       <details class="range" th:open="${activePreset==null}">
         <summary>직접 지정</summary>
         <form method="get" th:action="@{/admin/metrics}">
           <input type="datetime-local" name="from" th:value="${#temporals.format(snapshot.from,'yyyy-MM-dd''T''HH:mm')}">
           <span class="muted">~</span>
           <input type="datetime-local" name="to" th:value="${#temporals.format(snapshot.to,'yyyy-MM-dd''T''HH:mm')}">
+          <input type="hidden" name="excludeInternal" th:value="${excludeInternal}">
           <button class="btn" type="submit">조회</button>
         </form>
       </details>
-      <!-- 지금 보는 구간을 자체완결 HTML 로 내려받아 팀 공유(브라우저에서 ⌘P → PDF). 구간은 snapshot.from/to 그대로 전달. -->
+      <!-- 개발진(내부 계정) 포함/제외 토글. 켜지면(.on) 개발진 포함, 기본은 제외. 현재 구간(preset 또는 from/to)을 유지한 채 뒤집는다. -->
+      <a th:if="${activePreset != null}" class="chip" th:classappend="${!excludeInternal}?'on'"
+         th:href="@{/admin/metrics(preset=${activePreset}, excludeInternal=${!excludeInternal})}"
+         th:text="${excludeInternal}?'🧑‍💻 개발진 포함':'🧑‍💻 개발진 포함 중'">🧑‍💻 개발진 포함</a>
+      <a th:if="${activePreset == null}" class="chip" th:classappend="${!excludeInternal}?'on'"
+         th:href="@{/admin/metrics(from=${#temporals.format(snapshot.from,'yyyy-MM-dd''T''HH:mm')}, to=${#temporals.format(snapshot.to,'yyyy-MM-dd''T''HH:mm')}, excludeInternal=${!excludeInternal})}"
+         th:text="${excludeInternal}?'🧑‍💻 개발진 포함':'🧑‍💻 개발진 포함 중'">🧑‍💻 개발진 포함</a>
+      <!-- 지금 보는 구간을 자체완결 HTML 로 내려받아 팀 공유(브라우저에서 ⌘P → PDF). 구간·토글 상태를 그대로 전달. -->
       <a class="chip" style="margin-left:auto"
-         th:href="@{/admin/metrics/export(from=${#temporals.format(snapshot.from,'yyyy-MM-dd''T''HH:mm')},to=${#temporals.format(snapshot.to,'yyyy-MM-dd''T''HH:mm')})}">⬇ 리포트 다운로드</a>
+         th:href="@{/admin/metrics/export(from=${#temporals.format(snapshot.from,'yyyy-MM-dd''T''HH:mm')},to=${#temporals.format(snapshot.to,'yyyy-MM-dd''T''HH:mm')},excludeInternal=${excludeInternal})}">⬇ 리포트 다운로드</a>
     </div>
+    <p class="lede" style="margin:-8px 0 18px" th:text="${excludeInternal}?'※ 개발진 계정을 제외한 수치입니다 (파싱 성공률·공지 도달은 user 단위가 아니라 제외 대상 아님). 토글로 포함 가능.':'※ 개발진 계정을 포함한 수치입니다.'">-</p>
 
     <!-- KPI -->
     <div class="kpis">
