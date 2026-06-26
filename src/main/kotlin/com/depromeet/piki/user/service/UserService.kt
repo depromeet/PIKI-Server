@@ -176,7 +176,9 @@ class UserService(
     fun createGuest(): User {
         repeat(GUEST_NICKNAME_MAX_ATTEMPTS) {
             try {
-                return userRepository.save(
+                // saveAndFlush — 충돌을 이 try 안에서 결정적으로 끌어올려(비트랜잭션이라 save 만 해도 즉시 커밋되지만,
+                // 명시 flush 로 시점을 못 박는다) 재시도 분기가 항상 동작하게 한다.
+                return userRepository.saveAndFlush(
                     User(
                         id = UUID.randomUUID(),
                         nickname = generateUniqueGuestNickname(),
@@ -216,7 +218,10 @@ class UserService(
         identityType: IdentityType,
     ): User =
         try {
-            userRepository.save(
+            // saveAndFlush — @Transactional 호출자(createMember 등) 안에서 save 만 하면 클라 할당 UUID 라 INSERT 가
+            // 커밋 시점까지 미뤄져, unique 충돌이 이 catch 밖(커밋)에서 터져 409 변환을 못 한다(→ 500). flush 로 같은
+            // 메서드 안에서 제약 위반을 끌어올려, 닉네임 충돌을 여기서 잡아 duplicateNickname(409)으로 변환한다.
+            userRepository.saveAndFlush(
                 User(id = UUID.randomUUID(), nickname = nickname, profileImage = profileImage, identityType = identityType),
             )
         } catch (e: DataIntegrityViolationException) {
@@ -225,12 +230,14 @@ class UserService(
         }
 
     // DataIntegrityViolationException 이 닉네임 unique 제약(uq_users_nickname) 위반인지 판별한다.
-    // Hibernate 가 constraintName 을 못 채우는 경우를 대비해 예외 메시지(드라이버가 제약명을 담는다)도 함께 본다.
-    private fun isNicknameUniqueViolation(e: DataIntegrityViolationException): Boolean {
-        val constraintName = (e.cause as? ConstraintViolationException)?.constraintName
-        if (constraintName?.contains(USERS_NICKNAME_CONSTRAINT, ignoreCase = true) == true) return true
-        return e.message?.contains(USERS_NICKNAME_CONSTRAINT, ignoreCase = true) == true
-    }
+    // cause 체인을 끝까지 훑는다 — PersistenceException 같은 래퍼가 한 겹 더 끼면 e.cause 만 봐서는 ConstraintViolationException
+    // 을 놓쳐 닉네임 충돌이 409 대신 500 으로 샐 수 있다. 각 단계에서 ConstraintViolationException 의 constraintName(Hibernate 가
+    // 못 채우면 null)과 예외 메시지(드라이버가 제약명을 담는다) 둘 다 본다.
+    private fun isNicknameUniqueViolation(e: DataIntegrityViolationException): Boolean =
+        generateSequence(e as Throwable) { it.cause }.any { t ->
+            (t as? ConstraintViolationException)?.constraintName?.contains(USERS_NICKNAME_CONSTRAINT, ignoreCase = true) == true ||
+                t.message?.contains(USERS_NICKNAME_CONSTRAINT, ignoreCase = true) == true
+        }
 
     @Transactional(readOnly = true)
     fun findById(userId: UUID): User = userRepository.findById(userId) ?: throw UserException.notFound()
