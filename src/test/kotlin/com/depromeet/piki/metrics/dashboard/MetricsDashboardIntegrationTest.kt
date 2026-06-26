@@ -238,4 +238,42 @@ class MetricsDashboardIntegrationTest : IntegrationTestSupport() {
         assertEquals(2, snapshot.push.deliveryFailure)
         assertEquals(1, snapshot.push.deliverySkipped)
     }
+
+    @Test
+    fun `토글이 via-TU 토너먼트(생성·플레이) 제외에도 적용되고 tournament_user_id 가 NULL 인 history 는 보존된다`() {
+        // tournaments·tournament_histories 는 user_id 를 직접 안 갖고 tournament_users 경유로만 알아, 제외가 가장 복잡한 경로다.
+        // 개발진 소유 토너먼트 1 · 일반 토너먼트 1 · tournament_user_id NULL(옛 행) history 1 을 심어,
+        // excludeInternal=true 면 개발진 생성·플레이만 빠지고 NULL history 는 보존되는지 본다.
+        val normal = UUID.randomUUID()
+        val dev = UUID.randomUUID()
+        insertUser(normal, "MEMBER", withinWindow)
+        insertUser(dev, "MEMBER", withinWindow)
+        jdbcTemplate.update("INSERT INTO developers (user_id) VALUES (?)", uuidToBytes(dev))
+
+        // tournament_users — 각자 1명(id 명시).
+        jdbcTemplate.update("INSERT INTO tournament_users (id, tournament_id, user_id, created_at, updated_at) VALUES (9001, 8001, ?, ?, ?)", uuidToBytes(normal), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO tournament_users (id, tournament_id, user_id, created_at, updated_at) VALUES (9002, 8002, ?, ?, ?)", uuidToBytes(dev), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+
+        // tournaments — 생성자(owner_tournament_user_id) 경유로 제외. invite_code 는 활성 토너먼트 간 UNIQUE 라 행마다 다른 값.
+        jdbcTemplate.update("INSERT INTO tournaments (id, owner_tournament_user_id, name, status, invite_code, created_at, updated_at) VALUES (8001, 9001, 'n', 'PENDING', '111111', ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO tournaments (id, owner_tournament_user_id, name, status, invite_code, created_at, updated_at) VALUES (8002, 9002, 'd', 'PENDING', '222222', ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+
+        // tournament_histories — 일반 TU / 개발진 TU / NULL(옛 행). 플레이는 라운드 픽 1건당 1행.
+        val histCols = "(tournament_id, current_round, first_tournament_item_id, second_tournament_item_id, selected_tournament_item_id, tournament_user_id, created_at, updated_at)"
+        jdbcTemplate.update("INSERT INTO tournament_histories $histCols VALUES (8001, 1, 1, 2, 1, 9001, ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO tournament_histories $histCols VALUES (8002, 1, 1, 2, 1, 9002, ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO tournament_histories $histCols VALUES (8001, 1, 1, 2, 1, NULL, ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+
+        // 제외 — 개발진 생성·플레이·참여가 빠지고, NULL history 는 살아남는다.
+        val excluded = snapshotVia(excludeInternal = true)
+        assertEquals(1, excluded.tournament.created) // 개발진 소유(8002) 제외
+        assertEquals(1, excluded.tournament.participants) // 개발진 TU(9002) 제외
+        assertEquals(2, excluded.tournament.plays) // 개발진 history 제외, NULL·일반 history 보존
+
+        // 포함 — 전부 집계.
+        val included = snapshotVia(excludeInternal = false)
+        assertEquals(2, included.tournament.created)
+        assertEquals(2, included.tournament.participants)
+        assertEquals(3, included.tournament.plays)
+    }
 }

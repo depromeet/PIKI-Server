@@ -106,7 +106,7 @@
       <a class="chip" style="margin-left:auto"
          th:href="@{/admin/metrics/export(from=${#temporals.format(snapshot.from,'yyyy-MM-dd''T''HH:mm')},to=${#temporals.format(snapshot.to,'yyyy-MM-dd''T''HH:mm')},excludeInternal=${excludeInternal})}">⬇ 리포트 다운로드</a>
     </div>
-    <p class="lede" style="margin:-8px 0 18px" th:text="${excludeInternal}?'※ 개발진 계정을 제외한 수치입니다 (토글로 포함 가능).':'※ 개발진 계정을 포함한 수치입니다.'">-</p>
+    <p class="lede" style="margin:-8px 0 18px" th:text="${excludeInternal}?'※ 개발진 계정을 제외한 수치입니다 (파싱 성공률·공지 도달은 user 단위가 아니라 제외 대상 아님). 토글로 포함 가능.':'※ 개발진 계정을 포함한 수치입니다.'">-</p>
 
     <!-- KPI -->
     <div class="kpis">
