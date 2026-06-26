@@ -9,25 +9,40 @@ import java.time.LocalDateTime
 // 운영 통계 집계 전용 읽기 저장소. 모든 시각 컬럼(created_at 등)은 JVM 기본 TZ(UTC)로 저장되므로, 서비스가 조회 구간(KST)을
 // UTC LocalDateTime(from·to)으로 변환해 넘긴다. "구간 내"는 [from, to), "구간 전"은 < from. KST 시간대별 집계는 created_at 에
 // +9h 를 더해 버킷팅한다. user_daily_activity.active_date 만은 이미 KST 날짜로 적재돼 그대로 쓴다.
+//
+// 개발진(내부 유저) 제외 토글: per-user 집계는 exclude=true 일 때 developers 명단을 NOT IN 으로 뺀다(/admin/metrics 토글, 기본 제외).
+// developers 는 개발진 user_id 를 보관한다(이메일은 user_details 에 있으니 중복 저장 안 함 — 넣을 때 이메일로 1회 해석).
+// user_id 를 직접 가진 테이블은 그 컬럼으로, 토너먼트 생성/플레이처럼 user 를 tournament_users 경유로만 아는 테이블은
+// notInternalViaTu 로 건다. user 차원이 없는 집계(파싱 item_snapshots · 공지 announcements)는 토글과 무관하게 그대로 둔다.
 @Repository
 class MetricsRepository(
     private val jdbcTemplate: JdbcTemplate,
 ) {
     // ---- 가입자 ----
-    fun countActiveUsersBefore(from: LocalDateTime): Long =
-        count("SELECT COUNT(*) FROM users WHERE created_at < ? AND deleted_at IS NULL", ts(from))
+    fun countActiveUsersBefore(
+        from: LocalDateTime,
+        exclude: Boolean,
+    ): Long = count("SELECT COUNT(*) FROM users WHERE created_at < ? AND deleted_at IS NULL${notInternal(exclude, "id")}", ts(from))
 
     fun countActiveUsersWithin(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): Long = count("SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ? AND deleted_at IS NULL", ts(from), ts(to))
+        exclude: Boolean,
+    ): Long =
+        count(
+            "SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ? AND deleted_at IS NULL${notInternal(exclude, "id")}",
+            ts(from),
+            ts(to),
+        )
 
     fun countWithinByIdentityType(
         from: LocalDateTime,
         to: LocalDateTime,
+        exclude: Boolean,
     ): Map<String, Long> =
         keyCounts(
-            "SELECT identity_type, COUNT(*) FROM users WHERE created_at >= ? AND created_at < ? AND deleted_at IS NULL GROUP BY identity_type",
+            "SELECT identity_type, COUNT(*) FROM users " +
+                "WHERE created_at >= ? AND created_at < ? AND deleted_at IS NULL${notInternal(exclude, "id")} GROUP BY identity_type",
             ts(from),
             ts(to),
         )
@@ -35,9 +50,11 @@ class MetricsRepository(
     fun countSignupsByProvider(
         from: LocalDateTime,
         to: LocalDateTime,
+        exclude: Boolean,
     ): Map<String, Long> =
         keyCounts(
-            "SELECT provider, COUNT(*) FROM user_details WHERE created_at >= ? AND created_at < ? GROUP BY provider",
+            "SELECT provider, COUNT(*) FROM user_details " +
+                "WHERE created_at >= ? AND created_at < ?${notInternal(exclude, "user_id")} GROUP BY provider",
             ts(from),
             ts(to),
         )
@@ -47,11 +64,12 @@ class MetricsRepository(
     fun countGuestToMemberConversions(
         from: LocalDateTime,
         to: LocalDateTime,
+        exclude: Boolean,
     ): Long =
         count(
             """
             SELECT COUNT(*) FROM user_details ud JOIN users u ON u.id = ud.user_id
-            WHERE ud.created_at >= ? AND ud.created_at < ? AND u.created_at < ud.created_at - INTERVAL 1 MINUTE
+            WHERE ud.created_at >= ? AND ud.created_at < ? AND u.created_at < ud.created_at - INTERVAL 1 MINUTE${notInternal(exclude, "ud.user_id")}
             """.trimIndent(),
             ts(from),
             ts(to),
@@ -61,13 +79,15 @@ class MetricsRepository(
     fun countWishes(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): Long = count("SELECT COUNT(*) FROM wishes WHERE created_at >= ? AND created_at < ?", ts(from), ts(to))
+        exclude: Boolean,
+    ): Long = count("SELECT COUNT(*) FROM wishes WHERE created_at >= ? AND created_at < ?${notInternal(exclude, "user_id")}", ts(from), ts(to))
 
     // source_url IS NULL = 이미지 등록, NOT NULL = URL 등록. wish 는 snapshot_id 로 정규화돼 item 정체성은
     // item_snapshots.item_id 를 거쳐 items 에 도달한다(item_id 컬럼 제거됨).
     fun countWishesBySource(
         from: LocalDateTime,
         to: LocalDateTime,
+        exclude: Boolean,
     ): Pair<Long, Long> {
         val byImage =
             keyCounts(
@@ -76,7 +96,7 @@ class MetricsRepository(
                 FROM wishes w
                 JOIN item_snapshots s ON s.id = w.snapshot_id
                 JOIN items i ON i.id = s.item_id
-                WHERE w.created_at >= ? AND w.created_at < ? GROUP BY is_image
+                WHERE w.created_at >= ? AND w.created_at < ?${notInternal(exclude, "w.user_id")} GROUP BY is_image
                 """.trimIndent(),
                 ts(from),
                 ts(to),
@@ -86,6 +106,7 @@ class MetricsRepository(
         return url to image
     }
 
+    // 파싱(item_snapshots)은 user 차원이 없어 개발진 제외 불가 — 토글과 무관하게 개발진 파싱도 함께 집계된다(인지된 한계).
     fun countParsing(
         from: LocalDateTime,
         to: LocalDateTime,
@@ -100,43 +121,77 @@ class MetricsRepository(
     }
 
     // ---- 토너먼트 ----
+    // tournaments 는 생성자를 owner_tournament_user_id(tournament_users.id)로만 알아, 개발진 제외는 그 TU 경유로 건다.
     fun countTournamentsCreated(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): Long = count("SELECT COUNT(*) FROM tournaments WHERE created_at >= ? AND created_at < ?", ts(from), ts(to))
+        exclude: Boolean,
+    ): Long =
+        count(
+            "SELECT COUNT(*) FROM tournaments WHERE created_at >= ? AND created_at < ?${notInternalViaTu(exclude, "owner_tournament_user_id", false)}",
+            ts(from),
+            ts(to),
+        )
 
     fun countTournamentParticipants(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): Long = count("SELECT COUNT(DISTINCT user_id) FROM tournament_users WHERE created_at >= ? AND created_at < ?", ts(from), ts(to))
+        exclude: Boolean,
+    ): Long =
+        count(
+            "SELECT COUNT(DISTINCT user_id) FROM tournament_users WHERE created_at >= ? AND created_at < ?${notInternal(exclude, "user_id")}",
+            ts(from),
+            ts(to),
+        )
 
     fun countTournamentItems(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): Long = count("SELECT COUNT(*) FROM tournament_items WHERE created_at >= ? AND created_at < ?", ts(from), ts(to))
+        exclude: Boolean,
+    ): Long =
+        count(
+            "SELECT COUNT(*) FROM tournament_items WHERE created_at >= ? AND created_at < ?${notInternal(exclude, "user_id")}",
+            ts(from),
+            ts(to),
+        )
 
     // tournaments 에 상태 전이 시각이 없어, 완료는 tournament_users.completed_at 으로 센다(참가자별 완료).
     fun countTournamentCompleted(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): Long = count("SELECT COUNT(*) FROM tournament_users WHERE completed_at >= ? AND completed_at < ?", ts(from), ts(to))
+        exclude: Boolean,
+    ): Long =
+        count(
+            "SELECT COUNT(*) FROM tournament_users WHERE completed_at >= ? AND completed_at < ?${notInternal(exclude, "user_id")}",
+            ts(from),
+            ts(to),
+        )
 
-    // 플레이 활동량 = 라운드 픽 1건당 history 1행.
+    // 플레이 활동량 = 라운드 픽 1건당 history 1행. tournament_user_id 는 nullable(기존 행은 NULL) — old 행은 보존하고
+    // 값이 있는 행 중 개발진 TU 만 제외한다.
     fun countTournamentPlays(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): Long = count("SELECT COUNT(*) FROM tournament_histories WHERE created_at >= ? AND created_at < ?", ts(from), ts(to))
+        exclude: Boolean,
+    ): Long =
+        count(
+            "SELECT COUNT(*) FROM tournament_histories " +
+                "WHERE created_at >= ? AND created_at < ?${notInternalViaTu(exclude, "tournament_user_id", true)}",
+            ts(from),
+            ts(to),
+        )
 
     // ---- 푸시 도달 가능 (현재 상태, 구간 무관) ----
-    fun countPushReachableUsers(): Long =
-        count("SELECT COUNT(DISTINCT user_id) FROM user_devices WHERE deleted_at IS NULL")
+    fun countPushReachableUsers(exclude: Boolean): Long =
+        count("SELECT COUNT(DISTINCT user_id) FROM user_devices WHERE deleted_at IS NULL${notInternal(exclude, "user_id")}")
 
     // ---- 리텐션 / DAU ----
     // 구간에 가입한 코호트(탈퇴 포함 — 가입 사실 기준). 리텐션 분모.
     fun countSignupsInWindow(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): Long = count("SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ?", ts(from), ts(to))
+        exclude: Boolean,
+    ): Long = count("SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ?${notInternal(exclude, "id")}", ts(from), ts(to))
 
     // 구간에 가입한 유저 중, 각자의 "가입 다음날(KST)"에 활동 기록이 있는 수 = D1 재방문. active_date 를 구간시작+1 로
     // 고정하면 다일자 구간에서 중·후반 가입자의 D1 이 통째로 누락돼 비율이 과소집계된다 → 가입자별 다음날로 조인한다.
@@ -144,6 +199,7 @@ class MetricsRepository(
     fun countD1Returned(
         from: LocalDateTime,
         to: LocalDateTime,
+        exclude: Boolean,
     ): Long =
         count(
             """
@@ -152,7 +208,7 @@ class MetricsRepository(
             JOIN user_daily_activity uda
               ON uda.user_id = u.id
              AND uda.active_date = DATE(u.created_at + INTERVAL 9 HOUR) + INTERVAL 1 DAY
-            WHERE u.created_at >= ? AND u.created_at < ?
+            WHERE u.created_at >= ? AND u.created_at < ?${notInternal(exclude, "u.id")}
             """.trimIndent(),
             ts(from),
             ts(to),
@@ -162,9 +218,11 @@ class MetricsRepository(
     fun dailyActiveUsers(
         fromDate: LocalDate,
         toDate: LocalDate,
+        exclude: Boolean,
     ): List<MetricsSnapshot.DateCount> =
         jdbcTemplate.query(
-            "SELECT active_date, COUNT(*) FROM user_daily_activity WHERE active_date BETWEEN ? AND ? GROUP BY active_date ORDER BY active_date",
+            "SELECT active_date, COUNT(*) FROM user_daily_activity " +
+                "WHERE active_date BETWEEN ? AND ?${notInternal(exclude, "user_id")} GROUP BY active_date ORDER BY active_date",
             { rs, _ -> MetricsSnapshot.DateCount(rs.getDate(1).toLocalDate(), rs.getLong(2)) },
             java.sql.Date.valueOf(fromDate),
             java.sql.Date.valueOf(toDate),
@@ -174,22 +232,30 @@ class MetricsRepository(
     fun notificationsByType(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): Map<String, Long> = keyCounts("SELECT type, COUNT(*) FROM notifications WHERE created_at >= ? AND created_at < ? GROUP BY type", ts(from), ts(to))
+        exclude: Boolean,
+    ): Map<String, Long> =
+        keyCounts(
+            "SELECT type, COUNT(*) FROM notifications WHERE created_at >= ? AND created_at < ?${notInternal(exclude, "user_id")} GROUP BY type",
+            ts(from),
+            ts(to),
+        )
 
     // (total, is_read 합) — CTR 근사 계산용.
     fun notificationReadApprox(
         from: LocalDateTime,
         to: LocalDateTime,
+        exclude: Boolean,
     ): Pair<Long, Long> =
         jdbcTemplate
             .query(
-                "SELECT COUNT(*), COALESCE(SUM(is_read), 0) FROM notifications WHERE created_at >= ? AND created_at < ?",
+                "SELECT COUNT(*), COALESCE(SUM(is_read), 0) FROM notifications " +
+                    "WHERE created_at >= ? AND created_at < ?${notInternal(exclude, "user_id")}",
                 { rs, _ -> rs.getLong(1) to rs.getLong(2) },
                 ts(from),
                 ts(to),
             ).first()
 
-    // 공지 발송 도달 집계(성공/실패/미도달) — 구간에 발송된 공지 합산.
+    // 공지 발송(announcements)은 전 유저 대상 단건 집계라 user 차원이 없어 개발진 제외 불가(인지된 한계).
     fun announcementDelivery(
         from: LocalDateTime,
         to: LocalDateTime,
@@ -209,12 +275,13 @@ class MetricsRepository(
     fun hourlySignups(
         from: LocalDateTime,
         to: LocalDateTime,
+        exclude: Boolean,
     ): Map<Int, Long> {
         val result = linkedMapOf<Int, Long>()
         jdbcTemplate.query(
             """
             SELECT HOUR(created_at + INTERVAL 9 HOUR) AS h, COUNT(*)
-            FROM users WHERE created_at >= ? AND created_at < ?
+            FROM users WHERE created_at >= ? AND created_at < ?${notInternal(exclude, "id")}
             GROUP BY h ORDER BY h
             """.trimIndent(),
             { rs, _ -> result[rs.getInt(1)] = rs.getLong(2) },
@@ -222,6 +289,25 @@ class MetricsRepository(
             ts(to),
         )
         return result
+    }
+
+    // exclude=true 면 "AND <column> NOT IN (개발진 user_id)" 조각을, false(포함)면 빈 문자열을 돌려준다.
+    // developers 가 비어 있으면 NOT IN (빈 집합)이라 아무도 제외되지 않는다(SQL 안전).
+    private fun notInternal(
+        exclude: Boolean,
+        column: String,
+    ): String = if (exclude) " AND $column NOT IN ($DEVELOPER_IDS)" else ""
+
+    // tournament_users.id 를 가리키는 컬럼용(tournaments.owner_tournament_user_id · tournament_histories.tournament_user_id).
+    // nullable=true(히스토리)면 NULL 행은 보존하고 값이 있는 개발진 TU 만 제외한다.
+    private fun notInternalViaTu(
+        exclude: Boolean,
+        column: String,
+        nullable: Boolean,
+    ): String {
+        if (!exclude) return ""
+        val tu = "SELECT id FROM tournament_users WHERE user_id IN ($DEVELOPER_IDS)"
+        return if (nullable) " AND ($column IS NULL OR $column NOT IN ($tu))" else " AND $column NOT IN ($tu)"
     }
 
     private fun count(
@@ -239,4 +325,10 @@ class MetricsRepository(
     }
 
     private fun ts(value: LocalDateTime): Timestamp = Timestamp.valueOf(value)
+
+    companion object {
+        // 개발진 user_id 명단(developers 테이블). "개발진 포함" 토글이 꺼져 있을 때(기본) 이 user_id 들을 집계에서 뺀다.
+        // 명단 추가는 이메일로 1회 해석해 넣는다: INSERT INTO developers (user_id) SELECT user_id FROM user_details WHERE email = '...'.
+        private const val DEVELOPER_IDS = "SELECT user_id FROM developers"
+    }
 }

@@ -159,4 +159,83 @@ class MetricsDashboardIntegrationTest : IntegrationTestSupport() {
         assertEquals(2, snapshot.retention.d1Returned)
         assertEquals(100, snapshot.retention.d1Rate)
     }
+
+    // 개발진은 developers 명단(user_id)으로 식별된다. 같은 활동을 한 일반 유저 1·개발진 1을 심고,
+    // excludeInternal=true(기본)면 개발진이 빠져 1명분만, false(토글 포함)면 둘 다 2명분이 집계되는지 본다.
+    private fun snapshotVia(excludeInternal: Boolean): MetricsSnapshot =
+        mockMvc()
+            .perform(
+                get("/admin/metrics")
+                    .param("from", "2026-06-20T13:00")
+                    .param("to", "2026-06-20T18:00")
+                    .param("excludeInternal", excludeInternal.toString()),
+            ).andExpect(status().isOk)
+            .andReturn()
+            .modelAndView!!
+            .model["snapshot"] as MetricsSnapshot
+
+    @Test
+    fun `개발진 포함 토글에 따라 developers 명단의 활동이 빠지거나 포함된다`() {
+        val normal = UUID.randomUUID()
+        val dev = UUID.randomUUID()
+        insertUser(normal, "MEMBER", withinWindow)
+        insertUser(dev, "MEMBER", withinWindow)
+        // 개발진을 developers 명단에 user_id 로 등록(운영에선 이메일로 1회 해석해 넣는 그 user_id).
+        jdbcTemplate.update("INSERT INTO developers (user_id) VALUES (?)", uuidToBytes(dev))
+
+        // 위시 — 각 유저 1건(snapshot_id 로 참조).
+        jdbcTemplate.update("INSERT INTO items (id, source_url, created_at, updated_at) VALUES (7001, 'https://shop.example/n', ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO items (id, source_url, created_at, updated_at) VALUES (7002, 'https://shop.example/d', ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO item_snapshots (id, item_id, status, created_at, updated_at) VALUES (7101, 7001, 'READY', ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO item_snapshots (id, item_id, status, created_at, updated_at) VALUES (7102, 7002, 'READY', ?, ?)", Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO wishes (user_id, snapshot_id, created_at, updated_at) VALUES (?, 7101, ?, ?)", uuidToBytes(normal), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO wishes (user_id, snapshot_id, created_at, updated_at) VALUES (?, 7102, ?, ?)", uuidToBytes(dev), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+
+        // 푸시 도달 가능 — 각자 활성 디바이스 1개.
+        jdbcTemplate.update("INSERT INTO user_devices (user_id, device_id, fcm_token, created_at, updated_at) VALUES (?, 'dev-n', 'tok-n', ?, ?)", uuidToBytes(normal), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+        jdbcTemplate.update("INSERT INTO user_devices (user_id, device_id, fcm_token, created_at, updated_at) VALUES (?, 'dev-d', 'tok-d', ?, ?)", uuidToBytes(dev), Timestamp.valueOf(withinWindow), Timestamp.valueOf(withinWindow))
+
+        // DAU — 각자 구간 날짜(6/20 KST)에 활동.
+        jdbcTemplate.update("INSERT INTO user_daily_activity (user_id, active_date, created_at) VALUES (?, ?, NOW(6))", uuidToBytes(normal), Date.valueOf(LocalDate.of(2026, 6, 20)))
+        jdbcTemplate.update("INSERT INTO user_daily_activity (user_id, active_date, created_at) VALUES (?, ?, NOW(6))", uuidToBytes(dev), Date.valueOf(LocalDate.of(2026, 6, 20)))
+
+        // 기본(제외) — 개발진(dev)이 빠져 일반 유저 1명분만.
+        val excluded = snapshotVia(excludeInternal = true)
+        assertEquals(1, excluded.signup.within)
+        assertEquals(1, excluded.wish.total)
+        assertEquals(1, excluded.pushReachableUsers)
+        assertEquals(1, excluded.retention.dau.single { it.date == LocalDate.of(2026, 6, 20) }.count)
+
+        // 토글 포함 — 개발진까지 2명분.
+        val included = snapshotVia(excludeInternal = false)
+        assertEquals(2, included.signup.within)
+        assertEquals(2, included.wish.total)
+        assertEquals(2, included.pushReachableUsers)
+        assertEquals(2, included.retention.dau.single { it.date == LocalDate.of(2026, 6, 20) }.count)
+    }
+
+    @Test
+    fun `공지 발송 집계는 KST sent_at 으로 조회돼 구간 안의 성공·실패·미도달이 잡힌다`() {
+        // announcements.sent_at 은 (다른 테이블과 달리) KST wall-clock 으로 저장된다. 조회 구간이 KST 13:00~18:00 이면
+        // sent_at=15:00(KST)인 공지가 잡혀야 한다. UTC 로 변환해 조회하던 버그(9시간 어긋나 항상 0/0/0)의 회귀 방지.
+        jdbcTemplate.update(
+            "INSERT INTO announcements (title, body, target, status, sent_at, success_count, failure_count, skipped_count, created_at, updated_at) " +
+                "VALUES ('공지', '본문', '토큰 보유자 전체', 'SENT', ?, 5, 2, 1, ?, ?)",
+            Timestamp.valueOf("2026-06-20 15:00:00"),
+            Timestamp.valueOf(withinWindow),
+            Timestamp.valueOf(withinWindow),
+        )
+
+        val snapshot =
+            mockMvc()
+                .perform(get("/admin/metrics").param("from", "2026-06-20T13:00").param("to", "2026-06-20T18:00"))
+                .andExpect(status().isOk)
+                .andReturn()
+                .modelAndView!!
+                .model["snapshot"] as MetricsSnapshot
+
+        assertEquals(5, snapshot.push.deliverySuccess)
+        assertEquals(2, snapshot.push.deliveryFailure)
+        assertEquals(1, snapshot.push.deliverySkipped)
+    }
 }

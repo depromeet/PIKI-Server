@@ -33,12 +33,15 @@ class MetricsController(
         @RequestParam(required = false)
         @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm")
         to: LocalDateTime?,
+        // 기본 true = 개발진(developers 명단) 제외. 페이지 토글로 false 면 개발진 포함해 다시 집계한다.
+        @RequestParam(defaultValue = "true") excludeInternal: Boolean,
         model: Model,
     ): String {
         val range = metricsService.resolveRange(preset, from, to)
-        model.addAttribute("snapshot", metricsService.snapshot(range.from, range.to))
-        model.addAttribute("comparison", metricsService.compareWithPrevious(range.from, range.to))
+        model.addAttribute("snapshot", metricsService.snapshot(range.from, range.to, excludeInternal))
+        model.addAttribute("comparison", metricsService.compareWithPrevious(range.from, range.to, excludeInternal))
         model.addAttribute("activePreset", range.preset)
+        model.addAttribute("excludeInternal", excludeInternal)
         return "admin/metrics"
     }
 
@@ -54,13 +57,16 @@ class MetricsController(
         @RequestParam(required = false)
         @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm")
         to: LocalDateTime?,
+        // 내려받는 리포트가 화면과 같은 기준이 되도록 토글 상태를 그대로 전달받는다.
+        @RequestParam(defaultValue = "true") excludeInternal: Boolean,
         response: HttpServletResponse,
         model: Model,
     ): String {
         val range = metricsService.resolveRange(preset, from, to)
-        val snapshot = metricsService.snapshot(range.from, range.to)
+        val snapshot = metricsService.snapshot(range.from, range.to, excludeInternal)
         model.addAttribute("snapshot", snapshot)
-        model.addAttribute("comparison", metricsService.compareWithPrevious(range.from, range.to))
+        model.addAttribute("comparison", metricsService.compareWithPrevious(range.from, range.to, excludeInternal))
+        model.addAttribute("excludeInternal", excludeInternal)
         model.addAttribute("generatedAt", LocalDateTime.now(KST))
 
         val filename = "piki-metrics-${snapshot.from.format(FILE_TS)}_${snapshot.to.format(FILE_TS)}.html"
