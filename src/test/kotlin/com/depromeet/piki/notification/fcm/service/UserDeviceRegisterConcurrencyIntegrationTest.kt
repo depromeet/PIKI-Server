@@ -65,9 +65,51 @@ class UserDeviceRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
             jdbcTemplate.update("DELETE FROM user_devices WHERE fcm_token = ?", token)
         }
     }
+
+    @Test
+    fun `다른 기기 row 가 들고 있던 토큰을 동시 재등록해도 500 없이 토큰 1개로 수렴한다`() {
+        // Sentry delete 경쟁 재현 — 토큰을 들고 있던 기존 row(holder)가 있고, 같은 토큰을 다른 deviceId 로
+        // (앱 재설치로 device_id 가 바뀐 같은 유저의 중복 요청 등) 동시 재등록하면, 모든 시도가 holder 를
+        // release 하려다 엔티티 delete 의 "정확히 1 row" 단언이 깨져 StaleStateException(→500)이 났다.
+        // bulk delete 로 멱등 해제하도록 고친 뒤엔 500 없이 토큰 1 row 로 수렴해야 한다(#396 후속).
+        val token = "reassign-${UUID.randomUUID()}"
+        val userId = UUID.randomUUID()
+        val oldDeviceId = "old-device-${UUID.randomUUID()}"
+        val newDeviceId = "new-device-${UUID.randomUUID()}"
+        userDeviceService.register(userId, oldDeviceId, token) // 기존 holder 생성
+
+        val threadCount = 4
+        val pool = Executors.newFixedThreadPool(threadCount)
+        val ready = CountDownLatch(threadCount)
+        val start = CountDownLatch(1)
+        val errors = Collections.synchronizedList(mutableListOf<Throwable>())
+
+        try {
+            repeat(threadCount) {
+                pool.submit {
+                    ready.countDown()
+                    start.await()
+                    runCatching { userDeviceService.register(userId, newDeviceId, token) }
+                        .onFailure { errors.add(it) }
+                }
+            }
+            assertTrue(ready.await(5, TimeUnit.SECONDS), "모든 스레드가 시작 게이트에 준비돼야 한다")
+            start.countDown() // 동시 출발
+            pool.shutdown()
+            assertTrue(pool.awaitTermination(15, TimeUnit.SECONDS), "동시 작업이 시간 내 끝나야 한다")
+
+            assertEquals(emptyList(), errors.map { it.message }, "delete 경쟁에서 예외(StaleStateException → 500)가 나면 안 된다")
+            assertEquals(1, countByToken(token), "재배정이 토큰 1 row 로 수렴해야 한다")
+        } finally {
+            start.countDown()
+            pool.shutdownNow()
+            pool.awaitTermination(5, TimeUnit.SECONDS)
+            jdbcTemplate.update("DELETE FROM user_devices WHERE fcm_token = ?", token)
+        }
+    }
 }
 
 // 참고 — "서로 다른 유저가 같은 토큰을 동시 등록"하는 race 는 일부러 검증하지 않는다. FCM 토큰은 앱 설치(기기)
 // 하나당 전역 유일이라, 서로 다른 유저가 동일 토큰을 같은 순간에 등록하는 상황 자체가 현실에 없다(#396 이 노리는
-// race 는 같은 클라이언트의 중복 등록 = 위 테스트). 그 인위적 시나리오는 토큰 보유자 재배정(delete+insert)이
-// N-way 로 경합해 1회 재시도로는 못 푸는 별개의 어려운 문제라, 이슈 범위 밖으로 둔다.
+// race 는 같은 클라이언트의 중복/재등록 = 위 두 테스트). 그런 N-way 재배정도 토큰 기준 bulk delete(멱등 해제)로
+// StaleStateException 없이 1 row 로 수렴하지만, 비현실 시나리오라 별도 테스트로 고정하지는 않는다.
