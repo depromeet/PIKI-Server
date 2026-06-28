@@ -30,9 +30,9 @@ class UserDeviceRepositoryImpl(
 
     override fun deleteAllByFcmTokenIn(fcmTokens: Collection<String>) = userDeviceJpaRepository.deleteAllByFcmTokenIn(fcmTokens)
 
-    override fun delete(userDevice: UserDevice) = userDeviceJpaRepository.delete(userDevice)
+    override fun deleteByIdBulk(id: Long) {
+        userDeviceJpaRepository.deleteByIdBulk(id)
+    }
 
     override fun deleteAllByUserId(userId: UUID) = userDeviceJpaRepository.deleteAllByUserId(userId)
-
-    override fun flush() = userDeviceJpaRepository.flush()
 }
