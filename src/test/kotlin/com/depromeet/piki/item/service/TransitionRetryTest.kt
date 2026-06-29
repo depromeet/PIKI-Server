@@ -1,12 +1,15 @@
 package com.depromeet.piki.item.service
 
 import org.springframework.dao.QueryTimeoutException
+import org.springframework.dao.RecoverableDataAccessException
 import org.springframework.transaction.TransactionSystemException
+import java.sql.SQLRecoverableException
 import java.sql.SQLTransactionRollbackException
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 // 전이 write 의 일시 DB 오류 인라인 재시도 정책 — 일시면 짧게 재시도, 영구면 즉시 전파, 상한 도달이면 마지막 예외 전파.
 // commit(flush) 시점 장애가 TransactionSystemException 으로 감싸지거나 raw SQLTransientException 으로 와도 일시로 본다.
@@ -83,5 +86,47 @@ class TransitionRetryTest {
             }
         }
         assertEquals(1, calls.get())
+    }
+
+    @Test
+    fun `RecoverableDataAccessException 이면 일시로 보고 재시도한다`() {
+        val calls = AtomicInteger(0)
+        val result =
+            retry.execute {
+                if (calls.incrementAndGet() < 2) throw RecoverableDataAccessException("recover and retry")
+                "ok"
+            }
+        assertEquals("ok", result)
+        assertEquals(2, calls.get())
+    }
+
+    @Test
+    fun `SQLRecoverableException 이 cause 사슬에 있으면 일시로 본다`() {
+        val calls = AtomicInteger(0)
+        val result =
+            retry.execute {
+                if (calls.incrementAndGet() < 2) throw RuntimeException("wrap", SQLRecoverableException("recoverable"))
+                "ok"
+            }
+        assertEquals("ok", result)
+        assertEquals(2, calls.get())
+    }
+
+    @Test
+    fun `백오프 중 인터럽트되면 원래 일시 예외를 전파하고 interrupt 플래그를 복원한다`() {
+        val calls = AtomicInteger(0)
+        Thread.currentThread().interrupt() // 다음 Thread.sleep 이 즉시 InterruptedException 을 던지게 한다
+        try {
+            assertFailsWith<QueryTimeoutException> {
+                retry.execute<Unit> {
+                    calls.incrementAndGet()
+                    throw QueryTimeoutException("lock timeout")
+                }
+            }
+            assertEquals(1, calls.get()) // 첫 시도만 — 백오프 인터럽트로 재시도하지 않음
+            assertTrue(Thread.currentThread().isInterrupted) // InterruptedException 으로 가리지 않고 플래그 복원
+        } finally {
+            Thread.interrupted() // 테스트 격리 — interrupt 플래그 클리어
+        }
     }
 }
