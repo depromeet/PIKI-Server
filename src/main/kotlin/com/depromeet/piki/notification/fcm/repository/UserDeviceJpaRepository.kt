@@ -2,7 +2,9 @@ package com.depromeet.piki.notification.fcm.repository
 
 import com.depromeet.piki.notification.fcm.domain.UserDevice
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import java.util.UUID
 
 interface UserDeviceJpaRepository : JpaRepository<UserDevice, Long> {
@@ -27,4 +29,15 @@ interface UserDeviceJpaRepository : JpaRepository<UserDevice, Long> {
     fun deleteAllByFcmTokenIn(fcmTokens: Collection<String>)
 
     fun deleteAllByUserId(userId: UUID)
+
+    // 토큰 보유 row 멱등 삭제(#244 reconcile, #396 후속) — holder 를 PK 로 직접 삭제한다.
+    // 엔티티 delete(정확히 1 row 단언) 대신 bulk delete 라, 동시 등록으로 다른 트랜잭션이 같은 holder 를 먼저 지워
+    // 0 row 가 돼도 StaleStateException(ObjectOptimisticLockingFailureException → 500) 없이 무해하다.
+    // 삭제 조건을 PK 로 두는 게 핵심 — fcm_token(UNIQUE 인덱스) 기준으로 지우면 갭락을 잡아 같은 토큰 동시 INSERT 와
+    // 데드락이 나므로, 엔티티 delete 와 동일한 PK 락 프로파일을 유지해 데드락 없이 행 수 단언만 떼어낸다.
+    @Modifying
+    @Query("DELETE FROM UserDevice d WHERE d.id = :id")
+    fun deleteByIdBulk(
+        @Param("id") id: Long,
+    ): Int
 }

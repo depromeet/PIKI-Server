@@ -28,12 +28,10 @@ interface UserDeviceRepository {
     // 발송 후 정리(#245) — FCM 이 UNREGISTERED/INVALID 로 응답한 죽은 토큰을 일괄 제거한다.
     fun deleteAllByFcmTokenIn(fcmTokens: Collection<String>)
 
-    // 토큰 탈취(#244 reconcile) — 다른 사용자가 들고 있던 토큰 row 를 제거한다.
-    fun delete(userDevice: UserDevice)
+    // 토큰 탈취(#244 reconcile, #396 후속) — holder row 를 PK 로 멱등 삭제한다. bulk delete 라 0건이어도 무해 —
+    // 동시 등록으로 다른 트랜잭션이 같은 holder 를 먼저 지운 경쟁(StaleStateException)을 원천 차단한다.
+    fun deleteByIdBulk(id: Long)
 
     // 탈퇴 cascade — 그 유저의 모든 기기(FCM 토큰)를 하드삭제한다.
     fun deleteAllByUserId(userId: UUID)
-
-    // DELETE 후 flush — UNIQUE(fcm_token) 충돌을 막기 위해 삭제를 후속 save 전에 DB 로 내린다(Hibernate flush 순서 함정 회피).
-    fun flush()
 }
