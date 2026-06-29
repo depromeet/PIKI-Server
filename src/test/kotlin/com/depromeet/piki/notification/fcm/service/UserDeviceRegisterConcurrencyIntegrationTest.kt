@@ -26,6 +26,9 @@ class UserDeviceRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
     private fun countByToken(token: String): Int =
         jdbcTemplate.queryForObject("SELECT COUNT(*) FROM user_devices WHERE fcm_token = ?", Int::class.java, token) ?: 0
 
+    private fun deviceIdByToken(token: String): String? =
+        jdbcTemplate.queryForObject("SELECT device_id FROM user_devices WHERE fcm_token = ?", String::class.java, token)
+
     @Test
     fun `같은 유저 기기 토큰으로 동시 등록해도 500 없이 기기 1개로 수렴한다`() {
         val token = "concurrent-${UUID.randomUUID()}"
@@ -100,6 +103,7 @@ class UserDeviceRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
 
             assertEquals(emptyList(), errors.map { it.message }, "delete 경쟁에서 예외(StaleStateException → 500)가 나면 안 된다")
             assertEquals(1, countByToken(token), "재배정이 토큰 1 row 로 수렴해야 한다")
+            assertEquals(newDeviceId, deviceIdByToken(token), "토큰은 새 deviceId row 로 재배정돼야 한다 (수렴한 1 row 가 옛 holder 가 아님)")
         } finally {
             start.countDown()
             pool.shutdownNow()
@@ -111,5 +115,5 @@ class UserDeviceRegisterConcurrencyIntegrationTest : IntegrationTestSupport() {
 
 // 참고 — "서로 다른 유저가 같은 토큰을 동시 등록"하는 race 는 일부러 검증하지 않는다. FCM 토큰은 앱 설치(기기)
 // 하나당 전역 유일이라, 서로 다른 유저가 동일 토큰을 같은 순간에 등록하는 상황 자체가 현실에 없다(#396 이 노리는
-// race 는 같은 클라이언트의 중복/재등록 = 위 두 테스트). 그런 N-way 재배정도 토큰 기준 bulk delete(멱등 해제)로
+// race 는 같은 클라이언트의 중복/재등록 = 위 두 테스트). 그런 N-way 재배정도 PK 기준 holder bulk delete 로
 // StaleStateException 없이 1 row 로 수렴하지만, 비현실 시나리오라 별도 테스트로 고정하지는 않는다.
