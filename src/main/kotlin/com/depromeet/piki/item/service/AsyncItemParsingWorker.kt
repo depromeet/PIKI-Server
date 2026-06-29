@@ -24,6 +24,7 @@ import org.springframework.stereotype.Component
 class AsyncItemParsingWorker(
     private val productLinkExtractor: ProductLinkExtractor,
     private val itemParsingService: ItemParsingService,
+    private val transitionRetry: TransitionRetry,
     private val meterRegistry: MeterRegistry,
     private val observationRegistry: ObservationRegistry,
 ) : ItemParsingWorker {
@@ -55,7 +56,8 @@ class AsyncItemParsingWorker(
     ) {
         val elapsedMs = (System.nanoTime() - started) / 1_000_000
         // 전이가 실패(추출값 도메인 검증 위반·DB 오류·sweeper 와의 레이스로 이미 전이됨)해도 예외를 흡수한다.
-        runCatching { itemParsingService.markReady(snapshotId, snapshot) }
+        // 일시 DB 오류(데드락·lock timeout)면 추출 재실행 없이 전이 write 만 짧게 재시도한다(TransitionRetry).
+        runCatching { transitionRetry.execute { itemParsingService.markReady(snapshotId, snapshot) } }
             .onSuccess {
                 log.info(
                     "item.parse.result item={} result={} reason={} latency={}ms url={}",
@@ -137,12 +139,12 @@ class AsyncItemParsingWorker(
             else -> ItemParsingMetrics.REASON_PERMANENT_ERROR
         }
 
-    // FAILED 전이도 sweeper 와의 레이스로 실패할 수 있어(이미 전이됨) 잡아 흡수한다.
+    // FAILED 전이도 sweeper 와의 레이스로 실패할 수 있어(이미 전이됨) 잡아 흡수한다. 일시 DB 오류는 짧게 재시도한다.
     private fun markFailedQuietly(
         itemId: Long,
         snapshotId: Long,
     ) {
-        runCatching { itemParsingService.markFailed(snapshotId) }
+        runCatching { transitionRetry.execute { itemParsingService.markFailed(snapshotId) } }
             .onFailure { e ->
                 when (e) {
                     is IllegalStateException -> log.info("item {} 는 이미 전이됨, FAILED 처리 생략: {}", itemId, e.message)
