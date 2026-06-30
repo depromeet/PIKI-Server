@@ -24,4 +24,10 @@ interface UserRepository {
     ): Boolean
 
     fun findNicknamesIn(candidates: Collection<String>): List<String>
+
+    // 활성(미탈퇴) 유저 id 전체 — 공지 알림센터 fan-out(#560) 대상. 게스트 포함, tombstone(탈퇴) 제외.
+    fun findAllActiveUserIds(): List<UUID>
+
+    // 활성(미탈퇴) 유저 수 — 공지 알림센터 대상 인원 미리보기(#560).
+    fun countActiveUsers(): Long
 }

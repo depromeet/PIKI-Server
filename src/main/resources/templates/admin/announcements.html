@@ -61,7 +61,7 @@
       <span class="hint" style="margin-left:10px">빈 공지를 만들고 작성 화면으로 이동합니다.</span>
     </form>
 
-    <h2>등록된 공지 <span style="font-weight:500;font-size:12.5px;color:var(--muted)">— 현재 발송 대상 <b th:text="${recipientCount}">0</b>명 (토큰 보유자)</span></h2>
+    <h2>등록된 공지 <span style="font-weight:500;font-size:12.5px;color:var(--muted)">— 현재 알림 대상 <b th:text="${recipientCount}">0</b>명 (그중 푸시 <b th:text="${pushRecipientCount}">0</b>명)</span></h2>
     <div class="card" style="padding:0">
       <table>
         <thead><tr><th>내용</th><th>상태</th><th>예약/발송</th><th></th></tr></thead>

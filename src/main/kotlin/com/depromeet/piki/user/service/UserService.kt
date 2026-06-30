@@ -242,6 +242,14 @@ class UserService(
     @Transactional(readOnly = true)
     fun findById(userId: UUID): User = userRepository.findById(userId) ?: throw UserException.notFound()
 
+    // 활성(미탈퇴) 유저 id 전체 — 공지를 토큰 보유자만이 아니라 게스트 포함 모든 유저의 알림센터로 fan-out 하기 위함(#560).
+    @Transactional(readOnly = true)
+    fun findAllActiveUserIds(): List<UUID> = userRepository.findAllActiveUserIds()
+
+    // 활성(미탈퇴) 유저 수 — 공지 발송 전 알림센터 대상 인원 미리보기(#560).
+    @Transactional(readOnly = true)
+    fun countActiveUsers(): Long = userRepository.countActiveUsers()
+
     // 마이페이지(GET /me) 조회 — User(정체성)와 UserDetail 의 email 을 한 트랜잭션에서 모은다.
     // email 은 미수집(게스트)·미동의·backfill 전이면 UserDetail 이 없거나 null 이라 그대로 null 로 내려간다.
     @Transactional(readOnly = true)

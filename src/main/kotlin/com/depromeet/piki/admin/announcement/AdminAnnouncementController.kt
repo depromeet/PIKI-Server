@@ -46,6 +46,7 @@ class AdminAnnouncementController(
         model.addAttribute("hasNext", announcements.hasNext())
         model.addAttribute("totalPages", announcements.totalPages)
         model.addAttribute("recipientCount", adminAnnouncementService.recipientCount())
+        model.addAttribute("pushRecipientCount", adminAnnouncementService.pushRecipientCount())
         return "admin/announcements"
     }
 
@@ -141,7 +142,7 @@ class AdminAnnouncementController(
             pushTitle.length <= Announcement.MAX_PUSH_TEXT_LENGTH &&
             pushBody.length <= Announcement.MAX_PUSH_TEXT_LENGTH
 
-    // 발송/예약 설정 페이지 — 발송 전 "대상자 추출"(토큰 보유자 수)·내용·푸시 미리보기 + 발송 시각 선택. 실제 발송은 아래 POST.
+    // 발송/예약 설정 페이지 — 발송 전 대상자(알림센터=활성 유저 전체, 그중 푸시=토큰 보유자)·내용·푸시 미리보기 + 발송 시각 선택. 실제 발송은 아래 POST.
     @GetMapping("/{id}/send")
     fun confirmSend(
         @PathVariable id: Long,
@@ -151,6 +152,7 @@ class AdminAnnouncementController(
         if (!announcement.isDraft) return "redirect:/admin/announcements" // 발송됐거나 예약된 건 재설정 불가
         model.addAttribute("announcement", announcement)
         model.addAttribute("recipientCount", adminAnnouncementService.recipientCount())
+        model.addAttribute("pushRecipientCount", adminAnnouncementService.pushRecipientCount())
         // 푸시 미리보기 아이콘 — 실제 FCM 푸시(시스템 알림)가 쓰는 S3 기본 아이콘(defaults/push-icon.svg)을 그대로 보여준다.
         model.addAttribute("pushIconUrl", defaultPushImage.url)
         return "admin/announcement-send"

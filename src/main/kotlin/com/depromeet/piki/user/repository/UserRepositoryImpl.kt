@@ -26,4 +26,8 @@ class UserRepositoryImpl(
 
     override fun findNicknamesIn(candidates: Collection<String>): List<String> =
         userJpaRepository.findNicknamesIn(candidates)
+
+    override fun findAllActiveUserIds(): List<UUID> = userJpaRepository.findActiveIds()
+
+    override fun countActiveUsers(): Long = userJpaRepository.countActive()
 }

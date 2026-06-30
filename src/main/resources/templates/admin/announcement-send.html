@@ -79,8 +79,8 @@
       <div>
         <div class="extract">
           <div class="lbl">대상자 추출</div>
-          <div class="big"><b th:text="${recipientCount}">0</b>명에게 발송됩니다</div>
-          <div class="sub">앱 토큰 보유자 전체 (DISTINCT user_id 기준).<br>조건별 세그먼트는 후속.</div>
+          <div class="big"><b th:text="${recipientCount}">0</b>명의 알림센터로 발송됩니다</div>
+          <div class="sub">활성 유저 전체(게스트 포함)의 알림센터로 발송. 그중 앱 푸시(FCM)는 토큰 보유자 <b th:text="${pushRecipientCount}">0</b>명에게만.<br>조건별 세그먼트는 후속.</div>
         </div>
 
         <div class="card">

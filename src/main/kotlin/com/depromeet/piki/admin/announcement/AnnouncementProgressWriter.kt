@@ -1,7 +1,7 @@
 package com.depromeet.piki.admin.announcement
 import com.depromeet.piki.announcement.repository.AnnouncementRepository
 
-import com.depromeet.piki.notification.fcm.service.UserDeviceService
+import com.depromeet.piki.user.service.UserService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -13,7 +13,7 @@ import java.util.UUID
 class AnnouncementProgressWriter(
     private val announcementRepository: AnnouncementRepository,
     private val deliveryRepository: AnnouncementDeliveryRepository,
-    private val userDeviceService: UserDeviceService,
+    private val userService: UserService,
 ) {
     // 발송할 푸시 내용 + 대상 수신자. claim 이 성공하면 SENDING 으로 전환된 상태다.
     // 알림(notifications, ≤255)엔 공지 body(마크다운 장문)가 아니라 push 전용 문구가 들어간다(#561). 긴 body 는 공지 페이지 전용.
@@ -34,7 +34,9 @@ class AnnouncementProgressWriter(
     ): Claim? {
         val announcement = announcementRepository.findByIdForUpdate(announcementId) ?: return null
         if (!(announcement.isDraft || announcement.isScheduled)) return null
-        val recipients = userDeviceService.findAllTokenHolderIds()
+        // 공지는 토큰 보유자만이 아니라 활성 유저 전체(게스트 포함)의 알림센터로 fan-out 한다(#560).
+        // 토큰 없는 유저는 broadcaster 가 알림 row + SSE 만 만들고 FCM 은 NO_TOKEN 으로 skip 한다.
+        val recipients = userService.findAllActiveUserIds()
         announcement.markSending(recipientCount = recipients.size, sentBy = actor)
         announcementRepository.save(announcement)
         return Claim(announcement.effectivePushTitle, announcement.effectivePushBody, announcement.pushEnabled, recipients)

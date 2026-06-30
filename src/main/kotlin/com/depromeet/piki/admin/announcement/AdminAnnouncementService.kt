@@ -9,6 +9,7 @@ import com.depromeet.piki.announcement.domain.AnnouncementImageFile
 import com.depromeet.piki.common.storage.ImageStorage
 import com.depromeet.piki.notification.fcm.service.UserDeviceService
 import com.depromeet.piki.notification.service.DeliveryStatus
+import com.depromeet.piki.user.service.UserService
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
@@ -27,6 +28,7 @@ class AdminAnnouncementService(
     private val announcementRepository: AnnouncementRepository,
     private val deliveryRepository: AnnouncementDeliveryRepository,
     private val userDeviceService: UserDeviceService,
+    private val userService: UserService,
     private val sendService: AnnouncementSendService,
     private val auditService: AdminAuditService,
     private val writer: AnnouncementWriter,
@@ -40,8 +42,12 @@ class AdminAnnouncementService(
     fun get(id: Long): Announcement =
         announcementRepository.findById(id).orElseThrow { IllegalArgumentException("공지를 찾을 수 없습니다.") }
 
-    // 발송 대상자 추출 — 토큰 보유자 수. 예약/발송 확인 페이지가 발송 전에 미리 보여준다(대상자 추출 단계).
-    fun recipientCount(): Long = userDeviceService.countTokenHolders()
+    // 알림센터 발송 대상 — 활성 유저 전체(게스트 포함, #560). 공지는 토큰 보유자만이 아니라 모든 활성 유저의 알림센터로 간다.
+    // 예약/발송 확인 페이지가 발송 전에 미리 보여준다.
+    fun recipientCount(): Long = userService.countActiveUsers()
+
+    // 그중 앱 푸시(FCM)가 실제로 도달하는 인원 — 토큰 보유자 수. 토큰 없는 유저(게스트 등)는 알림센터엔 받지만 푸시는 안 간다.
+    fun pushRecipientCount(): Long = userDeviceService.countTokenHolders()
 
     // 빈 초안 생성(stub-create #561) — "새 공지 작성" 이 부른다. 제목·본문·이미지·푸시는 수정 화면(update)에서 채운다.
     // 이미지 즉시 업로드(addImageBlobHook)가 announcement/{id}/ 키를 쓰려면 작성 시점에 id 가 있어야 하므로,
