@@ -1,0 +1,87 @@
+package com.depromeet.piki.product.service
+
+import com.depromeet.piki.product.domain.ProductLink
+import com.depromeet.piki.product.service.http.PageFetchException
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import org.junit.jupiter.api.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+
+// Fallback(진입점)이 "plain 먼저, 막히면 headless" 를 flag·escalatable 규칙대로 엮는지 Spring 없이 검증한다.
+// 통합 테스트는 StubProductLinkExtractor 가 진입점(ProductLinkExtractor)을 통째 대체해 이 분기를 타지 않으므로,
+// seam 의 라우팅 로직은 여기 단위에서 망라한다. 두 전략은 실제 빈(정적 fetch·헤드리스)이 네트워크/브라우저를
+// 요구해 단위로 세울 수 없어, LinkExtractionStrategy 를 손으로 구현한 fake 로 "전략의 결과" 만 주입한다 —
+// Fallback 의 라우팅이 검증 대상이지 전략 내부가 아니다.
+class FallbackProductLinkExtractorTest {
+    private val link = ProductLink.parse("https://shop.example.com/p")
+    private val snapshot = ProductSnapshot(name = "나이키", currentPrice = 99_000)
+
+    private class FakeStrategy(private val fn: (ProductLink) -> ProductSnapshot) : LinkExtractionStrategy {
+        var calls = 0
+
+        override fun extract(link: ProductLink): ProductSnapshot {
+            calls++
+            return fn(link)
+        }
+    }
+
+    private fun fallback(
+        headlessEnabled: Boolean,
+        plain: FakeStrategy,
+        headless: FakeStrategy,
+    ) = FallbackProductLinkExtractor(
+        plain,
+        headless,
+        SimpleMeterRegistry(),
+        HeadlessExtractionProperties(enabled = headlessEnabled),
+    )
+
+    @Test
+    fun `headless 가 꺼져 있으면 plain 결과를 그대로 반환하고 headless 는 호출하지 않는다`() {
+        val plain = FakeStrategy { snapshot }
+        val headless = FakeStrategy { error("headless 는 호출되면 안 됨") }
+
+        val result = fallback(headlessEnabled = false, plain, headless).extract(link)
+
+        assertEquals(snapshot, result)
+        assertEquals(1, plain.calls)
+        assertEquals(0, headless.calls)
+    }
+
+    @Test
+    fun `headless 가 꺼져 있으면 escalatable 차단이어도 plain 예외를 그대로 전파한다`() {
+        // behavior-neutral: 플래그가 꺼진 동안엔 차단(escalatable)이라도 에스컬레이트하지 않고 현재 동작(예외 전파)을 유지한다.
+        val plain = FakeStrategy { throw PageFetchException.blocked(RuntimeException("403")) }
+        val headless = FakeStrategy { snapshot }
+
+        assertFailsWith<PageFetchException> {
+            fallback(headlessEnabled = false, plain, headless).extract(link)
+        }
+        assertEquals(0, headless.calls)
+    }
+
+    @Test
+    fun `headless 가 켜져 있고 plain 이 escalatable 차단으로 막히면 headless 로 에스컬레이트한다`() {
+        val plain = FakeStrategy { throw PageFetchException.blocked(RuntimeException("403")) }
+        val headlessSnapshot = ProductSnapshot(name = "헤드리스 결과", currentPrice = 50_000)
+        val headless = FakeStrategy { headlessSnapshot }
+
+        val result = fallback(headlessEnabled = true, plain, headless).extract(link)
+
+        assertEquals(headlessSnapshot, result)
+        assertEquals(1, plain.calls)
+        assertEquals(1, headless.calls)
+    }
+
+    @Test
+    fun `headless 가 켜져 있어도 escalatable 이 아닌 실패는 전파하고 headless 를 호출하지 않는다`() {
+        // 404 같은 진짜 입력 오류(clientError, escalatable=false)는 헤드리스로 넘겨봐야 소용없다.
+        val plain = FakeStrategy { throw PageFetchException.clientError(RuntimeException("404")) }
+        val headless = FakeStrategy { snapshot }
+
+        assertFailsWith<PageFetchException> {
+            fallback(headlessEnabled = true, plain, headless).extract(link)
+        }
+        assertEquals(0, headless.calls)
+    }
+}

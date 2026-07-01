@@ -11,6 +11,8 @@ import org.springframework.web.client.RestClient
 import java.net.InetAddress
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 // 대상 서버의 5xx 를 status 별로 일시(RETRYABLE)/영구(SERVER_ERROR)로 가르는지 네트워크 없이 검증한다.
 // 봇 차단을 500(no body)으로 응답하는 쇼핑몰이 무의미하게 재시도되지 않도록 500/501 은 영구로 본다.
@@ -41,7 +43,28 @@ class HttpPageFetcherServerErrorTest {
 
             assertEquals(ErrorCategory.SERVER_ERROR, ex.category)
             assertEquals(HttpStatus.BAD_GATEWAY, ex.httpStatus)
+            assertTrue(ex.escalatable, "$status(no-body 봇차단)는 헤드리스로 escalate 대상이어야 함")
         }
+    }
+
+    @Test
+    fun `body 있는 500 은 진짜 서버 장애로 보아 escalate 하지 않는다`() {
+        // 봇 차단(no-body 패턴)이 아니라 실제 서버 오류라, 헤드리스로도 못 살려 escalatable=false. status·category 는 500 과 동일.
+        val fetcher =
+            fetcherWith { server ->
+                server
+                    .expect(requestTo("https://shop.example.com/p"))
+                    .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR).body("Internal Server Error"))
+            }
+
+        val ex =
+            assertFailsWith<PageFetchException> {
+                fetcher.fetch(ProductLink.parse("https://shop.example.com/p"))
+            }
+
+        assertEquals(ErrorCategory.SERVER_ERROR, ex.category)
+        assertEquals(HttpStatus.BAD_GATEWAY, ex.httpStatus)
+        assertFalse(ex.escalatable, "body 있는 500 은 진짜 장애라 escalate 대상이 아님")
     }
 
     @Test
@@ -59,6 +82,7 @@ class HttpPageFetcherServerErrorTest {
 
             assertEquals(ErrorCategory.RETRYABLE, ex.category)
             assertEquals(HttpStatus.BAD_GATEWAY, ex.httpStatus)
+            assertFalse(ex.escalatable, "$status(일시 게이트웨이 오류)는 재시도 축이지 escalate 대상이 아님")
         }
     }
 
@@ -76,5 +100,25 @@ class HttpPageFetcherServerErrorTest {
 
         assertEquals(ErrorCategory.INVALID_INPUT, ex.category)
         assertEquals(HttpStatus.BAD_REQUEST, ex.httpStatus)
+        assertFalse(ex.escalatable, "404 는 진짜 없는 페이지라 헤드리스로 escalate 하지 않는다")
+    }
+
+    @Test
+    fun `403 은 봇 차단 신호로 escalatable 로 표시한다`() {
+        // 봇 차단·로그인 벽을 403 으로 응답하는 케이스(쿠팡·올리브영 등). 정적 fetch 로는 막히지만 실제 브라우저면
+        // 뚫릴 수 있어, 사용자 매핑(400)은 4xx 와 같게 두되 escalatable 로 표시해 Fallback 이 헤드리스로 넘길 수 있게 한다.
+        val fetcher =
+            fetcherWith { server ->
+                server.expect(requestTo("https://shop.example.com/p")).andRespond(withStatus(HttpStatus.FORBIDDEN))
+            }
+
+        val ex =
+            assertFailsWith<PageFetchException> {
+                fetcher.fetch(ProductLink.parse("https://shop.example.com/p"))
+            }
+
+        assertEquals(ErrorCategory.INVALID_INPUT, ex.category)
+        assertEquals(HttpStatus.BAD_REQUEST, ex.httpStatus)
+        assertTrue(ex.escalatable, "403(봇 차단)은 헤드리스로 escalate 대상이어야 함")
     }
 }
