@@ -10,6 +10,11 @@ class PageFetchException private constructor(
     override val category: ErrorCategory,
     override val httpStatus: HttpStatus,
     cause: Throwable? = null,
+    // 정적 fetch 가 "차단" 으로 막혔고 실제 브라우저(헤드리스)면 뚫릴 수 있는 신호인지 표시한다. FallbackProductLinkExtractor 가
+    // 이 값으로 헤드리스 에스컬레이션 여부를 정한다(에스컬레이션 축은 outbox 재시도 축과 직교). 어떤 실패를 escalatable 로
+    // 볼지는 던지는 지점(각 팩토리 = 단일 진실)이 정한다 — 현재는 403·500/501, provisional 이다. 기본 false. SSRF
+    // 차단(blockedHost)은 뚫으면 안 되므로 false 로 둔다.
+    val escalatable: Boolean = false,
 ) : BaseException(message, cause),
     HttpMappable {
     companion object {
@@ -25,15 +30,26 @@ class PageFetchException private constructor(
         fun upstreamError(cause: Throwable): PageFetchException =
             PageFetchException(LINK_UNREACHABLE, ErrorCategory.RETRYABLE, HttpStatus.BAD_GATEWAY, cause)
 
-        // 대상 서버가 500/501 을 준 경우. 일부 쇼핑몰이 봇 차단을 500(no body)으로 응답하는데, 같은 요청을
-        // 재시도해도 결정론적으로 재실패한다. 502/503/504(일시) 와 달리 500/501 은 영구로 보아 재시도하지 않는다
-        // (SERVER_ERROR → 워커가 즉시 FAILED). status 는 외부 의존성 실패라 502.
+        // 대상 서버가 500/501 을 body 와 함께 준 경우 = 진짜 서버 장애(과부하·버그 등). 502/503/504(일시) 와 달리
+        // 500/501 은 재시도해도 결정론적으로 재실패가 흔해 영구(SERVER_ERROR → 워커가 즉시 FAILED)로 본다. status 는 502.
+        // escalatable=false — 헤드리스로 열어도 못 살리는 실제 장애라 escalate 하지 않는다.
         fun permanentUpstreamError(cause: Throwable): PageFetchException =
             PageFetchException(LINK_UNREACHABLE, ErrorCategory.SERVER_ERROR, HttpStatus.BAD_GATEWAY, cause)
 
-        // 4xx (404, 403 로그인 벽, 410 등). 입력 URL 자체가 문제이므로 사용자에게 400 으로 노출.
+        // 대상 서버가 500/501 을 body 없이 준 경우 = 봇 차단 신호(KREAM 등이 봇을 no-body 500 으로 응답). 영구(SERVER_ERROR)이되,
+        // 실제 브라우저(헤드리스)면 뚫릴 수 있어 escalatable=true — Fallback 이 헤드리스로 에스컬레이트한다. (no-body 판별은 던지는 지점.)
+        fun permanentUpstreamBlock(cause: Throwable): PageFetchException =
+            PageFetchException(LINK_UNREACHABLE, ErrorCategory.SERVER_ERROR, HttpStatus.BAD_GATEWAY, cause, escalatable = true)
+
+        // 4xx (404, 410 등, 403 제외). 입력 URL 자체가 문제이므로 사용자에게 400 으로 노출한다. escalatable=false —
+        // 진짜 없는/잘못된 페이지라 헤드리스로 넘겨봐야 소용없다. 403 은 봇 차단일 수 있어 blocked() 로 따로 던진다.
         fun clientError(cause: Throwable): PageFetchException =
             PageFetchException(LINK_UNREACHABLE, ErrorCategory.INVALID_INPUT, HttpStatus.BAD_REQUEST, cause)
+
+        // 403 (봇 차단·로그인 벽). 사용자 매핑은 4xx 와 같게 400 으로 두되, 봇 차단이면 실제 브라우저(헤드리스)로는
+        // 뚫릴 수 있어 escalatable 로 표시한다 — Fallback 이 헤드리스 전략으로 에스컬레이트한다.
+        fun blocked(cause: Throwable): PageFetchException =
+            PageFetchException(LINK_UNREACHABLE, ErrorCategory.INVALID_INPUT, HttpStatus.BAD_REQUEST, cause, escalatable = true)
 
         fun emptyBody(): PageFetchException =
             PageFetchException(
