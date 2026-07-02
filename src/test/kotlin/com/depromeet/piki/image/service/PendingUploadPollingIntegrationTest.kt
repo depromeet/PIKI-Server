@@ -1,6 +1,7 @@
 package com.depromeet.piki.image.service
 
 import com.depromeet.piki.auth.infrastructure.jwt.JwtProvider
+import com.depromeet.piki.common.storage.ImageStorageException
 import com.depromeet.piki.item.domain.Item
 import com.depromeet.piki.item.domain.ItemSnapshot
 import com.depromeet.piki.item.domain.ItemStatus
@@ -108,6 +109,28 @@ class PendingUploadPollingIntegrationTest : IntegrationTestSupport() {
             // grace 안이라 등록도 정리도 안 된 채 pending 이 남는다.
             assertEquals(1, pendingCount(userId))
         } finally {
+            cleanupWishes(userId)
+        }
+    }
+
+    @Test
+    fun `HEAD 가 일시 실패하면 폴링이 그룹을 등록하지 않고 보류한다`() {
+        val userId = UUID.randomUUID()
+        insertMember(userId)
+        try {
+            seedExtractor()
+            // S3 HEAD 가 일시 장애로 예외를 던지는 상황 — "안 올라옴"으로 확정하지 않고 그룹 전체를 보류해야 한다.
+            stubImageStorage.existsBehavior = { throw ImageStorageException.existsCheckFailed() }
+            wishlistService.presignImageUploads(listOf("image/png", "image/jpeg"), userId)
+            makePollable(userId)
+
+            pollingScheduler.pollOnce()
+
+            // 판단 보류 — 등록도 정리도 안 되고 pending 이 그대로 남아 다음 폴링 대상이 된다.
+            assertEquals(0, wishCount(userId))
+            assertEquals(2, pendingCount(userId))
+        } finally {
+            stubImageStorage.existsBehavior = stubImageStorage.defaultExistsBehavior
             cleanupWishes(userId)
         }
     }
@@ -241,6 +264,35 @@ class PendingUploadPollingIntegrationTest : IntegrationTestSupport() {
 
             // 부분 등록(2개) 없이 30 그대로 — confirm 의 all-or-nothing 과 같은 정원 판정.
             assertEquals(30, tournamentItemCount(tournamentId))
+        } finally {
+            cleanupTournament(ownerId, tournamentId)
+        }
+    }
+
+    @Test
+    fun `업로드된 채 만료됐으나 정원 초과면 폴링이 폐기하고 부분 등록하지 않는다`() {
+        val mockMvc = buildMockMvc()
+        val ownerId = UUID.randomUUID()
+        insertGuest(ownerId)
+        var tournamentId = 0L
+        try {
+            seedExtractor()
+            tournamentId = createTournament(mockMvc, ownerId)
+            // 정원(32) 임박까지 채우고, 3개를 발급+업로드한 뒤 만료시킨다. 만료 경로도 배치라 30+3=33>32 면 전량 폐기여야 한다.
+            fillTournament(tournamentId, ownerId, 30)
+            tournamentItemService.presignImageUploads(ownerId, tournamentId, listOf("image/png", "image/jpeg", "image/webp"))
+            jdbcTemplate.update(
+                "UPDATE pending_uploads SET expires_at = ? WHERE user_id = ?",
+                LocalDateTime.now().minusMinutes(1),
+                uuidToBytes(ownerId),
+            )
+
+            pollingScheduler.pollOnce()
+
+            // 만료 경로가 단건 등록이면 2개가 부분 등록되지만, 배치 원자성이면 전량 거부(폐기)여야 한다.
+            assertEquals(30, tournamentItemCount(tournamentId))
+            // 영구 사유(정원 초과)로 폐기됐으므로 pending 도 남지 않는다.
+            assertEquals(0, pendingCount(ownerId))
         } finally {
             cleanupTournament(ownerId, tournamentId)
         }
