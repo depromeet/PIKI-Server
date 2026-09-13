@@ -3,6 +3,8 @@ package com.depromeet.piki.tournament.domain
 import com.depromeet.piki.common.domain.LongBaseEntity
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.Table
 import java.time.LocalDateTime
 import java.util.UUID
@@ -29,14 +31,30 @@ class TournamentUser(
     @Column(name = "completed_at")
     var completedAt: LocalDateTime? = null
 
+    // 참여자별 플레이(진행) 상태(#1027). tournaments.status 가 겸직하던 "한 사람의 진행"을 여기로 내렸다.
+    // PENDING(명단만, 아직 안 함) → IN_PROGRESS(플레이 시작) → COMPLETED(완주). CLONE 을 없앤 뒤로
+    // 한 사람의 진행은 이 컬럼 하나가 온전히 표현한다. tournaments.status 는 정의(구성) 상태만 담는다.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, columnDefinition = "varchar(50)")
+    var status: TournamentStatus = TournamentStatus.PENDING
+
     // 토너먼트 닉네임 변경(대기실/입장 화면에서 수정). 프로필(users.nickname)은 건드리지 않는다.
     fun rename(newNickname: String) {
         nickname = newNickname
     }
 
+    // 플레이 시작 — 명단(PENDING)에서 진행으로. 멤버·게스트가 자기 판을 시작하는 순간(과거의 CLONE 생성 지점).
+    fun startPlaying() {
+        check(status == TournamentStatus.PENDING) { "startPlaying 은 PENDING 에서만 호출 가능: $status" }
+        status = TournamentStatus.IN_PROGRESS
+    }
+
     fun complete() {
         completedAt = completedAt ?: LocalDateTime.now()
+        status = TournamentStatus.COMPLETED
     }
+
+    fun isPlaying() = status == TournamentStatus.IN_PROGRESS
 
     fun isCompleted() = completedAt?.let { true } ?: false
 
